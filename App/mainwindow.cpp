@@ -38,7 +38,7 @@ void MainWindow::saveSceneToSvg(const QString &filename) {
     tempScene.setBackgroundBrush(QBrush(Qt::transparent));
     tempScene.setItemIndexMethod(QGraphicsScene::BspTreeIndex);
 
-    for (auto& item : scene->items()) {
+    for (auto item : scene->items()) {
         newSceneRect |= item->mapToScene(item->boundingRect()).boundingRect();
         tempScene.addItem(item);
     }
@@ -57,4 +57,6 @@ void MainWindow::saveSceneToSvg(const QString &filename) {
     painter.begin(&generator);
     tempScene.render(&painter);
     painter.end();
+
+    scene->update();
 }

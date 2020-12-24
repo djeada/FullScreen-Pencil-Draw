@@ -31,3 +31,9 @@ void ToolBox::on_buttonLine_clicked()
     if (paintScene)
           paintScene->setMode(PaintMode::DrawLine);
 }
+
+void ToolBox::on_buttonSelection_clicked()
+{
+    if (paintScene)
+          paintScene->setMode(PaintMode::SelectObject);
+}
