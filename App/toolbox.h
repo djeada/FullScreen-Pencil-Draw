@@ -20,6 +20,7 @@ public:
 
 private slots:
     void on_buttonPencil_clicked();
+    void on_buttonLine_clicked();
 
 private:
     Ui::ToolBox* ui;

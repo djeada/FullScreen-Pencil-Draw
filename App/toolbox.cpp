@@ -25,3 +25,9 @@ void ToolBox::on_buttonPencil_clicked()
     if (paintScene)
           paintScene->setMode(PaintMode::DrawPoint);
 }
+
+void ToolBox::on_buttonLine_clicked()
+{
+    if (paintScene)
+          paintScene->setMode(PaintMode::DrawLine);
+}

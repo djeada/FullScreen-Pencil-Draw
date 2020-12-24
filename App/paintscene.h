@@ -18,6 +18,9 @@ class PaintScene : public  QGraphicsScene {
         PaintMode sceneMode;
         QPointF lastPoint;
         QGraphicsLineItem* itemToDraw;
+        QColor foregroundColor;
+        QColor backgroundColor;
+        int penSize;
         void drawPoint(QPointF point);
         void drawLine(QPointF point);
         void drawRect(QPointF point);

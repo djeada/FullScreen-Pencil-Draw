@@ -7,7 +7,10 @@
 PaintScene::PaintScene(QObject* parent) :
     QGraphicsScene(parent),
     sceneMode(PaintMode::NoMode),
-    itemToDraw(nullptr)
+    itemToDraw(nullptr),
+    foregroundColor(QColor("black")),
+    backgroundColor(QColor("white")),
+    penSize(3)
 {
 
 }
@@ -49,12 +52,13 @@ void PaintScene::keyPressEvent(QKeyEvent* event){
             removeItem(item);
             delete item;
         }
+
     else
         QGraphicsScene::keyPressEvent(event);
 }
 
 void PaintScene::drawPoint(QPointF point) {
-    auto pen = QPen(QColor(0,0,0), 10, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+    auto pen = QPen(foregroundColor, penSize, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
     addLine(lastPoint.x(), lastPoint.y(), point.x(), point.y(),  pen);
     lastPoint = point;
 }
@@ -64,10 +68,11 @@ void PaintScene::drawLine(QPointF point)
     if (!itemToDraw) {
         itemToDraw = new QGraphicsLineItem();
         addItem(itemToDraw);
-        itemToDraw->setPen(QPen(Qt::black, 3, Qt::SolidLine));
         itemToDraw->setPos(lastPoint);
     }
 
+    auto pen = QPen(foregroundColor, penSize, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+    itemToDraw->setPen(pen);
     itemToDraw->setLine(0,0, point.x() - lastPoint.x(), point.y() - lastPoint.y());
 }
 
