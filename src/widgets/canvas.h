@@ -4,6 +4,7 @@
 #include <QGraphicsScene>
 #include <QGraphicsView>
 #include <QMouseEvent>
+#include <QPen>
 
 class Canvas : public QGraphicsView {
   Q_OBJECT
@@ -11,6 +12,18 @@ class Canvas : public QGraphicsView {
 public:
   explicit Canvas(QWidget *parent = nullptr);
   ~Canvas();
+
+public slots:
+  void setPenTool();
+  void setEraserTool();
+  void setPenColor(const QColor &color);
+  void drawRectangle();
+  void drawCircle();
+  void drawLine();
+  void increaseBrushSize();
+  void decreaseBrushSize();
+  void clearCanvas();
+  void undoLastAction();
 
 protected:
   void mousePressEvent(QMouseEvent *event) override;
@@ -20,6 +33,8 @@ protected:
 private:
   QGraphicsScene *scene;
   QGraphicsPathItem *currentPath;
+  QList<QGraphicsItem*> itemsStack; // For undo functionality
+  QPen currentPen;
 };
 
 #endif // CANVAS_H
