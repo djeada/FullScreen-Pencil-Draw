@@ -32,12 +32,12 @@ ToolPanel::ToolPanel(QWidget *parent) : QToolBar(parent) {
   connect(actionLine, &QAction::triggered, this, &ToolPanel::onActionLine);
   addAction(actionLine);
 
-  // Increase brush size
+  // Increase brush size action
   actionIncreaseBrush = new QAction("Increase Brush", this);
   connect(actionIncreaseBrush, &QAction::triggered, this, &ToolPanel::onActionIncreaseBrush);
   addAction(actionIncreaseBrush);
 
-  // Decrease brush size
+  // Decrease brush size action
   actionDecreaseBrush = new QAction("Decrease Brush", this);
   connect(actionDecreaseBrush, &QAction::triggered, this, &ToolPanel::onActionDecreaseBrush);
   addAction(actionDecreaseBrush);
@@ -64,11 +64,11 @@ void ToolPanel::onActionColor() {
   }
 }
 
-void ToolPanel::onActionRectangle() { emit rectangleSelected(); }
+void ToolPanel::onActionRectangle() { emit shapeSelected("Rectangle"); emit rectangleSelected(); }
 
-void ToolPanel::onActionCircle() { emit circleSelected(); }
+void ToolPanel::onActionCircle() { emit shapeSelected("Circle"); emit circleSelected(); }
 
-void ToolPanel::onActionLine() { emit lineSelected(); }
+void ToolPanel::onActionLine() { emit shapeSelected("Line"); emit lineSelected(); }
 
 void ToolPanel::onActionIncreaseBrush() { emit increaseBrushSize(); }
 
