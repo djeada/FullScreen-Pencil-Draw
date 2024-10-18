@@ -40,7 +40,7 @@ jobs:
             libgl1-mesa-dev \
             xvfb
 
-      # Step 4: Verify Qt6 Installation
+      # Step 4: Verify Qt6 Installation (Optional)
       - name: Verify Qt6 Installation
         run: |
           # Check if qmake6 is available
@@ -49,7 +49,7 @@ jobs:
             qmake6 --version
           else
             echo "qmake6 is not found. Listing available qmake binaries:"
-            ls /usr/lib/qt6/bin/
+            find /usr -name "qmake*" -executable -type f
             exit 1
           fi
 
@@ -64,7 +64,7 @@ jobs:
       - name: Build
         run: |
           cd build
-          cmake --build -- -j$(nproc)
+          cmake --build . -- -j$(nproc)
 
       # Step 7: Run the Application with Xvfb
       - name: Run the application with Xvfb
