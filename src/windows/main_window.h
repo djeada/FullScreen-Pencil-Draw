@@ -1,19 +1,26 @@
-#pragma once
+// main_window.h
+#ifndef MAIN_WINDOW_H
+#define MAIN_WINDOW_H
 
 #include <QMainWindow>
 
-// Forward declarations to reduce unnecessary dependencies in the header
 class Canvas;
 class ToolPanel;
 
 class MainWindow : public QMainWindow {
-  Q_OBJECT
+    Q_OBJECT
 
 public:
-  explicit MainWindow(QWidget *parent = nullptr);
-  ~MainWindow();
+    explicit MainWindow(QWidget *parent = nullptr);
+    ~MainWindow();
+
+protected:
+    // Override the keyPressEvent to handle key presses
+    void keyPressEvent(QKeyEvent *event) override;
 
 private:
-  Canvas *_canvas;        // Canvas where drawing happens
-  ToolPanel *_toolPanel;  // Toolbar for selecting tools
+    Canvas *_canvas;
+    ToolPanel *_toolPanel;
 };
+
+#endif // MAIN_WINDOW_H
