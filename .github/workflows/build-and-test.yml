@@ -9,7 +9,7 @@ on:
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-22.04  # Specify the exact Ubuntu version for consistency
 
     steps:
       # Step 1: Checkout the repository
@@ -43,7 +43,15 @@ jobs:
       # Step 4: Verify Qt6 Installation
       - name: Verify Qt6 Installation
         run: |
-          qmake-qt6 --version
+          # Check if qt6-qmake is available
+          if command -v qt6-qmake >/dev/null 2>&1; then
+            echo "qt6-qmake is installed."
+            qt6-qmake --version
+          else
+            echo "qt6-qmake is not found. Listing available qmake binaries:"
+            ls /usr/lib/qt6/bin/
+            exit 1
+          fi
 
       # Step 5: Configure CMake
       - name: Configure CMake
