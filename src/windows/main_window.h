@@ -1,8 +1,10 @@
-#ifndef MAINWINDOW_H
-#define MAINWINDOW_H
+#pragma once
 
-#include "../widgets/canvas.h"
 #include <QMainWindow>
+
+// Forward declarations to reduce unnecessary dependencies in the header
+class Canvas;
+class ToolPanel;
 
 class MainWindow : public QMainWindow {
   Q_OBJECT
@@ -12,7 +14,6 @@ public:
   ~MainWindow();
 
 private:
-  Canvas *canvas;
+  Canvas *_canvas;        // Canvas where drawing happens
+  ToolPanel *_toolPanel;  // Toolbar for selecting tools
 };
-
-#endif // MAINWINDOW_H
