@@ -2,8 +2,8 @@
 #define TOOLPANEL_H
 
 #include <QAction>
-#include <QToolBar>
 #include <QColor>
+#include <QToolBar>
 
 class ToolPanel : public QToolBar {
   Q_OBJECT

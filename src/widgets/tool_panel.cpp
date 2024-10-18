@@ -19,7 +19,8 @@ ToolPanel::ToolPanel(QWidget *parent) : QToolBar(parent) {
 
   // Rectangle action
   actionRectangle = new QAction("Rectangle", this);
-  connect(actionRectangle, &QAction::triggered, this, &ToolPanel::onActionRectangle);
+  connect(actionRectangle, &QAction::triggered, this,
+          &ToolPanel::onActionRectangle);
   addAction(actionRectangle);
 
   // Circle action
@@ -34,12 +35,14 @@ ToolPanel::ToolPanel(QWidget *parent) : QToolBar(parent) {
 
   // Increase brush size action
   actionIncreaseBrush = new QAction("Increase Brush", this);
-  connect(actionIncreaseBrush, &QAction::triggered, this, &ToolPanel::onActionIncreaseBrush);
+  connect(actionIncreaseBrush, &QAction::triggered, this,
+          &ToolPanel::onActionIncreaseBrush);
   addAction(actionIncreaseBrush);
 
   // Decrease brush size action
   actionDecreaseBrush = new QAction("Decrease Brush", this);
-  connect(actionDecreaseBrush, &QAction::triggered, this, &ToolPanel::onActionDecreaseBrush);
+  connect(actionDecreaseBrush, &QAction::triggered, this,
+          &ToolPanel::onActionDecreaseBrush);
   addAction(actionDecreaseBrush);
 
   // Clear canvas action
@@ -64,11 +67,20 @@ void ToolPanel::onActionColor() {
   }
 }
 
-void ToolPanel::onActionRectangle() { emit shapeSelected("Rectangle"); emit rectangleSelected(); }
+void ToolPanel::onActionRectangle() {
+  emit shapeSelected("Rectangle");
+  emit rectangleSelected();
+}
 
-void ToolPanel::onActionCircle() { emit shapeSelected("Circle"); emit circleSelected(); }
+void ToolPanel::onActionCircle() {
+  emit shapeSelected("Circle");
+  emit circleSelected();
+}
 
-void ToolPanel::onActionLine() { emit shapeSelected("Line"); emit lineSelected(); }
+void ToolPanel::onActionLine() {
+  emit shapeSelected("Line");
+  emit lineSelected();
+}
 
 void ToolPanel::onActionIncreaseBrush() { emit increaseBrushSize(); }
 

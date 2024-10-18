@@ -8,19 +8,19 @@ class Canvas;
 class ToolPanel;
 
 class MainWindow : public QMainWindow {
-    Q_OBJECT
+  Q_OBJECT
 
 public:
-    explicit MainWindow(QWidget *parent = nullptr);
-    ~MainWindow();
+  explicit MainWindow(QWidget *parent = nullptr);
+  ~MainWindow();
 
 protected:
-    // Override the keyPressEvent to handle key presses
-    void keyPressEvent(QKeyEvent *event) override;
+  // Override the keyPressEvent to handle key presses
+  void keyPressEvent(QKeyEvent *event) override;
 
 private:
-    Canvas *_canvas;
-    ToolPanel *_toolPanel;
+  Canvas *_canvas;
+  ToolPanel *_toolPanel;
 };
 
 #endif // MAIN_WINDOW_H
