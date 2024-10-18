@@ -2,6 +2,12 @@
 
 FullScreen Pencil Draw is a simple yet powerful application built with C++ and the Qt6 framework. Designed as a demonstration of creating a graphic editor using Qt6, this app allows users to draw on a full-screen canvas with customizable tools and export their creations effortlessly.
 
+## Screenshots
+
+TODO:
+
+*Include screenshots of the application here to showcase the UI and features.*
+
 ## Features
 
 - Adjust the thickness and color of your brush to suit your drawing style.
@@ -10,6 +16,14 @@ FullScreen Pencil Draw is a simple yet powerful application built with C++ and t
 - Save your creations in popular image formats like PNG or JPG for sharing or further editing.
 - Utilize the entire screen real estate for an immersive drawing experience.
 - Intuitive and responsive user interface for seamless interaction.
+
+## Future Enhancements
+
+- Introducing more drawing tools like shapes, text, and color fill.
+- Allowing users to work with multiple layers for more complex drawings.
+- Supporting more file formats and higher resolution exports.
+- Enabling users to customize the UI and tool settings further.
+- Ensuring the application runs seamlessly on Windows, macOS, and Linux.
 
 ## Usage
 
@@ -104,6 +118,18 @@ VI. **Run the Application**
 
 Alternatively, double-click the executable in the `build` directory.
 
+## Troubleshooting
+
+If you encounter issues while building or running the application, consider the following steps:
+
+I. Ensure all required dependencies are installed and up to date.
+
+II. Make sure Qt6 is correctly installed and accessible by CMake.
+
+III. Look at the output logs for any error messages that can guide you in resolving issues.
+
+IV. Open an issue on the [GitHub repository](https://github.com/djeada/FullScreen-Pencil-Draw/issues) detailing the problem you’re facing.
+
 ## Contributing
 
 Contributions are welcome! If you have suggestions, improvements, or bug fixes, feel free to open an issue or submit a pull request.
@@ -138,35 +164,7 @@ VI. **Open a Pull Request**
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
-## Acknowledgements
-
-- For providing the tools and libraries to build a robust graphical application.
-- For simplifying the build process across different platforms.
-
 ## Contact
 
 For any questions or feedback, please reach out via [GitHub Issues](https://github.com/djeada/FullScreen-Pencil-Draw/issues) or contact the maintainer directly.
 
-## Screenshots
-
-*Include screenshots of the application here to showcase the UI and features.*
-
-## Future Enhancements
-
-- Introducing more drawing tools like shapes, text, and color fill.
-- Allowing users to work with multiple layers for more complex drawings.
-- Supporting more file formats and higher resolution exports.
-- Enabling users to customize the UI and tool settings further.
-- Ensuring the application runs seamlessly on Windows, macOS, and Linux.
-
-## Troubleshooting
-
-If you encounter issues while building or running the application, consider the following steps:
-
-I. Ensure all required dependencies are installed and up to date.
-
-II. Make sure Qt6 is correctly installed and accessible by CMake.
-
-III. Look at the output logs for any error messages that can guide you in resolving issues.
-
-IV. Open an issue on the [GitHub repository](https://github.com/djeada/FullScreen-Pencil-Draw/issues) detailing the problem you’re facing.
