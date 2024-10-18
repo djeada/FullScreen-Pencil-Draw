@@ -43,12 +43,12 @@ jobs:
       # Step 4: Verify Qt6 Installation
       - name: Verify Qt6 Installation
         run: |
-          # Check if qt6-qmake is available
-          if command -v qt6-qmake >/dev/null 2>&1; then
-            echo "qt6-qmake is installed."
-            qt6-qmake --version
+          # Check if qmake6 is available
+          if command -v qmake6 >/dev/null 2>&1; then
+            echo "qmake6 is installed."
+            qmake6 --version
           else
-            echo "qt6-qmake is not found. Listing available qmake binaries:"
+            echo "qmake6 is not found. Listing available qmake binaries:"
             ls /usr/lib/qt6/bin/
             exit 1
           fi
@@ -56,7 +56,7 @@ jobs:
       # Step 5: Configure CMake
       - name: Configure CMake
         run: |
-          mkdir build
+          mkdir -p build
           cd build
           cmake -DCMAKE_BUILD_TYPE=Release ..
 
