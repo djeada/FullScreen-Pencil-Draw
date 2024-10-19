@@ -1,10 +1,16 @@
 // canvas.cpp
 #include "canvas.h"
+#include <QApplication>
+#include <QClipboard>
 #include <QColorDialog>
 #include <QGraphicsEllipseItem>
+#include <QGraphicsItem>
 #include <QGraphicsLineItem>
 #include <QGraphicsRectItem>
+#include <QMimeData>
 #include <QMouseEvent>
+
+// Constructor and other methods remain unchanged up to setShape
 
 Canvas::Canvas(QWidget *parent)
     : QGraphicsView(parent), scene(new QGraphicsScene(this)),
@@ -33,6 +39,15 @@ Canvas::Canvas(QWidget *parent)
 
   // Enable mouse tracking to capture mouse move events without pressing buttons
   this->setMouseTracking(true);
+
+  // Enable item selection by default
+  scene->setItemIndexMethod(QGraphicsScene::NoIndex);
+  // Removed: scene->setSelectionArea(QPainterPath());
+
+  // Connect selectionChanged signal to handle any additional logic if needed
+  connect(scene, &QGraphicsScene::selectionChanged, this, [this]() {
+    // Optional: Add any additional logic when selection changes
+  });
 }
 
 Canvas::~Canvas() {
@@ -42,10 +57,19 @@ Canvas::~Canvas() {
 void Canvas::setShape(const QString &shapeType) {
   if (shapeType == "Line") {
     currentShape = Line;
+    this->setDragMode(QGraphicsView::NoDrag); // Disable drag for drawing
   } else if (shapeType == "Rectangle") {
     currentShape = Rectangle;
+    this->setDragMode(QGraphicsView::NoDrag); // Disable drag for drawing
   } else if (shapeType == "Circle") {
     currentShape = Circle;
+    this->setDragMode(QGraphicsView::NoDrag); // Disable drag for drawing
+  }
+  // Handle Selection Tool
+  else if (shapeType == "Selection") {
+    currentShape = Selection;
+    this->setDragMode(
+        QGraphicsView::RubberBandDrag); // Enable selection drag mode
   }
   tempShapeItem = nullptr; // Reset temporary shape
 
@@ -62,6 +86,9 @@ void Canvas::setPenTool() {
   // Ensure the pen color is white when the pen tool is selected
   currentPen.setColor(Qt::white);
 
+  // Disable selection drag mode
+  this->setDragMode(QGraphicsView::NoDrag);
+
   // Hide eraser preview
   hideEraserPreview();
 }
@@ -72,6 +99,9 @@ void Canvas::setEraserTool() {
 
   // Set eraser pen color to background color
   eraserPen.setColor(backgroundColor);
+
+  // Disable selection drag mode
+  this->setDragMode(QGraphicsView::NoDrag);
 
   // Show eraser preview
   // Initial position will be set in mouseMoveEvent
@@ -132,7 +162,15 @@ void Canvas::undoLastAction() {
 }
 
 void Canvas::mousePressEvent(QMouseEvent *event) {
-  startPoint = mapToScene(event->pos()); // Capture the start point of the shape
+  QPointF scenePos = mapToScene(event->pos());
+
+  if (currentShape == Selection) {
+    // Let QGraphicsView handle selection
+    QGraphicsView::mousePressEvent(event);
+    return;
+  }
+
+  startPoint = scenePos; // Capture the start point of the shape
 
   switch (currentShape) {
   case Pen:
@@ -143,6 +181,9 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
     } else {
       currentPath->setPen(currentPen);
     }
+    // Make the path selectable and movable
+    currentPath->setFlags(QGraphicsItem::ItemIsSelectable |
+                          QGraphicsItem::ItemIsMovable);
     QPainterPath p;
     p.moveTo(startPoint);
     currentPath->setPath(p);
@@ -150,21 +191,44 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
     itemsStack.append(currentPath); // Add to undo stack
     break;
   }
-  case Rectangle:
-    tempShapeItem = scene->addRect(QRectF(startPoint, startPoint), currentPen);
+  case Rectangle: {
+    QGraphicsRectItem *rectItem =
+        scene->addRect(QRectF(startPoint, startPoint), currentPen);
+    rectItem->setFlags(QGraphicsItem::ItemIsSelectable |
+                       QGraphicsItem::ItemIsMovable);
+    tempShapeItem = rectItem;
     break;
-  case Circle:
-    tempShapeItem =
+  }
+  case Circle: {
+    QGraphicsEllipseItem *ellipseItem =
         scene->addEllipse(QRectF(startPoint, startPoint), currentPen);
+    ellipseItem->setFlags(QGraphicsItem::ItemIsSelectable |
+                          QGraphicsItem::ItemIsMovable);
+    tempShapeItem = ellipseItem;
     break;
-  case Line:
-    tempShapeItem = scene->addLine(QLineF(startPoint, startPoint), currentPen);
+  }
+  case Line: {
+    QGraphicsLineItem *lineItem =
+        scene->addLine(QLineF(startPoint, startPoint), currentPen);
+    lineItem->setFlags(QGraphicsItem::ItemIsSelectable |
+                       QGraphicsItem::ItemIsMovable);
+    tempShapeItem = lineItem;
+    break;
+  }
+  default:
+    QGraphicsView::mousePressEvent(event);
     break;
   }
 }
 
 void Canvas::mouseMoveEvent(QMouseEvent *event) {
   QPointF currentPoint = mapToScene(event->pos()); // Track mouse movement
+
+  if (currentShape == Selection) {
+    // Let QGraphicsView handle selection
+    QGraphicsView::mouseMoveEvent(event);
+    return;
+  }
 
   switch (currentShape) {
   case Pen:
@@ -196,6 +260,9 @@ void Canvas::mouseMoveEvent(QMouseEvent *event) {
       lineItem->setLine(QLineF(startPoint, currentPoint));
     }
     break;
+  default:
+    QGraphicsView::mouseMoveEvent(event);
+    break;
   }
 
   // Update eraser preview position if in Eraser mode
@@ -206,6 +273,12 @@ void Canvas::mouseMoveEvent(QMouseEvent *event) {
 }
 
 void Canvas::mouseReleaseEvent(QMouseEvent *event) {
+  if (currentShape == Selection) {
+    // Let QGraphicsView handle selection
+    QGraphicsView::mouseReleaseEvent(event);
+    return;
+  }
+
   Q_UNUSED(event);
   if (currentShape != Pen && currentShape != Eraser && tempShapeItem) {
     itemsStack.append(tempShapeItem); // Add shape to undo stack
@@ -233,5 +306,149 @@ void Canvas::updateEraserPreview(const QPointF &position) {
 void Canvas::hideEraserPreview() {
   if (eraserPreview) {
     eraserPreview->hide();
+  }
+}
+
+// ----------------- New Methods for Copy, Cut, Paste -----------------
+
+void Canvas::copySelectedItems() {
+  QList<QGraphicsItem *> selectedItems = scene->selectedItems();
+  if (selectedItems.isEmpty())
+    return;
+
+  // Create a QMimeData object to store the serialized items
+  QMimeData *mimeData = new QMimeData();
+
+  // Serialize the selected items
+  QByteArray byteArray;
+  QDataStream dataStream(&byteArray, QIODevice::WriteOnly);
+
+  for (QGraphicsItem *item : selectedItems) {
+    // For simplicity, handle only specific item types
+    if (auto rectItem = dynamic_cast<QGraphicsRectItem *>(item)) {
+      dataStream << QString("Rectangle");
+      QRectF rect = rectItem->rect();
+      QPointF pos = rectItem->pos();
+      QPen pen = rectItem->pen();
+      QBrush brush = rectItem->brush();
+      dataStream << rect << pos << pen << brush;
+    } else if (auto ellipseItem = dynamic_cast<QGraphicsEllipseItem *>(item)) {
+      dataStream << QString("Ellipse");
+      QRectF rect = ellipseItem->rect();
+      QPointF pos = ellipseItem->pos();
+      QPen pen = ellipseItem->pen();
+      QBrush brush = ellipseItem->brush();
+      dataStream << rect << pos << pen << brush;
+    } else if (auto lineItem = dynamic_cast<QGraphicsLineItem *>(item)) {
+      dataStream << QString("Line");
+      QLineF line = lineItem->line();
+      QPointF pos = lineItem->pos();
+      QPen pen = lineItem->pen();
+      dataStream << line << pos << pen;
+    } else if (auto pathItem = dynamic_cast<QGraphicsPathItem *>(item)) {
+      dataStream << QString("Path");
+      QPainterPath path = pathItem->path();
+      QPointF pos = pathItem->pos();
+      QPen pen = pathItem->pen();
+      dataStream << path << pos << pen;
+    }
+    // Add more item types as needed
+  }
+
+  mimeData->setData("application/x-canvas-items", byteArray);
+
+  // Set the mime data to the clipboard
+  QClipboard *clipboard = QApplication::clipboard();
+  clipboard->setMimeData(mimeData);
+}
+
+void Canvas::cutSelectedItems() {
+  QList<QGraphicsItem *> selectedItems = scene->selectedItems();
+  if (selectedItems.isEmpty())
+    return;
+
+  // First, copy the selected items
+  copySelectedItems();
+
+  // Then, remove the selected items from the scene
+  for (QGraphicsItem *item : selectedItems) {
+    itemsStack.removeAll(item); // Remove from undo stack if present
+    scene->removeItem(item);
+    delete item;
+  }
+}
+
+void Canvas::pasteItems() {
+  QClipboard *clipboard = QApplication::clipboard();
+  const QMimeData *mimeData = clipboard->mimeData();
+
+  if (mimeData->hasFormat("application/x-canvas-items")) {
+    QByteArray byteArray = mimeData->data("application/x-canvas-items");
+    QDataStream dataStream(&byteArray, QIODevice::ReadOnly);
+
+    QList<QGraphicsItem *> pastedItems;
+
+    while (!dataStream.atEnd()) {
+      QString itemType;
+      dataStream >> itemType;
+
+      if (itemType == "Rectangle") {
+        QRectF rect;
+        QPointF pos;
+        QPen pen;
+        QBrush brush;
+        dataStream >> rect >> pos >> pen >> brush;
+
+        QGraphicsRectItem *newRect = scene->addRect(rect, pen, brush);
+        newRect->setPos(pos + QPointF(10, 10)); // Offset to avoid overlap
+        newRect->setFlags(QGraphicsItem::ItemIsSelectable |
+                          QGraphicsItem::ItemIsMovable);
+        itemsStack.append(newRect);
+        pastedItems.append(newRect);
+      } else if (itemType == "Ellipse") {
+        QRectF rect;
+        QPointF pos;
+        QPen pen;
+        QBrush brush;
+        dataStream >> rect >> pos >> pen >> brush;
+
+        QGraphicsEllipseItem *newEllipse = scene->addEllipse(rect, pen, brush);
+        newEllipse->setPos(pos + QPointF(10, 10)); // Offset to avoid overlap
+        newEllipse->setFlags(QGraphicsItem::ItemIsSelectable |
+                             QGraphicsItem::ItemIsMovable);
+        itemsStack.append(newEllipse);
+        pastedItems.append(newEllipse);
+      } else if (itemType == "Line") {
+        QLineF line;
+        QPointF pos;
+        QPen pen;
+        dataStream >> line >> pos >> pen;
+
+        QGraphicsLineItem *newLine = scene->addLine(line, pen);
+        newLine->setPos(pos + QPointF(10, 10)); // Offset to avoid overlap
+        newLine->setFlags(QGraphicsItem::ItemIsSelectable |
+                          QGraphicsItem::ItemIsMovable);
+        itemsStack.append(newLine);
+        pastedItems.append(newLine);
+      } else if (itemType == "Path") {
+        QPainterPath path;
+        QPointF pos;
+        QPen pen;
+        dataStream >> path >> pos >> pen;
+
+        QGraphicsPathItem *newPath = scene->addPath(path, pen);
+        newPath->setPos(pos + QPointF(10, 10)); // Offset to avoid overlap
+        newPath->setFlags(QGraphicsItem::ItemIsSelectable |
+                          QGraphicsItem::ItemIsMovable);
+        itemsStack.append(newPath);
+        pastedItems.append(newPath);
+      }
+      // Add more item types as needed
+    }
+
+    // Select all pasted items
+    for (QGraphicsItem *item : pastedItems) {
+      item->setSelected(true);
+    }
   }
 }
