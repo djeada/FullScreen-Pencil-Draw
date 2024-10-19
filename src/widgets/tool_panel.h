@@ -17,6 +17,7 @@ signals:
   void rectangleSelected();
   void circleSelected();
   void lineSelected();
+  void selectionSelected(); // New signal for selection
 
   // Other tool signals
   void penSelected();
@@ -26,12 +27,16 @@ signals:
   void decreaseBrushSize();
   void clearCanvas();
   void undoAction();
+  void copyAction();
+  void cutAction();
+  void pasteAction();
 
 private:
   // Actions for shapes
   QAction *actionRectangle;
   QAction *actionCircle;
   QAction *actionLine;
+  QAction *actionSelection; // New QAction for selection
 
   // Actions for other tools
   QAction *actionPen;
@@ -47,6 +52,7 @@ private slots:
   void onActionRectangle();
   void onActionCircle();
   void onActionLine();
+  void onActionSelection(); // New slot for selection
 
   // Slots for other tools
   void onActionPen();

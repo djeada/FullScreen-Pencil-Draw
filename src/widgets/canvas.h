@@ -1,10 +1,14 @@
+// canvas.h
 #ifndef CANVAS_H
 #define CANVAS_H
 
+#include <QApplication>
+#include <QClipboard>
 #include <QGraphicsPathItem>
 #include <QGraphicsScene>
 #include <QGraphicsView>
 #include <QList>
+#include <QMimeData>
 #include <QMouseEvent>
 #include <QPen>
 
@@ -17,15 +21,20 @@ public:
 
 public slots:
   // Shape drawing and tool functions
-  void setShape(
-      const QString &shapeType); // Set shape tool (Line, Circle, Rectangle)
-  void setPenTool();             // Set freehand drawing tool
-  void setEraserTool();          // Set eraser tool
-  void setPenColor(const QColor &color); // Set color for pen or shape
-  void increaseBrushSize();              // Increase brush size for pen/eraser
-  void decreaseBrushSize();              // Decrease brush size for pen/eraser
-  void clearCanvas();                    // Clear the entire canvas
+  void setShape(const QString &shapeType); // Set shape tool (Line, Circle,
+                                           // Rectangle, Selection)
+  void setPenTool();                       // Set freehand drawing tool
+  void setEraserTool();                    // Set eraser tool
+  void setPenColor(const QColor &color);   // Set color for pen or shape
+  void increaseBrushSize();                // Increase brush size for pen/eraser
+  void decreaseBrushSize();                // Decrease brush size for pen/eraser
+  void clearCanvas();                      // Clear the entire canvas
   void undoLastAction(); // Undo last action (remove last drawn item)
+
+  // New slots for copy, cut, paste
+  void copySelectedItems();
+  void cutSelectedItems();
+  void pasteItems();
 
 protected:
   void mousePressEvent(
@@ -38,7 +47,7 @@ protected:
   QColor getBackgroundColor() const;
 
 private:
-  enum ShapeType { Line, Rectangle, Circle, Pen, Eraser };
+  enum ShapeType { Line, Rectangle, Circle, Pen, Eraser, Selection };
 
   QGraphicsScene *scene;  // The graphics scene to draw on
   QPen currentPen;        // Current pen settings

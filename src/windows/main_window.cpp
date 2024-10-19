@@ -39,6 +39,15 @@ MainWindow::MainWindow(QWidget *parent)
           [this]() { _canvas->setShape("Circle"); });
   connect(_toolPanel, &ToolPanel::lineSelected, _canvas,
           [this]() { _canvas->setShape("Line"); });
+  connect(_toolPanel, &ToolPanel::selectionSelected, _canvas,
+          [this]() { _canvas->setShape("Selection"); });
+
+  // Connect Copy, Cut, Paste signals
+  connect(_toolPanel, &ToolPanel::copyAction, _canvas,
+          &Canvas::copySelectedItems);
+  connect(_toolPanel, &ToolPanel::cutAction, _canvas,
+          &Canvas::cutSelectedItems);
+  connect(_toolPanel, &ToolPanel::pasteAction, _canvas, &Canvas::pasteItems);
 
   // Other connections
   connect(_toolPanel, &ToolPanel::increaseBrushSize, _canvas,
@@ -59,9 +68,15 @@ MainWindow::~MainWindow() {
   // memory
 }
 
-// Override the keyPressEvent to handle Escape key
+// Override the keyPressEvent to handle Escape key and shortcuts
 void MainWindow::keyPressEvent(QKeyEvent *event) {
-  if (event->key() == Qt::Key_Escape) {
+  if (event->matches(QKeySequence::Copy)) {
+    _canvas->copySelectedItems();
+  } else if (event->matches(QKeySequence::Cut)) {
+    _canvas->cutSelectedItems();
+  } else if (event->matches(QKeySequence::Paste)) {
+    _canvas->pasteItems();
+  } else if (event->key() == Qt::Key_Escape) {
     // Option 1: Close the main window
     this->close();
 
