@@ -42,7 +42,6 @@ Canvas::Canvas(QWidget *parent)
 
   // Enable item selection by default
   scene->setItemIndexMethod(QGraphicsScene::NoIndex);
-  // Removed: scene->setSelectionArea(QPainterPath());
 
   // Connect selectionChanged signal to handle any additional logic if needed
   connect(scene, &QGraphicsScene::selectionChanged, this, [this]() {
@@ -185,10 +184,14 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
     currentPath->setFlags(QGraphicsItem::ItemIsSelectable |
                           QGraphicsItem::ItemIsMovable);
     QPainterPath p;
-    p.moveTo(startPoint);
+    p.moveTo(scenePos);
     currentPath->setPath(p);
     scene->addItem(currentPath);    // Add to the scene
     itemsStack.append(currentPath); // Add to undo stack
+
+    // Clear the point buffer and add the starting point
+    pointBuffer.clear();
+    pointBuffer.append(scenePos);
     break;
   }
   case Rectangle: {
@@ -233,11 +236,7 @@ void Canvas::mouseMoveEvent(QMouseEvent *event) {
   switch (currentShape) {
   case Pen:
   case Eraser:
-    if (currentPath) {
-      QPainterPath p = currentPath->path();
-      p.lineTo(currentPoint);
-      currentPath->setPath(p);
-    }
+    addPoint(currentPoint); // Add point with smoothing
     break;
   case Rectangle:
     if (tempShapeItem) {
@@ -285,6 +284,7 @@ void Canvas::mouseReleaseEvent(QMouseEvent *event) {
     tempShapeItem = nullptr;          // Clear temporary item
   } else if (currentShape == Pen || currentShape == Eraser) {
     currentPath = nullptr; // Reset current path
+    pointBuffer.clear();   // Clear the point buffer
   }
 }
 
@@ -308,8 +308,6 @@ void Canvas::hideEraserPreview() {
     eraserPreview->hide();
   }
 }
-
-// ----------------- New Methods for Copy, Cut, Paste -----------------
 
 void Canvas::copySelectedItems() {
   QList<QGraphicsItem *> selectedItems = scene->selectedItems();
@@ -450,5 +448,40 @@ void Canvas::pasteItems() {
     for (QGraphicsItem *item : pastedItems) {
       item->setSelected(true);
     }
+  }
+}
+
+void Canvas::addPoint(const QPointF &point) {
+  if (!currentPath)
+    return;
+
+  // Add the new point to the buffer
+  pointBuffer.append(point);
+
+  // Define the minimum number of points required for smoothing
+  const int minPointsRequired = 4;
+
+  // Perform smoothing only if we have enough points
+  if (pointBuffer.size() >= minPointsRequired) {
+    // Safely access the last four points
+    QPointF p0 = pointBuffer.at(pointBuffer.size() - minPointsRequired);
+    QPointF p1 = pointBuffer.at(pointBuffer.size() - minPointsRequired + 1);
+    QPointF p2 = pointBuffer.at(pointBuffer.size() - minPointsRequired + 2);
+    QPointF p3 = pointBuffer.at(pointBuffer.size() - minPointsRequired + 3);
+
+    // Calculate control points for cubic Bezier curve
+    QPointF controlPoint1 = p1 + (p2 - p0) / 6.0;
+    QPointF controlPoint2 = p2 - (p3 - p1) / 6.0;
+
+    // Add cubic Bezier curve to the path
+    QPainterPath path = currentPath->path();
+    path.cubicTo(controlPoint1, controlPoint2, p2);
+    currentPath->setPath(path);
+  }
+
+  // Limit the buffer size to prevent it from growing indefinitely
+  // Ensure we do not remove points prematurely
+  if (pointBuffer.size() > minPointsRequired) {
+    pointBuffer.removeFirst();
   }
 }
