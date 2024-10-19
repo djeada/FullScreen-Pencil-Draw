@@ -67,6 +67,12 @@ private:
 
   void updateEraserPreview(const QPointF &position);
   void hideEraserPreview();
+  // Buffer to store recent points for smoothing
+  QVector<QPointF> pointBuffer;
+  const int smoothingFactor = 5; // Number of points to consider for smoothing
+  QPointF previousPoint;
+  // Method to add a point and update the path with smoothing
+  void addPoint(const QPointF &point);
 };
 
 #endif // CANVAS_H
