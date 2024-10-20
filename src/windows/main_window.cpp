@@ -2,8 +2,8 @@
 #include "main_window.h"
 #include "../widgets/canvas.h"
 #include "../widgets/tool_panel.h"
-#include <QApplication> // Include if you choose to use qApp->quit()
-#include <QKeyEvent>    // Include to handle key events
+#include <QApplication>
+#include <QKeyEvent>
 #include <QVBoxLayout>
 
 MainWindow::MainWindow(QWidget *parent)

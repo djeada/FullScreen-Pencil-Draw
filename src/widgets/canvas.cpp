@@ -10,112 +10,90 @@
 #include <QMimeData>
 #include <QMouseEvent>
 
-// Constructor and other methods remain unchanged up to setShape
-
 Canvas::Canvas(QWidget *parent)
     : QGraphicsView(parent), scene(new QGraphicsScene(this)),
-      tempShapeItem(nullptr), currentShape(Line),
-      currentPen(Qt::white, 3), // Default drawing color: white
-      eraserPen(Qt::black, 10), // Eraser color will match background
-      currentPath(nullptr),
-      backgroundColor(Qt::black), // Set background color: black
-      eraserPreview(nullptr) {
+      tempShapeItem(nullptr), currentShape(Line), currentPen(Qt::white, 3),
+      eraserPen(Qt::black, 10), currentPath(nullptr),
+      backgroundColor(Qt::black), eraserPreview(nullptr) {
 
   this->setScene(scene);
   this->setRenderHint(QPainter::Antialiasing);
-  scene->setSceneRect(0, 0, 800, 600); // Set canvas size
+  scene->setSceneRect(0, 0, 800, 600);
 
-  // Set the scene background to backgroundColor
   scene->setBackgroundBrush(backgroundColor);
 
-  // Configure the eraserPen to match the background color
   eraserPen.setColor(backgroundColor);
 
-  // Initialize the eraser preview circle
   eraserPreview = scene->addEllipse(0, 0, eraserPen.width(), eraserPen.width(),
                                     QPen(Qt::gray), QBrush(Qt::NoBrush));
-  eraserPreview->setZValue(1); // Ensure it's on top
-  eraserPreview->hide();       // Hide initially
+  eraserPreview->setZValue(1);
+  eraserPreview->hide();
 
-  // Enable mouse tracking to capture mouse move events without pressing buttons
   this->setMouseTracking(true);
 
-  // Enable item selection by default
   scene->setItemIndexMethod(QGraphicsScene::NoIndex);
 
-  // Connect selectionChanged signal to handle any additional logic if needed
-  connect(scene, &QGraphicsScene::selectionChanged, this, [this]() {
-    // Optional: Add any additional logic when selection changes
-  });
+  connect(scene, &QGraphicsScene::selectionChanged, this, [this]() {});
 }
 
-Canvas::~Canvas() {
-  // No need to delete scene; it will be deleted automatically
-}
+Canvas::~Canvas() {}
 
 void Canvas::setShape(const QString &shapeType) {
   if (shapeType == "Line") {
     currentShape = Line;
-    this->setDragMode(QGraphicsView::NoDrag); // Disable drag for drawing
+    this->setDragMode(QGraphicsView::NoDrag);
   } else if (shapeType == "Rectangle") {
     currentShape = Rectangle;
-    this->setDragMode(QGraphicsView::NoDrag); // Disable drag for drawing
+    this->setDragMode(QGraphicsView::NoDrag);
   } else if (shapeType == "Circle") {
     currentShape = Circle;
-    this->setDragMode(QGraphicsView::NoDrag); // Disable drag for drawing
-  }
-  // Handle Selection Tool
-  else if (shapeType == "Selection") {
+    this->setDragMode(QGraphicsView::NoDrag);
+  } else if (shapeType == "Selection") {
     currentShape = Selection;
-    this->setDragMode(
-        QGraphicsView::RubberBandDrag); // Enable selection drag mode
+    this->setDragMode(QGraphicsView::RubberBandDrag);
   }
-  tempShapeItem = nullptr; // Reset temporary shape
+  tempShapeItem = nullptr;
 
-  // Hide eraser preview if not in eraser mode
   if (currentShape != Eraser) {
     hideEraserPreview();
+  }
+
+  if (currentShape != Selection) {
+    scene->clearSelection();
   }
 }
 
 void Canvas::setPenTool() {
-  currentShape = Pen; // Set to freehand drawing mode
+  currentShape = Pen;
   tempShapeItem = nullptr;
 
-  // Ensure the pen color is white when the pen tool is selected
-  currentPen.setColor(Qt::white);
-
-  // Disable selection drag mode
   this->setDragMode(QGraphicsView::NoDrag);
 
-  // Hide eraser preview
   hideEraserPreview();
+
+  scene->clearSelection();
 }
 
 void Canvas::setEraserTool() {
-  currentShape = Eraser; // Set to eraser mode
+  currentShape = Eraser;
   tempShapeItem = nullptr;
 
-  // Set eraser pen color to background color
   eraserPen.setColor(backgroundColor);
 
-  // Disable selection drag mode
   this->setDragMode(QGraphicsView::NoDrag);
 
-  // Show eraser preview
-  // Initial position will be set in mouseMoveEvent
+  hideEraserPreview();
+
+  scene->clearSelection();
 }
 
-void Canvas::setPenColor(const QColor &color) {
-  currentPen.setColor(color); // Set pen color
-}
+void Canvas::setPenColor(const QColor &color) { currentPen.setColor(color); }
 
 void Canvas::increaseBrushSize() {
   int size = currentPen.width();
   if (size < MAX_BRUSH_SIZE) {
-    currentPen.setWidth(size + 2); // Increase brush size
-    eraserPen.setWidth(eraserPen.width() +
-                       2); // Optionally increase eraser size
+    currentPen.setWidth(size + 2);
+    eraserPen.setWidth(eraserPen.width() + 2);
     if (currentShape == Eraser) {
       eraserPreview->setRect(eraserPreview->rect().x(),
                              eraserPreview->rect().y(), eraserPen.width(),
@@ -127,9 +105,8 @@ void Canvas::increaseBrushSize() {
 void Canvas::decreaseBrushSize() {
   int size = currentPen.width();
   if (size > MIN_BRUSH_SIZE) {
-    currentPen.setWidth(size - 2); // Decrease brush size
-    eraserPen.setWidth(eraserPen.width() -
-                       2); // Optionally decrease eraser size
+    currentPen.setWidth(size - 2);
+    eraserPen.setWidth(eraserPen.width() - 2);
     if (currentShape == Eraser) {
       eraserPreview->setRect(eraserPreview->rect().x(),
                              eraserPreview->rect().y(), eraserPen.width(),
@@ -139,24 +116,31 @@ void Canvas::decreaseBrushSize() {
 }
 
 void Canvas::clearCanvas() {
-  scene->clear();     // Clear the entire canvas
-  itemsStack.clear(); // Clear the undo stack
+  scene->clear();
+  undoStack.clear();
+  redoStack.clear();
 
-  // Reset the background to backgroundColor after clearing
   scene->setBackgroundBrush(backgroundColor);
 
-  // Re-add the eraser preview
   eraserPreview = scene->addEllipse(0, 0, eraserPen.width(), eraserPen.width(),
                                     QPen(Qt::gray), QBrush(Qt::NoBrush));
-  eraserPreview->setZValue(1); // Ensure it's on top
-  eraserPreview->hide();       // Hide initially
+  eraserPreview->setZValue(1);
+  eraserPreview->hide();
 }
 
 void Canvas::undoLastAction() {
-  if (!itemsStack.isEmpty()) {
-    QGraphicsItem *lastItem = itemsStack.takeLast(); // Remove last item
-    scene->removeItem(lastItem);                     // Remove it from the scene
-    delete lastItem;                                 // Free memory
+  if (!undoStack.isEmpty()) {
+    Action *lastAction = undoStack.takeLast();
+    lastAction->undo();
+    redoStack.append(lastAction);
+  }
+}
+
+void Canvas::redoLastAction() {
+  if (!redoStack.isEmpty()) {
+    Action *nextAction = redoStack.takeLast();
+    nextAction->redo();
+    undoStack.append(nextAction);
   }
 }
 
@@ -164,58 +148,75 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
   QPointF scenePos = mapToScene(event->pos());
 
   if (currentShape == Selection) {
-    // Let QGraphicsView handle selection
     QGraphicsView::mousePressEvent(event);
     return;
   }
 
-  startPoint = scenePos; // Capture the start point of the shape
+  startPoint = scenePos;
 
   switch (currentShape) {
-  case Pen:
   case Eraser: {
+    eraseAt(scenePos);
+    break;
+  }
+  case Pen: {
     currentPath = new QGraphicsPathItem();
-    if (currentShape == Eraser) {
-      currentPath->setPen(eraserPen);
-    } else {
-      currentPath->setPen(currentPen);
-    }
-    // Make the path selectable and movable
+    currentPath->setPen(currentPen);
     currentPath->setFlags(QGraphicsItem::ItemIsSelectable |
                           QGraphicsItem::ItemIsMovable);
     QPainterPath p;
     p.moveTo(scenePos);
     currentPath->setPath(p);
-    scene->addItem(currentPath);    // Add to the scene
-    itemsStack.append(currentPath); // Add to undo stack
+    scene->addItem(currentPath);
 
-    // Clear the point buffer and add the starting point
     pointBuffer.clear();
     pointBuffer.append(scenePos);
+
+    DrawAction *action = new DrawAction(currentPath);
+    undoStack.append(action);
+    redoStack.clear();
     break;
   }
   case Rectangle: {
     QGraphicsRectItem *rectItem =
-        scene->addRect(QRectF(startPoint, startPoint), currentPen);
+        new QGraphicsRectItem(QRectF(startPoint, startPoint));
+    rectItem->setPen(currentPen);
     rectItem->setFlags(QGraphicsItem::ItemIsSelectable |
                        QGraphicsItem::ItemIsMovable);
+    scene->addItem(rectItem);
     tempShapeItem = rectItem;
+
+    DrawAction *action = new DrawAction(rectItem);
+    undoStack.append(action);
+    redoStack.clear();
     break;
   }
   case Circle: {
     QGraphicsEllipseItem *ellipseItem =
-        scene->addEllipse(QRectF(startPoint, startPoint), currentPen);
+        new QGraphicsEllipseItem(QRectF(startPoint, startPoint));
+    ellipseItem->setPen(currentPen);
     ellipseItem->setFlags(QGraphicsItem::ItemIsSelectable |
                           QGraphicsItem::ItemIsMovable);
+    scene->addItem(ellipseItem);
     tempShapeItem = ellipseItem;
+
+    DrawAction *action = new DrawAction(ellipseItem);
+    undoStack.append(action);
+    redoStack.clear();
     break;
   }
   case Line: {
     QGraphicsLineItem *lineItem =
-        scene->addLine(QLineF(startPoint, startPoint), currentPen);
+        new QGraphicsLineItem(QLineF(startPoint, startPoint));
+    lineItem->setPen(currentPen);
     lineItem->setFlags(QGraphicsItem::ItemIsSelectable |
                        QGraphicsItem::ItemIsMovable);
+    scene->addItem(lineItem);
     tempShapeItem = lineItem;
+
+    DrawAction *action = new DrawAction(lineItem);
+    undoStack.append(action);
+    redoStack.clear();
     break;
   }
   default:
@@ -225,18 +226,16 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
 }
 
 void Canvas::mouseMoveEvent(QMouseEvent *event) {
-  QPointF currentPoint = mapToScene(event->pos()); // Track mouse movement
+  QPointF currentPoint = mapToScene(event->pos());
 
   if (currentShape == Selection) {
-    // Let QGraphicsView handle selection
     QGraphicsView::mouseMoveEvent(event);
     return;
   }
 
   switch (currentShape) {
   case Pen:
-  case Eraser:
-    addPoint(currentPoint); // Add point with smoothing
+    addPoint(currentPoint);
     break;
   case Rectangle:
     if (tempShapeItem) {
@@ -264,7 +263,6 @@ void Canvas::mouseMoveEvent(QMouseEvent *event) {
     break;
   }
 
-  // Update eraser preview position if in Eraser mode
   if (currentShape == Eraser) {
     QPointF scenePos = mapToScene(event->pos());
     updateEraserPreview(scenePos);
@@ -273,18 +271,16 @@ void Canvas::mouseMoveEvent(QMouseEvent *event) {
 
 void Canvas::mouseReleaseEvent(QMouseEvent *event) {
   if (currentShape == Selection) {
-    // Let QGraphicsView handle selection
     QGraphicsView::mouseReleaseEvent(event);
     return;
   }
 
   Q_UNUSED(event);
   if (currentShape != Pen && currentShape != Eraser && tempShapeItem) {
-    itemsStack.append(tempShapeItem); // Add shape to undo stack
-    tempShapeItem = nullptr;          // Clear temporary item
-  } else if (currentShape == Pen || currentShape == Eraser) {
-    currentPath = nullptr; // Reset current path
-    pointBuffer.clear();   // Clear the point buffer
+    tempShapeItem = nullptr;
+  } else if (currentShape == Pen) {
+    currentPath = nullptr;
+    pointBuffer.clear();
   }
 }
 
@@ -292,12 +288,10 @@ void Canvas::updateEraserPreview(const QPointF &position) {
   if (!eraserPreview)
     return;
 
-  // Center the preview circle on the cursor
   qreal radius = eraserPen.width() / 2.0;
   eraserPreview->setRect(position.x() - radius, position.y() - radius,
                          eraserPen.width(), eraserPen.width());
 
-  // Show the preview if it's not already visible
   if (!eraserPreview->isVisible()) {
     eraserPreview->show();
   }
@@ -314,15 +308,12 @@ void Canvas::copySelectedItems() {
   if (selectedItems.isEmpty())
     return;
 
-  // Create a QMimeData object to store the serialized items
   QMimeData *mimeData = new QMimeData();
 
-  // Serialize the selected items
   QByteArray byteArray;
   QDataStream dataStream(&byteArray, QIODevice::WriteOnly);
 
   for (QGraphicsItem *item : selectedItems) {
-    // For simplicity, handle only specific item types
     if (auto rectItem = dynamic_cast<QGraphicsRectItem *>(item)) {
       dataStream << QString("Rectangle");
       QRectF rect = rectItem->rect();
@@ -350,12 +341,10 @@ void Canvas::copySelectedItems() {
       QPen pen = pathItem->pen();
       dataStream << path << pos << pen;
     }
-    // Add more item types as needed
   }
 
   mimeData->setData("application/x-canvas-items", byteArray);
 
-  // Set the mime data to the clipboard
   QClipboard *clipboard = QApplication::clipboard();
   clipboard->setMimeData(mimeData);
 }
@@ -365,14 +354,13 @@ void Canvas::cutSelectedItems() {
   if (selectedItems.isEmpty())
     return;
 
-  // First, copy the selected items
   copySelectedItems();
 
-  // Then, remove the selected items from the scene
   for (QGraphicsItem *item : selectedItems) {
-    itemsStack.removeAll(item); // Remove from undo stack if present
+    DeleteAction *action = new DeleteAction(item);
+    undoStack.append(action);
+    redoStack.clear();
     scene->removeItem(item);
-    delete item;
   }
 }
 
@@ -397,12 +385,18 @@ void Canvas::pasteItems() {
         QBrush brush;
         dataStream >> rect >> pos >> pen >> brush;
 
-        QGraphicsRectItem *newRect = scene->addRect(rect, pen, brush);
-        newRect->setPos(pos + QPointF(10, 10)); // Offset to avoid overlap
+        QGraphicsRectItem *newRect = new QGraphicsRectItem(rect);
+        newRect->setPen(pen);
+        newRect->setBrush(brush);
+        newRect->setPos(pos + QPointF(10, 10));
         newRect->setFlags(QGraphicsItem::ItemIsSelectable |
                           QGraphicsItem::ItemIsMovable);
-        itemsStack.append(newRect);
+        scene->addItem(newRect);
         pastedItems.append(newRect);
+
+        DrawAction *action = new DrawAction(newRect);
+        undoStack.append(action);
+        redoStack.clear();
       } else if (itemType == "Ellipse") {
         QRectF rect;
         QPointF pos;
@@ -410,41 +404,55 @@ void Canvas::pasteItems() {
         QBrush brush;
         dataStream >> rect >> pos >> pen >> brush;
 
-        QGraphicsEllipseItem *newEllipse = scene->addEllipse(rect, pen, brush);
-        newEllipse->setPos(pos + QPointF(10, 10)); // Offset to avoid overlap
+        QGraphicsEllipseItem *newEllipse = new QGraphicsEllipseItem(rect);
+        newEllipse->setPen(pen);
+        newEllipse->setBrush(brush);
+        newEllipse->setPos(pos + QPointF(10, 10));
         newEllipse->setFlags(QGraphicsItem::ItemIsSelectable |
                              QGraphicsItem::ItemIsMovable);
-        itemsStack.append(newEllipse);
+        scene->addItem(newEllipse);
         pastedItems.append(newEllipse);
+
+        DrawAction *action = new DrawAction(newEllipse);
+        undoStack.append(action);
+        redoStack.clear();
       } else if (itemType == "Line") {
         QLineF line;
         QPointF pos;
         QPen pen;
         dataStream >> line >> pos >> pen;
 
-        QGraphicsLineItem *newLine = scene->addLine(line, pen);
-        newLine->setPos(pos + QPointF(10, 10)); // Offset to avoid overlap
+        QGraphicsLineItem *newLine = new QGraphicsLineItem(line);
+        newLine->setPen(pen);
+        newLine->setPos(pos + QPointF(10, 10));
         newLine->setFlags(QGraphicsItem::ItemIsSelectable |
                           QGraphicsItem::ItemIsMovable);
-        itemsStack.append(newLine);
+        scene->addItem(newLine);
         pastedItems.append(newLine);
+
+        DrawAction *action = new DrawAction(newLine);
+        undoStack.append(action);
+        redoStack.clear();
       } else if (itemType == "Path") {
         QPainterPath path;
         QPointF pos;
         QPen pen;
         dataStream >> path >> pos >> pen;
 
-        QGraphicsPathItem *newPath = scene->addPath(path, pen);
-        newPath->setPos(pos + QPointF(10, 10)); // Offset to avoid overlap
+        QGraphicsPathItem *newPath = new QGraphicsPathItem(path);
+        newPath->setPen(pen);
+        newPath->setPos(pos + QPointF(10, 10));
         newPath->setFlags(QGraphicsItem::ItemIsSelectable |
                           QGraphicsItem::ItemIsMovable);
-        itemsStack.append(newPath);
+        scene->addItem(newPath);
         pastedItems.append(newPath);
+
+        DrawAction *action = new DrawAction(newPath);
+        undoStack.append(action);
+        redoStack.clear();
       }
-      // Add more item types as needed
     }
 
-    // Select all pasted items
     for (QGraphicsItem *item : pastedItems) {
       item->setSelected(true);
     }
@@ -455,33 +463,40 @@ void Canvas::addPoint(const QPointF &point) {
   if (!currentPath)
     return;
 
-  // Add the new point to the buffer
   pointBuffer.append(point);
 
-  // Define the minimum number of points required for smoothing
   const int minPointsRequired = 4;
 
-  // Perform smoothing only if we have enough points
   if (pointBuffer.size() >= minPointsRequired) {
-    // Safely access the last four points
     QPointF p0 = pointBuffer.at(pointBuffer.size() - minPointsRequired);
     QPointF p1 = pointBuffer.at(pointBuffer.size() - minPointsRequired + 1);
     QPointF p2 = pointBuffer.at(pointBuffer.size() - minPointsRequired + 2);
     QPointF p3 = pointBuffer.at(pointBuffer.size() - minPointsRequired + 3);
 
-    // Calculate control points for cubic Bezier curve
     QPointF controlPoint1 = p1 + (p2 - p0) / 6.0;
     QPointF controlPoint2 = p2 - (p3 - p1) / 6.0;
 
-    // Add cubic Bezier curve to the path
     QPainterPath path = currentPath->path();
     path.cubicTo(controlPoint1, controlPoint2, p2);
     currentPath->setPath(path);
   }
 
-  // Limit the buffer size to prevent it from growing indefinitely
-  // Ensure we do not remove points prematurely
   if (pointBuffer.size() > minPointsRequired) {
     pointBuffer.removeFirst();
+  }
+}
+
+void Canvas::eraseAt(const QPointF &point) {
+  qreal eraserSize = eraserPen.width();
+  QRectF eraserRect(point.x() - eraserSize / 2, point.y() - eraserSize / 2,
+                    eraserSize, eraserSize);
+  QList<QGraphicsItem *> itemsToErase = scene->items(eraserRect);
+  for (QGraphicsItem *item : itemsToErase) {
+    if (item != eraserPreview) {
+      DeleteAction *action = new DeleteAction(item);
+      undoStack.append(action);
+      redoStack.clear();
+      scene->removeItem(item);
+    }
   }
 }
