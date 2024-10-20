@@ -2,15 +2,21 @@
 #ifndef CANVAS_H
 #define CANVAS_H
 
+#include "../core/action.h"
 #include <QApplication>
 #include <QClipboard>
+#include <QGraphicsEllipseItem>
+#include <QGraphicsItem>
+#include <QGraphicsLineItem>
 #include <QGraphicsPathItem>
+#include <QGraphicsRectItem>
 #include <QGraphicsScene>
 #include <QGraphicsView>
 #include <QList>
 #include <QMimeData>
 #include <QMouseEvent>
 #include <QPen>
+#include <QVector>
 
 class Canvas : public QGraphicsView {
   Q_OBJECT
@@ -20,59 +26,47 @@ public:
   ~Canvas();
 
 public slots:
-  // Shape drawing and tool functions
-  void setShape(const QString &shapeType); // Set shape tool (Line, Circle,
-                                           // Rectangle, Selection)
-  void setPenTool();                       // Set freehand drawing tool
-  void setEraserTool();                    // Set eraser tool
-  void setPenColor(const QColor &color);   // Set color for pen or shape
-  void increaseBrushSize();                // Increase brush size for pen/eraser
-  void decreaseBrushSize();                // Decrease brush size for pen/eraser
-  void clearCanvas();                      // Clear the entire canvas
-  void undoLastAction(); // Undo last action (remove last drawn item)
-
-  // New slots for copy, cut, paste
+  void setShape(const QString &shapeType);
+  void setPenTool();
+  void setEraserTool();
+  void setPenColor(const QColor &color);
+  void increaseBrushSize();
+  void decreaseBrushSize();
+  void clearCanvas();
+  void undoLastAction();
+  void redoLastAction();
   void copySelectedItems();
   void cutSelectedItems();
   void pasteItems();
 
 protected:
-  void mousePressEvent(
-      QMouseEvent *event) override; // Handle mouse press for starting shapes
-  void mouseMoveEvent(
-      QMouseEvent *event) override; // Handle mouse movement for drawing shapes
-  void mouseReleaseEvent(QMouseEvent *event)
-      override; // Handle mouse release for finalizing shapes
-  void setBackgroundColor(const QColor &color);
-  QColor getBackgroundColor() const;
+  void mousePressEvent(QMouseEvent *event) override;
+  void mouseMoveEvent(QMouseEvent *event) override;
+  void mouseReleaseEvent(QMouseEvent *event) override;
 
 private:
   enum ShapeType { Line, Rectangle, Circle, Pen, Eraser, Selection };
 
-  QGraphicsScene *scene;  // The graphics scene to draw on
-  QPen currentPen;        // Current pen settings
-  QPen eraserPen;         // Eraser pen settings
-  ShapeType currentShape; // The current shape being drawn
-  QPointF
-      startPoint; // The point where the mouse was first pressed (shape start)
-  QGraphicsItem
-      *tempShapeItem; // Temporary item for drawing shapes (until mouse release)
-  QGraphicsPathItem *currentPath;    // Path for freehand drawing (Pen tool)
-  QList<QGraphicsItem *> itemsStack; // Stack of items for undo functionality
-
+  QGraphicsScene *scene;
+  QPen currentPen;
+  QPen eraserPen;
+  ShapeType currentShape;
+  QPointF startPoint;
+  QGraphicsItem *tempShapeItem;
+  QGraphicsPathItem *currentPath;
   QColor backgroundColor;
-  QGraphicsEllipseItem *eraserPreview; // Eraser impact preview
-  const int MAX_BRUSH_SIZE = 150;      // Maximum brush size
-  const int MIN_BRUSH_SIZE = 1;        // Minimum brush size
-
+  QGraphicsEllipseItem *eraserPreview;
+  const int MAX_BRUSH_SIZE = 150;
+  const int MIN_BRUSH_SIZE = 1;
+  QVector<QPointF> pointBuffer;
+  const int smoothingFactor = 5;
+  QPointF previousPoint;
   void updateEraserPreview(const QPointF &position);
   void hideEraserPreview();
-  // Buffer to store recent points for smoothing
-  QVector<QPointF> pointBuffer;
-  const int smoothingFactor = 5; // Number of points to consider for smoothing
-  QPointF previousPoint;
-  // Method to add a point and update the path with smoothing
   void addPoint(const QPointF &point);
+  void eraseAt(const QPointF &point);
+  QList<Action *> undoStack;
+  QList<Action *> redoStack;
 };
 
 #endif // CANVAS_H
