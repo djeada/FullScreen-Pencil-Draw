@@ -485,14 +485,28 @@ void Canvas::addPoint(const QPointF &point) {
     pointBuffer.removeFirst();
   }
 }
-
 void Canvas::eraseAt(const QPointF &point) {
   qreal eraserSize = eraserPen.width();
   QRectF eraserRect(point.x() - eraserSize / 2, point.y() - eraserSize / 2,
                     eraserSize, eraserSize);
+
+  QPainterPath eraserPath;
+  eraserPath.addEllipse(eraserRect);
+
   QList<QGraphicsItem *> itemsToErase = scene->items(eraserRect);
+
   for (QGraphicsItem *item : itemsToErase) {
-    if (item != eraserPreview) {
+    if (item == eraserPreview)
+      continue; // Ignore the eraser preview itself
+
+    // Get the item's shape and use QPainterPathStroker for strokes
+    QPainterPath itemPath = item->shape();
+    QPainterPathStroker stroker;
+    stroker.setWidth(1); // Use the pen width of the item
+    QPainterPath strokedPath = stroker.createStroke(itemPath);
+
+    // Check for intersection with the eraser path
+    if (eraserPath.intersects(strokedPath)) {
       DeleteAction *action = new DeleteAction(item);
       undoStack.append(action);
       redoStack.clear();
