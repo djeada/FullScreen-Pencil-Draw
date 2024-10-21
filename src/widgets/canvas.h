@@ -2,7 +2,6 @@
 #ifndef CANVAS_H
 #define CANVAS_H
 
-#include "../core/action.h"
 #include <QApplication>
 #include <QClipboard>
 #include <QGraphicsEllipseItem>
@@ -17,6 +16,8 @@
 #include <QMouseEvent>
 #include <QPen>
 #include <QVector>
+
+#include "../core/action.h"
 
 class Canvas : public QGraphicsView {
   Q_OBJECT
@@ -45,8 +46,10 @@ protected:
   void mouseReleaseEvent(QMouseEvent *event) override;
 
 private:
+  // Enums
   enum ShapeType { Line, Rectangle, Circle, Pen, Eraser, Selection };
 
+  // Member variables
   QGraphicsScene *scene;
   QPen currentPen;
   QPen eraserPen;
@@ -56,17 +59,22 @@ private:
   QGraphicsPathItem *currentPath;
   QColor backgroundColor;
   QGraphicsEllipseItem *eraserPreview;
+
   const int MAX_BRUSH_SIZE = 150;
   const int MIN_BRUSH_SIZE = 1;
-  QVector<QPointF> pointBuffer;
   const int smoothingFactor = 5;
+
+  QVector<QPointF> pointBuffer;
   QPointF previousPoint;
+
+  QList<Action *> undoStack;
+  QList<Action *> redoStack;
+
+  // Private methods
   void updateEraserPreview(const QPointF &position);
   void hideEraserPreview();
   void addPoint(const QPointF &point);
   void eraseAt(const QPointF &point);
-  QList<Action *> undoStack;
-  QList<Action *> redoStack;
 };
 
 #endif // CANVAS_H
