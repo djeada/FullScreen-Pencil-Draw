@@ -56,6 +56,12 @@ void Canvas::setShape(const QString &shapeType) {
 
   if (currentShape != Eraser) {
     hideEraserPreview();
+
+    // Re-enable selection and movement for all items
+    for (auto item : scene->items()) {
+      item->setFlag(QGraphicsItem::ItemIsSelectable, true);
+      item->setFlag(QGraphicsItem::ItemIsMovable, true);
+    }
   }
 
   if (currentShape != Selection) {
@@ -84,7 +90,12 @@ void Canvas::setEraserTool() {
 
   hideEraserPreview();
 
+  // Clear selection and disable movement and selection for all items
   scene->clearSelection();
+  for (auto item : scene->items()) {
+    item->setFlag(QGraphicsItem::ItemIsSelectable, false);
+    item->setFlag(QGraphicsItem::ItemIsMovable, false);
+  }
 }
 
 void Canvas::setPenColor(const QColor &color) { currentPen.setColor(color); }
