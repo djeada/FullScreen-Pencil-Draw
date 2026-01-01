@@ -1,9 +1,12 @@
+#ifndef ACTION_H
+#define ACTION_H
+
 #include <QGraphicsItem>
 #include <QGraphicsScene>
 
 class Action {
 public:
-  constexpr Action();
+  Action() = default;
   virtual ~Action();
   virtual void undo() = 0;
   virtual void redo() = 0;
@@ -30,3 +33,5 @@ public:
 private:
   QGraphicsItem *item;
 };
+
+#endif // ACTION_H

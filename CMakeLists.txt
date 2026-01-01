@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.16)
 
 project(FullScreen-Pencil-Draw VERSION 0.1 LANGUAGES CXX)
 
@@ -9,7 +9,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
 # Set the C++ standard
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Find Qt libraries (prefer Qt6, fallback to Qt5)
@@ -51,6 +51,7 @@ endif()
 
 # Include the headers directory to ensure all headers are found
 target_include_directories(${PROJECT_NAME} PRIVATE
+    src/core
     src/widgets
     src/windows
 )

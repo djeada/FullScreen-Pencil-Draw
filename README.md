@@ -1,29 +1,90 @@
 # FullScreen Pencil Draw
 
-FullScreen Pencil Draw is a simple yet powerful application built with C++ and the Qt6 framework. Designed as a demonstration of creating a graphic editor using Qt6, this app allows users to draw on a full-screen canvas with customizable tools and export their creations effortlessly.
+FullScreen Pencil Draw is a professional-grade vector and raster graphics editor built with C++ and Qt6. Designed for both quick sketches and detailed illustrations, this application provides an intuitive mix of drawing tools with a modern, extensible architecture.
 
 ## Screenshots
 
-TODO:
-
-*Include screenshots of the application here to showcase the UI and features.*
+![Application Screenshot](https://github.com/user-attachments/assets/0e311731-69f6-458a-bcc9-fb2a4d46b32b)
 
 ## Features
 
-- Adjust the thickness and color of your brush to suit your drawing style.
-- Choose between different tools such as pen and eraser to create or modify your artwork.
-- Easily revert or reapply changes to perfect your drawings.
-- Save your creations in popular image formats like PNG or JPG for sharing or further editing.
-- Utilize the entire screen real estate for an immersive drawing experience.
-- Intuitive and responsive user interface for seamless interaction.
+### Drawing Tools
+- **Pen Tool**: Smooth freehand drawing with Catmull-Rom spline interpolation
+- **Eraser Tool**: Remove items with visual preview cursor
+- **Text Tool**: Add text annotations with customizable font size
+- **Fill Tool**: Fill closed shapes with current color
+- **Line Tool**: Draw straight lines
+- **Arrow Tool**: Draw arrows for diagrams and annotations
+- **Rectangle Tool**: Draw rectangles and squares
+- **Circle Tool**: Draw circles and ellipses
 
-## Future Enhancements
+### Navigation & Selection
+- **Selection Tool**: Select, move, and transform items with rubber-band selection
+- **Pan Tool**: Navigate around large canvases by dragging
+- **Zoom**: Zoom in/out with Ctrl+Scroll, keyboard shortcuts, or toolbar buttons
+- **Grid Overlay**: Toggle alignment grid for precise positioning
 
-- Introducing more drawing tools like shapes, text, and color fill.
-- Allowing users to work with multiple layers for more complex drawings.
-- Supporting more file formats and higher resolution exports.
-- Enabling users to customize the UI and tool settings further.
-- Ensuring the application runs seamlessly on Windows, macOS, and Linux.
+### Professional Features
+- **Opacity Control**: Adjust brush transparency with slider
+- **Brush Size Control**: Visual display with +/- buttons and keyboard shortcuts
+- **Color Picker**: Full color dialog with current color preview
+- **Zoom Level Display**: Real-time zoom percentage indicator
+- **Cursor Position**: Live X/Y coordinate display
+- **Undo/Redo**: Full action history with unlimited undo levels
+
+### File Operations
+- **New Canvas**: Create custom-sized canvas with background color choice
+- **Open Image**: Import PNG, JPG, BMP, GIF as background layer
+- **Save/Export**: Export to PNG, JPG, or BMP formats
+- **Clear Canvas**: Reset to blank state
+
+### Edit Operations
+- **Copy/Cut/Paste**: Full clipboard support for items
+- **Duplicate**: Quick duplicate selected items (Ctrl+D)
+- **Delete**: Remove selected items
+- **Select All**: Select all canvas items
+
+## Keyboard Shortcuts
+
+| Category | Shortcut | Action |
+|----------|----------|--------|
+| **Tools** | `P` | Pen tool |
+| | `E` | Eraser tool |
+| | `T` | Text tool |
+| | `F` | Fill tool |
+| | `L` | Line tool |
+| | `A` | Arrow tool |
+| | `R` | Rectangle tool |
+| | `C` | Circle tool |
+| | `S` | Selection tool |
+| | `H` | Pan/Hand tool |
+| **View** | `G` | Toggle grid |
+| | `+` / `=` | Zoom in |
+| | `-` | Zoom out |
+| | `0` | Reset zoom (1:1) |
+| | `Ctrl+Scroll` | Zoom with mouse |
+| **Brush** | `[` | Decrease brush size |
+| | `]` | Increase brush size |
+| **Edit** | `Ctrl+Z` | Undo |
+| | `Ctrl+Y` | Redo |
+| | `Ctrl+C` | Copy |
+| | `Ctrl+X` | Cut |
+| | `Ctrl+V` | Paste |
+| | `Ctrl+D` | Duplicate |
+| | `Ctrl+A` | Select all |
+| | `Delete` | Delete selected |
+| **File** | `Ctrl+N` | New canvas |
+| | `Ctrl+O` | Open image |
+| | `Ctrl+S` | Save |
+| | `Esc` | Exit |
+
+## Architecture
+
+The application follows a clean Model-View architecture:
+- **Canvas**: QGraphicsView-based drawing surface with scene management
+- **ToolPanel**: Modular toolbar with signal/slot-based tool switching  
+- **Action System**: Undo/redo stack with polymorphic action classes
+- **Modern C++17**: Smart pointers, constexpr, structured bindings
 
 ## Usage
 
@@ -64,11 +125,11 @@ To build FullScreen Pencil Draw, ensure you have the necessary dependencies inst
 
 ### Prerequisites
 
-- Ensure you have a C++ compiler that supports C++11 or later.
-- Version 3.5 or higher.
-- Includes Qt6 base development packages and tools.
-- Required for compiling C++ applications.
-- For running GUI applications in a headless environment (optional, used in CI workflows).
+- A C++ compiler that supports C++17 or later (GCC 7+, Clang 5+, MSVC 2017+)
+- CMake version 3.16 or higher
+- Qt6 base development packages and tools
+- OpenGL development libraries
+- Xvfb (optional, for running GUI applications in a headless environment)
 
 ### Installation Steps
 

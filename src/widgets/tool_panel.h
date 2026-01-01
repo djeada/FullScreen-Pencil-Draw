@@ -3,6 +3,8 @@
 
 #include <QAction>
 #include <QColor>
+#include <QLabel>
+#include <QSlider>
 #include <QToolBar>
 
 class ToolPanel : public QToolBar {
@@ -10,58 +12,108 @@ class ToolPanel : public QToolBar {
 
 public:
   explicit ToolPanel(QWidget *parent = nullptr);
+  void updateBrushSizeDisplay(int size);
+  void updateColorDisplay(const QColor &color);
+  void updateZoomDisplay(double zoom);
+  void updateOpacityDisplay(int opacity);
+  void updatePositionDisplay(const QPointF &pos);
+  void setActiveTool(const QString &toolName);
 
 signals:
-  // Signals for shape selections
   void shapeSelected(const QString &shapeType);
   void rectangleSelected();
   void circleSelected();
   void lineSelected();
-  void selectionSelected(); // New signal for selection
-
-  // Other tool signals
+  void selectionSelected();
   void penSelected();
   void eraserSelected();
+  void textSelected();
+  void fillSelected();
+  void arrowSelected();
+  void panSelected();
   void colorSelected(const QColor &color);
+  void opacitySelected(int opacity);
   void increaseBrushSize();
   void decreaseBrushSize();
   void clearCanvas();
   void undoAction();
+  void redoAction();
+  void saveAction();
+  void openAction();
+  void newCanvasAction();
+  void zoomInAction();
+  void zoomOutAction();
+  void zoomResetAction();
+  void toggleGridAction();
   void copyAction();
   void cutAction();
   void pasteAction();
+  void duplicateAction();
+  void deleteAction();
+  void selectAllAction();
 
 private:
-  // Actions for shapes
   QAction *actionRectangle;
   QAction *actionCircle;
   QAction *actionLine;
-  QAction *actionSelection; // New QAction for selection
-
-  // Actions for other tools
+  QAction *actionSelection;
   QAction *actionPen;
   QAction *actionEraser;
+  QAction *actionText;
+  QAction *actionFill;
+  QAction *actionArrow;
+  QAction *actionPan;
   QAction *actionColor;
   QAction *actionIncreaseBrush;
   QAction *actionDecreaseBrush;
   QAction *actionClear;
   QAction *actionUndo;
+  QAction *actionRedo;
+  QAction *actionSave;
+  QAction *actionOpen;
+  QAction *actionNew;
+  QAction *actionZoomIn;
+  QAction *actionZoomOut;
+  QAction *actionZoomReset;
+  QAction *actionGrid;
+
+  QLabel *brushSizeLabel;
+  QLabel *colorPreview;
+  QLabel *activeToolLabel;
+  QLabel *zoomLabel;
+  QLabel *opacityLabel;
+  QLabel *positionLabel;
+  QSlider *opacitySlider;
+
+  void clearActiveToolStyles();
 
 private slots:
-  // Slots for shape actions
-  void onActionRectangle();
-  void onActionCircle();
-  void onActionLine();
-  void onActionSelection(); // New slot for selection
-
-  // Slots for other tools
-  void onActionPen();
-  void onActionEraser();
   void onActionColor();
   void onActionIncreaseBrush();
   void onActionDecreaseBrush();
   void onActionClear();
   void onActionUndo();
+  void onActionRedo();
+  void onActionSave();
+  void onActionOpen();
+  void onActionNew();
+  void onActionZoomIn();
+  void onActionZoomOut();
+  void onActionZoomReset();
+  void onActionGrid();
+  void onOpacityChanged(int value);
+
+public slots:
+  void onActionRectangle();
+  void onActionCircle();
+  void onActionLine();
+  void onActionSelection();
+  void onActionPen();
+  void onActionEraser();
+  void onActionText();
+  void onActionFill();
+  void onActionArrow();
+  void onActionPan();
 };
 
 #endif // TOOLPANEL_H
