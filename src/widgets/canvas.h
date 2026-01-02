@@ -18,6 +18,8 @@
 #include <QPen>
 #include <QVector>
 #include <QWheelEvent>
+#include <QContextMenuEvent>
+#include <QMenu>
 
 #include "../core/action.h"
 
@@ -69,6 +71,9 @@ public slots:
   void newCanvas(int width, int height, const QColor &bgColor);
   void toggleGrid();
   void selectAll();
+  void exportSelectionToSVG();
+  void exportSelectionToPNG();
+  void exportSelectionToJPG();
 
 protected:
   void mousePressEvent(QMouseEvent *event) override;
@@ -76,6 +81,7 @@ protected:
   void mouseReleaseEvent(QMouseEvent *event) override;
   void wheelEvent(QWheelEvent *event) override;
   void drawBackground(QPainter *painter, const QRectF &rect) override;
+  void contextMenuEvent(QContextMenuEvent *event) override;
 
 private:
   // Enums
@@ -122,6 +128,7 @@ private:
   void fillAt(const QPointF &point);
   void drawArrow(const QPointF &start, const QPointF &end);
   void createTextItem(const QPointF &position);
+  QRectF getSelectionBoundingRect() const;
 };
 
 #endif // CANVAS_H

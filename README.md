@@ -36,6 +36,7 @@ FullScreen Pencil Draw is a professional-grade vector and raster graphics editor
 - **New Canvas**: Create custom-sized canvas with background color choice
 - **Open Image**: Import PNG, JPG, BMP, GIF as background layer
 - **Save/Export**: Export to PNG, JPG, or BMP formats
+- **Export Selection**: Right-click on selected items to export in SVG, PNG, or JPG formats
 - **Clear Canvas**: Reset to blank state
 
 ### Edit Operations
@@ -43,6 +44,7 @@ FullScreen Pencil Draw is a professional-grade vector and raster graphics editor
 - **Duplicate**: Quick duplicate selected items (Ctrl+D)
 - **Delete**: Remove selected items
 - **Select All**: Select all canvas items
+- **Context Menu Export**: Right-click on selected items to export as SVG, PNG, or JPG
 
 ## Keyboard Shortcuts
 

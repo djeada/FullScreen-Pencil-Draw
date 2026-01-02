@@ -67,3 +67,4 @@ Desktop.ini
 ## Builds
 ############
 *build*
+*.log
