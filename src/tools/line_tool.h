@@ -1,0 +1,23 @@
+// line_tool.h
+#ifndef LINE_TOOL_H
+#define LINE_TOOL_H
+
+#include "shape_tool.h"
+#include <QGraphicsLineItem>
+
+/**
+ * @brief Tool for drawing straight lines.
+ */
+class LineTool : public ShapeTool {
+public:
+  explicit LineTool(Canvas *canvas);
+  ~LineTool() override;
+
+  QString name() const override { return "Line"; }
+
+protected:
+  QGraphicsItem *createShape(const QPointF &startPos) override;
+  void updateShape(const QPointF &startPos, const QPointF &currentPos) override;
+};
+
+#endif // LINE_TOOL_H

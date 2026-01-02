@@ -52,6 +52,7 @@ endif()
 # Include the headers directory to ensure all headers are found
 target_include_directories(${PROJECT_NAME} PRIVATE
     src/core
+    src/tools
     src/widgets
     src/windows
 )
