@@ -9,16 +9,19 @@ on:
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-22.04  # Specify the exact Ubuntu version for consistency
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
 
     steps:
       # Step 1: Checkout the repository
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       # Step 2: Cache CMake and Qt Dependencies
       - name: Cache CMake and Qt
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cmake
@@ -73,7 +76,11 @@ jobs:
           cd build
           # Start Xvfb in the background
           Xvfb :99 -screen 0 1024x768x24 &
+          XVFB_PID=$!
           export DISPLAY=:99
+          
+          # Wait for Xvfb to be ready
+          sleep 2
           
           # Run the application in the background and redirect output to a log file
           ./FullScreen-Pencil-Draw > app_output.log 2>&1 &
@@ -92,19 +99,31 @@ jobs:
             echo "Application exited before 10 seconds."
           fi
           
+          # Clean up Xvfb process
+          if ps -p $XVFB_PID > /dev/null; then
+            echo "Terminating Xvfb (PID: $XVFB_PID)"
+            kill $XVFB_PID
+          fi
+          
           # Check the log file for any errors
-          if grep -i "error" app_output.log
-          then
-            echo "Errors detected in application output."
-            exit 1
+          if [ -f app_output.log ]; then
+            echo "Log file contents:"
+            cat app_output.log
+            if grep -i "error" app_output.log; then
+              echo "Errors detected in application output."
+              exit 1
+            else
+              echo "No errors found in application output."
+            fi
           else
-            echo "No errors found in application output."
+            echo "Log file not found."
+            exit 1
           fi
 
       # Step 8: Upload Logs if the Previous Step Failed
       - name: Upload logs
         if: failure()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: application-logs
           path: build/app_output.log
