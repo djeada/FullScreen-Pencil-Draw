@@ -1,4 +1,7 @@
-// circle_tool.h
+/**
+ * @file circle_tool.h
+ * @brief Circle/ellipse drawing tool.
+ */
 #ifndef CIRCLE_TOOL_H
 #define CIRCLE_TOOL_H
 

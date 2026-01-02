@@ -1,4 +1,7 @@
-// line_tool.cpp
+/**
+ * @file line_tool.cpp
+ * @brief Straight line drawing tool implementation.
+ */
 #include "line_tool.h"
 #include "../widgets/canvas.h"
 

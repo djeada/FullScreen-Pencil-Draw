@@ -1,4 +1,7 @@
-// circle_tool.cpp
+/**
+ * @file circle_tool.cpp
+ * @brief Circle/ellipse drawing tool implementation.
+ */
 #include "circle_tool.h"
 #include "../widgets/canvas.h"
 

@@ -1,4 +1,7 @@
-// rectangle_tool.cpp
+/**
+ * @file rectangle_tool.cpp
+ * @brief Rectangle drawing tool implementation.
+ */
 #include "rectangle_tool.h"
 #include "../widgets/canvas.h"
 

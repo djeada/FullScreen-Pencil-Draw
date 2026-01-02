@@ -1,4 +1,7 @@
-// selection_tool.h
+/**
+ * @file selection_tool.h
+ * @brief Selection tool for selecting and moving items.
+ */
 #ifndef SELECTION_TOOL_H
 #define SELECTION_TOOL_H
 

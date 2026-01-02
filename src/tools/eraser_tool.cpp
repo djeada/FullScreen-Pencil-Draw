@@ -1,4 +1,7 @@
-// eraser_tool.cpp
+/**
+ * @file eraser_tool.cpp
+ * @brief Eraser tool implementation.
+ */
 #include "eraser_tool.h"
 #include "../widgets/canvas.h"
 #include <QPainterPathStroker>

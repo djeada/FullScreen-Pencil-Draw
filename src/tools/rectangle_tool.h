@@ -1,4 +1,7 @@
-// rectangle_tool.h
+/**
+ * @file rectangle_tool.h
+ * @brief Rectangle drawing tool.
+ */
 #ifndef RECTANGLE_TOOL_H
 #define RECTANGLE_TOOL_H
 

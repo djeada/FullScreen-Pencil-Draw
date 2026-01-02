@@ -1,4 +1,7 @@
-// arrow_tool.cpp
+/**
+ * @file arrow_tool.cpp
+ * @brief Arrow drawing tool implementation.
+ */
 #include "arrow_tool.h"
 #include "../widgets/canvas.h"
 #include <cmath>

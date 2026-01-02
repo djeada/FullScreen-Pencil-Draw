@@ -1,4 +1,7 @@
-// tool_manager.h
+/**
+ * @file tool_manager.h
+ * @brief Tool manager for centralized tool management.
+ */
 #ifndef TOOL_MANAGER_H
 #define TOOL_MANAGER_H
 

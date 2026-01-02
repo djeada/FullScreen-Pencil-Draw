@@ -1,4 +1,7 @@
-// tool.h
+/**
+ * @file tool.h
+ * @brief Abstract base class for all drawing tools.
+ */
 #ifndef TOOL_H
 #define TOOL_H
 

@@ -1,4 +1,7 @@
-// fill_tool.h
+/**
+ * @file fill_tool.h
+ * @brief Fill tool for coloring shapes.
+ */
 #ifndef FILL_TOOL_H
 #define FILL_TOOL_H
 

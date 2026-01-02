@@ -1,4 +1,7 @@
-// shape_tool.h
+/**
+ * @file shape_tool.h
+ * @brief Abstract base class for shape drawing tools.
+ */
 #ifndef SHAPE_TOOL_H
 #define SHAPE_TOOL_H
 

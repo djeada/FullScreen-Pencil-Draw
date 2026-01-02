@@ -1,4 +1,7 @@
-// line_tool.h
+/**
+ * @file line_tool.h
+ * @brief Straight line drawing tool.
+ */
 #ifndef LINE_TOOL_H
 #define LINE_TOOL_H
 

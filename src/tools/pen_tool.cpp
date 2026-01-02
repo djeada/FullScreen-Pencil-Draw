@@ -1,4 +1,7 @@
-// pen_tool.cpp
+/**
+ * @file pen_tool.cpp
+ * @brief Freehand drawing tool implementation.
+ */
 #include "pen_tool.h"
 #include "../widgets/canvas.h"
 

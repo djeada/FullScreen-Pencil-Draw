@@ -1,4 +1,7 @@
-// text_tool.cpp
+/**
+ * @file text_tool.cpp
+ * @brief Text annotation tool implementation.
+ */
 #include "text_tool.h"
 #include "../widgets/canvas.h"
 #include <QFont>

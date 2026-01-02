@@ -1,4 +1,7 @@
-// pan_tool.h
+/**
+ * @file pan_tool.h
+ * @brief Pan/scroll tool for canvas navigation.
+ */
 #ifndef PAN_TOOL_H
 #define PAN_TOOL_H
 

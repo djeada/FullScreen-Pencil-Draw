@@ -1,4 +1,7 @@
-// arrow_tool.h
+/**
+ * @file arrow_tool.h
+ * @brief Arrow drawing tool implementation.
+ */
 #ifndef ARROW_TOOL_H
 #define ARROW_TOOL_H
 

@@ -1,4 +1,7 @@
-// shape_tool.cpp
+/**
+ * @file shape_tool.cpp
+ * @brief Abstract base class for shape drawing tools implementation.
+ */
 #include "shape_tool.h"
 #include "../widgets/canvas.h"
 

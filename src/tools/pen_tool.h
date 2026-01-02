@@ -1,4 +1,7 @@
-// pen_tool.h
+/**
+ * @file pen_tool.h
+ * @brief Freehand drawing tool with smooth spline interpolation.
+ */
 #ifndef PEN_TOOL_H
 #define PEN_TOOL_H
 

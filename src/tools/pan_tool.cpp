@@ -1,4 +1,7 @@
-// pan_tool.cpp
+/**
+ * @file pan_tool.cpp
+ * @brief Pan/scroll tool implementation.
+ */
 #include "pan_tool.h"
 #include "../widgets/canvas.h"
 #include <QScrollBar>

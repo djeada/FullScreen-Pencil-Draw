@@ -1,4 +1,7 @@
-// fill_tool.cpp
+/**
+ * @file fill_tool.cpp
+ * @brief Fill tool implementation.
+ */
 #include "fill_tool.h"
 #include "../widgets/canvas.h"
 #include <QGraphicsEllipseItem>

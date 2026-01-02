@@ -1,4 +1,7 @@
-// tool_manager.cpp
+/**
+ * @file tool_manager.cpp
+ * @brief Tool manager implementation.
+ */
 #include "tool_manager.h"
 #include "arrow_tool.h"
 #include "circle_tool.h"

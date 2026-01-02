@@ -1,4 +1,7 @@
-// text_tool.h
+/**
+ * @file text_tool.h
+ * @brief Text annotation tool.
+ */
 #ifndef TEXT_TOOL_H
 #define TEXT_TOOL_H
 

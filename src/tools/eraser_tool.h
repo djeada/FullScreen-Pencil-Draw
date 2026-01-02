@@ -1,4 +1,7 @@
-// eraser_tool.h
+/**
+ * @file eraser_tool.h
+ * @brief Eraser tool for removing items from canvas.
+ */
 #ifndef ERASER_TOOL_H
 #define ERASER_TOOL_H
 

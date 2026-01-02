@@ -1,4 +1,7 @@
-// selection_tool.cpp
+/**
+ * @file selection_tool.cpp
+ * @brief Selection tool implementation.
+ */
 #include "selection_tool.h"
 #include "../widgets/canvas.h"
 
