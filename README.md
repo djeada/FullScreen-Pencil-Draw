@@ -35,6 +35,7 @@ FullScreen Pencil Draw is a professional-grade vector and raster graphics editor
 ### File Operations
 - **New Canvas**: Create custom-sized canvas with background color choice
 - **Open Image**: Import PNG, JPG, BMP, GIF as background layer
+- **Drag-and-Drop Upload**: Drag images directly from file system with dimension specification dialog
 - **Save/Export**: Export to PNG, JPG, or BMP formats
 - **Export Selection**: Right-click on selected items to export in SVG, PNG, or JPG formats
 - **Clear Canvas**: Reset to blank state
@@ -120,6 +121,15 @@ V. **Save Your Artwork**
 
 - Click the "Save" button located on the toolbar.
 - Select your preferred image format (PNG or JPG) and choose the destination folder to save your creation.
+
+VI. **Import Images via Drag-and-Drop**
+
+- Drag an image file (PNG, JPG, JPEG, BMP, or GIF) from your file system.
+- Drop it anywhere on the canvas.
+- A dialog will appear allowing you to specify the desired dimensions.
+- Adjust the width and height (aspect ratio is maintained by default).
+- Click OK to add the image to your canvas at the drop location.
+- The imported image can be selected, moved, resized, and edited like any other canvas item.
 
 ## Building the Application
 
