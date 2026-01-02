@@ -4,26 +4,52 @@ FullScreen Pencil Draw is a simple yet powerful application built with C++ and t
 
 ## Screenshots
 
-TODO:
-
-*Include screenshots of the application here to showcase the UI and features.*
+![Application Screenshot](https://github.com/user-attachments/assets/73c98ec3-6d65-4752-9341-5282b34841ad)
 
 ## Features
 
-- Adjust the thickness and color of your brush to suit your drawing style.
-- Choose between different tools such as pen and eraser to create or modify your artwork.
-- Easily revert or reapply changes to perfect your drawings.
-- Save your creations in popular image formats like PNG or JPG for sharing or further editing.
-- Utilize the entire screen real estate for an immersive drawing experience.
-- Intuitive and responsive user interface for seamless interaction.
+- **Drawing Tools**: Freehand pen, line, rectangle, and circle tools
+- **Brush Customization**: Adjust thickness and color of your brush
+- **Eraser Tool**: Remove unwanted parts of your drawing
+- **Selection Tool**: Select, move, copy, cut, and paste items
+- **Undo/Redo**: Easily revert or reapply changes
+- **Zoom**: Zoom in/out with mouse wheel (Ctrl+Scroll) or toolbar buttons
+- **Save/Export**: Save your creations in PNG or JPG format
+- **Full Screen**: Utilize the entire screen for an immersive experience
+- **Status Bar**: Shows current keyboard shortcuts
+- **Tooltips**: Hover over tools to see their function and shortcuts
+
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `P` | Pen tool |
+| `E` | Eraser tool |
+| `L` | Line tool |
+| `R` | Rectangle tool |
+| `C` | Circle tool |
+| `S` | Selection tool |
+| `K` | Color picker |
+| `[` | Decrease brush size |
+| `]` | Increase brush size |
+| `+` / `=` | Zoom in |
+| `-` | Zoom out |
+| `Ctrl+Z` | Undo |
+| `Ctrl+Y` | Redo |
+| `Ctrl+S` | Save |
+| `Ctrl+C` | Copy selected items |
+| `Ctrl+X` | Cut selected items |
+| `Ctrl+V` | Paste |
+| `Ctrl+Scroll` | Zoom with mouse wheel |
+| `Esc` | Exit application |
 
 ## Future Enhancements
 
-- Introducing more drawing tools like shapes, text, and color fill.
-- Allowing users to work with multiple layers for more complex drawings.
-- Supporting more file formats and higher resolution exports.
-- Enabling users to customize the UI and tool settings further.
-- Ensuring the application runs seamlessly on Windows, macOS, and Linux.
+- Adding text tool for annotations
+- Multiple layers support for complex drawings
+- Fill tool for coloring shapes
+- Custom brush shapes
+- Cross-platform testing and optimization
 
 ## Usage
 
@@ -64,11 +90,11 @@ To build FullScreen Pencil Draw, ensure you have the necessary dependencies inst
 
 ### Prerequisites
 
-- Ensure you have a C++ compiler that supports C++11 or later.
-- Version 3.5 or higher.
-- Includes Qt6 base development packages and tools.
-- Required for compiling C++ applications.
-- For running GUI applications in a headless environment (optional, used in CI workflows).
+- A C++ compiler that supports C++17 or later (GCC 7+, Clang 5+, MSVC 2017+)
+- CMake version 3.16 or higher
+- Qt6 base development packages and tools
+- OpenGL development libraries
+- Xvfb (optional, for running GUI applications in a headless environment)
 
 ### Installation Steps
 

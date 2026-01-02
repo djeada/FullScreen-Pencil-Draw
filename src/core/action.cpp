@@ -1,9 +1,5 @@
 #include "action.h"
 
-constexpr Action::Action() {
-  // Constructor implementation here
-}
-
 Action::~Action() {}
 DrawAction::~DrawAction() {
   // Optional cleanup

@@ -3,22 +3,28 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QColorDialog>
+#include <QFileDialog>
 #include <QGraphicsEllipseItem>
 #include <QGraphicsItem>
 #include <QGraphicsLineItem>
 #include <QGraphicsRectItem>
 #include <QMimeData>
 #include <QMouseEvent>
+#include <QWheelEvent>
 
 Canvas::Canvas(QWidget *parent)
     : QGraphicsView(parent), scene(new QGraphicsScene(this)),
-      tempShapeItem(nullptr), currentShape(Line), currentPen(Qt::white, 3),
+      tempShapeItem(nullptr), currentShape(Pen), currentPen(Qt::white, 3),
       eraserPen(Qt::black, 10), currentPath(nullptr),
       backgroundColor(Qt::black), eraserPreview(nullptr) {
 
   this->setScene(scene);
   this->setRenderHint(QPainter::Antialiasing);
-  scene->setSceneRect(0, 0, 800, 600);
+  this->setRenderHint(QPainter::SmoothPixmapTransform);
+  this->setViewportUpdateMode(QGraphicsView::SmartViewportUpdate);
+  this->setTransformationAnchor(QGraphicsView::AnchorUnderMouse);
+  this->setResizeAnchor(QGraphicsView::AnchorUnderMouse);
+  scene->setSceneRect(0, 0, 2000, 1500);
 
   scene->setBackgroundBrush(backgroundColor);
 
@@ -37,6 +43,10 @@ Canvas::Canvas(QWidget *parent)
 }
 
 Canvas::~Canvas() {}
+
+int Canvas::getCurrentBrushSize() const { return currentPen.width(); }
+
+QColor Canvas::getCurrentColor() const { return currentPen.color(); }
 
 void Canvas::setShape(const QString &shapeType) {
   if (shapeType == "Line") {
@@ -98,31 +108,43 @@ void Canvas::setEraserTool() {
   }
 }
 
-void Canvas::setPenColor(const QColor &color) { currentPen.setColor(color); }
+void Canvas::setPenColor(const QColor &color) {
+  currentPen.setColor(color);
+  emit colorChanged(color);
+}
 
 void Canvas::increaseBrushSize() {
   int size = currentPen.width();
   if (size < MAX_BRUSH_SIZE) {
-    currentPen.setWidth(size + 2);
-    eraserPen.setWidth(eraserPen.width() + 2);
+    int newSize = size + BRUSH_SIZE_STEP;
+    currentPen.setWidth(newSize);
+    eraserPen.setWidth(eraserPen.width() + BRUSH_SIZE_STEP);
     if (currentShape == Eraser) {
       eraserPreview->setRect(eraserPreview->rect().x(),
                              eraserPreview->rect().y(), eraserPen.width(),
                              eraserPen.width());
     }
+    emit brushSizeChanged(newSize);
   }
 }
 
 void Canvas::decreaseBrushSize() {
   int size = currentPen.width();
   if (size > MIN_BRUSH_SIZE) {
-    currentPen.setWidth(size - 2);
-    eraserPen.setWidth(eraserPen.width() - 2);
+    int newSize = size - BRUSH_SIZE_STEP;
+    if (newSize < MIN_BRUSH_SIZE)
+      newSize = MIN_BRUSH_SIZE;
+    currentPen.setWidth(newSize);
+    int eraserNewSize = eraserPen.width() - BRUSH_SIZE_STEP;
+    if (eraserNewSize < MIN_BRUSH_SIZE)
+      eraserNewSize = MIN_BRUSH_SIZE;
+    eraserPen.setWidth(eraserNewSize);
     if (currentShape == Eraser) {
       eraserPreview->setRect(eraserPreview->rect().x(),
                              eraserPreview->rect().y(), eraserPen.width(),
                              eraserPen.width());
     }
+    emit brushSizeChanged(newSize);
   }
 }
 
@@ -152,6 +174,75 @@ void Canvas::redoLastAction() {
     Action *nextAction = redoStack.takeLast();
     nextAction->redo();
     undoStack.append(nextAction);
+  }
+}
+
+void Canvas::zoomIn() { applyZoom(ZOOM_FACTOR); }
+
+void Canvas::zoomOut() { applyZoom(1.0 / ZOOM_FACTOR); }
+
+void Canvas::applyZoom(double factor) {
+  double newZoom = currentZoom * factor;
+  if (newZoom > MAX_ZOOM || newZoom < MIN_ZOOM) {
+    return;
+  }
+  currentZoom = newZoom;
+  scale(factor, factor);
+}
+
+void Canvas::wheelEvent(QWheelEvent *event) {
+  if (event->modifiers() & Qt::ControlModifier) {
+    if (event->angleDelta().y() > 0) {
+      zoomIn();
+    } else {
+      zoomOut();
+    }
+    event->accept();
+  } else {
+    QGraphicsView::wheelEvent(event);
+  }
+}
+
+void Canvas::saveToFile() {
+  QString fileName = QFileDialog::getSaveFileName(
+      this, "Save Image", "", "PNG Image (*.png);;JPEG Image (*.jpg *.jpeg)");
+
+  if (fileName.isEmpty()) {
+    return;
+  }
+
+  // Hide eraser preview during save
+  bool eraserWasVisible = eraserPreview && eraserPreview->isVisible();
+  if (eraserPreview) {
+    eraserPreview->hide();
+  }
+
+  // Clear selection for clean export
+  scene->clearSelection();
+
+  // Get the bounding rect of all items (or scene rect if empty)
+  QRectF sceneRect = scene->itemsBoundingRect();
+  if (sceneRect.isEmpty()) {
+    sceneRect = scene->sceneRect();
+  }
+
+  // Add some padding
+  sceneRect.adjust(-10, -10, 10, 10);
+
+  // Create image with the scene contents
+  QImage image(sceneRect.size().toSize(), QImage::Format_ARGB32);
+  image.fill(backgroundColor);
+
+  QPainter painter(&image);
+  painter.setRenderHint(QPainter::Antialiasing);
+  scene->render(&painter, QRectF(), sceneRect);
+  painter.end();
+
+  image.save(fileName);
+
+  // Restore eraser preview if it was visible
+  if (eraserWasVisible && eraserPreview) {
+    eraserPreview->show();
   }
 }
 
@@ -496,6 +587,7 @@ void Canvas::addPoint(const QPointF &point) {
     pointBuffer.removeFirst();
   }
 }
+
 void Canvas::eraseAt(const QPointF &point) {
   qreal eraserSize = eraserPen.width();
   QRectF eraserRect(point.x() - eraserSize / 2, point.y() - eraserSize / 2,
