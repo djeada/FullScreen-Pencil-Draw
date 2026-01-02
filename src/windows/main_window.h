@@ -6,7 +6,6 @@
 
 class Canvas;
 class ToolPanel;
-class QStatusBar;
 class QLabel;
 
 class MainWindow : public QMainWindow {
@@ -22,6 +21,10 @@ protected:
 private slots:
   void onBrushSizeChanged(int size);
   void onColorChanged(const QColor &color);
+  void onZoomChanged(double zoom);
+  void onOpacityChanged(int opacity);
+  void onCursorPositionChanged(const QPointF &pos);
+  void onNewCanvas();
 
 private:
   Canvas *_canvas;

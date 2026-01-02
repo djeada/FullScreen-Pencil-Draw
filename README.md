@@ -1,55 +1,90 @@
 # FullScreen Pencil Draw
 
-FullScreen Pencil Draw is a simple yet powerful application built with C++ and the Qt6 framework. Designed as a demonstration of creating a graphic editor using Qt6, this app allows users to draw on a full-screen canvas with customizable tools and export their creations effortlessly.
+FullScreen Pencil Draw is a professional-grade vector and raster graphics editor built with C++ and Qt6. Designed for both quick sketches and detailed illustrations, this application provides an intuitive mix of drawing tools with a modern, extensible architecture.
 
 ## Screenshots
 
-![Application Screenshot](https://github.com/user-attachments/assets/73c98ec3-6d65-4752-9341-5282b34841ad)
+![Application Screenshot](https://github.com/user-attachments/assets/0e311731-69f6-458a-bcc9-fb2a4d46b32b)
 
 ## Features
 
-- **Drawing Tools**: Freehand pen, line, rectangle, and circle tools
-- **Brush Customization**: Adjust thickness and color of your brush
-- **Eraser Tool**: Remove unwanted parts of your drawing
-- **Selection Tool**: Select, move, copy, cut, and paste items
-- **Undo/Redo**: Easily revert or reapply changes
-- **Zoom**: Zoom in/out with mouse wheel (Ctrl+Scroll) or toolbar buttons
-- **Save/Export**: Save your creations in PNG or JPG format
-- **Full Screen**: Utilize the entire screen for an immersive experience
-- **Status Bar**: Shows current keyboard shortcuts
-- **Tooltips**: Hover over tools to see their function and shortcuts
+### Drawing Tools
+- **Pen Tool**: Smooth freehand drawing with Catmull-Rom spline interpolation
+- **Eraser Tool**: Remove items with visual preview cursor
+- **Text Tool**: Add text annotations with customizable font size
+- **Fill Tool**: Fill closed shapes with current color
+- **Line Tool**: Draw straight lines
+- **Arrow Tool**: Draw arrows for diagrams and annotations
+- **Rectangle Tool**: Draw rectangles and squares
+- **Circle Tool**: Draw circles and ellipses
+
+### Navigation & Selection
+- **Selection Tool**: Select, move, and transform items with rubber-band selection
+- **Pan Tool**: Navigate around large canvases by dragging
+- **Zoom**: Zoom in/out with Ctrl+Scroll, keyboard shortcuts, or toolbar buttons
+- **Grid Overlay**: Toggle alignment grid for precise positioning
+
+### Professional Features
+- **Opacity Control**: Adjust brush transparency with slider
+- **Brush Size Control**: Visual display with +/- buttons and keyboard shortcuts
+- **Color Picker**: Full color dialog with current color preview
+- **Zoom Level Display**: Real-time zoom percentage indicator
+- **Cursor Position**: Live X/Y coordinate display
+- **Undo/Redo**: Full action history with unlimited undo levels
+
+### File Operations
+- **New Canvas**: Create custom-sized canvas with background color choice
+- **Open Image**: Import PNG, JPG, BMP, GIF as background layer
+- **Save/Export**: Export to PNG, JPG, or BMP formats
+- **Clear Canvas**: Reset to blank state
+
+### Edit Operations
+- **Copy/Cut/Paste**: Full clipboard support for items
+- **Duplicate**: Quick duplicate selected items (Ctrl+D)
+- **Delete**: Remove selected items
+- **Select All**: Select all canvas items
 
 ## Keyboard Shortcuts
 
-| Shortcut | Action |
-|----------|--------|
-| `P` | Pen tool |
-| `E` | Eraser tool |
-| `L` | Line tool |
-| `R` | Rectangle tool |
-| `C` | Circle tool |
-| `S` | Selection tool |
-| `K` | Color picker |
-| `[` | Decrease brush size |
-| `]` | Increase brush size |
-| `+` / `=` | Zoom in |
-| `-` | Zoom out |
-| `Ctrl+Z` | Undo |
-| `Ctrl+Y` | Redo |
-| `Ctrl+S` | Save |
-| `Ctrl+C` | Copy selected items |
-| `Ctrl+X` | Cut selected items |
-| `Ctrl+V` | Paste |
-| `Ctrl+Scroll` | Zoom with mouse wheel |
-| `Esc` | Exit application |
+| Category | Shortcut | Action |
+|----------|----------|--------|
+| **Tools** | `P` | Pen tool |
+| | `E` | Eraser tool |
+| | `T` | Text tool |
+| | `F` | Fill tool |
+| | `L` | Line tool |
+| | `A` | Arrow tool |
+| | `R` | Rectangle tool |
+| | `C` | Circle tool |
+| | `S` | Selection tool |
+| | `H` | Pan/Hand tool |
+| **View** | `G` | Toggle grid |
+| | `+` / `=` | Zoom in |
+| | `-` | Zoom out |
+| | `0` | Reset zoom (1:1) |
+| | `Ctrl+Scroll` | Zoom with mouse |
+| **Brush** | `[` | Decrease brush size |
+| | `]` | Increase brush size |
+| **Edit** | `Ctrl+Z` | Undo |
+| | `Ctrl+Y` | Redo |
+| | `Ctrl+C` | Copy |
+| | `Ctrl+X` | Cut |
+| | `Ctrl+V` | Paste |
+| | `Ctrl+D` | Duplicate |
+| | `Ctrl+A` | Select all |
+| | `Delete` | Delete selected |
+| **File** | `Ctrl+N` | New canvas |
+| | `Ctrl+O` | Open image |
+| | `Ctrl+S` | Save |
+| | `Esc` | Exit |
 
-## Future Enhancements
+## Architecture
 
-- Adding text tool for annotations
-- Multiple layers support for complex drawings
-- Fill tool for coloring shapes
-- Custom brush shapes
-- Cross-platform testing and optimization
+The application follows a clean Model-View architecture:
+- **Canvas**: QGraphicsView-based drawing surface with scene management
+- **ToolPanel**: Modular toolbar with signal/slot-based tool switching  
+- **Action System**: Undo/redo stack with polymorphic action classes
+- **Modern C++17**: Smart pointers, constexpr, structured bindings
 
 ## Usage
 
