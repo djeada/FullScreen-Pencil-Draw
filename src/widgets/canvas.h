@@ -1,9 +1,17 @@
-// canvas.h
+/**
+ * @file canvas.h
+ * @brief Main drawing canvas widget.
+ *
+ * The Canvas class provides the primary drawing surface for the application.
+ * It uses a QGraphicsView/QGraphicsScene architecture with a modular tool
+ * system for different drawing operations.
+ */
 #ifndef CANVAS_H
 #define CANVAS_H
 
 #include <QApplication>
 #include <QClipboard>
+#include <QContextMenuEvent>
 #include <QDragEnterEvent>
 #include <QDragMoveEvent>
 #include <QDropEvent>
@@ -16,16 +24,27 @@
 #include <QGraphicsTextItem>
 #include <QGraphicsView>
 #include <QList>
+#include <QMenu>
 #include <QMimeData>
 #include <QMouseEvent>
 #include <QPen>
 #include <QVector>
 #include <QWheelEvent>
-#include <QContextMenuEvent>
-#include <QMenu>
+#include <memory>
+#include <vector>
 
 #include "../core/action.h"
 
+class ToolManager;
+class Tool;
+
+/**
+ * @brief The main drawing canvas widget.
+ *
+ * Canvas is a QGraphicsView-based widget that provides the drawing surface.
+ * It integrates with the ToolManager for tool-based drawing operations
+ * and maintains undo/redo stacks for all actions.
+ */
 class Canvas : public QGraphicsView {
   Q_OBJECT
 
@@ -33,12 +52,26 @@ public:
   explicit Canvas(QWidget *parent = nullptr);
   ~Canvas();
 
+  // State accessors
   int getCurrentBrushSize() const;
   QColor getCurrentColor() const;
   double getCurrentZoom() const;
   int getCurrentOpacity() const;
   bool isGridVisible() const;
   bool isFilledShapes() const;
+
+  // Tool system accessors - used by Tool classes
+  QGraphicsScene *scene() const { return scene_; }
+  const QPen &currentPen() const { return currentPen_; }
+  const QPen &eraserPen() const { return eraserPen_; }
+  QGraphicsPixmapItem *backgroundImageItem() const { return backgroundImage_; }
+  QColor backgroundColor() const { return backgroundColor_; }
+
+  // Action management - used by Tool classes
+  void addDrawAction(QGraphicsItem *item);
+  void addDeleteAction(QGraphicsItem *item);
+  void addAction(std::unique_ptr<Action> action);
+  void clearRedoStack();
 
 signals:
   void brushSizeChanged(int size);
@@ -97,18 +130,19 @@ private:
   enum ShapeType { Line, Rectangle, Circle, Pen, Eraser, Selection, Text, Fill, Arrow, Pan };
 
   // Member variables
-  QGraphicsScene *scene;
-  QPen currentPen;
-  QPen eraserPen;
-  ShapeType currentShape;
-  QPointF startPoint;
-  QPointF lastPanPoint;
-  QGraphicsItem *tempShapeItem;
-  QGraphicsPathItem *currentPath;
-  QColor backgroundColor;
-  QGraphicsEllipseItem *eraserPreview;
-  QGraphicsPixmapItem *backgroundImage;
+  QGraphicsScene *scene_;
+  QPen currentPen_;
+  QPen eraserPen_;
+  ShapeType currentShape_;
+  QPointF startPoint_;
+  QPointF lastPanPoint_;
+  QGraphicsItem *tempShapeItem_;
+  QGraphicsPathItem *currentPath_;
+  QColor backgroundColor_;
+  QGraphicsEllipseItem *eraserPreview_;
+  QGraphicsPixmapItem *backgroundImage_;
 
+  // Constants
   static constexpr int MAX_BRUSH_SIZE = 150;
   static constexpr int MIN_BRUSH_SIZE = 1;
   static constexpr int BRUSH_SIZE_STEP = 2;
@@ -117,17 +151,20 @@ private:
   static constexpr double MIN_ZOOM = 0.1;
   static constexpr int GRID_SIZE = 20;
 
-  double currentZoom = 1.0;
-  int currentOpacity = 255;
-  bool showGrid = false;
-  bool isPanning = false;
-  bool fillShapes = false;
+  // State variables
+  double currentZoom_ = 1.0;
+  int currentOpacity_ = 255;
+  bool showGrid_ = false;
+  bool isPanning_ = false;
+  bool fillShapes_ = false;
 
-  QVector<QPointF> pointBuffer;
-  QPointF previousPoint;
+  // Drawing state
+  QVector<QPointF> pointBuffer_;
+  QPointF previousPoint_;
 
-  QList<Action *> undoStack;
-  QList<Action *> redoStack;
+  // Undo/Redo stacks (using vector for move-only types)
+  std::vector<std::unique_ptr<Action>> undoStack_;
+  std::vector<std::unique_ptr<Action>> redoStack_;
 
   // Private methods
   void updateEraserPreview(const QPointF &position);
