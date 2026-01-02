@@ -50,7 +50,12 @@ Canvas::Canvas(QWidget *parent)
   currentPen.setJoinStyle(Qt::RoundJoin);
 }
 
-Canvas::~Canvas() {}
+Canvas::~Canvas() {
+  qDeleteAll(undoStack);
+  qDeleteAll(redoStack);
+  undoStack.clear();
+  redoStack.clear();
+}
 
 int Canvas::getCurrentBrushSize() const { return currentPen.width(); }
 QColor Canvas::getCurrentColor() const { return currentPen.color(); }
@@ -180,6 +185,8 @@ void Canvas::decreaseBrushSize() {
 
 void Canvas::clearCanvas() {
   scene->clear();
+  qDeleteAll(undoStack);
+  qDeleteAll(redoStack);
   undoStack.clear();
   redoStack.clear();
   backgroundImage = nullptr;

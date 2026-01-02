@@ -261,7 +261,10 @@ void ToolPanel::onActionColor() {
   if (color.isValid()) { updateColorDisplay(color); emit colorSelected(color); }
 }
 
-void ToolPanel::onOpacityChanged(int value) { emit opacitySelected(value); }
+void ToolPanel::onOpacityChanged(int value) { 
+  int boundedValue = qBound(0, value, 255);
+  emit opacitySelected(boundedValue); 
+}
 void ToolPanel::onActionIncreaseBrush() { emit increaseBrushSize(); }
 void ToolPanel::onActionDecreaseBrush() { emit decreaseBrushSize(); }
 void ToolPanel::onActionClear() { emit clearCanvas(); }
