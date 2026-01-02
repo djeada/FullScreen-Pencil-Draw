@@ -128,6 +128,7 @@ private:
   void fillAt(const QPointF &point);
   void drawArrow(const QPointF &start, const QPointF &end);
   void createTextItem(const QPointF &position);
+  QRectF getSelectionBoundingRect() const;
 };
 
 #endif // CANVAS_H
