@@ -73,7 +73,11 @@ jobs:
           cd build
           # Start Xvfb in the background
           Xvfb :99 -screen 0 1024x768x24 &
+          XVFB_PID=$!
           export DISPLAY=:99
+          
+          # Wait for Xvfb to be ready
+          sleep 2
           
           # Run the application in the background and redirect output to a log file
           ./FullScreen-Pencil-Draw > app_output.log 2>&1 &
@@ -93,12 +97,18 @@ jobs:
           fi
           
           # Check the log file for any errors
-          if grep -i "error" app_output.log
-          then
-            echo "Errors detected in application output."
-            exit 1
+          if [ -f app_output.log ]; then
+            echo "Log file contents:"
+            cat app_output.log
+            if grep -i "error" app_output.log; then
+              echo "Errors detected in application output."
+              exit 1
+            else
+              echo "No errors found in application output."
+            fi
           else
-            echo "No errors found in application output."
+            echo "Log file not found."
+            exit 1
           fi
 
       # Step 8: Upload Logs if the Previous Step Failed
