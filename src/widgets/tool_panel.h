@@ -17,6 +17,7 @@ public:
   void updateZoomDisplay(double zoom);
   void updateOpacityDisplay(int opacity);
   void updatePositionDisplay(const QPointF &pos);
+  void updateFilledShapesDisplay(bool filled);
   void setActiveTool(const QString &toolName);
 
 signals:
@@ -45,6 +46,7 @@ signals:
   void zoomOutAction();
   void zoomResetAction();
   void toggleGridAction();
+  void toggleFilledShapesAction();
   void copyAction();
   void cutAction();
   void pasteAction();
@@ -76,6 +78,7 @@ private:
   QAction *actionZoomOut;
   QAction *actionZoomReset;
   QAction *actionGrid;
+  QAction *actionFilledShapes;
 
   QLabel *brushSizeLabel;
   QLabel *colorPreview;
@@ -101,6 +104,7 @@ private slots:
   void onActionZoomOut();
   void onActionZoomReset();
   void onActionGrid();
+  void onActionFilledShapes();
   void onOpacityChanged(int value);
 
 public slots:

@@ -28,9 +28,11 @@ FullScreen Pencil Draw is a professional-grade vector and raster graphics editor
 - **Opacity Control**: Adjust brush transparency with slider
 - **Brush Size Control**: Visual display with +/- buttons and keyboard shortcuts
 - **Color Picker**: Full color dialog with current color preview
+- **Filled Shapes Toggle**: Draw filled or outlined rectangles and circles (B key)
 - **Zoom Level Display**: Real-time zoom percentage indicator
 - **Cursor Position**: Live X/Y coordinate display
 - **Undo/Redo**: Full action history with unlimited undo levels
+- **Clear Canvas Confirmation**: Prevents accidental canvas clearing
 
 ### File Operations
 - **New Canvas**: Create custom-sized canvas with background color choice
@@ -62,6 +64,7 @@ FullScreen Pencil Draw is a professional-grade vector and raster graphics editor
 | | `S` | Selection tool |
 | | `H` | Pan/Hand tool |
 | **View** | `G` | Toggle grid |
+| | `B` | Toggle filled shapes |
 | | `+` / `=` | Zoom in |
 | | `-` | Zoom out |
 | | `0` | Reset zoom (1:1) |

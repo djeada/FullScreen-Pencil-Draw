@@ -14,24 +14,26 @@ public:
 
 class DrawAction : public Action {
 public:
-  DrawAction(QGraphicsItem *item);
+  DrawAction(QGraphicsItem *item, QGraphicsScene *scene);
   ~DrawAction();
   void undo() override;
   void redo() override;
 
 private:
   QGraphicsItem *item;
+  QGraphicsScene *scene;
 };
 
 class DeleteAction : public Action {
 public:
-  DeleteAction(QGraphicsItem *item);
+  DeleteAction(QGraphicsItem *item, QGraphicsScene *scene);
   ~DeleteAction();
   void undo() override;
   void redo() override;
 
 private:
   QGraphicsItem *item;
+  QGraphicsScene *scene;
 };
 
 #endif // ACTION_H

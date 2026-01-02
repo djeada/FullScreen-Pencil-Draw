@@ -36,7 +36,7 @@ MainWindow::MainWindow(QWidget *parent)
 MainWindow::~MainWindow() {}
 
 void MainWindow::setupStatusBar() {
-  _statusLabel = new QLabel("Ready | P:Pen E:Eraser T:Text F:Fill L:Line A:Arrow R:Rect C:Circle S:Select H:Pan G:Grid | Ctrl+Scroll:Zoom", this);
+  _statusLabel = new QLabel("Ready | P:Pen E:Eraser T:Text F:Fill L:Line A:Arrow R:Rect C:Circle S:Select H:Pan | G:Grid B:Filled | Ctrl+Scroll:Zoom", this);
   statusBar()->addWidget(_statusLabel);
   statusBar()->setStyleSheet("QStatusBar { background-color: #2d2d2d; color: #ffffff; }");
 }
@@ -86,6 +86,10 @@ void MainWindow::setupConnections() {
   connect(_toolPanel, &ToolPanel::zoomOutAction, _canvas, &Canvas::zoomOut);
   connect(_toolPanel, &ToolPanel::zoomResetAction, _canvas, &Canvas::zoomReset);
   connect(_toolPanel, &ToolPanel::toggleGridAction, _canvas, &Canvas::toggleGrid);
+  connect(_toolPanel, &ToolPanel::toggleFilledShapesAction, _canvas, &Canvas::toggleFilledShapes);
+
+  // Filled shapes feedback
+  connect(_canvas, &Canvas::filledShapesChanged, this, &MainWindow::onFilledShapesChanged);
 
   // File operations
   connect(_toolPanel, &ToolPanel::saveAction, _canvas, &Canvas::saveToFile);
@@ -98,6 +102,7 @@ void MainWindow::onBrushSizeChanged(int size) { _toolPanel->updateBrushSizeDispl
 void MainWindow::onColorChanged(const QColor &color) { _toolPanel->updateColorDisplay(color); }
 void MainWindow::onZoomChanged(double zoom) { _toolPanel->updateZoomDisplay(zoom); }
 void MainWindow::onOpacityChanged(int opacity) { _toolPanel->updateOpacityDisplay(opacity); }
+void MainWindow::onFilledShapesChanged(bool filled) { _toolPanel->updateFilledShapesDisplay(filled); }
 void MainWindow::onCursorPositionChanged(const QPointF &pos) { _toolPanel->updatePositionDisplay(pos); }
 
 void MainWindow::onNewCanvas() {
@@ -136,6 +141,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
   else if (event->key() == Qt::Key_S && !(event->modifiers() & Qt::ControlModifier)) { _toolPanel->onActionSelection(); }
   else if (event->key() == Qt::Key_H) { _toolPanel->onActionPan(); }
   else if (event->key() == Qt::Key_G) { _canvas->toggleGrid(); }
+  else if (event->key() == Qt::Key_B) { _canvas->toggleFilledShapes(); }
   else if (event->key() == Qt::Key_D && (event->modifiers() & Qt::ControlModifier)) { _canvas->duplicateSelectedItems(); }
   // Brush size
   else if (event->key() == Qt::Key_BracketRight) { _canvas->increaseBrushSize(); }
