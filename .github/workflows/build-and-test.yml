@@ -96,6 +96,12 @@ jobs:
             echo "Application exited before 10 seconds."
           fi
           
+          # Clean up Xvfb process
+          if ps -p $XVFB_PID > /dev/null; then
+            echo "Terminating Xvfb (PID: $XVFB_PID)"
+            kill $XVFB_PID
+          fi
+          
           # Check the log file for any errors
           if [ -f app_output.log ]; then
             echo "Log file contents:"
