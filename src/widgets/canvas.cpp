@@ -199,8 +199,16 @@ void Canvas::decreaseBrushSize() {
 }
 
 void Canvas::clearCanvas() {
-  // Ask for confirmation before clearing
-  if (scene->items().count() > 1) {  // More than just the eraser preview
+  // Ask for confirmation if there are drawable items on the canvas
+  // (excluding system items like eraser preview and background image)
+  int drawableItemCount = 0;
+  for (auto item : scene->items()) {
+    if (item != eraserPreview && item != backgroundImage) {
+      drawableItemCount++;
+    }
+  }
+  
+  if (drawableItemCount > 0) {
     QMessageBox::StandardButton reply = QMessageBox::question(
         this, "Clear Canvas",
         "Are you sure you want to clear the canvas? This action cannot be undone.",
@@ -418,6 +426,7 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
   case Arrow: case Rectangle: {
     auto ri = new QGraphicsRectItem(QRectF(startPoint, startPoint));
     ri->setPen(currentPen);
+    // Only fill rectangles, not the preview rect used for Arrow tool
     if (fillShapes && currentShape == Rectangle) ri->setBrush(currentPen.color());
     ri->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
     scene->addItem(ri); tempShapeItem = ri;
