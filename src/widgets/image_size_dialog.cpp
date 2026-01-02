@@ -14,11 +14,11 @@ ImageSizeDialog::ImageSizeDialog(int originalWidth, int originalHeight, QWidget 
   setModal(true);
   
   // Prevent division by zero
-  if (originalHeight <= 0) {
-    originalHeight = 1;
+  if (this->originalHeight <= 0) {
+    this->originalHeight = 1;
   }
   
-  aspectRatio = static_cast<double>(originalWidth) / static_cast<double>(originalHeight);
+  aspectRatio = static_cast<double>(this->originalWidth) / static_cast<double>(this->originalHeight);
   
   // Create widgets
   widthSpinBox = new QSpinBox(this);
@@ -34,7 +34,7 @@ ImageSizeDialog::ImageSizeDialog(int originalWidth, int originalHeight, QWidget 
   maintainAspectCheckBox = new QCheckBox("Maintain aspect ratio", this);
   maintainAspectCheckBox->setChecked(true);
   
-  originalSizeLabel = new QLabel(QString("Original size: %1 x %2 px").arg(originalWidth).arg(originalHeight), this);
+  originalSizeLabel = new QLabel(QString("Original size: %1 x %2 px").arg(this->originalWidth).arg(this->originalHeight), this);
   
   // Create layout
   QVBoxLayout *mainLayout = new QVBoxLayout(this);

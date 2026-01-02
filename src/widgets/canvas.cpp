@@ -563,8 +563,8 @@ void Canvas::dropEvent(QDropEvent *event) {
       if (url.isLocalFile()) {
         QString filePath = url.toLocalFile();
         
-        // Extract file extension
-        QString extension = filePath.section('.', -1).toLower();
+        // Extract file extension using QFileInfo for robust handling
+        QString extension = QFileInfo(filePath).suffix().toLower();
         
         // Check if the file is a supported image format
         if (SUPPORTED_IMAGE_EXTENSIONS.contains(extension)) {
