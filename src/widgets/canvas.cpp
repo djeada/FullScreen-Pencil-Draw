@@ -1,5 +1,6 @@
 // canvas.cpp
 #include "canvas.h"
+#include "image_size_dialog.h"
 #include <QApplication>
 #include <QClipboard>
 #include <QColorDialog>
@@ -15,6 +16,7 @@
 #include <QMimeData>
 #include <QMouseEvent>
 #include <QScrollBar>
+#include <QUrl>
 #include <QWheelEvent>
 #include <cmath>
 
@@ -45,6 +47,9 @@ Canvas::Canvas(QWidget *parent)
 
   this->setMouseTracking(true);
   scene->setItemIndexMethod(QGraphicsScene::BspTreeIndex);
+  
+  // Enable drag and drop
+  this->setAcceptDrops(true);
 
   currentPen.setCapStyle(Qt::RoundCap);
   currentPen.setJoinStyle(Qt::RoundJoin);
@@ -522,5 +527,85 @@ void Canvas::eraseAt(const QPointF &point) {
       undoStack.append(new DeleteAction(item)); redoStack.clear();
       scene->removeItem(item);
     }
+  }
+}
+
+void Canvas::dragEnterEvent(QDragEnterEvent *event) {
+  // Accept the drag if it contains URLs (files)
+  if (event->mimeData()->hasUrls()) {
+    event->acceptProposedAction();
+  }
+}
+
+void Canvas::dragMoveEvent(QDragMoveEvent *event) {
+  // Accept the drag move if it contains URLs (files)
+  if (event->mimeData()->hasUrls()) {
+    event->acceptProposedAction();
+  }
+}
+
+void Canvas::dropEvent(QDropEvent *event) {
+  // Handle the dropped files
+  const QMimeData *mimeData = event->mimeData();
+  
+  if (mimeData->hasUrls()) {
+    QList<QUrl> urls = mimeData->urls();
+    
+    // Process each dropped file
+    for (const QUrl &url : urls) {
+      if (url.isLocalFile()) {
+        QString filePath = url.toLocalFile();
+        
+        // Check if the file is an image
+        if (filePath.endsWith(".png", Qt::CaseInsensitive) ||
+            filePath.endsWith(".jpg", Qt::CaseInsensitive) ||
+            filePath.endsWith(".jpeg", Qt::CaseInsensitive) ||
+            filePath.endsWith(".bmp", Qt::CaseInsensitive) ||
+            filePath.endsWith(".gif", Qt::CaseInsensitive)) {
+          
+          // Get the drop position in scene coordinates
+          QPointF dropPosition = mapToScene(event->position().toPoint());
+          
+          // Load the dropped image
+          loadDroppedImage(filePath, dropPosition);
+        }
+      }
+    }
+    
+    event->acceptProposedAction();
+  }
+}
+
+void Canvas::loadDroppedImage(const QString &filePath, const QPointF &dropPosition) {
+  // Load the image
+  QPixmap pixmap(filePath);
+  
+  if (pixmap.isNull()) {
+    return; // Invalid image
+  }
+  
+  // Show dialog to specify dimensions
+  ImageSizeDialog dialog(pixmap.width(), pixmap.height(), this);
+  
+  if (dialog.exec() == QDialog::Accepted) {
+    int newWidth = dialog.getWidth();
+    int newHeight = dialog.getHeight();
+    
+    // Scale the pixmap to the specified dimensions
+    QPixmap scaledPixmap = pixmap.scaled(newWidth, newHeight, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    
+    // Create a graphics pixmap item
+    QGraphicsPixmapItem *pixmapItem = scene->addPixmap(scaledPixmap);
+    
+    // Position the item at the drop location (centered)
+    pixmapItem->setPos(dropPosition.x() - newWidth / 2.0, dropPosition.y() - newHeight / 2.0);
+    
+    // Make the item selectable and movable
+    pixmapItem->setFlag(QGraphicsItem::ItemIsSelectable, true);
+    pixmapItem->setFlag(QGraphicsItem::ItemIsMovable, true);
+    
+    // Add to undo stack
+    undoStack.append(new DrawAction(pixmapItem));
+    redoStack.clear();
   }
 }

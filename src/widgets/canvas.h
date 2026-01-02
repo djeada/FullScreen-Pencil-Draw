@@ -4,6 +4,9 @@
 
 #include <QApplication>
 #include <QClipboard>
+#include <QDragEnterEvent>
+#include <QDragMoveEvent>
+#include <QDropEvent>
 #include <QGraphicsEllipseItem>
 #include <QGraphicsItem>
 #include <QGraphicsLineItem>
@@ -76,6 +79,9 @@ protected:
   void mouseReleaseEvent(QMouseEvent *event) override;
   void wheelEvent(QWheelEvent *event) override;
   void drawBackground(QPainter *painter, const QRectF &rect) override;
+  void dragEnterEvent(QDragEnterEvent *event) override;
+  void dragMoveEvent(QDragMoveEvent *event) override;
+  void dropEvent(QDropEvent *event) override;
 
 private:
   // Enums
@@ -122,6 +128,7 @@ private:
   void fillAt(const QPointF &point);
   void drawArrow(const QPointF &start, const QPointF &end);
   void createTextItem(const QPointF &position);
+  void loadDroppedImage(const QString &filePath, const QPointF &dropPosition);
 };
 
 #endif // CANVAS_H
