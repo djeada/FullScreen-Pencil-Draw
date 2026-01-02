@@ -4,6 +4,7 @@
 #include <QHBoxLayout>
 #include <QFormLayout>
 #include <QDialogButtonBox>
+#include <QtMath>
 
 ImageSizeDialog::ImageSizeDialog(int originalWidth, int originalHeight, QWidget *parent)
     : QDialog(parent), originalWidth(originalWidth), originalHeight(originalHeight),
@@ -11,6 +12,11 @@ ImageSizeDialog::ImageSizeDialog(int originalWidth, int originalHeight, QWidget 
   
   setWindowTitle("Specify Image Dimensions");
   setModal(true);
+  
+  // Prevent division by zero
+  if (originalHeight <= 0) {
+    originalHeight = 1;
+  }
   
   aspectRatio = static_cast<double>(originalWidth) / static_cast<double>(originalHeight);
   
@@ -69,7 +75,7 @@ void ImageSizeDialog::onWidthChanged(int value) {
   
   if (maintainAspectCheckBox->isChecked()) {
     updatingValues = true;
-    int newHeight = static_cast<int>(value / aspectRatio);
+    int newHeight = qRound(value / aspectRatio);
     heightSpinBox->setValue(newHeight);
     updatingValues = false;
   }
@@ -80,7 +86,7 @@ void ImageSizeDialog::onHeightChanged(int value) {
   
   if (maintainAspectCheckBox->isChecked()) {
     updatingValues = true;
-    int newWidth = static_cast<int>(value * aspectRatio);
+    int newWidth = qRound(value * aspectRatio);
     widthSpinBox->setValue(newWidth);
     updatingValues = false;
   }

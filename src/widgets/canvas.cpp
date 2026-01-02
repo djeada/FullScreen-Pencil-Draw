@@ -5,6 +5,7 @@
 #include <QClipboard>
 #include <QColorDialog>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QGraphicsEllipseItem>
 #include <QGraphicsItem>
 #include <QGraphicsLineItem>
@@ -13,12 +14,18 @@
 #include <QGraphicsRectItem>
 #include <QGraphicsTextItem>
 #include <QInputDialog>
+#include <QMessageBox>
 #include <QMimeData>
 #include <QMouseEvent>
 #include <QScrollBar>
 #include <QUrl>
 #include <QWheelEvent>
 #include <cmath>
+
+// Supported image file extensions for drag-and-drop
+static const QSet<QString> SUPPORTED_IMAGE_EXTENSIONS = {
+    "png", "jpg", "jpeg", "bmp", "gif"
+};
 
 Canvas::Canvas(QWidget *parent)
     : QGraphicsView(parent), scene(new QGraphicsScene(this)),
@@ -556,18 +563,21 @@ void Canvas::dropEvent(QDropEvent *event) {
       if (url.isLocalFile()) {
         QString filePath = url.toLocalFile();
         
-        // Check if the file is an image
-        if (filePath.endsWith(".png", Qt::CaseInsensitive) ||
-            filePath.endsWith(".jpg", Qt::CaseInsensitive) ||
-            filePath.endsWith(".jpeg", Qt::CaseInsensitive) ||
-            filePath.endsWith(".bmp", Qt::CaseInsensitive) ||
-            filePath.endsWith(".gif", Qt::CaseInsensitive)) {
-          
+        // Extract file extension
+        QString extension = filePath.section('.', -1).toLower();
+        
+        // Check if the file is a supported image format
+        if (SUPPORTED_IMAGE_EXTENSIONS.contains(extension)) {
           // Get the drop position in scene coordinates
           QPointF dropPosition = mapToScene(event->position().toPoint());
           
           // Load the dropped image
           loadDroppedImage(filePath, dropPosition);
+        } else {
+          // Inform user about unsupported file type
+          QMessageBox::warning(this, "Unsupported File", 
+                             QString("File '%1' is not a supported image format.\n\nSupported formats: PNG, JPG, JPEG, BMP, GIF")
+                             .arg(QFileInfo(filePath).fileName()));
         }
       }
     }
@@ -581,7 +591,11 @@ void Canvas::loadDroppedImage(const QString &filePath, const QPointF &dropPositi
   QPixmap pixmap(filePath);
   
   if (pixmap.isNull()) {
-    return; // Invalid image
+    // Show error message for invalid image
+    QMessageBox::warning(this, "Invalid Image", 
+                       QString("Failed to load image from '%1'.\n\nThe file may be corrupted or not a valid image.")
+                       .arg(QFileInfo(filePath).fileName()));
+    return;
   }
   
   // Show dialog to specify dimensions
@@ -592,6 +606,8 @@ void Canvas::loadDroppedImage(const QString &filePath, const QPointF &dropPositi
     int newHeight = dialog.getHeight();
     
     // Scale the pixmap to the specified dimensions
+    // Note: We use IgnoreAspectRatio because the dialog already handled
+    // aspect ratio calculations, so we want exact dimensions specified by user
     QPixmap scaledPixmap = pixmap.scaled(newWidth, newHeight, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
     
     // Create a graphics pixmap item
