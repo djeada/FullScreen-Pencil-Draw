@@ -153,6 +153,12 @@ ToolPanel::ToolPanel(QWidget *parent) : QToolBar(parent) {
   connect(actionGrid, &QAction::triggered, this, &ToolPanel::onActionGrid);
   addAction(actionGrid);
 
+  actionFilledShapes = new QAction("Filled", this);
+  actionFilledShapes->setToolTip("Toggle filled shapes (B)");
+  actionFilledShapes->setCheckable(true);
+  connect(actionFilledShapes, &QAction::triggered, this, &ToolPanel::onActionFilledShapes);
+  addAction(actionFilledShapes);
+
   addSeparator();
 
   // Edit actions
@@ -244,6 +250,7 @@ void ToolPanel::updateColorDisplay(const QColor &color) { colorPreview->setStyle
 void ToolPanel::updateZoomDisplay(double zoom) { zoomLabel->setText(QString("%1%").arg(qRound(zoom))); }
 void ToolPanel::updateOpacityDisplay(int opacity) { opacitySlider->setValue(opacity); }
 void ToolPanel::updatePositionDisplay(const QPointF &pos) { positionLabel->setText(QString("X:%1 Y:%2").arg(qRound(pos.x())).arg(qRound(pos.y()))); }
+void ToolPanel::updateFilledShapesDisplay(bool filled) { actionFilledShapes->setChecked(filled); }
 
 void ToolPanel::onActionPen() { clearActiveToolStyles(); actionPen->setChecked(true); setActiveTool("Pen"); emit penSelected(); }
 void ToolPanel::onActionEraser() { clearActiveToolStyles(); actionEraser->setChecked(true); setActiveTool("Eraser"); emit eraserSelected(); }
@@ -277,3 +284,4 @@ void ToolPanel::onActionZoomIn() { emit zoomInAction(); }
 void ToolPanel::onActionZoomOut() { emit zoomOutAction(); }
 void ToolPanel::onActionZoomReset() { emit zoomResetAction(); }
 void ToolPanel::onActionGrid() { emit toggleGridAction(); }
+void ToolPanel::onActionFilledShapes() { emit toggleFilledShapesAction(); }

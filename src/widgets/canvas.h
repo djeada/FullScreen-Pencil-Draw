@@ -38,6 +38,7 @@ public:
   double getCurrentZoom() const;
   int getCurrentOpacity() const;
   bool isGridVisible() const;
+  bool isFilledShapes() const;
 
 signals:
   void brushSizeChanged(int size);
@@ -45,6 +46,7 @@ signals:
   void zoomChanged(double zoomPercent);
   void opacityChanged(int opacity);
   void cursorPositionChanged(const QPointF &pos);
+  void filledShapesChanged(bool filled);
 
 public slots:
   void setShape(const QString &shapeType);
@@ -73,6 +75,7 @@ public slots:
   void openFile();
   void newCanvas(int width, int height, const QColor &bgColor);
   void toggleGrid();
+  void toggleFilledShapes();
   void selectAll();
   void exportSelectionToSVG();
   void exportSelectionToPNG();
@@ -118,6 +121,7 @@ private:
   int currentOpacity = 255;
   bool showGrid = false;
   bool isPanning = false;
+  bool fillShapes = false;
 
   QVector<QPointF> pointBuffer;
   QPointF previousPoint;

@@ -76,6 +76,7 @@ QColor Canvas::getCurrentColor() const { return currentPen.color(); }
 double Canvas::getCurrentZoom() const { return currentZoom * 100.0; }
 int Canvas::getCurrentOpacity() const { return currentOpacity; }
 bool Canvas::isGridVisible() const { return showGrid; }
+bool Canvas::isFilledShapes() const { return fillShapes; }
 
 void Canvas::drawBackground(QPainter *painter, const QRectF &rect) {
   QGraphicsView::drawBackground(painter, rect);
@@ -198,6 +199,17 @@ void Canvas::decreaseBrushSize() {
 }
 
 void Canvas::clearCanvas() {
+  // Ask for confirmation before clearing
+  if (scene->items().count() > 1) {  // More than just the eraser preview
+    QMessageBox::StandardButton reply = QMessageBox::question(
+        this, "Clear Canvas",
+        "Are you sure you want to clear the canvas? This action cannot be undone.",
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    if (reply != QMessageBox::Yes) {
+      return;
+    }
+  }
+  
   scene->clear();
   qDeleteAll(undoStack);
   qDeleteAll(redoStack);
@@ -262,6 +274,11 @@ void Canvas::toggleGrid() {
   scene->invalidate(scene->sceneRect(), QGraphicsScene::BackgroundLayer);
 }
 
+void Canvas::toggleFilledShapes() {
+  fillShapes = !fillShapes;
+  emit filledShapesChanged(fillShapes);
+}
+
 void Canvas::selectAll() {
   for (auto item : scene->items())
     if (item != eraserPreview && item != backgroundImage) item->setSelected(true);
@@ -270,7 +287,7 @@ void Canvas::selectAll() {
 void Canvas::deleteSelectedItems() {
   for (QGraphicsItem *item : scene->selectedItems()) {
     if (item != eraserPreview && item != backgroundImage) {
-      undoStack.append(new DeleteAction(item));
+      undoStack.append(new DeleteAction(item, scene));
       redoStack.clear();
       scene->removeItem(item);
     }
@@ -283,24 +300,24 @@ void Canvas::duplicateSelectedItems() {
     if (auto r = dynamic_cast<QGraphicsRectItem *>(item)) {
       auto n = new QGraphicsRectItem(r->rect()); n->setPen(r->pen()); n->setBrush(r->brush());
       n->setPos(r->pos() + QPointF(20, 20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
-      scene->addItem(n); newItems.append(n); undoStack.append(new DrawAction(n));
+      scene->addItem(n); newItems.append(n); undoStack.append(new DrawAction(n, scene));
     } else if (auto e = dynamic_cast<QGraphicsEllipseItem *>(item)) {
       if (item == eraserPreview) continue;
       auto n = new QGraphicsEllipseItem(e->rect()); n->setPen(e->pen()); n->setBrush(e->brush());
       n->setPos(e->pos() + QPointF(20, 20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
-      scene->addItem(n); newItems.append(n); undoStack.append(new DrawAction(n));
+      scene->addItem(n); newItems.append(n); undoStack.append(new DrawAction(n, scene));
     } else if (auto l = dynamic_cast<QGraphicsLineItem *>(item)) {
       auto n = new QGraphicsLineItem(l->line()); n->setPen(l->pen());
       n->setPos(l->pos() + QPointF(20, 20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
-      scene->addItem(n); newItems.append(n); undoStack.append(new DrawAction(n));
+      scene->addItem(n); newItems.append(n); undoStack.append(new DrawAction(n, scene));
     } else if (auto p = dynamic_cast<QGraphicsPathItem *>(item)) {
       auto n = new QGraphicsPathItem(p->path()); n->setPen(p->pen());
       n->setPos(p->pos() + QPointF(20, 20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
-      scene->addItem(n); newItems.append(n); undoStack.append(new DrawAction(n));
+      scene->addItem(n); newItems.append(n); undoStack.append(new DrawAction(n, scene));
     } else if (auto t = dynamic_cast<QGraphicsTextItem *>(item)) {
       auto n = new QGraphicsTextItem(t->toPlainText()); n->setFont(t->font()); n->setDefaultTextColor(t->defaultTextColor());
       n->setPos(t->pos() + QPointF(20, 20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
-      scene->addItem(n); newItems.append(n); undoStack.append(new DrawAction(n));
+      scene->addItem(n); newItems.append(n); undoStack.append(new DrawAction(n, scene));
     }
   }
   redoStack.clear();
@@ -348,7 +365,7 @@ void Canvas::createTextItem(const QPointF &pos) {
     ti->setPos(pos);
     ti->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
     scene->addItem(ti);
-    undoStack.append(new DrawAction(ti));
+    undoStack.append(new DrawAction(ti, scene));
     redoStack.clear();
   }
 }
@@ -375,7 +392,7 @@ void Canvas::drawArrow(const QPointF &start, const QPointF &end) {
   ahi->setPen(currentPen); ahi->setBrush(currentPen.color());
   ahi->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
   scene->addItem(ahi);
-  undoStack.append(new DrawAction(li)); undoStack.append(new DrawAction(ahi));
+  undoStack.append(new DrawAction(li, scene)); undoStack.append(new DrawAction(ahi, scene));
   redoStack.clear();
 }
 
@@ -396,25 +413,29 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
     QPainterPath p; p.moveTo(sp); currentPath->setPath(p);
     scene->addItem(currentPath);
     pointBuffer.clear(); pointBuffer.append(sp);
-    undoStack.append(new DrawAction(currentPath)); redoStack.clear();
+    undoStack.append(new DrawAction(currentPath, scene)); redoStack.clear();
   } break;
   case Arrow: case Rectangle: {
     auto ri = new QGraphicsRectItem(QRectF(startPoint, startPoint));
-    ri->setPen(currentPen); ri->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
+    ri->setPen(currentPen);
+    if (fillShapes && currentShape == Rectangle) ri->setBrush(currentPen.color());
+    ri->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
     scene->addItem(ri); tempShapeItem = ri;
-    if (currentShape == Rectangle) { undoStack.append(new DrawAction(ri)); redoStack.clear(); }
+    if (currentShape == Rectangle) { undoStack.append(new DrawAction(ri, scene)); redoStack.clear(); }
   } break;
   case Circle: {
     auto ei = new QGraphicsEllipseItem(QRectF(startPoint, startPoint));
-    ei->setPen(currentPen); ei->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
+    ei->setPen(currentPen);
+    if (fillShapes) ei->setBrush(currentPen.color());
+    ei->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
     scene->addItem(ei); tempShapeItem = ei;
-    undoStack.append(new DrawAction(ei)); redoStack.clear();
+    undoStack.append(new DrawAction(ei, scene)); redoStack.clear();
   } break;
   case Line: {
     auto li = new QGraphicsLineItem(QLineF(startPoint, startPoint));
     li->setPen(currentPen); li->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
     scene->addItem(li); tempShapeItem = li;
-    undoStack.append(new DrawAction(li)); redoStack.clear();
+    undoStack.append(new DrawAction(li, scene)); redoStack.clear();
   } break;
   default: QGraphicsView::mousePressEvent(event); break;
   }
@@ -484,7 +505,7 @@ void Canvas::cutSelectedItems() {
   copySelectedItems();
   for (auto item : sel) {
     if (item != eraserPreview && item != backgroundImage) {
-      undoStack.append(new DeleteAction(item)); redoStack.clear();
+      undoStack.append(new DeleteAction(item, scene)); redoStack.clear();
       scene->removeItem(item);
     }
   }
@@ -498,12 +519,12 @@ void Canvas::pasteItems() {
   QList<QGraphicsItem*> pi;
   while (!ds.atEnd()) {
     QString t; ds >> t;
-    if (t == "Rectangle") { QRectF r; QPointF p; QPen pn; QBrush b; ds >> r >> p >> pn >> b; auto n = new QGraphicsRectItem(r); n->setPen(pn); n->setBrush(b); n->setPos(p + QPointF(20,20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable); scene->addItem(n); pi.append(n); undoStack.append(new DrawAction(n)); }
-    else if (t == "Ellipse") { QRectF r; QPointF p; QPen pn; QBrush b; ds >> r >> p >> pn >> b; auto n = new QGraphicsEllipseItem(r); n->setPen(pn); n->setBrush(b); n->setPos(p + QPointF(20,20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable); scene->addItem(n); pi.append(n); undoStack.append(new DrawAction(n)); }
-    else if (t == "Line") { QLineF l; QPointF p; QPen pn; ds >> l >> p >> pn; auto n = new QGraphicsLineItem(l); n->setPen(pn); n->setPos(p + QPointF(20,20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable); scene->addItem(n); pi.append(n); undoStack.append(new DrawAction(n)); }
-    else if (t == "Path") { QPainterPath pp; QPointF p; QPen pn; ds >> pp >> p >> pn; auto n = new QGraphicsPathItem(pp); n->setPen(pn); n->setPos(p + QPointF(20,20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable); scene->addItem(n); pi.append(n); undoStack.append(new DrawAction(n)); }
-    else if (t == "Text") { QString tx; QPointF p; QFont f; QColor c; ds >> tx >> p >> f >> c; auto n = new QGraphicsTextItem(tx); n->setFont(f); n->setDefaultTextColor(c); n->setPos(p + QPointF(20,20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable); scene->addItem(n); pi.append(n); undoStack.append(new DrawAction(n)); }
-    else if (t == "Polygon") { QPolygonF pg; QPointF p; QPen pn; QBrush b; ds >> pg >> p >> pn >> b; auto n = new QGraphicsPolygonItem(pg); n->setPen(pn); n->setBrush(b); n->setPos(p + QPointF(20,20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable); scene->addItem(n); pi.append(n); undoStack.append(new DrawAction(n)); }
+    if (t == "Rectangle") { QRectF r; QPointF p; QPen pn; QBrush b; ds >> r >> p >> pn >> b; auto n = new QGraphicsRectItem(r); n->setPen(pn); n->setBrush(b); n->setPos(p + QPointF(20,20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable); scene->addItem(n); pi.append(n); undoStack.append(new DrawAction(n, scene)); }
+    else if (t == "Ellipse") { QRectF r; QPointF p; QPen pn; QBrush b; ds >> r >> p >> pn >> b; auto n = new QGraphicsEllipseItem(r); n->setPen(pn); n->setBrush(b); n->setPos(p + QPointF(20,20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable); scene->addItem(n); pi.append(n); undoStack.append(new DrawAction(n, scene)); }
+    else if (t == "Line") { QLineF l; QPointF p; QPen pn; ds >> l >> p >> pn; auto n = new QGraphicsLineItem(l); n->setPen(pn); n->setPos(p + QPointF(20,20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable); scene->addItem(n); pi.append(n); undoStack.append(new DrawAction(n, scene)); }
+    else if (t == "Path") { QPainterPath pp; QPointF p; QPen pn; ds >> pp >> p >> pn; auto n = new QGraphicsPathItem(pp); n->setPen(pn); n->setPos(p + QPointF(20,20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable); scene->addItem(n); pi.append(n); undoStack.append(new DrawAction(n, scene)); }
+    else if (t == "Text") { QString tx; QPointF p; QFont f; QColor c; ds >> tx >> p >> f >> c; auto n = new QGraphicsTextItem(tx); n->setFont(f); n->setDefaultTextColor(c); n->setPos(p + QPointF(20,20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable); scene->addItem(n); pi.append(n); undoStack.append(new DrawAction(n, scene)); }
+    else if (t == "Polygon") { QPolygonF pg; QPointF p; QPen pn; QBrush b; ds >> pg >> p >> pn >> b; auto n = new QGraphicsPolygonItem(pg); n->setPen(pn); n->setBrush(b); n->setPos(p + QPointF(20,20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable); scene->addItem(n); pi.append(n); undoStack.append(new DrawAction(n, scene)); }
   }
   redoStack.clear(); scene->clearSelection();
   for (auto i : pi) i->setSelected(true);
@@ -533,7 +554,7 @@ void Canvas::eraseAt(const QPointF &point) {
     if (item == eraserPreview || item == backgroundImage) continue;
     QPainterPathStroker s; s.setWidth(1);
     if (ep.intersects(s.createStroke(item->shape()))) {
-      undoStack.append(new DeleteAction(item)); redoStack.clear();
+      undoStack.append(new DeleteAction(item, scene)); redoStack.clear();
       scene->removeItem(item);
     }
   }
@@ -623,7 +644,7 @@ void Canvas::loadDroppedImage(const QString &filePath, const QPointF &dropPositi
     pixmapItem->setFlag(QGraphicsItem::ItemIsMovable, true);
     
     // Add to undo stack
-    undoStack.append(new DrawAction(pixmapItem));
+    undoStack.append(new DrawAction(pixmapItem, scene));
     redoStack.clear();
   }
 }
