@@ -13,8 +13,8 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Find Qt libraries (prefer Qt6, fallback to Qt5)
-find_package(QT NAMES Qt6 Qt5 COMPONENTS Widgets REQUIRED)
-find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Widgets REQUIRED)
+find_package(QT NAMES Qt6 Qt5 COMPONENTS Widgets Svg REQUIRED)
+find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Widgets Svg REQUIRED)
 
 # Explicitly specify source and header files
 file(GLOB_RECURSE PROJECT_SOURCES
@@ -57,7 +57,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 )
 
 # Link Qt Widgets library
-target_link_libraries(${PROJECT_NAME} PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
+target_link_libraries(${PROJECT_NAME} PRIVATE Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::Svg)
 
 # Set properties for macOS, if needed
 set_target_properties(${PROJECT_NAME} PROPERTIES

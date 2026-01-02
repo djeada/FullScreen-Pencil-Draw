@@ -19,7 +19,9 @@
 #include <QMouseEvent>
 #include <QScrollBar>
 #include <QUrl>
+#include <QSvgGenerator>
 #include <QWheelEvent>
+#include <QMenu>
 #include <cmath>
 
 // Supported image file extensions for drag-and-drop
@@ -624,4 +626,141 @@ void Canvas::loadDroppedImage(const QString &filePath, const QPointF &dropPositi
     undoStack.append(new DrawAction(pixmapItem));
     redoStack.clear();
   }
+}
+
+void Canvas::contextMenuEvent(QContextMenuEvent *event) {
+  // Only show context menu if there are selected items
+  if (scene->selectedItems().isEmpty()) {
+    QGraphicsView::contextMenuEvent(event);
+    return;
+  }
+
+  QMenu contextMenu(this);
+  QAction *exportSVGAction = contextMenu.addAction("Export Selection as SVG");
+  QAction *exportPNGAction = contextMenu.addAction("Export Selection as PNG");
+  QAction *exportJPGAction = contextMenu.addAction("Export Selection as JPG");
+
+  connect(exportSVGAction, &QAction::triggered, this, &Canvas::exportSelectionToSVG);
+  connect(exportPNGAction, &QAction::triggered, this, &Canvas::exportSelectionToPNG);
+  connect(exportJPGAction, &QAction::triggered, this, &Canvas::exportSelectionToJPG);
+
+  contextMenu.exec(event->globalPos());
+}
+
+QRectF Canvas::getSelectionBoundingRect() const {
+  QList<QGraphicsItem*> selectedItems = scene->selectedItems();
+  if (selectedItems.isEmpty()) return QRectF();
+  
+  QRectF boundingRect;
+  bool firstItem = true;
+  for (QGraphicsItem *item : selectedItems) {
+    if (item != eraserPreview && item != backgroundImage) {
+      if (firstItem) {
+        boundingRect = item->sceneBoundingRect();
+        firstItem = false;
+      } else {
+        boundingRect = boundingRect.united(item->sceneBoundingRect());
+      }
+    }
+  }
+  boundingRect.adjust(-10, -10, 10, 10);
+  return boundingRect;
+}
+
+void Canvas::exportSelectionToSVG() {
+  if (scene->selectedItems().isEmpty()) return;
+
+  QString fileName = QFileDialog::getSaveFileName(this, "Export Selection as SVG", "", "SVG (*.svg)");
+  if (fileName.isEmpty()) return;
+
+  QRectF boundingRect = getSelectionBoundingRect();
+  if (boundingRect.isEmpty()) return;
+
+  // Create SVG generator
+  QSvgGenerator generator;
+  generator.setFileName(fileName);
+  generator.setSize(boundingRect.size().toSize());
+  generator.setViewBox(QRect(0, 0, boundingRect.width(), boundingRect.height()));
+  generator.setTitle("Exported Selection");
+  generator.setDescription("Selected items exported from FullScreen Pencil Draw");
+
+  // Render selected items to SVG
+  QPainter painter;
+  painter.begin(&generator);
+  painter.setRenderHint(QPainter::Antialiasing);
+  painter.setRenderHint(QPainter::TextAntialiasing);
+  painter.translate(-boundingRect.topLeft());
+  
+  for (QGraphicsItem *item : scene->selectedItems()) {
+    if (item != eraserPreview && item != backgroundImage) {
+      painter.save();
+      painter.setTransform(item->sceneTransform(), true);
+      item->paint(&painter, nullptr, nullptr);
+      painter.restore();
+    }
+  }
+  
+  painter.end();
+}
+
+void Canvas::exportSelectionToPNG() {
+  if (scene->selectedItems().isEmpty()) return;
+
+  QString fileName = QFileDialog::getSaveFileName(this, "Export Selection as PNG", "", "PNG (*.png)");
+  if (fileName.isEmpty()) return;
+
+  QRectF boundingRect = getSelectionBoundingRect();
+  if (boundingRect.isEmpty()) return;
+
+  // Create image and render selected items
+  QImage image(boundingRect.size().toSize(), QImage::Format_ARGB32);
+  image.fill(Qt::transparent);
+  
+  QPainter painter(&image);
+  painter.setRenderHint(QPainter::Antialiasing);
+  painter.setRenderHint(QPainter::TextAntialiasing);
+  painter.translate(-boundingRect.topLeft());
+  
+  for (QGraphicsItem *item : scene->selectedItems()) {
+    if (item != eraserPreview && item != backgroundImage) {
+      painter.save();
+      painter.setTransform(item->sceneTransform(), true);
+      item->paint(&painter, nullptr, nullptr);
+      painter.restore();
+    }
+  }
+  
+  painter.end();
+  image.save(fileName);
+}
+
+void Canvas::exportSelectionToJPG() {
+  if (scene->selectedItems().isEmpty()) return;
+
+  QString fileName = QFileDialog::getSaveFileName(this, "Export Selection as JPG", "", "JPEG (*.jpg)");
+  if (fileName.isEmpty()) return;
+
+  QRectF boundingRect = getSelectionBoundingRect();
+  if (boundingRect.isEmpty()) return;
+
+  // Create image with white background and render selected items
+  QImage image(boundingRect.size().toSize(), QImage::Format_RGB32);
+  image.fill(Qt::white);
+  
+  QPainter painter(&image);
+  painter.setRenderHint(QPainter::Antialiasing);
+  painter.setRenderHint(QPainter::TextAntialiasing);
+  painter.translate(-boundingRect.topLeft());
+  
+  for (QGraphicsItem *item : scene->selectedItems()) {
+    if (item != eraserPreview && item != backgroundImage) {
+      painter.save();
+      painter.setTransform(item->sceneTransform(), true);
+      item->paint(&painter, nullptr, nullptr);
+      painter.restore();
+    }
+  }
+  
+  painter.end();
+  image.save(fileName);
 }
