@@ -24,6 +24,7 @@ private slots:
   void onZoomChanged(double zoom);
   void onOpacityChanged(int opacity);
   void onCursorPositionChanged(const QPointF &pos);
+  void onFilledShapesChanged(bool filled);
   void onNewCanvas();
 
 private:

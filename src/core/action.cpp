@@ -1,21 +1,49 @@
 #include "action.h"
 
 Action::~Action() {}
+
+DrawAction::DrawAction(QGraphicsItem *item, QGraphicsScene *scene)
+    : item(item), scene(scene) {}
+
 DrawAction::~DrawAction() {
-  // Optional cleanup
+  // Item ownership is managed by the scene when added
+  // If item was removed and never re-added, we need to clean it up
+  if (item && !item->scene()) {
+    delete item;
+  }
 }
-DrawAction::DrawAction(QGraphicsItem *item) : item(item) {}
 
-void DrawAction::undo() { item->scene()->removeItem(item); }
+void DrawAction::undo() {
+  if (item && scene) {
+    scene->removeItem(item);
+  }
+}
 
-void DrawAction::redo() { item->scene()->addItem(item); }
+void DrawAction::redo() {
+  if (item && scene) {
+    scene->addItem(item);
+  }
+}
 
-DeleteAction::DeleteAction(QGraphicsItem *item) : item(item) {}
+DeleteAction::DeleteAction(QGraphicsItem *item, QGraphicsScene *scene)
+    : item(item), scene(scene) {}
 
 DeleteAction::~DeleteAction() {
-  // Optional cleanup
+  // Item ownership is managed by the scene when added
+  // If item was removed and never re-added, we need to clean it up
+  if (item && !item->scene()) {
+    delete item;
+  }
 }
 
-void DeleteAction::undo() { item->scene()->addItem(item); }
+void DeleteAction::undo() {
+  if (item && scene) {
+    scene->addItem(item);
+  }
+}
 
-void DeleteAction::redo() { item->scene()->removeItem(item); }
+void DeleteAction::redo() {
+  if (item && scene) {
+    scene->removeItem(item);
+  }
+}
