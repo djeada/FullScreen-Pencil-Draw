@@ -183,6 +183,7 @@ private:
   void drawArrow(const QPointF &start, const QPointF &end);
   void createTextItem(const QPointF &position);
   void loadDroppedImage(const QString &filePath, const QPointF &dropPosition);
+  void exportToPDFWithFilename(const QString &fileName);
   QRectF getSelectionBoundingRect() const;
 };
 

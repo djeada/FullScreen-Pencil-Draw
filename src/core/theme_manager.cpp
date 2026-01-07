@@ -1,5 +1,6 @@
 // theme_manager.cpp
 #include "theme_manager.h"
+#include "app_constants.h"
 #include <QApplication>
 #include <QSettings>
 #include <QStyleFactory>
@@ -235,12 +236,12 @@ void ThemeManager::applyLightTheme() {
 }
 
 void ThemeManager::saveThemePreference() {
-  QSettings settings("FullScreenPencilDraw", "FullScreenPencilDraw");
+  QSettings settings(AppConstants::OrganizationName, AppConstants::ApplicationName);
   settings.setValue("theme", currentTheme_ == Dark ? "dark" : "light");
 }
 
 void ThemeManager::loadThemePreference() {
-  QSettings settings("FullScreenPencilDraw", "FullScreenPencilDraw");
+  QSettings settings(AppConstants::OrganizationName, AppConstants::ApplicationName);
   QString themeName = settings.value("theme", "dark").toString();
   currentTheme_ = (themeName == "light") ? Light : Dark;
 

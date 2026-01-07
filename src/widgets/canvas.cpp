@@ -363,9 +363,9 @@ void Canvas::saveToFile() {
   QString fileName = QFileDialog::getSaveFileName(this, "Save Image", "", "PNG (*.png);;JPEG (*.jpg);;BMP (*.bmp);;PDF (*.pdf)");
   if (fileName.isEmpty()) return;
   
-  // Check if saving as PDF
+  // Check if saving as PDF - pass the filename to avoid double dialog
   if (fileName.endsWith(".pdf", Qt::CaseInsensitive)) {
-    exportToPDF();
+    exportToPDFWithFilename(fileName);
     return;
   }
   
@@ -423,7 +423,10 @@ void Canvas::openRecentFile(const QString &filePath) {
 void Canvas::exportToPDF() {
   QString fileName = QFileDialog::getSaveFileName(this, "Export to PDF", "", "PDF (*.pdf)");
   if (fileName.isEmpty()) return;
-  
+  exportToPDFWithFilename(fileName);
+}
+
+void Canvas::exportToPDFWithFilename(const QString &fileName) {
   bool ev = eraserPreview_ && eraserPreview_->isVisible();
   if (eraserPreview_) eraserPreview_->hide();
   scene_->clearSelection();
@@ -432,10 +435,12 @@ void Canvas::exportToPDF() {
   if (sr.isEmpty()) sr = scene_->sceneRect();
   sr.adjust(-10, -10, 10, 10);
   
-  // Create PDF writer
+  // Create PDF writer with A4 page size as default
   QPdfWriter pdfWriter(fileName);
-  pdfWriter.setPageSize(QPageSize(sr.size().toSize(), QPageSize::Point));
-  pdfWriter.setPageMargins(QMarginsF(0, 0, 0, 0));
+  
+  // Use A4 page size for reasonable dimensions
+  pdfWriter.setPageSize(QPageSize::A4);
+  pdfWriter.setPageMargins(QMarginsF(10, 10, 10, 10), QPageLayout::Millimeter);
   pdfWriter.setTitle("FullScreen Pencil Draw Export");
   pdfWriter.setCreator("FullScreen Pencil Draw");
   
@@ -451,12 +456,17 @@ void Canvas::exportToPDF() {
   // Fill background
   painter.fillRect(painter.viewport(), backgroundColor_);
   
-  // Calculate scale factor to fit the scene onto the page
+  // Calculate scale factor to fit the scene onto the page while maintaining aspect ratio
   QRectF pageRect = painter.viewport();
   double scaleX = pageRect.width() / sr.width();
   double scaleY = pageRect.height() / sr.height();
   double scale = qMin(scaleX, scaleY);
   
+  // Center the content on the page
+  double offsetX = (pageRect.width() - sr.width() * scale) / 2.0;
+  double offsetY = (pageRect.height() - sr.height() * scale) / 2.0;
+  
+  painter.translate(offsetX, offsetY);
   painter.scale(scale, scale);
   painter.translate(-sr.topLeft());
   
