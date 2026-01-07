@@ -1,8 +1,9 @@
 #include "tool_panel.h"
+#include "brush_preview.h"
 #include <QColorDialog>
 #include <QFrame>
 
-ToolPanel::ToolPanel(QWidget *parent) : QToolBar(parent) {
+ToolPanel::ToolPanel(QWidget *parent) : QToolBar(parent), brushPreview_(nullptr) {
   setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
   setMovable(false);
 
@@ -97,6 +98,10 @@ ToolPanel::ToolPanel(QWidget *parent) : QToolBar(parent) {
   actionIncreaseBrush->setToolTip("Increase size (])");
   connect(actionIncreaseBrush, &QAction::triggered, this, &ToolPanel::onActionIncreaseBrush);
   addAction(actionIncreaseBrush);
+
+  // Visual brush preview
+  brushPreview_ = new BrushPreview(this);
+  addWidget(brushPreview_);
 
   addSeparator();
 
@@ -245,8 +250,21 @@ void ToolPanel::clearActiveToolStyles() {
 }
 
 void ToolPanel::setActiveTool(const QString &toolName) { activeToolLabel->setText("Tool: " + toolName); }
-void ToolPanel::updateBrushSizeDisplay(int size) { brushSizeLabel->setText(QString("Size: %1").arg(size)); }
-void ToolPanel::updateColorDisplay(const QColor &color) { colorPreview->setStyleSheet(QString("QLabel { background-color: %1; border: 2px solid #888888; border-radius: 3px; }").arg(color.name())); }
+
+void ToolPanel::updateBrushSizeDisplay(int size) {
+  brushSizeLabel->setText(QString("Size: %1").arg(size));
+  if (brushPreview_) {
+    brushPreview_->setBrushSize(size);
+  }
+}
+
+void ToolPanel::updateColorDisplay(const QColor &color) {
+  colorPreview->setStyleSheet(QString("QLabel { background-color: %1; border: 2px solid #888888; border-radius: 3px; }").arg(color.name()));
+  if (brushPreview_) {
+    brushPreview_->setBrushColor(color);
+  }
+}
+
 void ToolPanel::updateZoomDisplay(double zoom) { zoomLabel->setText(QString("%1%").arg(qRound(zoom))); }
 void ToolPanel::updateOpacityDisplay(int opacity) { opacitySlider->setValue(opacity); }
 void ToolPanel::updatePositionDisplay(const QPointF &pos) { positionLabel->setText(QString("X:%1 Y:%2").arg(qRound(pos.x())).arg(qRound(pos.y()))); }

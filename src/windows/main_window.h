@@ -6,6 +6,7 @@
 
 class Canvas;
 class ToolPanel;
+class LayerPanel;
 class QLabel;
 
 class MainWindow : public QMainWindow {
@@ -30,10 +31,12 @@ private slots:
 private:
   Canvas *_canvas;
   ToolPanel *_toolPanel;
+  LayerPanel *_layerPanel;
   QLabel *_statusLabel;
 
   void setupConnections();
   void setupStatusBar();
+  void setupLayerPanel();
 };
 
 #endif // MAIN_WINDOW_H

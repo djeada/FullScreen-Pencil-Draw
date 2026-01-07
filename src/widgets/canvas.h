@@ -34,6 +34,7 @@
 #include <vector>
 
 #include "../core/action.h"
+#include "../core/layer.h"
 
 class ToolManager;
 class Tool;
@@ -66,6 +67,9 @@ public:
   const QPen &eraserPen() const { return eraserPen_; }
   QGraphicsPixmapItem *backgroundImageItem() const { return backgroundImage_; }
   QColor backgroundColor() const { return backgroundColor_; }
+  
+  // Layer management
+  LayerManager *layerManager() const { return layerManager_; }
 
   // Action management - used by Tool classes
   void addDrawAction(QGraphicsItem *item);
@@ -131,6 +135,7 @@ private:
 
   // Member variables
   QGraphicsScene *scene_;
+  LayerManager *layerManager_;
   QPen currentPen_;
   QPen eraserPen_;
   ShapeType currentShape_;

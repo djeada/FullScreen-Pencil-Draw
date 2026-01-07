@@ -3,6 +3,7 @@
  * @brief Fill tool implementation.
  */
 #include "fill_tool.h"
+#include "../core/action.h"
 #include "../widgets/canvas.h"
 #include <QGraphicsEllipseItem>
 #include <QGraphicsPolygonItem>
@@ -31,6 +32,7 @@ void FillTool::mouseReleaseEvent(QMouseEvent * /*event*/,
 void FillTool::fillAt(const QPointF &point) {
   QGraphicsScene *scene = canvas_->scene();
   QColor fillColor = canvas_->currentPen().color();
+  QBrush newBrush(fillColor);
 
   for (QGraphicsItem *item : scene->items(point)) {
     // Skip background image
@@ -39,19 +41,25 @@ void FillTool::fillAt(const QPointF &point) {
 
     // Fill rectangles
     if (auto *rect = dynamic_cast<QGraphicsRectItem *>(item)) {
-      rect->setBrush(fillColor);
+      QBrush oldBrush = rect->brush();
+      rect->setBrush(newBrush);
+      canvas_->addAction(std::make_unique<FillAction>(item, oldBrush, newBrush));
       return;
     }
 
     // Fill ellipses
     if (auto *ellipse = dynamic_cast<QGraphicsEllipseItem *>(item)) {
-      ellipse->setBrush(fillColor);
+      QBrush oldBrush = ellipse->brush();
+      ellipse->setBrush(newBrush);
+      canvas_->addAction(std::make_unique<FillAction>(item, oldBrush, newBrush));
       return;
     }
 
     // Fill polygons
     if (auto *polygon = dynamic_cast<QGraphicsPolygonItem *>(item)) {
-      polygon->setBrush(fillColor);
+      QBrush oldBrush = polygon->brush();
+      polygon->setBrush(newBrush);
+      canvas_->addAction(std::make_unique<FillAction>(item, oldBrush, newBrush));
       return;
     }
   }

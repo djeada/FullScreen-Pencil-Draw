@@ -9,6 +9,7 @@
 #ifndef ACTION_H
 #define ACTION_H
 
+#include <QBrush>
 #include <QGraphicsItem>
 #include <QGraphicsScene>
 #include <QPointF>
@@ -135,6 +136,27 @@ public:
 
 private:
   std::vector<std::unique_ptr<Action>> actions_;
+};
+
+/**
+ * @brief Action for filling a shape with a color.
+ *
+ * This action tracks fill operations on fillable shapes.
+ * Undo restores the original brush, redo applies the fill again.
+ */
+class FillAction : public Action {
+public:
+  FillAction(QGraphicsItem *item, const QBrush &oldBrush, const QBrush &newBrush);
+  ~FillAction() override;
+
+  void undo() override;
+  void redo() override;
+  QString description() const override { return "Fill"; }
+
+private:
+  QGraphicsItem *item_;
+  QBrush oldBrush_;
+  QBrush newBrush_;
 };
 
 #endif // ACTION_H
