@@ -1,5 +1,6 @@
 // main_window.cpp
 #include "main_window.h"
+#include "../core/auto_save_manager.h"
 #include "../core/layer.h"
 #include "../core/recent_files_manager.h"
 #include "../core/theme_manager.h"
@@ -19,7 +20,9 @@
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), _canvas(new Canvas(this)),
       _toolPanel(new ToolPanel(this)), _layerPanel(nullptr),
-      _statusLabel(nullptr), _recentFilesMenu(nullptr) {
+      _autoSaveManager(nullptr), _statusLabel(nullptr), 
+      _recentFilesMenu(nullptr), _snapToGridAction(nullptr),
+      _autoSaveAction(nullptr) {
 
   QWidget *centralWidget = new QWidget(this);
   QVBoxLayout *layout = new QVBoxLayout(centralWidget);
@@ -34,6 +37,7 @@ MainWindow::MainWindow(QWidget *parent)
   setupMenuBar();
   setupStatusBar();
   setupLayerPanel();
+  setupAutoSave();
   setupConnections();
 
   _toolPanel->updateBrushSizeDisplay(_canvas->getCurrentBrushSize());
@@ -99,6 +103,9 @@ void MainWindow::setupConnections() {
 
   // Filled shapes feedback
   connect(_canvas, &Canvas::filledShapesChanged, this, &MainWindow::onFilledShapesChanged);
+  
+  // Snap to grid feedback
+  connect(_canvas, &Canvas::snapToGridChanged, this, &MainWindow::onSnapToGridChanged);
 
   // File operations
   connect(_toolPanel, &ToolPanel::saveAction, _canvas, &Canvas::saveToFile);
@@ -158,6 +165,9 @@ void MainWindow::setupMenuBar() {
   QAction *gridAction = viewMenu->addAction("Toggle &Grid", QKeySequence(Qt::Key_G), _canvas, &Canvas::toggleGrid);
   gridAction->setCheckable(true);
   
+  _snapToGridAction = viewMenu->addAction("&Snap to Grid", QKeySequence(Qt::CTRL | Qt::Key_G), _canvas, &Canvas::toggleSnapToGrid);
+  _snapToGridAction->setCheckable(true);
+  
   QAction *filledAction = viewMenu->addAction("Toggle &Filled Shapes", QKeySequence(Qt::Key_B), _canvas, &Canvas::toggleFilledShapes);
   filledAction->setCheckable(true);
   
@@ -167,6 +177,18 @@ void MainWindow::setupMenuBar() {
   QMenu *themeMenu = viewMenu->addMenu("&Theme");
   QAction *toggleThemeAction = themeMenu->addAction("Toggle &Dark/Light Theme", this, &MainWindow::onToggleTheme);
   toggleThemeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_T));
+  
+  // Tools menu
+  QMenu *toolsMenu = menuBar->addMenu("&Tools");
+  
+  _autoSaveAction = toolsMenu->addAction("Enable &Auto-Save", [this]() {
+    if (_autoSaveManager) {
+      _autoSaveManager->setEnabled(!_autoSaveManager->isEnabled());
+      _autoSaveAction->setChecked(_autoSaveManager->isEnabled());
+    }
+  });
+  _autoSaveAction->setCheckable(true);
+  _autoSaveAction->setChecked(true);  // Enabled by default
 }
 
 void MainWindow::updateRecentFilesMenu() {
@@ -227,6 +249,33 @@ void MainWindow::onZoomChanged(double zoom) { _toolPanel->updateZoomDisplay(zoom
 void MainWindow::onOpacityChanged(int opacity) { _toolPanel->updateOpacityDisplay(opacity); }
 void MainWindow::onFilledShapesChanged(bool filled) { _toolPanel->updateFilledShapesDisplay(filled); }
 void MainWindow::onCursorPositionChanged(const QPointF &pos) { _toolPanel->updatePositionDisplay(pos); }
+
+void MainWindow::onSnapToGridChanged(bool enabled) {
+  if (_snapToGridAction) {
+    _snapToGridAction->setChecked(enabled);
+  }
+}
+
+void MainWindow::setupAutoSave() {
+  _autoSaveManager = new AutoSaveManager(_canvas, this);
+  
+  connect(_autoSaveManager, &AutoSaveManager::autoSavePerformed,
+          this, &MainWindow::onAutoSavePerformed);
+  
+  // Check for recovery on startup
+  if (_autoSaveManager->hasAutoSave()) {
+    _autoSaveManager->restoreAutoSave();
+  }
+  
+  // Update the menu action state
+  if (_autoSaveAction) {
+    _autoSaveAction->setChecked(_autoSaveManager->isEnabled());
+  }
+}
+
+void MainWindow::onAutoSavePerformed(const QString &path) {
+  statusBar()->showMessage(QString("Auto-saved to: %1").arg(path), 3000);
+}
 
 void MainWindow::onNewCanvas() {
   bool ok;

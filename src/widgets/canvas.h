@@ -60,6 +60,7 @@ public:
   int getCurrentOpacity() const;
   bool isGridVisible() const;
   bool isFilledShapes() const;
+  bool isSnapToGridEnabled() const;
 
   // Tool system accessors - used by Tool classes
   QGraphicsScene *scene() const { return scene_; }
@@ -84,6 +85,8 @@ signals:
   void opacityChanged(int opacity);
   void cursorPositionChanged(const QPointF &pos);
   void filledShapesChanged(bool filled);
+  void snapToGridChanged(bool enabled);
+  void canvasModified();
 
 public slots:
   void setShape(const QString &shapeType);
@@ -113,6 +116,7 @@ public slots:
   void newCanvas(int width, int height, const QColor &bgColor);
   void toggleGrid();
   void toggleFilledShapes();
+  void toggleSnapToGrid();
   void selectAll();
   void exportSelectionToSVG();
   void exportSelectionToPNG();
@@ -164,6 +168,8 @@ private:
   bool showGrid_ = false;
   bool isPanning_ = false;
   bool fillShapes_ = false;
+  bool snapToGrid_ = false;
+  int duplicateOffset_ = 20;
 
   // Drawing state
   QVector<QPointF> pointBuffer_;
@@ -185,6 +191,8 @@ private:
   void loadDroppedImage(const QString &filePath, const QPointF &dropPosition);
   void exportToPDFWithFilename(const QString &fileName);
   QRectF getSelectionBoundingRect() const;
+  QPointF snapToGridPoint(const QPointF &point) const;
+  QPointF calculateSmartDuplicateOffset() const;
 };
 
 #endif // CANVAS_H
