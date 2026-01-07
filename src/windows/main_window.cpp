@@ -1,6 +1,8 @@
 // main_window.cpp
 #include "main_window.h"
+#include "../core/layer.h"
 #include "../widgets/canvas.h"
+#include "../widgets/layer_panel.h"
 #include "../widgets/tool_panel.h"
 #include <QApplication>
 #include <QColorDialog>
@@ -12,7 +14,8 @@
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), _canvas(new Canvas(this)),
-      _toolPanel(new ToolPanel(this)), _statusLabel(nullptr) {
+      _toolPanel(new ToolPanel(this)), _layerPanel(nullptr),
+      _statusLabel(nullptr) {
 
   QWidget *centralWidget = new QWidget(this);
   QVBoxLayout *layout = new QVBoxLayout(centralWidget);
@@ -25,6 +28,7 @@ MainWindow::MainWindow(QWidget *parent)
   this->resize(1400, 900);
 
   setupStatusBar();
+  setupLayerPanel();
   setupConnections();
 
   _toolPanel->updateBrushSizeDisplay(_canvas->getCurrentBrushSize());
@@ -98,6 +102,13 @@ void MainWindow::setupConnections() {
   connect(_toolPanel, &ToolPanel::clearCanvas, _canvas, &Canvas::clearCanvas);
 }
 
+void MainWindow::setupLayerPanel() {
+  if (_canvas && _canvas->layerManager()) {
+    _layerPanel = new LayerPanel(_canvas->layerManager(), this);
+    addDockWidget(Qt::RightDockWidgetArea, _layerPanel);
+  }
+}
+
 void MainWindow::onBrushSizeChanged(int size) { _toolPanel->updateBrushSizeDisplay(size); }
 void MainWindow::onColorChanged(const QColor &color) { _toolPanel->updateColorDisplay(color); }
 void MainWindow::onZoomChanged(double zoom) { _toolPanel->updateZoomDisplay(zoom); }
@@ -114,6 +125,10 @@ void MainWindow::onNewCanvas() {
   QColor bgColor = QColorDialog::getColor(Qt::black, this, "Background Color");
   if (!bgColor.isValid()) return;
   _canvas->newCanvas(width, height, bgColor);
+  // Refresh layer panel after new canvas
+  if (_layerPanel) {
+    _layerPanel->refreshLayerList();
+  }
 }
 
 void MainWindow::keyPressEvent(QKeyEvent *event) {

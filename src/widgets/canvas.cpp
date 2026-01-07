@@ -33,8 +33,8 @@ static const QSet<QString> SUPPORTED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg",
 
 Canvas::Canvas(QWidget *parent)
     : QGraphicsView(parent), scene_(new QGraphicsScene(this)),
-      tempShapeItem_(nullptr), currentShape_(Pen), currentPen_(Qt::white, 3),
-      eraserPen_(Qt::black, 10), currentPath_(nullptr),
+      layerManager_(nullptr), tempShapeItem_(nullptr), currentShape_(Pen),
+      currentPen_(Qt::white, 3), eraserPen_(Qt::black, 10), currentPath_(nullptr),
       backgroundColor_(Qt::black), eraserPreview_(nullptr),
       backgroundImage_(nullptr), isPanning_(false) {
 
@@ -50,6 +50,9 @@ Canvas::Canvas(QWidget *parent)
 
   scene_->setBackgroundBrush(backgroundColor_);
   eraserPen_.setColor(backgroundColor_);
+
+  // Initialize layer manager
+  layerManager_ = new LayerManager(scene_, this);
 
   eraserPreview_ =
       scene_->addEllipse(0, 0, eraserPen_.width(), eraserPen_.width(),
@@ -83,6 +86,10 @@ bool Canvas::isFilledShapes() const { return fillShapes_; }
 void Canvas::addDrawAction(QGraphicsItem *item) {
   undoStack_.push_back(std::make_unique<DrawAction>(item, scene_));
   clearRedoStack();
+  // Add item to active layer
+  if (layerManager_) {
+    layerManager_->addItemToActiveLayer(item);
+  }
 }
 
 void Canvas::addDeleteAction(QGraphicsItem *item) {
@@ -395,11 +402,27 @@ void Canvas::createTextItem(const QPointF &pos) {
 }
 
 void Canvas::fillAt(const QPointF &point) {
+  QBrush newBrush(currentPen_.color());
   for (QGraphicsItem *item : scene_->items(point)) {
     if (item == eraserPreview_ || item == backgroundImage_) continue;
-    if (auto r = dynamic_cast<QGraphicsRectItem *>(item)) { r->setBrush(currentPen_.color()); return; }
-    if (auto e = dynamic_cast<QGraphicsEllipseItem *>(item)) { e->setBrush(currentPen_.color()); return; }
-    if (auto p = dynamic_cast<QGraphicsPolygonItem *>(item)) { p->setBrush(currentPen_.color()); return; }
+    if (auto r = dynamic_cast<QGraphicsRectItem *>(item)) {
+      QBrush oldBrush = r->brush();
+      r->setBrush(newBrush);
+      addAction(std::make_unique<FillAction>(item, oldBrush, newBrush));
+      return;
+    }
+    if (auto e = dynamic_cast<QGraphicsEllipseItem *>(item)) {
+      QBrush oldBrush = e->brush();
+      e->setBrush(newBrush);
+      addAction(std::make_unique<FillAction>(item, oldBrush, newBrush));
+      return;
+    }
+    if (auto p = dynamic_cast<QGraphicsPolygonItem *>(item)) {
+      QBrush oldBrush = p->brush();
+      p->setBrush(newBrush);
+      addAction(std::make_unique<FillAction>(item, oldBrush, newBrush));
+      return;
+    }
   }
 }
 
