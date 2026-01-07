@@ -84,6 +84,8 @@ int Canvas::getCurrentOpacity() const { return currentOpacity_; }
 bool Canvas::isGridVisible() const { return showGrid_; }
 bool Canvas::isFilledShapes() const { return fillShapes_; }
 bool Canvas::isSnapToGridEnabled() const { return snapToGrid_; }
+bool Canvas::isRulerVisible() const { return showRuler_; }
+bool Canvas::isMeasurementToolEnabled() const { return measurementToolEnabled_; }
 
 // Action management methods
 void Canvas::addDrawAction(QGraphicsItem *item) {
@@ -320,6 +322,113 @@ void Canvas::toggleFilledShapes() {
 void Canvas::toggleSnapToGrid() {
   snapToGrid_ = !snapToGrid_;
   emit snapToGridChanged(snapToGrid_);
+}
+
+void Canvas::toggleRuler() {
+  showRuler_ = !showRuler_;
+  viewport()->update();
+  emit rulerVisibilityChanged(showRuler_);
+}
+
+void Canvas::toggleMeasurementTool() {
+  measurementToolEnabled_ = !measurementToolEnabled_;
+  emit measurementToolChanged(measurementToolEnabled_);
+}
+
+void Canvas::lockSelectedItems() {
+  for (QGraphicsItem *item : scene_->selectedItems()) {
+    if (item != eraserPreview_ && item != backgroundImage_) {
+      item->setFlag(QGraphicsItem::ItemIsMovable, false);
+      item->setFlag(QGraphicsItem::ItemIsSelectable, false);
+      // Store lock state in data
+      item->setData(0, "locked");
+    }
+  }
+  scene_->clearSelection();
+}
+
+void Canvas::unlockSelectedItems() {
+  // Unlock all locked items (since they can't be selected when locked)
+  for (QGraphicsItem *item : scene_->items()) {
+    if (item != eraserPreview_ && item != backgroundImage_) {
+      if (item->data(0).toString() == "locked") {
+        item->setFlag(QGraphicsItem::ItemIsMovable, true);
+        item->setFlag(QGraphicsItem::ItemIsSelectable, true);
+        item->setData(0, QVariant());
+      }
+    }
+  }
+}
+
+QString Canvas::calculateDistance(const QPointF &p1, const QPointF &p2) const {
+  qreal dx = p2.x() - p1.x();
+  qreal dy = p2.y() - p1.y();
+  qreal distance = std::sqrt(dx * dx + dy * dy);
+  return QString("%1 px").arg(QString::number(distance, 'f', 1));
+}
+
+void Canvas::drawForeground(QPainter *painter, const QRectF &rect) {
+  QGraphicsView::drawForeground(painter, rect);
+  if (showRuler_) {
+    drawRuler(painter, rect);
+  }
+}
+
+void Canvas::drawRuler(QPainter *painter, const QRectF &rect) {
+  // Get viewport rect in scene coordinates
+  QRectF viewRect = mapToScene(viewport()->rect()).boundingRect();
+  
+  // Save painter state
+  painter->save();
+  
+  // Draw horizontal ruler background
+  painter->fillRect(QRectF(viewRect.left(), viewRect.top(), viewRect.width(), RULER_SIZE), QColor(50, 50, 50, 200));
+  
+  // Draw vertical ruler background
+  painter->fillRect(QRectF(viewRect.left(), viewRect.top(), RULER_SIZE, viewRect.height()), QColor(50, 50, 50, 200));
+  
+  // Setup pen and font for ruler markings
+  painter->setPen(QPen(Qt::white, 1));
+  QFont rulerFont;
+  rulerFont.setPixelSize(9);
+  painter->setFont(rulerFont);
+  
+  // Calculate tick spacing based on zoom
+  int majorTickSpacing = GRID_SIZE * 5; // Major tick every 100px at 100% zoom
+  int minorTickSpacing = GRID_SIZE; // Minor tick every 20px
+  
+  // Draw horizontal ruler ticks
+  qreal startX = std::floor(viewRect.left() / minorTickSpacing) * minorTickSpacing;
+  for (qreal x = startX; x < viewRect.right(); x += minorTickSpacing) {
+    bool isMajor = (static_cast<int>(x) % majorTickSpacing) == 0;
+    qreal tickHeight = isMajor ? RULER_SIZE * 0.6 : RULER_SIZE * 0.3;
+    painter->drawLine(QPointF(x, viewRect.top() + RULER_SIZE - tickHeight), 
+                      QPointF(x, viewRect.top() + RULER_SIZE));
+    if (isMajor) {
+      painter->drawText(QPointF(x + 2, viewRect.top() + RULER_SIZE * 0.5), QString::number(static_cast<int>(x)));
+    }
+  }
+  
+  // Draw vertical ruler ticks
+  qreal startY = std::floor(viewRect.top() / minorTickSpacing) * minorTickSpacing;
+  for (qreal y = startY; y < viewRect.bottom(); y += minorTickSpacing) {
+    bool isMajor = (static_cast<int>(y) % majorTickSpacing) == 0;
+    qreal tickWidth = isMajor ? RULER_SIZE * 0.6 : RULER_SIZE * 0.3;
+    painter->drawLine(QPointF(viewRect.left() + RULER_SIZE - tickWidth, y), 
+                      QPointF(viewRect.left() + RULER_SIZE, y));
+    if (isMajor) {
+      painter->save();
+      painter->translate(viewRect.left() + RULER_SIZE * 0.4, y + 2);
+      painter->rotate(90);
+      painter->drawText(0, 0, QString::number(static_cast<int>(y)));
+      painter->restore();
+    }
+  }
+  
+  // Draw corner square
+  painter->fillRect(QRectF(viewRect.left(), viewRect.top(), RULER_SIZE, RULER_SIZE), QColor(70, 70, 70, 200));
+  
+  painter->restore();
 }
 
 QPointF Canvas::snapToGridPoint(const QPointF &point) const {
@@ -647,6 +756,15 @@ void Canvas::mouseMoveEvent(QMouseEvent *event) {
     cp = snapToGridPoint(cp);
   }
   emit cursorPositionChanged(cp);
+  
+  // Emit measurement when drawing shapes
+  if (measurementToolEnabled_ && (event->buttons() & Qt::LeftButton)) {
+    if (currentShape_ == Rectangle || currentShape_ == Circle || 
+        currentShape_ == Line || currentShape_ == Arrow) {
+      emit measurementUpdated(calculateDistance(startPoint_, cp));
+    }
+  }
+  
   if (currentShape_ == Selection) { QGraphicsView::mouseMoveEvent(event); return; }
   if (currentShape_ == Pan && isPanning_) {
     QPointF d = event->pos() - lastPanPoint_; lastPanPoint_ = event->pos();

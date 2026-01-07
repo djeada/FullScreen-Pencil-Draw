@@ -21,8 +21,9 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), _canvas(new Canvas(this)),
       _toolPanel(new ToolPanel(this)), _layerPanel(nullptr),
       _autoSaveManager(nullptr), _statusLabel(nullptr), 
-      _recentFilesMenu(nullptr), _snapToGridAction(nullptr),
-      _autoSaveAction(nullptr) {
+      _measurementLabel(nullptr), _recentFilesMenu(nullptr), 
+      _snapToGridAction(nullptr), _autoSaveAction(nullptr),
+      _rulerAction(nullptr), _measurementAction(nullptr) {
 
   QWidget *centralWidget = new QWidget(this);
   QVBoxLayout *layout = new QVBoxLayout(centralWidget);
@@ -50,7 +51,9 @@ MainWindow::~MainWindow() {}
 
 void MainWindow::setupStatusBar() {
   _statusLabel = new QLabel("Ready | P:Pen E:Eraser T:Text F:Fill L:Line A:Arrow R:Rect C:Circle S:Select H:Pan | G:Grid B:Filled | Ctrl+Scroll:Zoom", this);
+  _measurementLabel = new QLabel("", this);
   statusBar()->addWidget(_statusLabel);
+  statusBar()->addPermanentWidget(_measurementLabel);
   statusBar()->setStyleSheet("QStatusBar { background-color: #2d2d2d; color: #ffffff; }");
 }
 
@@ -106,6 +109,11 @@ void MainWindow::setupConnections() {
   
   // Snap to grid feedback
   connect(_canvas, &Canvas::snapToGridChanged, this, &MainWindow::onSnapToGridChanged);
+  
+  // Ruler and measurement feedback
+  connect(_canvas, &Canvas::rulerVisibilityChanged, this, &MainWindow::onRulerVisibilityChanged);
+  connect(_canvas, &Canvas::measurementToolChanged, this, &MainWindow::onMeasurementToolChanged);
+  connect(_canvas, &Canvas::measurementUpdated, this, &MainWindow::onMeasurementUpdated);
 
   // File operations
   connect(_toolPanel, &ToolPanel::saveAction, _canvas, &Canvas::saveToFile);
@@ -176,10 +184,25 @@ void MainWindow::setupMenuBar() {
   
   viewMenu->addSeparator();
   
+  _rulerAction = viewMenu->addAction("Show &Ruler", QKeySequence(Qt::CTRL | Qt::Key_R), _canvas, &Canvas::toggleRuler);
+  _rulerAction->setCheckable(true);
+  _rulerAction->setChecked(_canvas->isRulerVisible());
+  
+  _measurementAction = viewMenu->addAction("&Measurement Tool", QKeySequence(Qt::Key_M), _canvas, &Canvas::toggleMeasurementTool);
+  _measurementAction->setCheckable(true);
+  _measurementAction->setChecked(_canvas->isMeasurementToolEnabled());
+  
+  viewMenu->addSeparator();
+  
   // Theme submenu
   QMenu *themeMenu = viewMenu->addMenu("&Theme");
   QAction *toggleThemeAction = themeMenu->addAction("Toggle &Dark/Light Theme", this, &MainWindow::onToggleTheme);
   toggleThemeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_T));
+  
+  // Edit menu - add lock/unlock after other edit items
+  editMenu->addSeparator();
+  editMenu->addAction("&Lock Selected", QKeySequence(Qt::CTRL | Qt::Key_L), _canvas, &Canvas::lockSelectedItems);
+  editMenu->addAction("&Unlock All", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_L), _canvas, &Canvas::unlockSelectedItems);
   
   // Tools menu
   QMenu *toolsMenu = menuBar->addMenu("&Tools");
@@ -256,6 +279,27 @@ void MainWindow::onCursorPositionChanged(const QPointF &pos) { _toolPanel->updat
 void MainWindow::onSnapToGridChanged(bool enabled) {
   if (_snapToGridAction) {
     _snapToGridAction->setChecked(enabled);
+  }
+}
+
+void MainWindow::onRulerVisibilityChanged(bool visible) {
+  if (_rulerAction) {
+    _rulerAction->setChecked(visible);
+  }
+}
+
+void MainWindow::onMeasurementToolChanged(bool enabled) {
+  if (_measurementAction) {
+    _measurementAction->setChecked(enabled);
+  }
+  if (!enabled && _measurementLabel) {
+    _measurementLabel->clear();
+  }
+}
+
+void MainWindow::onMeasurementUpdated(const QString &measurement) {
+  if (_measurementLabel) {
+    _measurementLabel->setText(QString("Distance: %1").arg(measurement));
   }
 }
 

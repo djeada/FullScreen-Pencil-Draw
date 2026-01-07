@@ -203,9 +203,9 @@ These features can be implemented quickly and provide immediate value:
 4. [x] **Auto-save** - Periodically save work locally
 5. [x] **Snap to Grid** - Align shapes to grid intersections
 6. [x] **Shape Duplication with Offset** - Smart paste at offset position
-7. [ ] **Ruler/Guides** - Visual guides for alignment
-8. [ ] **Measurement Tool** - Display distances between objects
-9. [ ] **Lock Objects** - Prevent accidental modification
+7. [x] **Ruler/Guides** - Visual guides for alignment
+8. [x] **Measurement Tool** - Display distances between objects
+9. [x] **Lock Objects** - Prevent accidental modification
 10. [ ] **Group/Ungroup** - Combine multiple objects
 
 ---
