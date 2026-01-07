@@ -26,6 +26,7 @@ FullScreen Pencil Draw is a professional-grade vector and raster graphics editor
 
 ### Professional Features
 - **Layer System**: Full layer management with visibility, opacity, and lock controls
+- **Brush Preview**: Visual preview widget showing actual brush size and color
 - **Opacity Control**: Adjust brush transparency with slider
 - **Brush Size Control**: Visual display with +/- buttons and keyboard shortcuts
 - **Color Picker**: Full color dialog with current color preview
