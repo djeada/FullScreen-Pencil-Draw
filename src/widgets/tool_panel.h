@@ -7,6 +7,8 @@
 #include <QSlider>
 #include <QToolBar>
 
+class BrushPreview;
+
 class ToolPanel : public QToolBar {
   Q_OBJECT
 
@@ -87,6 +89,7 @@ private:
   QLabel *opacityLabel;
   QLabel *positionLabel;
   QSlider *opacitySlider;
+  BrushPreview *brushPreview_;
 
   void clearActiveToolStyles();
 

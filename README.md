@@ -25,14 +25,26 @@ FullScreen Pencil Draw is a professional-grade vector and raster graphics editor
 - **Grid Overlay**: Toggle alignment grid for precise positioning
 
 ### Professional Features
+- **Layer System**: Full layer management with visibility, opacity, and lock controls
+- **Brush Preview**: Visual preview widget showing actual brush size and color
 - **Opacity Control**: Adjust brush transparency with slider
 - **Brush Size Control**: Visual display with +/- buttons and keyboard shortcuts
 - **Color Picker**: Full color dialog with current color preview
 - **Filled Shapes Toggle**: Draw filled or outlined rectangles and circles (B key)
 - **Zoom Level Display**: Real-time zoom percentage indicator
 - **Cursor Position**: Live X/Y coordinate display
-- **Undo/Redo**: Full action history with unlimited undo levels
+- **Undo/Redo**: Full action history with unlimited undo levels (including fill operations)
 - **Clear Canvas Confirmation**: Prevents accidental canvas clearing
+
+### Layer System
+- **Layer Panel**: Dockable panel on the right side for layer management
+- **Add/Delete Layers**: Create new layers or remove existing ones
+- **Layer Visibility**: Toggle eye icon to show/hide layers
+- **Layer Lock**: Lock layers to prevent accidental edits
+- **Layer Opacity**: Adjust individual layer transparency
+- **Layer Ordering**: Move layers up/down in the stack
+- **Duplicate Layers**: Create copies of existing layers
+- **Merge Down**: Merge a layer with the one below it
 
 ### File Operations
 - **New Canvas**: Create custom-sized canvas with background color choice
@@ -89,7 +101,10 @@ FullScreen Pencil Draw is a professional-grade vector and raster graphics editor
 The application follows a clean Model-View architecture:
 - **Canvas**: QGraphicsView-based drawing surface with scene management
 - **ToolPanel**: Modular toolbar with signal/slot-based tool switching  
+- **LayerManager**: Centralized layer management for organizing graphics
+- **LayerPanel**: Dockable widget for layer manipulation
 - **Action System**: Undo/redo stack with polymorphic action classes
+- **Tool System**: Extensible tool architecture with base Tool class
 - **Modern C++17**: Smart pointers, constexpr, structured bindings
 
 ## Usage

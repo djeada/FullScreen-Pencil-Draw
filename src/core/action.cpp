@@ -3,6 +3,9 @@
  * @brief Implementation of the undo/redo action system.
  */
 #include "action.h"
+#include <QGraphicsEllipseItem>
+#include <QGraphicsPolygonItem>
+#include <QGraphicsRectItem>
 
 Action::~Action() = default;
 
@@ -93,5 +96,35 @@ void CompositeAction::redo() {
   // Redo in forward order
   for (auto &action : actions_) {
     action->redo();
+  }
+}
+
+// FillAction implementation
+FillAction::FillAction(QGraphicsItem *item, const QBrush &oldBrush, const QBrush &newBrush)
+    : item_(item), oldBrush_(oldBrush), newBrush_(newBrush) {}
+
+FillAction::~FillAction() = default;
+
+void FillAction::undo() {
+  if (!item_) return;
+  
+  if (auto *rect = dynamic_cast<QGraphicsRectItem *>(item_)) {
+    rect->setBrush(oldBrush_);
+  } else if (auto *ellipse = dynamic_cast<QGraphicsEllipseItem *>(item_)) {
+    ellipse->setBrush(oldBrush_);
+  } else if (auto *polygon = dynamic_cast<QGraphicsPolygonItem *>(item_)) {
+    polygon->setBrush(oldBrush_);
+  }
+}
+
+void FillAction::redo() {
+  if (!item_) return;
+  
+  if (auto *rect = dynamic_cast<QGraphicsRectItem *>(item_)) {
+    rect->setBrush(newBrush_);
+  } else if (auto *ellipse = dynamic_cast<QGraphicsEllipseItem *>(item_)) {
+    ellipse->setBrush(newBrush_);
+  } else if (auto *polygon = dynamic_cast<QGraphicsPolygonItem *>(item_)) {
+    polygon->setBrush(newBrush_);
   }
 }
