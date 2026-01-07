@@ -164,12 +164,15 @@ void MainWindow::setupMenuBar() {
   
   QAction *gridAction = viewMenu->addAction("Toggle &Grid", QKeySequence(Qt::Key_G), _canvas, &Canvas::toggleGrid);
   gridAction->setCheckable(true);
+  gridAction->setChecked(_canvas->isGridVisible());
   
   _snapToGridAction = viewMenu->addAction("&Snap to Grid", QKeySequence(Qt::CTRL | Qt::Key_G), _canvas, &Canvas::toggleSnapToGrid);
   _snapToGridAction->setCheckable(true);
+  _snapToGridAction->setChecked(_canvas->isSnapToGridEnabled());
   
   QAction *filledAction = viewMenu->addAction("Toggle &Filled Shapes", QKeySequence(Qt::Key_B), _canvas, &Canvas::toggleFilledShapes);
   filledAction->setCheckable(true);
+  filledAction->setChecked(_canvas->isFilledShapes());
   
   viewMenu->addSeparator();
   
