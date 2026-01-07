@@ -1,21 +1,25 @@
 // main_window.cpp
 #include "main_window.h"
 #include "../core/layer.h"
+#include "../core/recent_files_manager.h"
+#include "../core/theme_manager.h"
 #include "../widgets/canvas.h"
 #include "../widgets/layer_panel.h"
 #include "../widgets/tool_panel.h"
 #include <QApplication>
 #include <QColorDialog>
+#include <QFileInfo>
 #include <QInputDialog>
 #include <QKeyEvent>
 #include <QLabel>
+#include <QMenuBar>
 #include <QStatusBar>
 #include <QVBoxLayout>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), _canvas(new Canvas(this)),
       _toolPanel(new ToolPanel(this)), _layerPanel(nullptr),
-      _statusLabel(nullptr) {
+      _statusLabel(nullptr), _recentFilesMenu(nullptr) {
 
   QWidget *centralWidget = new QWidget(this);
   QVBoxLayout *layout = new QVBoxLayout(centralWidget);
@@ -27,6 +31,7 @@ MainWindow::MainWindow(QWidget *parent)
   this->setWindowTitle("FullScreen Pencil Draw - Professional Edition");
   this->resize(1400, 900);
 
+  setupMenuBar();
   setupStatusBar();
   setupLayerPanel();
   setupConnections();
@@ -100,6 +105,113 @@ void MainWindow::setupConnections() {
   connect(_toolPanel, &ToolPanel::openAction, _canvas, &Canvas::openFile);
   connect(_toolPanel, &ToolPanel::newCanvasAction, this, &MainWindow::onNewCanvas);
   connect(_toolPanel, &ToolPanel::clearCanvas, _canvas, &Canvas::clearCanvas);
+  
+  // Recent files
+  connect(&RecentFilesManager::instance(), &RecentFilesManager::recentFilesChanged,
+          this, &MainWindow::onRecentFilesChanged);
+}
+
+void MainWindow::setupMenuBar() {
+  QMenuBar *menuBar = this->menuBar();
+  
+  // File menu
+  QMenu *fileMenu = menuBar->addMenu("&File");
+  
+  QAction *newAction = fileMenu->addAction("&New", QKeySequence::New, this, &MainWindow::onNewCanvas);
+  QAction *openAction = fileMenu->addAction("&Open...", QKeySequence::Open, _canvas, &Canvas::openFile);
+  
+  // Recent Files submenu
+  _recentFilesMenu = fileMenu->addMenu("Recent Files");
+  updateRecentFilesMenu();
+  
+  fileMenu->addSeparator();
+  
+  QAction *saveAction = fileMenu->addAction("&Save...", QKeySequence::Save, _canvas, &Canvas::saveToFile);
+  QAction *exportPdfAction = fileMenu->addAction("Export to &PDF...", _canvas, &Canvas::exportToPDF);
+  
+  fileMenu->addSeparator();
+  
+  QAction *exitAction = fileMenu->addAction("E&xit", QKeySequence::Quit, this, &QMainWindow::close);
+  
+  // Edit menu
+  QMenu *editMenu = menuBar->addMenu("&Edit");
+  
+  editMenu->addAction("&Undo", QKeySequence::Undo, _canvas, &Canvas::undoLastAction);
+  editMenu->addAction("&Redo", QKeySequence::Redo, _canvas, &Canvas::redoLastAction);
+  editMenu->addSeparator();
+  editMenu->addAction("Cu&t", QKeySequence::Cut, _canvas, &Canvas::cutSelectedItems);
+  editMenu->addAction("&Copy", QKeySequence::Copy, _canvas, &Canvas::copySelectedItems);
+  editMenu->addAction("&Paste", QKeySequence::Paste, _canvas, &Canvas::pasteItems);
+  editMenu->addSeparator();
+  editMenu->addAction("Select &All", QKeySequence::SelectAll, _canvas, &Canvas::selectAll);
+  editMenu->addAction("&Delete", QKeySequence::Delete, _canvas, &Canvas::deleteSelectedItems);
+  editMenu->addAction("D&uplicate", QKeySequence(Qt::CTRL | Qt::Key_D), _canvas, &Canvas::duplicateSelectedItems);
+  
+  // View menu
+  QMenu *viewMenu = menuBar->addMenu("&View");
+  
+  viewMenu->addAction("Zoom &In", QKeySequence::ZoomIn, _canvas, &Canvas::zoomIn);
+  viewMenu->addAction("Zoom &Out", QKeySequence::ZoomOut, _canvas, &Canvas::zoomOut);
+  viewMenu->addAction("&Reset Zoom", QKeySequence(Qt::Key_0), _canvas, &Canvas::zoomReset);
+  viewMenu->addSeparator();
+  
+  QAction *gridAction = viewMenu->addAction("Toggle &Grid", QKeySequence(Qt::Key_G), _canvas, &Canvas::toggleGrid);
+  gridAction->setCheckable(true);
+  
+  QAction *filledAction = viewMenu->addAction("Toggle &Filled Shapes", QKeySequence(Qt::Key_B), _canvas, &Canvas::toggleFilledShapes);
+  filledAction->setCheckable(true);
+  
+  viewMenu->addSeparator();
+  
+  // Theme submenu
+  QMenu *themeMenu = viewMenu->addMenu("&Theme");
+  QAction *toggleThemeAction = themeMenu->addAction("Toggle &Dark/Light Theme", this, &MainWindow::onToggleTheme);
+  toggleThemeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_T));
+}
+
+void MainWindow::updateRecentFilesMenu() {
+  if (!_recentFilesMenu) return;
+  
+  _recentFilesMenu->clear();
+  
+  QStringList recentFiles = RecentFilesManager::instance().recentFiles();
+  
+  if (recentFiles.isEmpty()) {
+    QAction *noFilesAction = _recentFilesMenu->addAction("No Recent Files");
+    noFilesAction->setEnabled(false);
+  } else {
+    for (int i = 0; i < recentFiles.size(); ++i) {
+      QString filePath = recentFiles.at(i);
+      QString fileName = QFileInfo(filePath).fileName();
+      QString text = QString("&%1. %2").arg(i + 1).arg(fileName);
+      
+      QAction *action = _recentFilesMenu->addAction(text);
+      action->setData(filePath);
+      action->setToolTip(filePath);
+      connect(action, &QAction::triggered, this, &MainWindow::openRecentFile);
+    }
+    
+    _recentFilesMenu->addSeparator();
+    _recentFilesMenu->addAction("Clear Recent Files", []() {
+      RecentFilesManager::instance().clearRecentFiles();
+    });
+  }
+}
+
+void MainWindow::onRecentFilesChanged() {
+  updateRecentFilesMenu();
+}
+
+void MainWindow::openRecentFile() {
+  QAction *action = qobject_cast<QAction *>(sender());
+  if (action) {
+    QString filePath = action->data().toString();
+    _canvas->openRecentFile(filePath);
+  }
+}
+
+void MainWindow::onToggleTheme() {
+  ThemeManager::instance().toggleTheme();
 }
 
 void MainWindow::setupLayerPanel() {

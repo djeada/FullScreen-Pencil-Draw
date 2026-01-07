@@ -197,9 +197,9 @@ This document outlines features to be implemented to enhance FullScreen Pencil D
 
 These features can be implemented quickly and provide immediate value:
 
-1. [ ] **Dark Theme** - Qt styling (QSS/QPalette) changes only
-2. [ ] **PDF Export** - Use existing Qt PDF capabilities
-3. [ ] **Recent Files List** - Track and display recently opened files
+1. [x] **Dark Theme** - Qt styling (QSS/QPalette) changes only
+2. [x] **PDF Export** - Use existing Qt PDF capabilities
+3. [x] **Recent Files List** - Track and display recently opened files
 4. [ ] **Auto-save** - Periodically save work locally
 5. [ ] **Snap to Grid** - Align shapes to grid intersections
 6. [ ] **Shape Duplication with Offset** - Smart paste at offset position

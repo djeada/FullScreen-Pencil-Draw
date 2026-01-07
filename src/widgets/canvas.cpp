@@ -4,6 +4,7 @@
  */
 #include "canvas.h"
 #include "image_size_dialog.h"
+#include "../core/recent_files_manager.h"
 #include <QApplication>
 #include <QClipboard>
 #include <QColorDialog>
@@ -21,6 +22,7 @@
 #include <QMessageBox>
 #include <QMimeData>
 #include <QMouseEvent>
+#include <QPdfWriter>
 #include <QScrollBar>
 #include <QSvgGenerator>
 #include <QUrl>
@@ -358,8 +360,15 @@ void Canvas::duplicateSelectedItems() {
 }
 
 void Canvas::saveToFile() {
-  QString fileName = QFileDialog::getSaveFileName(this, "Save Image", "", "PNG (*.png);;JPEG (*.jpg);;BMP (*.bmp)");
+  QString fileName = QFileDialog::getSaveFileName(this, "Save Image", "", "PNG (*.png);;JPEG (*.jpg);;BMP (*.bmp);;PDF (*.pdf)");
   if (fileName.isEmpty()) return;
+  
+  // Check if saving as PDF
+  if (fileName.endsWith(".pdf", Qt::CaseInsensitive)) {
+    exportToPDF();
+    return;
+  }
+  
   bool ev = eraserPreview_ && eraserPreview_->isVisible();
   if (eraserPreview_) eraserPreview_->hide();
   scene_->clearSelection();
@@ -372,6 +381,9 @@ void Canvas::saveToFile() {
   scene_->render(&p, QRectF(), sr); p.end();
   img.save(fileName);
   if (ev && eraserPreview_) eraserPreview_->show();
+  
+  // Add to recent files
+  RecentFilesManager::instance().addRecentFile(fileName);
 }
 
 void Canvas::openFile() {
@@ -385,6 +397,76 @@ void Canvas::openFile() {
   backgroundImage_->setFlag(QGraphicsItem::ItemIsSelectable, false);
   backgroundImage_->setFlag(QGraphicsItem::ItemIsMovable, false);
   scene_->setSceneRect(0, 0, qMax(scene_->sceneRect().width(), (qreal)pm.width()), qMax(scene_->sceneRect().height(), (qreal)pm.height()));
+  
+  // Add to recent files
+  RecentFilesManager::instance().addRecentFile(fileName);
+}
+
+void Canvas::openRecentFile(const QString &filePath) {
+  if (filePath.isEmpty()) return;
+  QPixmap pm(filePath);
+  if (pm.isNull()) {
+    QMessageBox::warning(this, "Error", QString("Could not open file: %1").arg(filePath));
+    return;
+  }
+  if (backgroundImage_) { scene_->removeItem(backgroundImage_); delete backgroundImage_; }
+  backgroundImage_ = scene_->addPixmap(pm);
+  backgroundImage_->setZValue(-1000);
+  backgroundImage_->setFlag(QGraphicsItem::ItemIsSelectable, false);
+  backgroundImage_->setFlag(QGraphicsItem::ItemIsMovable, false);
+  scene_->setSceneRect(0, 0, qMax(scene_->sceneRect().width(), (qreal)pm.width()), qMax(scene_->sceneRect().height(), (qreal)pm.height()));
+  
+  // Update recent files
+  RecentFilesManager::instance().addRecentFile(filePath);
+}
+
+void Canvas::exportToPDF() {
+  QString fileName = QFileDialog::getSaveFileName(this, "Export to PDF", "", "PDF (*.pdf)");
+  if (fileName.isEmpty()) return;
+  
+  bool ev = eraserPreview_ && eraserPreview_->isVisible();
+  if (eraserPreview_) eraserPreview_->hide();
+  scene_->clearSelection();
+  
+  QRectF sr = scene_->itemsBoundingRect();
+  if (sr.isEmpty()) sr = scene_->sceneRect();
+  sr.adjust(-10, -10, 10, 10);
+  
+  // Create PDF writer
+  QPdfWriter pdfWriter(fileName);
+  pdfWriter.setPageSize(QPageSize(sr.size().toSize(), QPageSize::Point));
+  pdfWriter.setPageMargins(QMarginsF(0, 0, 0, 0));
+  pdfWriter.setTitle("FullScreen Pencil Draw Export");
+  pdfWriter.setCreator("FullScreen Pencil Draw");
+  
+  // Calculate resolution to maintain quality
+  int dpi = 300;
+  pdfWriter.setResolution(dpi);
+  
+  QPainter painter(&pdfWriter);
+  painter.setRenderHint(QPainter::Antialiasing);
+  painter.setRenderHint(QPainter::TextAntialiasing);
+  painter.setRenderHint(QPainter::SmoothPixmapTransform);
+  
+  // Fill background
+  painter.fillRect(painter.viewport(), backgroundColor_);
+  
+  // Calculate scale factor to fit the scene onto the page
+  QRectF pageRect = painter.viewport();
+  double scaleX = pageRect.width() / sr.width();
+  double scaleY = pageRect.height() / sr.height();
+  double scale = qMin(scaleX, scaleY);
+  
+  painter.scale(scale, scale);
+  painter.translate(-sr.topLeft());
+  
+  scene_->render(&painter, QRectF(), sr);
+  painter.end();
+  
+  if (ev && eraserPreview_) eraserPreview_->show();
+  
+  // Add to recent files
+  RecentFilesManager::instance().addRecentFile(fileName);
 }
 
 void Canvas::createTextItem(const QPointF &pos) {

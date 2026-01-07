@@ -117,6 +117,8 @@ public slots:
   void exportSelectionToSVG();
   void exportSelectionToPNG();
   void exportSelectionToJPG();
+  void exportToPDF();
+  void openRecentFile(const QString &filePath);
 
 protected:
   void mousePressEvent(QMouseEvent *event) override;

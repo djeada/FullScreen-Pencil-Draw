@@ -3,6 +3,7 @@
 #define MAIN_WINDOW_H
 
 #include <QMainWindow>
+#include <QMenu>
 
 class Canvas;
 class ToolPanel;
@@ -27,16 +28,22 @@ private slots:
   void onCursorPositionChanged(const QPointF &pos);
   void onFilledShapesChanged(bool filled);
   void onNewCanvas();
+  void onToggleTheme();
+  void onRecentFilesChanged();
+  void openRecentFile();
 
 private:
   Canvas *_canvas;
   ToolPanel *_toolPanel;
   LayerPanel *_layerPanel;
   QLabel *_statusLabel;
+  QMenu *_recentFilesMenu;
 
   void setupConnections();
   void setupStatusBar();
   void setupLayerPanel();
+  void setupMenuBar();
+  void updateRecentFilesMenu();
 };
 
 #endif // MAIN_WINDOW_H
