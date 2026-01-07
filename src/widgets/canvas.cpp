@@ -757,8 +757,8 @@ void Canvas::mouseMoveEvent(QMouseEvent *event) {
   }
   emit cursorPositionChanged(cp);
   
-  // Emit measurement when drawing shapes
-  if (measurementToolEnabled_ && (event->buttons() & Qt::LeftButton)) {
+  // Emit measurement when drawing shapes (only when we have a valid start point)
+  if (measurementToolEnabled_ && (event->buttons() & Qt::LeftButton) && tempShapeItem_) {
     if (currentShape_ == Rectangle || currentShape_ == Circle || 
         currentShape_ == Line || currentShape_ == Arrow) {
       emit measurementUpdated(calculateDistance(startPoint_, cp));
