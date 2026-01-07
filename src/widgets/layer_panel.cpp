@@ -54,19 +54,19 @@ void LayerPanel::setupUI() {
   connect(addButton_, &QPushButton::clicked, this, &LayerPanel::onAddLayer);
   controlsRow1->addWidget(addButton_);
 
-  deleteButton_ = new QPushButton("−", container);
+  deleteButton_ = new QPushButton("-", container);
   deleteButton_->setToolTip("Delete layer");
   deleteButton_->setMaximumWidth(30);
   connect(deleteButton_, &QPushButton::clicked, this, &LayerPanel::onDeleteLayer);
   controlsRow1->addWidget(deleteButton_);
 
-  duplicateButton_ = new QPushButton("⧉", container);
+  duplicateButton_ = new QPushButton("D", container);
   duplicateButton_->setToolTip("Duplicate layer");
   duplicateButton_->setMaximumWidth(30);
   connect(duplicateButton_, &QPushButton::clicked, this, &LayerPanel::onDuplicateLayer);
   controlsRow1->addWidget(duplicateButton_);
 
-  mergeButton_ = new QPushButton("⧑", container);
+  mergeButton_ = new QPushButton("M", container);
   mergeButton_->setToolTip("Merge down");
   mergeButton_->setMaximumWidth(30);
   connect(mergeButton_, &QPushButton::clicked, this, &LayerPanel::onMergeDown);
@@ -79,26 +79,26 @@ void LayerPanel::setupUI() {
   QHBoxLayout *controlsRow2 = new QHBoxLayout();
   controlsRow2->setSpacing(2);
 
-  moveUpButton_ = new QPushButton("↑", container);
+  moveUpButton_ = new QPushButton("^", container);
   moveUpButton_->setToolTip("Move layer up");
   moveUpButton_->setMaximumWidth(30);
   connect(moveUpButton_, &QPushButton::clicked, this, &LayerPanel::onMoveLayerUp);
   controlsRow2->addWidget(moveUpButton_);
 
-  moveDownButton_ = new QPushButton("↓", container);
+  moveDownButton_ = new QPushButton("v", container);
   moveDownButton_->setToolTip("Move layer down");
   moveDownButton_->setMaximumWidth(30);
   connect(moveDownButton_, &QPushButton::clicked, this, &LayerPanel::onMoveLayerDown);
   controlsRow2->addWidget(moveDownButton_);
 
-  visibilityButton_ = new QPushButton("👁", container);
+  visibilityButton_ = new QPushButton("V", container);
   visibilityButton_->setToolTip("Toggle visibility");
   visibilityButton_->setMaximumWidth(30);
   visibilityButton_->setCheckable(true);
   connect(visibilityButton_, &QPushButton::clicked, this, &LayerPanel::onVisibilityToggled);
   controlsRow2->addWidget(visibilityButton_);
 
-  lockButton_ = new QPushButton("🔒", container);
+  lockButton_ = new QPushButton("L", container);
   lockButton_->setToolTip("Toggle lock");
   lockButton_->setMaximumWidth(30);
   lockButton_->setCheckable(true);
@@ -204,9 +204,9 @@ void LayerPanel::refreshLayerList() {
   for (int i = layerManager_->layerCount() - 1; i >= 0; --i) {
     Layer *layer = layerManager_->layer(i);
     if (layer) {
-      QString prefix = layer->isVisible() ? "👁 " : "   ";
+      QString prefix = layer->isVisible() ? "[V] " : "[ ] ";
       if (layer->isLocked()) {
-        prefix += "🔒 ";
+        prefix += "[L] ";
       }
       layerList_->addItem(prefix + layer->name());
     }
