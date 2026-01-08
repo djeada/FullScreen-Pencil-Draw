@@ -6,10 +6,20 @@
 ToolPanel::ToolPanel(QWidget *parent) : QToolBar(parent), brushPreview_(nullptr) {
   setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
   setMovable(false);
+  setIconSize(QSize(20, 20));
 
-  // Active tool display
+  // Active tool display with modern styling
   activeToolLabel = new QLabel("Tool: Pen", this);
-  activeToolLabel->setStyleSheet("QLabel { font-weight: bold; padding: 5px; background-color: #2d2d2d; color: #ffffff; border-radius: 3px; }");
+  activeToolLabel->setStyleSheet(R"(
+    QLabel { 
+      font-weight: 600; 
+      padding: 8px 12px; 
+      background-color: #4285f4; 
+      color: #ffffff; 
+      border-radius: 6px; 
+      font-size: 12px;
+    }
+  )");
   addWidget(activeToolLabel);
   addSeparator();
 
@@ -90,7 +100,16 @@ ToolPanel::ToolPanel(QWidget *parent) : QToolBar(parent), brushPreview_(nullptr)
   addAction(actionDecreaseBrush);
 
   brushSizeLabel = new QLabel("Size: 3", this);
-  brushSizeLabel->setStyleSheet("QLabel { padding: 5px; background-color: #3d3d3d; color: #ffffff; border-radius: 3px; min-width: 50px; }");
+  brushSizeLabel->setStyleSheet(R"(
+    QLabel { 
+      padding: 6px 10px; 
+      background-color: #34343a; 
+      color: #f5f5f7; 
+      border-radius: 6px; 
+      min-width: 55px;
+      font-weight: 500;
+    }
+  )");
   brushSizeLabel->setAlignment(Qt::AlignCenter);
   addWidget(brushSizeLabel);
 
@@ -107,8 +126,14 @@ ToolPanel::ToolPanel(QWidget *parent) : QToolBar(parent), brushPreview_(nullptr)
 
   // Color & opacity
   colorPreview = new QLabel(this);
-  colorPreview->setFixedSize(24, 24);
-  colorPreview->setStyleSheet("QLabel { background-color: #ffffff; border: 2px solid #888888; border-radius: 3px; }");
+  colorPreview->setFixedSize(28, 28);
+  colorPreview->setStyleSheet(R"(
+    QLabel { 
+      background-color: #ffffff; 
+      border: 2px solid #4a4a50; 
+      border-radius: 6px; 
+    }
+  )");
   colorPreview->setToolTip("Current color");
   addWidget(colorPreview);
 
@@ -118,7 +143,7 @@ ToolPanel::ToolPanel(QWidget *parent) : QToolBar(parent), brushPreview_(nullptr)
   addAction(actionColor);
 
   opacityLabel = new QLabel("Opacity", this);
-  opacityLabel->setStyleSheet("QLabel { color: #ffffff; padding: 2px; }");
+  opacityLabel->setStyleSheet("QLabel { color: #a0a0a5; padding: 4px; font-size: 11px; }");
   addWidget(opacityLabel);
 
   opacitySlider = new QSlider(Qt::Horizontal, this);
@@ -138,7 +163,16 @@ ToolPanel::ToolPanel(QWidget *parent) : QToolBar(parent), brushPreview_(nullptr)
   addAction(actionZoomOut);
 
   zoomLabel = new QLabel("100%", this);
-  zoomLabel->setStyleSheet("QLabel { padding: 3px; background-color: #3d3d3d; color: #ffffff; border-radius: 3px; min-width: 45px; }");
+  zoomLabel->setStyleSheet(R"(
+    QLabel { 
+      padding: 6px 10px; 
+      background-color: #34343a; 
+      color: #f5f5f7; 
+      border-radius: 6px; 
+      min-width: 50px;
+      font-weight: 500;
+    }
+  )");
   zoomLabel->setAlignment(Qt::AlignCenter);
   addWidget(zoomLabel);
 
@@ -229,9 +263,18 @@ ToolPanel::ToolPanel(QWidget *parent) : QToolBar(parent), brushPreview_(nullptr)
 
   addSeparator();
 
-  // Position display
+  // Position display with modern styling
   positionLabel = new QLabel("X: 0  Y: 0", this);
-  positionLabel->setStyleSheet("QLabel { padding: 3px; background-color: #2d2d2d; color: #aaaaaa; border-radius: 3px; min-width: 80px; }");
+  positionLabel->setStyleSheet(R"(
+    QLabel { 
+      padding: 6px 10px; 
+      background-color: #1e1e22; 
+      color: #a0a0a5; 
+      border-radius: 6px; 
+      min-width: 90px;
+      font-size: 11px;
+    }
+  )");
   positionLabel->setAlignment(Qt::AlignCenter);
   addWidget(positionLabel);
 }
@@ -259,7 +302,13 @@ void ToolPanel::updateBrushSizeDisplay(int size) {
 }
 
 void ToolPanel::updateColorDisplay(const QColor &color) {
-  colorPreview->setStyleSheet(QString("QLabel { background-color: %1; border: 2px solid #888888; border-radius: 3px; }").arg(color.name()));
+  colorPreview->setStyleSheet(QString(R"(
+    QLabel { 
+      background-color: %1; 
+      border: 2px solid #4a4a50; 
+      border-radius: 6px; 
+    }
+  )").arg(color.name()));
   if (brushPreview_) {
     brushPreview_->setBrushColor(color);
   }

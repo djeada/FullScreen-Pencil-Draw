@@ -40,12 +40,13 @@ void BrushPreview::paintEvent(QPaintEvent * /*event*/) {
   QPainter painter(this);
   painter.setRenderHint(QPainter::Antialiasing);
 
-  // Draw background
-  painter.fillRect(rect(), QColor(30, 30, 30));
+  // Draw modern flat background
+  painter.fillRect(rect(), QColor(30, 30, 34));
 
-  // Draw border
-  painter.setPen(QPen(QColor(60, 60, 60), 1));
-  painter.drawRect(rect().adjusted(0, 0, -1, -1));
+  // Draw subtle rounded border
+  painter.setPen(QPen(QColor(58, 58, 64), 1));
+  painter.setBrush(Qt::NoBrush);
+  painter.drawRoundedRect(rect().adjusted(0, 0, -1, -1), 6, 6);
 
   // Calculate display size (scale down if brush is larger than preview area)
   int maxDisplaySize = PREVIEW_SIZE - 8;
@@ -58,29 +59,40 @@ void BrushPreview::paintEvent(QPaintEvent * /*event*/) {
     scaleFactor = static_cast<qreal>(maxDisplaySize) / brushSize_;
   }
 
-  // Draw crosshairs
-  painter.setPen(QPen(QColor(80, 80, 80), 1));
+  // Draw subtle crosshairs
+  painter.setPen(QPen(QColor(70, 70, 76), 1));
   int centerX = width() / 2;
   int centerY = height() / 2;
-  painter.drawLine(centerX, 0, centerX, height());
-  painter.drawLine(0, centerY, width(), centerY);
+  painter.drawLine(centerX, 4, centerX, height() - 4);
+  painter.drawLine(4, centerY, width() - 4, centerY);
 
-  // Draw brush circle
+  // Draw brush circle with glow effect
   QColor fillColor = brushColor_;
-  fillColor.setAlpha(180);
+  fillColor.setAlpha(160);
 
-  painter.setPen(QPen(brushColor_, 1));
+  // Outer glow
+  QColor glowColor = brushColor_;
+  glowColor.setAlpha(40);
+  painter.setPen(Qt::NoPen);
+  painter.setBrush(glowColor);
+  int glowSize = displaySize + 6;
+  int glowX = centerX - glowSize / 2;
+  int glowY = centerY - glowSize / 2;
+  painter.drawEllipse(glowX, glowY, glowSize, glowSize);
+
+  // Main brush circle
+  painter.setPen(QPen(brushColor_, 2));
   painter.setBrush(fillColor);
-
   int x = centerX - displaySize / 2;
   int y = centerY - displaySize / 2;
   painter.drawEllipse(x, y, displaySize, displaySize);
 
   // Draw actual size text if scaled
   if (brushSize_ > maxDisplaySize) {
-    painter.setPen(Qt::white);
+    painter.setPen(QColor(160, 160, 165));
     QFont font = painter.font();
     font.setPointSize(8);
+    font.setWeight(QFont::Medium);
     painter.setFont(font);
     QString sizeText = QString("%1px").arg(brushSize_);
     painter.drawText(rect(), Qt::AlignBottom | Qt::AlignHCenter, sizeText);
