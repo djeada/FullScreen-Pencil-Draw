@@ -60,6 +60,9 @@ public:
   int getCurrentOpacity() const;
   bool isGridVisible() const;
   bool isFilledShapes() const;
+  bool isSnapToGridEnabled() const;
+  bool isRulerVisible() const;
+  bool isMeasurementToolEnabled() const;
 
   // Tool system accessors - used by Tool classes
   QGraphicsScene *scene() const { return scene_; }
@@ -84,6 +87,11 @@ signals:
   void opacityChanged(int opacity);
   void cursorPositionChanged(const QPointF &pos);
   void filledShapesChanged(bool filled);
+  void snapToGridChanged(bool enabled);
+  void canvasModified();
+  void rulerVisibilityChanged(bool visible);
+  void measurementToolChanged(bool enabled);
+  void measurementUpdated(const QString &measurement);
 
 public slots:
   void setShape(const QString &shapeType);
@@ -113,10 +121,17 @@ public slots:
   void newCanvas(int width, int height, const QColor &bgColor);
   void toggleGrid();
   void toggleFilledShapes();
+  void toggleSnapToGrid();
+  void toggleRuler();
+  void toggleMeasurementTool();
+  void lockSelectedItems();
+  void unlockSelectedItems();
   void selectAll();
   void exportSelectionToSVG();
   void exportSelectionToPNG();
   void exportSelectionToJPG();
+  void exportToPDF();
+  void openRecentFile(const QString &filePath);
 
 protected:
   void mousePressEvent(QMouseEvent *event) override;
@@ -124,6 +139,7 @@ protected:
   void mouseReleaseEvent(QMouseEvent *event) override;
   void wheelEvent(QWheelEvent *event) override;
   void drawBackground(QPainter *painter, const QRectF &rect) override;
+  void drawForeground(QPainter *painter, const QRectF &rect) override;
   void dragEnterEvent(QDragEnterEvent *event) override;
   void dragMoveEvent(QDragMoveEvent *event) override;
   void dropEvent(QDropEvent *event) override;
@@ -155,6 +171,7 @@ private:
   static constexpr double MAX_ZOOM = 10.0;
   static constexpr double MIN_ZOOM = 0.1;
   static constexpr int GRID_SIZE = 20;
+  static constexpr int RULER_SIZE = 25;
 
   // State variables
   double currentZoom_ = 1.0;
@@ -162,10 +179,15 @@ private:
   bool showGrid_ = false;
   bool isPanning_ = false;
   bool fillShapes_ = false;
+  bool snapToGrid_ = false;
+  bool showRuler_ = false;
+  bool measurementToolEnabled_ = false;
+  int duplicateOffset_ = 20;
 
   // Drawing state
   QVector<QPointF> pointBuffer_;
   QPointF previousPoint_;
+  QPointF measurementStart_;
 
   // Undo/Redo stacks (using vector for move-only types)
   std::vector<std::unique_ptr<Action>> undoStack_;
@@ -181,7 +203,12 @@ private:
   void drawArrow(const QPointF &start, const QPointF &end);
   void createTextItem(const QPointF &position);
   void loadDroppedImage(const QString &filePath, const QPointF &dropPosition);
+  void exportToPDFWithFilename(const QString &fileName);
   QRectF getSelectionBoundingRect() const;
+  QPointF snapToGridPoint(const QPointF &point) const;
+  QPointF calculateSmartDuplicateOffset() const;
+  void drawRuler(QPainter *painter, const QRectF &rect);
+  QString calculateDistance(const QPointF &p1, const QPointF &p2) const;
 };
 
 #endif // CANVAS_H

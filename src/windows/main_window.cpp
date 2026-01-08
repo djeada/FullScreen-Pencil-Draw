@@ -1,21 +1,29 @@
 // main_window.cpp
 #include "main_window.h"
+#include "../core/auto_save_manager.h"
 #include "../core/layer.h"
+#include "../core/recent_files_manager.h"
+#include "../core/theme_manager.h"
 #include "../widgets/canvas.h"
 #include "../widgets/layer_panel.h"
 #include "../widgets/tool_panel.h"
 #include <QApplication>
 #include <QColorDialog>
+#include <QFileInfo>
 #include <QInputDialog>
 #include <QKeyEvent>
 #include <QLabel>
+#include <QMenuBar>
 #include <QStatusBar>
 #include <QVBoxLayout>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), _canvas(new Canvas(this)),
       _toolPanel(new ToolPanel(this)), _layerPanel(nullptr),
-      _statusLabel(nullptr) {
+      _autoSaveManager(nullptr), _statusLabel(nullptr), 
+      _measurementLabel(nullptr), _recentFilesMenu(nullptr), 
+      _snapToGridAction(nullptr), _autoSaveAction(nullptr),
+      _rulerAction(nullptr), _measurementAction(nullptr) {
 
   QWidget *centralWidget = new QWidget(this);
   QVBoxLayout *layout = new QVBoxLayout(centralWidget);
@@ -27,8 +35,10 @@ MainWindow::MainWindow(QWidget *parent)
   this->setWindowTitle("FullScreen Pencil Draw - Professional Edition");
   this->resize(1400, 900);
 
+  setupMenuBar();
   setupStatusBar();
   setupLayerPanel();
+  setupAutoSave();
   setupConnections();
 
   _toolPanel->updateBrushSizeDisplay(_canvas->getCurrentBrushSize());
@@ -41,7 +51,9 @@ MainWindow::~MainWindow() {}
 
 void MainWindow::setupStatusBar() {
   _statusLabel = new QLabel("Ready | P:Pen E:Eraser T:Text F:Fill L:Line A:Arrow R:Rect C:Circle S:Select H:Pan | G:Grid B:Filled | Ctrl+Scroll:Zoom", this);
+  _measurementLabel = new QLabel("", this);
   statusBar()->addWidget(_statusLabel);
+  statusBar()->addPermanentWidget(_measurementLabel);
   statusBar()->setStyleSheet("QStatusBar { background-color: #2d2d2d; color: #ffffff; }");
 }
 
@@ -94,12 +106,160 @@ void MainWindow::setupConnections() {
 
   // Filled shapes feedback
   connect(_canvas, &Canvas::filledShapesChanged, this, &MainWindow::onFilledShapesChanged);
+  
+  // Snap to grid feedback
+  connect(_canvas, &Canvas::snapToGridChanged, this, &MainWindow::onSnapToGridChanged);
+  
+  // Ruler and measurement feedback
+  connect(_canvas, &Canvas::rulerVisibilityChanged, this, &MainWindow::onRulerVisibilityChanged);
+  connect(_canvas, &Canvas::measurementToolChanged, this, &MainWindow::onMeasurementToolChanged);
+  connect(_canvas, &Canvas::measurementUpdated, this, &MainWindow::onMeasurementUpdated);
 
   // File operations
   connect(_toolPanel, &ToolPanel::saveAction, _canvas, &Canvas::saveToFile);
   connect(_toolPanel, &ToolPanel::openAction, _canvas, &Canvas::openFile);
   connect(_toolPanel, &ToolPanel::newCanvasAction, this, &MainWindow::onNewCanvas);
   connect(_toolPanel, &ToolPanel::clearCanvas, _canvas, &Canvas::clearCanvas);
+  
+  // Recent files
+  connect(&RecentFilesManager::instance(), &RecentFilesManager::recentFilesChanged,
+          this, &MainWindow::onRecentFilesChanged);
+}
+
+void MainWindow::setupMenuBar() {
+  QMenuBar *menuBar = this->menuBar();
+  
+  // File menu
+  QMenu *fileMenu = menuBar->addMenu("&File");
+  
+  QAction *newAction = fileMenu->addAction("&New", QKeySequence::New, this, &MainWindow::onNewCanvas);
+  QAction *openAction = fileMenu->addAction("&Open...", QKeySequence::Open, _canvas, &Canvas::openFile);
+  
+  // Recent Files submenu
+  _recentFilesMenu = fileMenu->addMenu("Recent Files");
+  updateRecentFilesMenu();
+  
+  fileMenu->addSeparator();
+  
+  QAction *saveAction = fileMenu->addAction("&Save...", QKeySequence::Save, _canvas, &Canvas::saveToFile);
+  QAction *exportPdfAction = fileMenu->addAction("Export to &PDF...", _canvas, &Canvas::exportToPDF);
+  
+  fileMenu->addSeparator();
+  
+  QAction *exitAction = fileMenu->addAction("E&xit", QKeySequence::Quit, this, &QMainWindow::close);
+  
+  // Edit menu
+  QMenu *editMenu = menuBar->addMenu("&Edit");
+  
+  editMenu->addAction("&Undo", QKeySequence::Undo, _canvas, &Canvas::undoLastAction);
+  editMenu->addAction("&Redo", QKeySequence::Redo, _canvas, &Canvas::redoLastAction);
+  editMenu->addSeparator();
+  editMenu->addAction("Cu&t", QKeySequence::Cut, _canvas, &Canvas::cutSelectedItems);
+  editMenu->addAction("&Copy", QKeySequence::Copy, _canvas, &Canvas::copySelectedItems);
+  editMenu->addAction("&Paste", QKeySequence::Paste, _canvas, &Canvas::pasteItems);
+  editMenu->addSeparator();
+  editMenu->addAction("Select &All", QKeySequence::SelectAll, _canvas, &Canvas::selectAll);
+  editMenu->addAction("&Delete", QKeySequence::Delete, _canvas, &Canvas::deleteSelectedItems);
+  editMenu->addAction("D&uplicate", QKeySequence(Qt::CTRL | Qt::Key_D), _canvas, &Canvas::duplicateSelectedItems);
+  
+  // View menu
+  QMenu *viewMenu = menuBar->addMenu("&View");
+  
+  viewMenu->addAction("Zoom &In", QKeySequence::ZoomIn, _canvas, &Canvas::zoomIn);
+  viewMenu->addAction("Zoom &Out", QKeySequence::ZoomOut, _canvas, &Canvas::zoomOut);
+  viewMenu->addAction("&Reset Zoom", QKeySequence(Qt::Key_0), _canvas, &Canvas::zoomReset);
+  viewMenu->addSeparator();
+  
+  QAction *gridAction = viewMenu->addAction("Toggle &Grid", QKeySequence(Qt::Key_G), _canvas, &Canvas::toggleGrid);
+  gridAction->setCheckable(true);
+  gridAction->setChecked(_canvas->isGridVisible());
+  
+  _snapToGridAction = viewMenu->addAction("&Snap to Grid", QKeySequence(Qt::CTRL | Qt::Key_G), _canvas, &Canvas::toggleSnapToGrid);
+  _snapToGridAction->setCheckable(true);
+  _snapToGridAction->setChecked(_canvas->isSnapToGridEnabled());
+  
+  QAction *filledAction = viewMenu->addAction("Toggle &Filled Shapes", QKeySequence(Qt::Key_B), _canvas, &Canvas::toggleFilledShapes);
+  filledAction->setCheckable(true);
+  filledAction->setChecked(_canvas->isFilledShapes());
+  
+  viewMenu->addSeparator();
+  
+  _rulerAction = viewMenu->addAction("Show &Ruler", QKeySequence(Qt::CTRL | Qt::Key_R), _canvas, &Canvas::toggleRuler);
+  _rulerAction->setCheckable(true);
+  _rulerAction->setChecked(_canvas->isRulerVisible());
+  
+  _measurementAction = viewMenu->addAction("&Measurement Tool", QKeySequence(Qt::Key_M), _canvas, &Canvas::toggleMeasurementTool);
+  _measurementAction->setCheckable(true);
+  _measurementAction->setChecked(_canvas->isMeasurementToolEnabled());
+  
+  viewMenu->addSeparator();
+  
+  // Theme submenu
+  QMenu *themeMenu = viewMenu->addMenu("&Theme");
+  QAction *toggleThemeAction = themeMenu->addAction("Toggle &Dark/Light Theme", this, &MainWindow::onToggleTheme);
+  toggleThemeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_T));
+  
+  // Edit menu - add lock/unlock after other edit items
+  editMenu->addSeparator();
+  editMenu->addAction("&Lock Selected", QKeySequence(Qt::CTRL | Qt::Key_L), _canvas, &Canvas::lockSelectedItems);
+  editMenu->addAction("&Unlock All", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_L), _canvas, &Canvas::unlockSelectedItems);
+  
+  // Tools menu
+  QMenu *toolsMenu = menuBar->addMenu("&Tools");
+  
+  _autoSaveAction = toolsMenu->addAction("Enable &Auto-Save", [this]() {
+    if (_autoSaveManager) {
+      _autoSaveManager->setEnabled(!_autoSaveManager->isEnabled());
+      _autoSaveAction->setChecked(_autoSaveManager->isEnabled());
+    }
+  });
+  _autoSaveAction->setCheckable(true);
+  _autoSaveAction->setChecked(true);  // Enabled by default
+}
+
+void MainWindow::updateRecentFilesMenu() {
+  if (!_recentFilesMenu) return;
+  
+  _recentFilesMenu->clear();
+  
+  QStringList recentFiles = RecentFilesManager::instance().recentFiles();
+  
+  if (recentFiles.isEmpty()) {
+    QAction *noFilesAction = _recentFilesMenu->addAction("No Recent Files");
+    noFilesAction->setEnabled(false);
+  } else {
+    for (int i = 0; i < recentFiles.size(); ++i) {
+      QString filePath = recentFiles.at(i);
+      QString fileName = QFileInfo(filePath).fileName();
+      QString text = QString("&%1. %2").arg(i + 1).arg(fileName);
+      
+      QAction *action = _recentFilesMenu->addAction(text);
+      action->setData(filePath);
+      action->setToolTip(filePath);
+      connect(action, &QAction::triggered, this, &MainWindow::openRecentFile);
+    }
+    
+    _recentFilesMenu->addSeparator();
+    _recentFilesMenu->addAction("Clear Recent Files", []() {
+      RecentFilesManager::instance().clearRecentFiles();
+    });
+  }
+}
+
+void MainWindow::onRecentFilesChanged() {
+  updateRecentFilesMenu();
+}
+
+void MainWindow::openRecentFile() {
+  QAction *action = qobject_cast<QAction *>(sender());
+  if (action) {
+    QString filePath = action->data().toString();
+    _canvas->openRecentFile(filePath);
+  }
+}
+
+void MainWindow::onToggleTheme() {
+  ThemeManager::instance().toggleTheme();
 }
 
 void MainWindow::setupLayerPanel() {
@@ -115,6 +275,54 @@ void MainWindow::onZoomChanged(double zoom) { _toolPanel->updateZoomDisplay(zoom
 void MainWindow::onOpacityChanged(int opacity) { _toolPanel->updateOpacityDisplay(opacity); }
 void MainWindow::onFilledShapesChanged(bool filled) { _toolPanel->updateFilledShapesDisplay(filled); }
 void MainWindow::onCursorPositionChanged(const QPointF &pos) { _toolPanel->updatePositionDisplay(pos); }
+
+void MainWindow::onSnapToGridChanged(bool enabled) {
+  if (_snapToGridAction) {
+    _snapToGridAction->setChecked(enabled);
+  }
+}
+
+void MainWindow::onRulerVisibilityChanged(bool visible) {
+  if (_rulerAction) {
+    _rulerAction->setChecked(visible);
+  }
+}
+
+void MainWindow::onMeasurementToolChanged(bool enabled) {
+  if (_measurementAction) {
+    _measurementAction->setChecked(enabled);
+  }
+  if (!enabled && _measurementLabel) {
+    _measurementLabel->clear();
+  }
+}
+
+void MainWindow::onMeasurementUpdated(const QString &measurement) {
+  if (_measurementLabel) {
+    _measurementLabel->setText(QString("Distance: %1").arg(measurement));
+  }
+}
+
+void MainWindow::setupAutoSave() {
+  _autoSaveManager = new AutoSaveManager(_canvas, this);
+  
+  connect(_autoSaveManager, &AutoSaveManager::autoSavePerformed,
+          this, &MainWindow::onAutoSavePerformed);
+  
+  // Check for recovery on startup
+  if (_autoSaveManager->hasAutoSave()) {
+    _autoSaveManager->restoreAutoSave();
+  }
+  
+  // Update the menu action state
+  if (_autoSaveAction) {
+    _autoSaveAction->setChecked(_autoSaveManager->isEnabled());
+  }
+}
+
+void MainWindow::onAutoSavePerformed(const QString &path) {
+  statusBar()->showMessage(QString("Auto-saved to: %1").arg(path), 3000);
+}
 
 void MainWindow::onNewCanvas() {
   bool ok;

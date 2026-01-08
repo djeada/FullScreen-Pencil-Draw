@@ -4,6 +4,7 @@
  */
 #include "canvas.h"
 #include "image_size_dialog.h"
+#include "../core/recent_files_manager.h"
 #include <QApplication>
 #include <QClipboard>
 #include <QColorDialog>
@@ -21,6 +22,7 @@
 #include <QMessageBox>
 #include <QMimeData>
 #include <QMouseEvent>
+#include <QPdfWriter>
 #include <QScrollBar>
 #include <QSvgGenerator>
 #include <QUrl>
@@ -81,6 +83,9 @@ double Canvas::getCurrentZoom() const { return currentZoom_ * 100.0; }
 int Canvas::getCurrentOpacity() const { return currentOpacity_; }
 bool Canvas::isGridVisible() const { return showGrid_; }
 bool Canvas::isFilledShapes() const { return fillShapes_; }
+bool Canvas::isSnapToGridEnabled() const { return snapToGrid_; }
+bool Canvas::isRulerVisible() const { return showRuler_; }
+bool Canvas::isMeasurementToolEnabled() const { return measurementToolEnabled_; }
 
 // Action management methods
 void Canvas::addDrawAction(QGraphicsItem *item) {
@@ -90,6 +95,7 @@ void Canvas::addDrawAction(QGraphicsItem *item) {
   if (layerManager_) {
     layerManager_->addItemToActiveLayer(item);
   }
+  emit canvasModified();
 }
 
 void Canvas::addDeleteAction(QGraphicsItem *item) {
@@ -313,6 +319,157 @@ void Canvas::toggleFilledShapes() {
   emit filledShapesChanged(fillShapes_);
 }
 
+void Canvas::toggleSnapToGrid() {
+  snapToGrid_ = !snapToGrid_;
+  emit snapToGridChanged(snapToGrid_);
+}
+
+void Canvas::toggleRuler() {
+  showRuler_ = !showRuler_;
+  viewport()->update();
+  emit rulerVisibilityChanged(showRuler_);
+}
+
+void Canvas::toggleMeasurementTool() {
+  measurementToolEnabled_ = !measurementToolEnabled_;
+  emit measurementToolChanged(measurementToolEnabled_);
+}
+
+void Canvas::lockSelectedItems() {
+  for (QGraphicsItem *item : scene_->selectedItems()) {
+    if (item != eraserPreview_ && item != backgroundImage_) {
+      item->setFlag(QGraphicsItem::ItemIsMovable, false);
+      item->setFlag(QGraphicsItem::ItemIsSelectable, false);
+      // Store lock state in data
+      item->setData(0, "locked");
+    }
+  }
+  scene_->clearSelection();
+}
+
+void Canvas::unlockSelectedItems() {
+  // Unlock all locked items (since they can't be selected when locked)
+  for (QGraphicsItem *item : scene_->items()) {
+    if (item != eraserPreview_ && item != backgroundImage_) {
+      if (item->data(0).toString() == "locked") {
+        item->setFlag(QGraphicsItem::ItemIsMovable, true);
+        item->setFlag(QGraphicsItem::ItemIsSelectable, true);
+        item->setData(0, QVariant());
+      }
+    }
+  }
+}
+
+QString Canvas::calculateDistance(const QPointF &p1, const QPointF &p2) const {
+  qreal dx = p2.x() - p1.x();
+  qreal dy = p2.y() - p1.y();
+  qreal distance = std::sqrt(dx * dx + dy * dy);
+  return QString("%1 px").arg(QString::number(distance, 'f', 1));
+}
+
+void Canvas::drawForeground(QPainter *painter, const QRectF &rect) {
+  QGraphicsView::drawForeground(painter, rect);
+  if (showRuler_) {
+    drawRuler(painter, rect);
+  }
+}
+
+void Canvas::drawRuler(QPainter *painter, const QRectF &rect) {
+  // Get viewport rect in scene coordinates
+  QRectF viewRect = mapToScene(viewport()->rect()).boundingRect();
+  
+  // Save painter state
+  painter->save();
+  
+  // Draw horizontal ruler background
+  painter->fillRect(QRectF(viewRect.left(), viewRect.top(), viewRect.width(), RULER_SIZE), QColor(50, 50, 50, 200));
+  
+  // Draw vertical ruler background
+  painter->fillRect(QRectF(viewRect.left(), viewRect.top(), RULER_SIZE, viewRect.height()), QColor(50, 50, 50, 200));
+  
+  // Setup pen and font for ruler markings
+  painter->setPen(QPen(Qt::white, 1));
+  QFont rulerFont;
+  rulerFont.setPixelSize(9);
+  painter->setFont(rulerFont);
+  
+  // Calculate tick spacing based on zoom
+  int majorTickSpacing = GRID_SIZE * 5; // Major tick every 100px at 100% zoom
+  int minorTickSpacing = GRID_SIZE; // Minor tick every 20px
+  
+  // Draw horizontal ruler ticks
+  qreal startX = std::floor(viewRect.left() / minorTickSpacing) * minorTickSpacing;
+  for (qreal x = startX; x < viewRect.right(); x += minorTickSpacing) {
+    bool isMajor = (static_cast<int>(x) % majorTickSpacing) == 0;
+    qreal tickHeight = isMajor ? RULER_SIZE * 0.6 : RULER_SIZE * 0.3;
+    painter->drawLine(QPointF(x, viewRect.top() + RULER_SIZE - tickHeight), 
+                      QPointF(x, viewRect.top() + RULER_SIZE));
+    if (isMajor) {
+      painter->drawText(QPointF(x + 2, viewRect.top() + RULER_SIZE * 0.5), QString::number(static_cast<int>(x)));
+    }
+  }
+  
+  // Draw vertical ruler ticks
+  qreal startY = std::floor(viewRect.top() / minorTickSpacing) * minorTickSpacing;
+  for (qreal y = startY; y < viewRect.bottom(); y += minorTickSpacing) {
+    bool isMajor = (static_cast<int>(y) % majorTickSpacing) == 0;
+    qreal tickWidth = isMajor ? RULER_SIZE * 0.6 : RULER_SIZE * 0.3;
+    painter->drawLine(QPointF(viewRect.left() + RULER_SIZE - tickWidth, y), 
+                      QPointF(viewRect.left() + RULER_SIZE, y));
+    if (isMajor) {
+      painter->save();
+      painter->translate(viewRect.left() + RULER_SIZE * 0.4, y + 2);
+      painter->rotate(90);
+      painter->drawText(0, 0, QString::number(static_cast<int>(y)));
+      painter->restore();
+    }
+  }
+  
+  // Draw corner square
+  painter->fillRect(QRectF(viewRect.left(), viewRect.top(), RULER_SIZE, RULER_SIZE), QColor(70, 70, 70, 200));
+  
+  painter->restore();
+}
+
+QPointF Canvas::snapToGridPoint(const QPointF &point) const {
+  if (!snapToGrid_) return point;
+  
+  qreal x = qRound(point.x() / GRID_SIZE) * GRID_SIZE;
+  qreal y = qRound(point.y() / GRID_SIZE) * GRID_SIZE;
+  return QPointF(x, y);
+}
+
+QPointF Canvas::calculateSmartDuplicateOffset() const {
+  // Calculate smart offset based on selected items and available space
+  QList<QGraphicsItem *> selected = scene_->selectedItems();
+  if (selected.isEmpty()) return QPointF(GRID_SIZE, GRID_SIZE);
+  
+  // Get bounding rect of selected items
+  QRectF boundingRect;
+  for (QGraphicsItem *item : selected) {
+    if (item != eraserPreview_ && item != backgroundImage_) {
+      if (boundingRect.isEmpty()) {
+        boundingRect = item->sceneBoundingRect();
+      } else {
+        boundingRect = boundingRect.united(item->sceneBoundingRect());
+      }
+    }
+  }
+  
+  // Use grid-aligned offset that's at least as large as the item + some padding
+  qreal gridSize = static_cast<qreal>(GRID_SIZE);
+  qreal offsetX = std::max(gridSize, std::ceil(boundingRect.width() / gridSize) * gridSize + gridSize);
+  qreal offsetY = gridSize;
+  
+  // If the offset would go beyond scene width, move down instead
+  if (boundingRect.right() + offsetX > scene_->sceneRect().right()) {
+    offsetX = gridSize;
+    offsetY = std::max(gridSize, std::ceil(boundingRect.height() / gridSize) * gridSize + gridSize);
+  }
+  
+  return QPointF(offsetX, offsetY);
+}
+
 void Canvas::selectAll() {
   for (auto item : scene_->items())
     if (item != eraserPreview_ && item != backgroundImage_) item->setSelected(true);
@@ -329,27 +486,34 @@ void Canvas::deleteSelectedItems() {
 
 void Canvas::duplicateSelectedItems() {
   QList<QGraphicsItem *> newItems;
+  QPointF offset = calculateSmartDuplicateOffset();
+  
   for (QGraphicsItem *item : scene_->selectedItems()) {
     if (auto r = dynamic_cast<QGraphicsRectItem *>(item)) {
       auto n = new QGraphicsRectItem(r->rect()); n->setPen(r->pen()); n->setBrush(r->brush());
-      n->setPos(r->pos() + QPointF(20, 20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
+      QPointF newPos = snapToGrid_ ? snapToGridPoint(r->pos() + offset) : r->pos() + offset;
+      n->setPos(newPos); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
       scene_->addItem(n); newItems.append(n); addDrawAction(n);
     } else if (auto e = dynamic_cast<QGraphicsEllipseItem *>(item)) {
       if (item == eraserPreview_) continue;
       auto n = new QGraphicsEllipseItem(e->rect()); n->setPen(e->pen()); n->setBrush(e->brush());
-      n->setPos(e->pos() + QPointF(20, 20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
+      QPointF newPos = snapToGrid_ ? snapToGridPoint(e->pos() + offset) : e->pos() + offset;
+      n->setPos(newPos); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
       scene_->addItem(n); newItems.append(n); addDrawAction(n);
     } else if (auto l = dynamic_cast<QGraphicsLineItem *>(item)) {
       auto n = new QGraphicsLineItem(l->line()); n->setPen(l->pen());
-      n->setPos(l->pos() + QPointF(20, 20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
+      QPointF newPos = snapToGrid_ ? snapToGridPoint(l->pos() + offset) : l->pos() + offset;
+      n->setPos(newPos); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
       scene_->addItem(n); newItems.append(n); addDrawAction(n);
     } else if (auto p = dynamic_cast<QGraphicsPathItem *>(item)) {
       auto n = new QGraphicsPathItem(p->path()); n->setPen(p->pen());
-      n->setPos(p->pos() + QPointF(20, 20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
+      QPointF newPos = snapToGrid_ ? snapToGridPoint(p->pos() + offset) : p->pos() + offset;
+      n->setPos(newPos); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
       scene_->addItem(n); newItems.append(n); addDrawAction(n);
     } else if (auto t = dynamic_cast<QGraphicsTextItem *>(item)) {
       auto n = new QGraphicsTextItem(t->toPlainText()); n->setFont(t->font()); n->setDefaultTextColor(t->defaultTextColor());
-      n->setPos(t->pos() + QPointF(20, 20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
+      QPointF newPos = snapToGrid_ ? snapToGridPoint(t->pos() + offset) : t->pos() + offset;
+      n->setPos(newPos); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
       scene_->addItem(n); newItems.append(n); addDrawAction(n);
     }
   }
@@ -358,8 +522,15 @@ void Canvas::duplicateSelectedItems() {
 }
 
 void Canvas::saveToFile() {
-  QString fileName = QFileDialog::getSaveFileName(this, "Save Image", "", "PNG (*.png);;JPEG (*.jpg);;BMP (*.bmp)");
+  QString fileName = QFileDialog::getSaveFileName(this, "Save Image", "", "PNG (*.png);;JPEG (*.jpg);;BMP (*.bmp);;PDF (*.pdf)");
   if (fileName.isEmpty()) return;
+  
+  // Check if saving as PDF - pass the filename to avoid double dialog
+  if (fileName.endsWith(".pdf", Qt::CaseInsensitive)) {
+    exportToPDFWithFilename(fileName);
+    return;
+  }
+  
   bool ev = eraserPreview_ && eraserPreview_->isVisible();
   if (eraserPreview_) eraserPreview_->hide();
   scene_->clearSelection();
@@ -372,6 +543,9 @@ void Canvas::saveToFile() {
   scene_->render(&p, QRectF(), sr); p.end();
   img.save(fileName);
   if (ev && eraserPreview_) eraserPreview_->show();
+  
+  // Add to recent files
+  RecentFilesManager::instance().addRecentFile(fileName);
 }
 
 void Canvas::openFile() {
@@ -385,6 +559,86 @@ void Canvas::openFile() {
   backgroundImage_->setFlag(QGraphicsItem::ItemIsSelectable, false);
   backgroundImage_->setFlag(QGraphicsItem::ItemIsMovable, false);
   scene_->setSceneRect(0, 0, qMax(scene_->sceneRect().width(), (qreal)pm.width()), qMax(scene_->sceneRect().height(), (qreal)pm.height()));
+  
+  // Add to recent files
+  RecentFilesManager::instance().addRecentFile(fileName);
+}
+
+void Canvas::openRecentFile(const QString &filePath) {
+  if (filePath.isEmpty()) return;
+  QPixmap pm(filePath);
+  if (pm.isNull()) {
+    QMessageBox::warning(this, "Error", QString("Could not open file: %1").arg(filePath));
+    return;
+  }
+  if (backgroundImage_) { scene_->removeItem(backgroundImage_); delete backgroundImage_; }
+  backgroundImage_ = scene_->addPixmap(pm);
+  backgroundImage_->setZValue(-1000);
+  backgroundImage_->setFlag(QGraphicsItem::ItemIsSelectable, false);
+  backgroundImage_->setFlag(QGraphicsItem::ItemIsMovable, false);
+  scene_->setSceneRect(0, 0, qMax(scene_->sceneRect().width(), (qreal)pm.width()), qMax(scene_->sceneRect().height(), (qreal)pm.height()));
+  
+  // Update recent files
+  RecentFilesManager::instance().addRecentFile(filePath);
+}
+
+void Canvas::exportToPDF() {
+  QString fileName = QFileDialog::getSaveFileName(this, "Export to PDF", "", "PDF (*.pdf)");
+  if (fileName.isEmpty()) return;
+  exportToPDFWithFilename(fileName);
+}
+
+void Canvas::exportToPDFWithFilename(const QString &fileName) {
+  bool ev = eraserPreview_ && eraserPreview_->isVisible();
+  if (eraserPreview_) eraserPreview_->hide();
+  scene_->clearSelection();
+  
+  QRectF sr = scene_->itemsBoundingRect();
+  if (sr.isEmpty()) sr = scene_->sceneRect();
+  sr.adjust(-10, -10, 10, 10);
+  
+  // Create PDF writer with A4 page size as default
+  QPdfWriter pdfWriter(fileName);
+  
+  // Use A4 page size for reasonable dimensions
+  pdfWriter.setPageSize(QPageSize::A4);
+  pdfWriter.setPageMargins(QMarginsF(10, 10, 10, 10), QPageLayout::Millimeter);
+  pdfWriter.setTitle("FullScreen Pencil Draw Export");
+  pdfWriter.setCreator("FullScreen Pencil Draw");
+  
+  // Calculate resolution to maintain quality
+  int dpi = 300;
+  pdfWriter.setResolution(dpi);
+  
+  QPainter painter(&pdfWriter);
+  painter.setRenderHint(QPainter::Antialiasing);
+  painter.setRenderHint(QPainter::TextAntialiasing);
+  painter.setRenderHint(QPainter::SmoothPixmapTransform);
+  
+  // Fill background
+  painter.fillRect(painter.viewport(), backgroundColor_);
+  
+  // Calculate scale factor to fit the scene onto the page while maintaining aspect ratio
+  QRectF pageRect = painter.viewport();
+  double scaleX = pageRect.width() / sr.width();
+  double scaleY = pageRect.height() / sr.height();
+  double scale = qMin(scaleX, scaleY);
+  
+  // Center the content on the page
+  double offsetX = (pageRect.width() - sr.width() * scale) / 2.0;
+  double offsetY = (pageRect.height() - sr.height() * scale) / 2.0;
+  
+  painter.translate(offsetX, offsetY);
+  painter.scale(scale, scale);
+  painter.translate(-sr.topLeft());
+  
+  scene_->render(&painter, QRectF(), sr);
+  painter.end();
+  
+  if (ev && eraserPreview_) eraserPreview_->show();
+  
+  // Add to recent files
+  RecentFilesManager::instance().addRecentFile(fileName);
 }
 
 void Canvas::createTextItem(const QPointF &pos) {
@@ -445,12 +699,17 @@ void Canvas::drawArrow(const QPointF &start, const QPointF &end) {
 
 void Canvas::mousePressEvent(QMouseEvent *event) {
   QPointF sp = mapToScene(event->pos());
+  // Apply snap-to-grid for shape tools
+  if (snapToGrid_ && (currentShape_ == Rectangle || currentShape_ == Circle || 
+                       currentShape_ == Line || currentShape_ == Arrow)) {
+    sp = snapToGridPoint(sp);
+  }
   emit cursorPositionChanged(sp);
   if (currentShape_ == Selection) { QGraphicsView::mousePressEvent(event); return; }
   if (currentShape_ == Pan) { isPanning_ = true; lastPanPoint_ = event->pos(); setCursor(Qt::ClosedHandCursor); return; }
   startPoint_ = sp;
   switch (currentShape_) {
-  case Text: createTextItem(sp); break;
+  case Text: createTextItem(snapToGrid_ ? snapToGridPoint(sp) : sp); break;
   case Fill: fillAt(sp); break;
   case Eraser: eraseAt(sp); break;
   case Pen: {
@@ -491,7 +750,21 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
 
 void Canvas::mouseMoveEvent(QMouseEvent *event) {
   QPointF cp = mapToScene(event->pos());
+  // Apply snap-to-grid for shape tools during drawing
+  if (snapToGrid_ && (currentShape_ == Rectangle || currentShape_ == Circle || 
+                       currentShape_ == Line || currentShape_ == Arrow)) {
+    cp = snapToGridPoint(cp);
+  }
   emit cursorPositionChanged(cp);
+  
+  // Emit measurement when drawing shapes (only when we have a valid start point)
+  if (measurementToolEnabled_ && (event->buttons() & Qt::LeftButton) && tempShapeItem_) {
+    if (currentShape_ == Rectangle || currentShape_ == Circle || 
+        currentShape_ == Line || currentShape_ == Arrow) {
+      emit measurementUpdated(calculateDistance(startPoint_, cp));
+    }
+  }
+  
   if (currentShape_ == Selection) { QGraphicsView::mouseMoveEvent(event); return; }
   if (currentShape_ == Pan && isPanning_) {
     QPointF d = event->pos() - lastPanPoint_; lastPanPoint_ = event->pos();
@@ -511,6 +784,11 @@ void Canvas::mouseMoveEvent(QMouseEvent *event) {
 
 void Canvas::mouseReleaseEvent(QMouseEvent *event) {
   QPointF ep = mapToScene(event->pos());
+  // Apply snap-to-grid for shape tools
+  if (snapToGrid_ && (currentShape_ == Rectangle || currentShape_ == Circle || 
+                       currentShape_ == Line || currentShape_ == Arrow)) {
+    ep = snapToGridPoint(ep);
+  }
   if (currentShape_ == Selection) { QGraphicsView::mouseReleaseEvent(event); return; }
   if (currentShape_ == Pan) { isPanning_ = false; setCursor(Qt::OpenHandCursor); return; }
   if (currentShape_ == Arrow && tempShapeItem_) {

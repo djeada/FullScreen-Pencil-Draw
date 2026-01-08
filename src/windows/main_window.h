@@ -3,11 +3,14 @@
 #define MAIN_WINDOW_H
 
 #include <QMainWindow>
+#include <QMenu>
 
 class Canvas;
 class ToolPanel;
 class LayerPanel;
+class AutoSaveManager;
 class QLabel;
+class QAction;
 
 class MainWindow : public QMainWindow {
   Q_OBJECT
@@ -26,17 +29,35 @@ private slots:
   void onOpacityChanged(int opacity);
   void onCursorPositionChanged(const QPointF &pos);
   void onFilledShapesChanged(bool filled);
+  void onSnapToGridChanged(bool enabled);
+  void onRulerVisibilityChanged(bool visible);
+  void onMeasurementToolChanged(bool enabled);
+  void onMeasurementUpdated(const QString &measurement);
   void onNewCanvas();
+  void onToggleTheme();
+  void onRecentFilesChanged();
+  void openRecentFile();
+  void onAutoSavePerformed(const QString &path);
 
 private:
   Canvas *_canvas;
   ToolPanel *_toolPanel;
   LayerPanel *_layerPanel;
+  AutoSaveManager *_autoSaveManager;
   QLabel *_statusLabel;
+  QLabel *_measurementLabel;
+  QMenu *_recentFilesMenu;
+  QAction *_snapToGridAction;
+  QAction *_autoSaveAction;
+  QAction *_rulerAction;
+  QAction *_measurementAction;
 
   void setupConnections();
   void setupStatusBar();
   void setupLayerPanel();
+  void setupMenuBar();
+  void setupAutoSave();
+  void updateRecentFilesMenu();
 };
 
 #endif // MAIN_WINDOW_H
