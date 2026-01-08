@@ -54,7 +54,21 @@ void MainWindow::setupStatusBar() {
   _measurementLabel = new QLabel("", this);
   statusBar()->addWidget(_statusLabel);
   statusBar()->addPermanentWidget(_measurementLabel);
-  statusBar()->setStyleSheet("QStatusBar { background-color: #2d2d2d; color: #ffffff; }");
+  statusBar()->setStyleSheet(R"(
+    QStatusBar { 
+      background-color: #26262a; 
+      color: #a0a0a5; 
+      border-top: 1px solid #3a3a40;
+      padding: 4px 8px;
+    }
+    QStatusBar::item {
+      border: none;
+    }
+    QLabel {
+      color: #a0a0a5;
+      font-size: 11px;
+    }
+  )");
 }
 
 void MainWindow::setupConnections() {
