@@ -7,11 +7,15 @@
 
 #include "tool.h"
 
+class LatexTextItem;
+
 /**
  * @brief Tool for adding text annotations to the canvas.
  *
- * Clicking on the canvas opens a dialog to enter text, which is
- * then placed at the clicked position.
+ * Clicking on the canvas opens a dialog to enter text.
+ * Text enclosed by $...$ will be rendered as LaTeX math expressions.
+ * Clicking on an existing text item opens a dialog to edit it.
+ * Double-clicking on a text item also allows editing.
  */
 class TextTool : public Tool {
 public:
@@ -27,6 +31,7 @@ public:
 
 private:
   void createTextItem(const QPointF &position);
+  LatexTextItem *currentEditingItem_;
 };
 
 #endif // TEXT_TOOL_H

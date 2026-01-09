@@ -4,6 +4,7 @@
  */
 #include "canvas.h"
 #include "image_size_dialog.h"
+#include "latex_text_item.h"
 #include "../core/recent_files_manager.h"
 #include <QApplication>
 #include <QClipboard>
@@ -510,6 +511,11 @@ void Canvas::duplicateSelectedItems() {
       QPointF newPos = snapToGrid_ ? snapToGridPoint(p->pos() + offset) : p->pos() + offset;
       n->setPos(newPos); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
       scene_->addItem(n); newItems.append(n); addDrawAction(n);
+    } else if (auto lt = dynamic_cast<LatexTextItem *>(item)) {
+      auto n = new LatexTextItem(); n->setText(lt->text()); n->setFont(lt->font()); n->setTextColor(lt->textColor());
+      QPointF newPos = snapToGrid_ ? snapToGridPoint(lt->pos() + offset) : lt->pos() + offset;
+      n->setPos(newPos);
+      scene_->addItem(n); newItems.append(n); addDrawAction(n);
     } else if (auto t = dynamic_cast<QGraphicsTextItem *>(item)) {
       auto n = new QGraphicsTextItem(t->toPlainText()); n->setFont(t->font()); n->setDefaultTextColor(t->defaultTextColor());
       QPointF newPos = snapToGrid_ ? snapToGridPoint(t->pos() + offset) : t->pos() + offset;
@@ -642,16 +648,21 @@ void Canvas::exportToPDFWithFilename(const QString &fileName) {
 }
 
 void Canvas::createTextItem(const QPointF &pos) {
+  // Get text from user via dialog
   bool ok;
-  QString text = QInputDialog::getText(this, "Add Text", "Enter text:", QLineEdit::Normal, "", &ok);
+  QString text = QInputDialog::getText(this, "Add Text",
+      "Enter text (use $...$ for LaTeX math):",
+      QLineEdit::Normal, "", &ok);
+
   if (ok && !text.isEmpty()) {
-    auto ti = new QGraphicsTextItem(text);
-    ti->setFont(QFont("Arial", currentPen_.width() * 4));
-    ti->setDefaultTextColor(currentPen_.color());
-    ti->setPos(pos);
-    ti->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
-    scene_->addItem(ti);
-    addDrawAction(ti);
+    auto *textItem = new LatexTextItem();
+    textItem->setFont(QFont("Arial", currentPen_.width() * 4));
+    textItem->setTextColor(currentPen_.color());
+    textItem->setText(text);
+    textItem->setPos(pos);
+
+    scene_->addItem(textItem);
+    addDrawAction(textItem);
   }
 }
 
@@ -818,6 +829,7 @@ void Canvas::copySelectedItems() {
     else if (auto e = dynamic_cast<QGraphicsEllipseItem*>(item)) { if (item == eraserPreview_) continue; ds << QString("Ellipse") << e->rect() << e->pos() << e->pen() << e->brush(); }
     else if (auto l = dynamic_cast<QGraphicsLineItem*>(item)) { ds << QString("Line") << l->line() << l->pos() << l->pen(); }
     else if (auto p = dynamic_cast<QGraphicsPathItem*>(item)) { ds << QString("Path") << p->path() << p->pos() << p->pen(); }
+    else if (auto lt = dynamic_cast<LatexTextItem*>(item)) { ds << QString("LatexText") << lt->text() << lt->pos() << lt->font() << lt->textColor(); }
     else if (auto t = dynamic_cast<QGraphicsTextItem*>(item)) { ds << QString("Text") << t->toPlainText() << t->pos() << t->font() << t->defaultTextColor(); }
     else if (auto pg = dynamic_cast<QGraphicsPolygonItem*>(item)) { ds << QString("Polygon") << pg->polygon() << pg->pos() << pg->pen() << pg->brush(); }
   }
@@ -849,6 +861,7 @@ void Canvas::pasteItems() {
     else if (t == "Ellipse") { QRectF r; QPointF p; QPen pn; QBrush b; ds >> r >> p >> pn >> b; auto n = new QGraphicsEllipseItem(r); n->setPen(pn); n->setBrush(b); n->setPos(p + QPointF(20,20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable); scene_->addItem(n); pi.append(n); addDrawAction(n); }
     else if (t == "Line") { QLineF l; QPointF p; QPen pn; ds >> l >> p >> pn; auto n = new QGraphicsLineItem(l); n->setPen(pn); n->setPos(p + QPointF(20,20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable); scene_->addItem(n); pi.append(n); addDrawAction(n); }
     else if (t == "Path") { QPainterPath pp; QPointF p; QPen pn; ds >> pp >> p >> pn; auto n = new QGraphicsPathItem(pp); n->setPen(pn); n->setPos(p + QPointF(20,20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable); scene_->addItem(n); pi.append(n); addDrawAction(n); }
+    else if (t == "LatexText") { QString tx; QPointF p; QFont f; QColor c; ds >> tx >> p >> f >> c; auto n = new LatexTextItem(); n->setText(tx); n->setFont(f); n->setTextColor(c); n->setPos(p + QPointF(20,20)); scene_->addItem(n); pi.append(n); addDrawAction(n); }
     else if (t == "Text") { QString tx; QPointF p; QFont f; QColor c; ds >> tx >> p >> f >> c; auto n = new QGraphicsTextItem(tx); n->setFont(f); n->setDefaultTextColor(c); n->setPos(p + QPointF(20,20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable); scene_->addItem(n); pi.append(n); addDrawAction(n); }
     else if (t == "Polygon") { QPolygonF pg; QPointF p; QPen pn; QBrush b; ds >> pg >> p >> pn >> b; auto n = new QGraphicsPolygonItem(pg); n->setPen(pn); n->setBrush(b); n->setPos(p + QPointF(20,20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable); scene_->addItem(n); pi.append(n); addDrawAction(n); }
   }
