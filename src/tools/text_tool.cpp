@@ -22,7 +22,7 @@ void TextTool::mousePressEvent(QMouseEvent *event, const QPointF &scenePos) {
       // If text is empty after editing, remove the item
       if (latexItem->text().isEmpty()) {
         canvas_->scene()->removeItem(latexItem);
-        delete latexItem;
+        latexItem->deleteLater();
       }
       return;
     }

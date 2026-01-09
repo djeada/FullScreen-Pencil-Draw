@@ -145,11 +145,8 @@ void LatexTextItem::startEditing() {
       QLineEdit::Normal, text_, &ok);
 
   if (ok) {
-    if (newText.isEmpty()) {
-      // Don't update if empty - caller should handle removal
-      text_ = newText;
-    } else {
-      text_ = newText;
+    text_ = newText;
+    if (!newText.isEmpty()) {
       renderContent();
       update();
     }
@@ -180,9 +177,10 @@ void LatexTextItem::renderContent() {
   }
 
   renderedContent_ = renderLatex(text_);
+  // contentRect_ represents the content area without padding
+  // boundingRect() will add the padding
   contentRect_ =
-      QRectF(0, 0, renderedContent_.width() + PADDING * 2,
-             renderedContent_.height() + PADDING * 2);
+      QRectF(0, 0, renderedContent_.width(), renderedContent_.height());
 }
 
 QPixmap LatexTextItem::renderLatex(const QString &text) {
@@ -221,10 +219,11 @@ QPixmap LatexTextItem::renderLatex(const QString &text) {
   doc.setHtml(htmlContent);
   doc.setTextWidth(-1); // No word wrap
 
-  // Create the pixmap
+  // Create the pixmap - use qCeil to avoid text clipping
   QSizeF size = doc.size();
-  QPixmap pixmap(qMax(static_cast<int>(size.width()), MIN_WIDTH),
-                 qMax(static_cast<int>(size.height()), MIN_HEIGHT));
+  int pixmapWidth = qMax(static_cast<int>(std::ceil(size.width())), MIN_WIDTH);
+  int pixmapHeight = qMax(static_cast<int>(std::ceil(size.height())), MIN_HEIGHT);
+  QPixmap pixmap(pixmapWidth, pixmapHeight);
   pixmap.fill(Qt::transparent);
 
   QPainter painter(&pixmap);
