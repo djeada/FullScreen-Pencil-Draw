@@ -1,24 +1,50 @@
 /**
  * @file latex_text_item.h
- * @brief Custom graphics item for LaTeX-enabled text.
+ * @brief Custom graphics item for LaTeX-enabled text with inline editing.
  *
- * This class provides a text item that can render LaTeX
- * expressions enclosed by $...$ delimiters.
+ * This class provides an editable text item that can render LaTeX
+ * expressions enclosed by $...$ delimiters. Features inline text editing
+ * with a visible text rectangle and real-time LaTeX preview.
  */
 #ifndef LATEX_TEXT_ITEM_H
 #define LATEX_TEXT_ITEM_H
 
 #include <QFont>
 #include <QGraphicsObject>
+#include <QGraphicsProxyWidget>
 #include <QGraphicsSceneMouseEvent>
 #include <QPainter>
+#include <QTextEdit>
+
+class QFocusEvent;
 
 /**
- * @brief A graphics item that supports text with LaTeX rendering.
+ * @brief Inline text editor for LaTeX input with real-time preview hint.
+ */
+class LatexTextEdit : public QTextEdit {
+  Q_OBJECT
+
+public:
+  explicit LatexTextEdit(QWidget *parent = nullptr);
+
+signals:
+  void editingFinished();
+  void editingCancelled();
+
+protected:
+  void focusOutEvent(QFocusEvent *event) override;
+  void keyPressEvent(QKeyEvent *event) override;
+};
+
+/**
+ * @brief A graphics item that supports inline text editing with LaTeX rendering.
  *
  * When the text contains expressions enclosed by $...$, they are rendered
  * as mathematical formulas using Unicode symbols. The item supports:
- * - Double-clicking to edit text via dialog
+ * - Inline text editing with visible text rectangle
+ * - LaTeX rendering when focus is lost (clicking outside)
+ * - Double-clicking to re-edit existing text
+ * - Real-time LaTeX syntax hints
  * - Selection and movement like other graphics items
  */
 class LatexTextItem : public QGraphicsObject {
@@ -84,9 +110,15 @@ public:
   void setFont(const QFont &font);
 
   /**
-   * @brief Start editing mode (opens dialog).
+   * @brief Start inline editing mode with text rectangle.
    */
   void startEditing();
+
+  /**
+   * @brief Check if currently in editing mode.
+   * @return true if editing
+   */
+  bool isEditing() const { return isEditing_; }
 
   /**
    * @brief Check if the text contains LaTeX expressions.
@@ -108,7 +140,16 @@ signals:
 protected:
   void mouseDoubleClickEvent(QGraphicsSceneMouseEvent *event) override;
 
+private slots:
+  void onEditingFinished();
+  void onEditingCancelled();
+
 private:
+  /**
+   * @brief Finish editing and render the LaTeX content.
+   */
+  void finishEditing();
+
   /**
    * @brief Render the text content (including LaTeX if present).
    */
@@ -140,10 +181,17 @@ private:
   QFont font_;
   QPixmap renderedContent_;
   QRectF contentRect_;
+  bool isEditing_;
 
-  static constexpr int MIN_WIDTH = 50;
-  static constexpr int MIN_HEIGHT = 20;
-  static constexpr int PADDING = 5;
+  // Inline editing widgets
+  QGraphicsProxyWidget *proxyWidget_;
+  LatexTextEdit *textEdit_;
+
+  static constexpr int MIN_WIDTH = 150;
+  static constexpr int MIN_HEIGHT = 30;
+  static constexpr int PADDING = 8;
+  static constexpr int EDIT_MIN_WIDTH = 250;
+  static constexpr int EDIT_MIN_HEIGHT = 60;
 };
 
 #endif // LATEX_TEXT_ITEM_H

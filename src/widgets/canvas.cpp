@@ -648,22 +648,28 @@ void Canvas::exportToPDFWithFilename(const QString &fileName) {
 }
 
 void Canvas::createTextItem(const QPointF &pos) {
-  // Get text from user via dialog
-  bool ok;
-  QString text = QInputDialog::getText(this, "Add Text",
-      "Enter text (use $...$ for LaTeX math):",
-      QLineEdit::Normal, "", &ok);
+  // Create text item with inline editing
+  auto *textItem = new LatexTextItem();
+  textItem->setFont(QFont("Arial", qMax(12, currentPen_.width() * 3)));
+  textItem->setTextColor(currentPen_.color());
+  textItem->setPos(pos);
 
-  if (ok && !text.isEmpty()) {
-    auto *textItem = new LatexTextItem();
-    textItem->setFont(QFont("Arial", currentPen_.width() * 4));
-    textItem->setTextColor(currentPen_.color());
-    textItem->setText(text);
-    textItem->setPos(pos);
+  scene_->addItem(textItem);
 
-    scene_->addItem(textItem);
-    addDrawAction(textItem);
-  }
+  // Connect to handle when editing is finished
+  connect(textItem, &LatexTextItem::editingFinished, this, [this, textItem]() {
+    // If the text is empty after editing, remove the item
+    if (textItem->text().trimmed().isEmpty()) {
+      scene_->removeItem(textItem);
+      textItem->deleteLater();
+    } else {
+      // Add to undo stack only when there's actual content
+      addDrawAction(textItem);
+    }
+  });
+
+  // Start inline editing immediately
+  textItem->startEditing();
 }
 
 void Canvas::fillAt(const QPointF &point) {
