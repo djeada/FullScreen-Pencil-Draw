@@ -77,11 +77,13 @@ private:
   QToolBar *_pdfToolBar;
   QLabel *_pdfPageLabel;
   QAction *_pdfDarkModeAction;
+  bool _pdfPanelOnLeft;  // Track if PDF panel is on the left side
 
   void setupPdfViewer();
   void setupPdfToolBar();
   void showPdfPanel();
   void hidePdfPanel();
+  void swapPanelOrder();  // Swap the order of canvas and PDF panel
 #endif
 
   void setupConnections();
