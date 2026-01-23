@@ -81,23 +81,24 @@ MainWindow::MainWindow(QWidget *parent)
 MainWindow::~MainWindow() {}
 
 void MainWindow::setupStatusBar() {
-  _statusLabel = new QLabel("Ready | P:Pen E:Eraser T:Text F:Fill L:Line A:Arrow R:Rect C:Circle S:Select H:Pan | G:Grid B:Filled | Ctrl+Scroll:Zoom", this);
+  _statusLabel = new QLabel("✦ Ready | P:Pen E:Eraser T:Text F:Fill L:Line A:Arrow R:Rect C:Circle S:Select H:Pan | G:Grid B:Filled | Ctrl+Scroll:Zoom", this);
   _measurementLabel = new QLabel("", this);
   statusBar()->addWidget(_statusLabel);
   statusBar()->addPermanentWidget(_measurementLabel);
   statusBar()->setStyleSheet(R"(
     QStatusBar { 
-      background-color: #26262a; 
-      color: #a0a0a5; 
-      border-top: 1px solid #3a3a40;
-      padding: 4px 8px;
+      background-color: #161618; 
+      color: #a0a0a8; 
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      padding: 6px 12px;
     }
     QStatusBar::item {
       border: none;
     }
     QLabel {
-      color: #a0a0a5;
+      color: #a0a0a8;
       font-size: 11px;
+      font-weight: 500;
     }
   )");
 }

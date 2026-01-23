@@ -8,6 +8,8 @@
 #ifndef PDF_VIEWER_H
 #define PDF_VIEWER_H
 
+#ifdef HAVE_QT_PDF
+
 #include <QDragEnterEvent>
 #include <QDragMoveEvent>
 #include <QDropEvent>
@@ -409,5 +411,7 @@ private:
   void fillAt(const QPointF &point);
   void drawArrow(const QPointF &start, const QPointF &end);
 };
+
+#endif // HAVE_QT_PDF
 
 #endif // PDF_VIEWER_H

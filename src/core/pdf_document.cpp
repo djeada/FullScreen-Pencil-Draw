@@ -3,6 +3,9 @@
  * @brief Implementation of PDF document loading and management.
  */
 #include "pdf_document.h"
+
+#ifdef HAVE_QT_PDF
+
 #include <QDebug>
 
 // --- PdfPageCache Implementation ---
@@ -276,3 +279,5 @@ QImage PdfDocument::invertImage(const QImage &image) const {
   inverted.invertPixels(QImage::InvertRgb);
   return inverted;
 }
+
+#endif // HAVE_QT_PDF

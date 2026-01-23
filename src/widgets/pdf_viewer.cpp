@@ -3,6 +3,9 @@
  * @brief Implementation of PDF viewing widget with annotation support.
  */
 #include "pdf_viewer.h"
+
+#ifdef HAVE_QT_PDF
+
 #include "latex_text_item.h"
 #include <QApplication>
 #include <QFileDialog>
@@ -812,3 +815,5 @@ void PdfViewer::dropEvent(QDropEvent *event) {
   
   QGraphicsView::dropEvent(event);
 }
+
+#endif // HAVE_QT_PDF
