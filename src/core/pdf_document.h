@@ -11,7 +11,9 @@
 #include <QImage>
 #include <QMutex>
 #include <QObject>
+#ifdef HAVE_QT_PDF
 #include <QPdfDocument>
+#endif
 #include <QSize>
 #include <QString>
 #include <memory>
@@ -193,7 +195,9 @@ public:
    * @brief Get the underlying QPdfDocument (for advanced use)
    * @return Pointer to the QPdfDocument
    */
+#ifdef HAVE_QT_PDF
   QPdfDocument *document() const { return document_.get(); }
+#endif
 
 signals:
   /**
@@ -217,7 +221,9 @@ private slots:
   void onDocumentStatusChanged();
 
 private:
+#ifdef HAVE_QT_PDF
   std::unique_ptr<QPdfDocument> document_;
+#endif
   std::unique_ptr<PdfPageCache> cache_;
   QString filePath_;
   QString errorMessage_;
