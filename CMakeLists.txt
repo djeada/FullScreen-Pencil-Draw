@@ -16,6 +16,15 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(QT NAMES Qt6 Qt5 COMPONENTS Widgets Svg REQUIRED)
 find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Widgets Svg REQUIRED)
 
+# Find Qt PDF module (optional, for PDF viewing functionality)
+find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Pdf QUIET)
+if(Qt${QT_VERSION_MAJOR}Pdf_FOUND)
+    message(STATUS "Qt PDF module found - PDF viewing enabled")
+    add_definitions(-DHAVE_QT_PDF)
+else()
+    message(STATUS "Qt PDF module not found - PDF viewing disabled")
+endif()
+
 # Explicitly specify source and header files
 file(GLOB_RECURSE PROJECT_SOURCES
     src/*.cpp
@@ -59,6 +68,11 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 
 # Link Qt Widgets library
 target_link_libraries(${PROJECT_NAME} PRIVATE Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::Svg)
+
+# Link Qt PDF if available
+if(Qt${QT_VERSION_MAJOR}Pdf_FOUND)
+    target_link_libraries(${PROJECT_NAME} PRIVATE Qt${QT_VERSION_MAJOR}::Pdf)
+endif()
 
 # Set properties for macOS, if needed
 set_target_properties(${PROJECT_NAME} PROPERTIES

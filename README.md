@@ -18,6 +18,16 @@ FullScreen Pencil Draw is a professional-grade vector and raster graphics editor
 - **Rectangle Tool**: Draw rectangles and squares
 - **Circle Tool**: Draw circles and ellipses
 
+### PDF Viewing & Annotation
+- **Open PDF Files**: Load multi-page PDF documents for viewing and annotation
+- **Multi-Page Navigation**: Navigate between pages with toolbar buttons or keyboard shortcuts
+- **PDF Background**: PDF content is rendered as a read-only background layer
+- **Overlay Drawing**: Draw annotations on top of PDF pages using all drawing tools
+- **Per-Page Overlays**: Each page maintains its own overlay annotations
+- **Undo/Redo Per Page**: Full undo/redo support isolated to each page's overlays
+- **Dark Mode**: Toggle color inversion for comfortable viewing in low-light environments
+- **Export Annotated PDF**: Export the annotated document to a new PDF file
+
 ### Navigation & Selection
 - **Selection Tool**: Select, move, and transform items with rubber-band selection
 - **Pan Tool**: Navigate around large canvases by dragging
@@ -49,9 +59,11 @@ FullScreen Pencil Draw is a professional-grade vector and raster graphics editor
 ### File Operations
 - **New Canvas**: Create custom-sized canvas with background color choice
 - **Open Image**: Import PNG, JPG, BMP, GIF as background layer
+- **Open PDF**: Load PDF documents for annotation (requires Qt PDF module)
 - **Drag-and-Drop Upload**: Drag images directly from file system with dimension specification dialog
 - **Save/Export**: Export to PNG, JPG, or BMP formats
 - **Export Selection**: Right-click on selected items to export in SVG, PNG, or JPG formats
+- **Export Annotated PDF**: Save annotated PDF documents to new files
 - **Clear Canvas**: Reset to blank state
 
 ### Edit Operations
@@ -93,8 +105,13 @@ FullScreen Pencil Draw is a professional-grade vector and raster graphics editor
 | | `Delete` | Delete selected |
 | **File** | `Ctrl+N` | New canvas |
 | | `Ctrl+O` | Open image |
+| | `Ctrl+Shift+O` | Open PDF |
 | | `Ctrl+S` | Save |
 | | `Esc` | Exit |
+| **PDF Navigation** | `Page Down` | Next page |
+| | `Page Up` | Previous page |
+| | `Home` | First page |
+| | `End` | Last page |
 
 ## Architecture
 
@@ -105,6 +122,9 @@ The application follows a clean Model-View architecture:
 - **LayerPanel**: Dockable widget for layer manipulation
 - **Action System**: Undo/redo stack with polymorphic action classes
 - **Tool System**: Extensible tool architecture with base Tool class
+- **PdfViewer**: PDF viewing and annotation widget using Qt PDF module
+- **PdfDocument**: PDF document loading with page caching
+- **PdfOverlayManager**: Per-page overlay management for annotations
 - **Modern C++17**: Smart pointers, constexpr, structured bindings
 
 ## Usage
