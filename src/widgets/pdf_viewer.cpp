@@ -204,18 +204,17 @@ void PdfViewer::renderCurrentPage() {
   scene_->setSceneRect(0, 0, pageImage.width(), pageImage.height());
 }
 
-void PdfViewer::setToolType(int toolType) {
+void PdfViewer::setToolType(ToolManager::ToolType toolType) {
   specialTool_ = SpecialTool::None;
   
   // Reset drag mode
   setDragMode(QGraphicsView::NoDrag);
   
-  // Convert int to ToolManager::ToolType and set via tool manager
-  auto type = static_cast<ToolManager::ToolType>(toolType);
-  toolManager_->setActiveTool(type);
+  // Set via tool manager
+  toolManager_->setActiveTool(toolType);
   
   // Set rubber band drag for selection tool
-  if (type == ToolManager::ToolType::Selection) {
+  if (toolType == ToolManager::ToolType::Selection) {
     setDragMode(QGraphicsView::RubberBandDrag);
   }
   

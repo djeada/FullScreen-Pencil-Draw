@@ -25,8 +25,7 @@
 #include "../core/pdf_document.h"
 #include "../core/pdf_overlay.h"
 #include "../core/scene_renderer.h"
-
-class ToolManager;
+#include "../tools/tool_manager.h"
 
 /**
  * @brief Graphics item for displaying a PDF page as background.
@@ -159,7 +158,7 @@ public:
    * @brief Set the current drawing tool using ToolManager
    * @param toolType The tool type to use
    */
-  void setToolType(int toolType);
+  void setToolType(ToolManager::ToolType toolType);
 
   /**
    * @brief Set screenshot selection mode (PDF-specific tool)

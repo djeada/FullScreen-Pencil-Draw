@@ -546,28 +546,28 @@ void MainWindow::setupPdfToolBar() {
   
   // Drawing tools for PDF
   _pdfToolBar->addAction("Pen", [this]() {
-    _pdfViewer->setToolType(static_cast<int>(ToolManager::ToolType::Pen));
+    _pdfViewer->setToolType(ToolManager::ToolType::Pen);
   });
   _pdfToolBar->addAction("Eraser", [this]() {
-    _pdfViewer->setToolType(static_cast<int>(ToolManager::ToolType::Eraser));
+    _pdfViewer->setToolType(ToolManager::ToolType::Eraser);
   });
   _pdfToolBar->addAction("Text", [this]() {
-    _pdfViewer->setToolType(static_cast<int>(ToolManager::ToolType::Text));
+    _pdfViewer->setToolType(ToolManager::ToolType::Text);
   });
   _pdfToolBar->addAction("Rectangle", [this]() {
-    _pdfViewer->setToolType(static_cast<int>(ToolManager::ToolType::Rectangle));
+    _pdfViewer->setToolType(ToolManager::ToolType::Rectangle);
   });
   _pdfToolBar->addAction("Circle", [this]() {
-    _pdfViewer->setToolType(static_cast<int>(ToolManager::ToolType::Circle));
+    _pdfViewer->setToolType(ToolManager::ToolType::Circle);
   });
   _pdfToolBar->addAction("Arrow", [this]() {
-    _pdfViewer->setToolType(static_cast<int>(ToolManager::ToolType::Arrow));
+    _pdfViewer->setToolType(ToolManager::ToolType::Arrow);
   });
   _pdfToolBar->addAction("Selection", [this]() {
-    _pdfViewer->setToolType(static_cast<int>(ToolManager::ToolType::Selection));
+    _pdfViewer->setToolType(ToolManager::ToolType::Selection);
   });
   _pdfToolBar->addAction("Pan", [this]() {
-    _pdfViewer->setToolType(static_cast<int>(ToolManager::ToolType::Pan));
+    _pdfViewer->setToolType(ToolManager::ToolType::Pan);
   });
   _pdfToolBar->addAction("📷 Screenshot", [this]() {
     _pdfViewer->setScreenshotSelectionMode(true);
