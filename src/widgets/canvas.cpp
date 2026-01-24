@@ -1118,7 +1118,11 @@ void Canvas::dropEvent(QDropEvent *event) {
         // Check if the file is a supported image format
         else if (SUPPORTED_IMAGE_EXTENSIONS.contains(extension)) {
           // Get the drop position in scene coordinates
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
           QPointF dropPosition = mapToScene(event->position().toPoint());
+#else
+          QPointF dropPosition = mapToScene(event->pos());
+#endif
           
           // Load the dropped image
           loadDroppedImage(filePath, dropPosition);
