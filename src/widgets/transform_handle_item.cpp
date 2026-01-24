@@ -47,16 +47,25 @@ QRectF TransformHandleItem::boundingRect() const {
 
   QRectF bounds = targetBoundsInScene();
   
-  // Check if target item has moved and notify geometry change if needed
-  // This ensures handles follow the target item during drag operations
-  if (bounds != cachedTargetBounds_) {
+  // Helper to expand bounds to include handles and rotation handle
+  auto expandForHandles = [](const QRectF &rect) {
+    return rect.adjusted(-HANDLE_SIZE, -HANDLE_SIZE - ROTATION_HANDLE_OFFSET,
+                         HANDLE_SIZE, HANDLE_SIZE);
+  };
+  
+  QRectF expandedBounds = expandForHandles(bounds);
+  
+  // If target item has moved, return union of old and new bounds to ensure
+  // the old anchor positions get repainted (cleared) along with the new positions.
+  // This prevents the visual trail artifact when items are dragged.
+  if (bounds != cachedTargetBounds_ && !cachedTargetBounds_.isEmpty()) {
+    QRectF oldExpandedBounds = expandForHandles(cachedTargetBounds_);
     cachedTargetBounds_ = bounds;
-    const_cast<TransformHandleItem*>(this)->prepareGeometryChange();
+    return expandedBounds.united(oldExpandedBounds);
   }
   
-  // Expand to include handles and rotation handle
-  return bounds.adjusted(-HANDLE_SIZE, -HANDLE_SIZE - ROTATION_HANDLE_OFFSET,
-                         HANDLE_SIZE, HANDLE_SIZE);
+  cachedTargetBounds_ = bounds;
+  return expandedBounds;
 }
 
 QPainterPath TransformHandleItem::shape() const {
