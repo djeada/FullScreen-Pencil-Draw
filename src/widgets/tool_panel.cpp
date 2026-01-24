@@ -6,44 +6,45 @@
 ToolPanel::ToolPanel(QWidget *parent) : QToolBar(parent), brushPreview_(nullptr) {
   setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
   setMovable(false);
-  setIconSize(QSize(20, 20));
+  setIconSize(QSize(22, 22));
 
-  // Active tool display with modern styling
-  activeToolLabel = new QLabel("Tool: Pen", this);
+  // Active tool display with modern styling and gradient
+  activeToolLabel = new QLabel("✎ Pen", this);
   activeToolLabel->setStyleSheet(R"(
     QLabel { 
       font-weight: 600; 
-      padding: 8px 12px; 
-      background-color: #4285f4; 
+      padding: 10px 16px; 
+      background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #3b82f6, stop:1 #60a5fa); 
       color: #ffffff; 
-      border-radius: 6px; 
-      font-size: 12px;
+      border-radius: 8px; 
+      font-size: 13px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
     }
   )");
   addWidget(activeToolLabel);
   addSeparator();
 
-  // Drawing tools
-  actionPen = new QAction("Pen", this);
+  // Drawing tools with Unicode icons
+  actionPen = new QAction("✎ Pen", this);
   actionPen->setToolTip("Freehand draw (P)");
   actionPen->setCheckable(true);
   actionPen->setChecked(true);
   connect(actionPen, &QAction::triggered, this, &ToolPanel::onActionPen);
   addAction(actionPen);
 
-  actionEraser = new QAction("Eraser", this);
+  actionEraser = new QAction("⌫ Eraser", this);
   actionEraser->setToolTip("Erase items (E)");
   actionEraser->setCheckable(true);
   connect(actionEraser, &QAction::triggered, this, &ToolPanel::onActionEraser);
   addAction(actionEraser);
 
-  actionText = new QAction("Text", this);
+  actionText = new QAction("T Text", this);
   actionText->setToolTip("Add text (T)");
   actionText->setCheckable(true);
   connect(actionText, &QAction::triggered, this, &ToolPanel::onActionText);
   addAction(actionText);
 
-  actionFill = new QAction("Fill", this);
+  actionFill = new QAction("◉ Fill", this);
   actionFill->setToolTip("Fill shape (F)");
   actionFill->setCheckable(true);
   connect(actionFill, &QAction::triggered, this, &ToolPanel::onActionFill);
@@ -52,25 +53,25 @@ ToolPanel::ToolPanel(QWidget *parent) : QToolBar(parent), brushPreview_(nullptr)
   addSeparator();
 
   // Shape tools
-  actionLine = new QAction("Line", this);
+  actionLine = new QAction("╱ Line", this);
   actionLine->setToolTip("Draw line (L)");
   actionLine->setCheckable(true);
   connect(actionLine, &QAction::triggered, this, &ToolPanel::onActionLine);
   addAction(actionLine);
 
-  actionArrow = new QAction("Arrow", this);
+  actionArrow = new QAction("➤ Arrow", this);
   actionArrow->setToolTip("Draw arrow (A)");
   actionArrow->setCheckable(true);
   connect(actionArrow, &QAction::triggered, this, &ToolPanel::onActionArrow);
   addAction(actionArrow);
 
-  actionRectangle = new QAction("Rect", this);
+  actionRectangle = new QAction("▢ Rect", this);
   actionRectangle->setToolTip("Draw rectangle (R)");
   actionRectangle->setCheckable(true);
   connect(actionRectangle, &QAction::triggered, this, &ToolPanel::onActionRectangle);
   addAction(actionRectangle);
 
-  actionCircle = new QAction("Circle", this);
+  actionCircle = new QAction("◯ Circle", this);
   actionCircle->setToolTip("Draw circle (C)");
   actionCircle->setCheckable(true);
   connect(actionCircle, &QAction::triggered, this, &ToolPanel::onActionCircle);
@@ -79,13 +80,13 @@ ToolPanel::ToolPanel(QWidget *parent) : QToolBar(parent), brushPreview_(nullptr)
   addSeparator();
 
   // Navigation tools
-  actionSelection = new QAction("Select", this);
+  actionSelection = new QAction("⬚ Select", this);
   actionSelection->setToolTip("Select items (S)");
   actionSelection->setCheckable(true);
   connect(actionSelection, &QAction::triggered, this, &ToolPanel::onActionSelection);
   addAction(actionSelection);
 
-  actionPan = new QAction("Pan", this);
+  actionPan = new QAction("☰ Pan", this);
   actionPan->setToolTip("Pan canvas (H)");
   actionPan->setCheckable(true);
   connect(actionPan, &QAction::triggered, this, &ToolPanel::onActionPan);
@@ -102,11 +103,12 @@ ToolPanel::ToolPanel(QWidget *parent) : QToolBar(parent), brushPreview_(nullptr)
   brushSizeLabel = new QLabel("Size: 3", this);
   brushSizeLabel->setStyleSheet(R"(
     QLabel { 
-      padding: 6px 10px; 
-      background-color: #34343a; 
-      color: #f5f5f7; 
-      border-radius: 6px; 
-      min-width: 55px;
+      padding: 8px 12px; 
+      background-color: rgba(255, 255, 255, 0.06); 
+      color: #f8f8fc; 
+      border-radius: 8px; 
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      min-width: 60px;
       font-weight: 500;
     }
   )");
@@ -126,30 +128,30 @@ ToolPanel::ToolPanel(QWidget *parent) : QToolBar(parent), brushPreview_(nullptr)
 
   // Color & opacity
   colorPreview = new QLabel(this);
-  colorPreview->setFixedSize(28, 28);
+  colorPreview->setFixedSize(32, 32);
   colorPreview->setStyleSheet(R"(
     QLabel { 
       background-color: #ffffff; 
-      border: 2px solid #4a4a50; 
-      border-radius: 6px; 
+      border: 2px solid rgba(255, 255, 255, 0.15); 
+      border-radius: 8px; 
     }
   )");
   colorPreview->setToolTip("Current color");
   addWidget(colorPreview);
 
-  actionColor = new QAction("Color", this);
+  actionColor = new QAction("🎨 Color", this);
   actionColor->setToolTip("Pick color (K)");
   connect(actionColor, &QAction::triggered, this, &ToolPanel::onActionColor);
   addAction(actionColor);
 
   opacityLabel = new QLabel("Opacity", this);
-  opacityLabel->setStyleSheet("QLabel { color: #a0a0a5; padding: 4px; font-size: 11px; }");
+  opacityLabel->setStyleSheet("QLabel { color: #a0a0a8; padding: 6px; font-size: 11px; font-weight: 500; }");
   addWidget(opacityLabel);
 
   opacitySlider = new QSlider(Qt::Horizontal, this);
   opacitySlider->setRange(0, 255);
   opacitySlider->setValue(255);
-  opacitySlider->setMaximumWidth(60);
+  opacitySlider->setMaximumWidth(70);
   opacitySlider->setToolTip("Brush opacity");
   connect(opacitySlider, &QSlider::valueChanged, this, &ToolPanel::onOpacityChanged);
   addWidget(opacitySlider);
@@ -165,11 +167,12 @@ ToolPanel::ToolPanel(QWidget *parent) : QToolBar(parent), brushPreview_(nullptr)
   zoomLabel = new QLabel("100%", this);
   zoomLabel->setStyleSheet(R"(
     QLabel { 
-      padding: 6px 10px; 
-      background-color: #34343a; 
-      color: #f5f5f7; 
-      border-radius: 6px; 
-      min-width: 50px;
+      padding: 8px 12px; 
+      background-color: rgba(255, 255, 255, 0.06); 
+      color: #f8f8fc; 
+      border-radius: 8px; 
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      min-width: 55px;
       font-weight: 500;
     }
   )");
@@ -181,18 +184,18 @@ ToolPanel::ToolPanel(QWidget *parent) : QToolBar(parent), brushPreview_(nullptr)
   connect(actionZoomIn, &QAction::triggered, this, &ToolPanel::onActionZoomIn);
   addAction(actionZoomIn);
 
-  actionZoomReset = new QAction("1:1", this);
+  actionZoomReset = new QAction("⟲ 1:1", this);
   actionZoomReset->setToolTip("Reset zoom (0)");
   connect(actionZoomReset, &QAction::triggered, this, &ToolPanel::onActionZoomReset);
   addAction(actionZoomReset);
 
-  actionGrid = new QAction("Grid", this);
+  actionGrid = new QAction("⊞ Grid", this);
   actionGrid->setToolTip("Toggle grid (G)");
   actionGrid->setCheckable(true);
   connect(actionGrid, &QAction::triggered, this, &ToolPanel::onActionGrid);
   addAction(actionGrid);
 
-  actionFilledShapes = new QAction("Filled", this);
+  actionFilledShapes = new QAction("◼ Filled", this);
   actionFilledShapes->setToolTip("Toggle filled shapes (B)");
   actionFilledShapes->setCheckable(true);
   connect(actionFilledShapes, &QAction::triggered, this, &ToolPanel::onActionFilledShapes);
@@ -201,39 +204,39 @@ ToolPanel::ToolPanel(QWidget *parent) : QToolBar(parent), brushPreview_(nullptr)
   addSeparator();
 
   // Edit actions
-  actionUndo = new QAction("Undo", this);
+  actionUndo = new QAction("↶ Undo", this);
   actionUndo->setToolTip("Undo (Ctrl+Z)");
   connect(actionUndo, &QAction::triggered, this, &ToolPanel::onActionUndo);
   addAction(actionUndo);
 
-  actionRedo = new QAction("Redo", this);
+  actionRedo = new QAction("↷ Redo", this);
   actionRedo->setToolTip("Redo (Ctrl+Y)");
   connect(actionRedo, &QAction::triggered, this, &ToolPanel::onActionRedo);
   addAction(actionRedo);
 
   addSeparator();
 
-  QAction *actionCopy = new QAction("Copy", this);
+  QAction *actionCopy = new QAction("⧉ Copy", this);
   actionCopy->setToolTip("Copy (Ctrl+C)");
   connect(actionCopy, &QAction::triggered, this, &ToolPanel::copyAction);
   addAction(actionCopy);
 
-  QAction *actionCut = new QAction("Cut", this);
+  QAction *actionCut = new QAction("✂ Cut", this);
   actionCut->setToolTip("Cut (Ctrl+X)");
   connect(actionCut, &QAction::triggered, this, &ToolPanel::cutAction);
   addAction(actionCut);
 
-  QAction *actionPaste = new QAction("Paste", this);
+  QAction *actionPaste = new QAction("📋 Paste", this);
   actionPaste->setToolTip("Paste (Ctrl+V)");
   connect(actionPaste, &QAction::triggered, this, &ToolPanel::pasteAction);
   addAction(actionPaste);
 
-  QAction *actionDuplicate = new QAction("Dup", this);
+  QAction *actionDuplicate = new QAction("⊕ Dup", this);
   actionDuplicate->setToolTip("Duplicate (Ctrl+D)");
   connect(actionDuplicate, &QAction::triggered, this, &ToolPanel::duplicateAction);
   addAction(actionDuplicate);
 
-  QAction *actionDelete = new QAction("Del", this);
+  QAction *actionDelete = new QAction("✕ Del", this);
   actionDelete->setToolTip("Delete (Del)");
   connect(actionDelete, &QAction::triggered, this, &ToolPanel::deleteAction);
   addAction(actionDelete);
@@ -241,22 +244,22 @@ ToolPanel::ToolPanel(QWidget *parent) : QToolBar(parent), brushPreview_(nullptr)
   addSeparator();
 
   // File actions
-  actionNew = new QAction("New", this);
+  actionNew = new QAction("📄 New", this);
   actionNew->setToolTip("New canvas (Ctrl+N)");
   connect(actionNew, &QAction::triggered, this, &ToolPanel::onActionNew);
   addAction(actionNew);
 
-  actionOpen = new QAction("Open", this);
+  actionOpen = new QAction("📂 Open", this);
   actionOpen->setToolTip("Open image (Ctrl+O)");
   connect(actionOpen, &QAction::triggered, this, &ToolPanel::onActionOpen);
   addAction(actionOpen);
 
-  actionSave = new QAction("Save", this);
+  actionSave = new QAction("💾 Save", this);
   actionSave->setToolTip("Save (Ctrl+S)");
   connect(actionSave, &QAction::triggered, this, &ToolPanel::onActionSave);
   addAction(actionSave);
 
-  actionClear = new QAction("Clear", this);
+  actionClear = new QAction("🗑 Clear", this);
   actionClear->setToolTip("Clear canvas");
   connect(actionClear, &QAction::triggered, this, &ToolPanel::onActionClear);
   addAction(actionClear);
@@ -267,12 +270,14 @@ ToolPanel::ToolPanel(QWidget *parent) : QToolBar(parent), brushPreview_(nullptr)
   positionLabel = new QLabel("X: 0  Y: 0", this);
   positionLabel->setStyleSheet(R"(
     QLabel { 
-      padding: 6px 10px; 
-      background-color: #1e1e22; 
-      color: #a0a0a5; 
-      border-radius: 6px; 
-      min-width: 90px;
+      padding: 8px 12px; 
+      background-color: rgba(0, 0, 0, 0.3); 
+      color: #a0a0a8; 
+      border-radius: 8px; 
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      min-width: 100px;
       font-size: 11px;
+      font-weight: 500;
     }
   )");
   positionLabel->setAlignment(Qt::AlignCenter);
@@ -292,7 +297,16 @@ void ToolPanel::clearActiveToolStyles() {
   actionPan->setChecked(false);
 }
 
-void ToolPanel::setActiveTool(const QString &toolName) { activeToolLabel->setText("Tool: " + toolName); }
+void ToolPanel::setActiveTool(const QString &toolName) { 
+  // Map tool names to Unicode icons for display
+  static const QHash<QString, QString> toolIcons = {
+    {"Pen", "✎"}, {"Eraser", "⌫"}, {"Text", "T"}, {"Fill", "◉"},
+    {"Line", "╱"}, {"Arrow", "➤"}, {"Rectangle", "▢"}, {"Circle", "◯"},
+    {"Select", "⬚"}, {"Pan", "☰"}
+  };
+  QString icon = toolIcons.value(toolName, "•");
+  activeToolLabel->setText(icon + " " + toolName); 
+}
 
 void ToolPanel::updateBrushSizeDisplay(int size) {
   brushSizeLabel->setText(QString("Size: %1").arg(size));
@@ -305,8 +319,8 @@ void ToolPanel::updateColorDisplay(const QColor &color) {
   colorPreview->setStyleSheet(QString(R"(
     QLabel { 
       background-color: %1; 
-      border: 2px solid #4a4a50; 
-      border-radius: 6px; 
+      border: 2px solid rgba(255, 255, 255, 0.15); 
+      border-radius: 8px; 
     }
   )").arg(color.name()));
   if (brushPreview_) {

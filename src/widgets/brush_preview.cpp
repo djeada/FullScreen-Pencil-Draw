@@ -40,16 +40,19 @@ void BrushPreview::paintEvent(QPaintEvent * /*event*/) {
   QPainter painter(this);
   painter.setRenderHint(QPainter::Antialiasing);
 
-  // Draw modern flat background
-  painter.fillRect(rect(), QColor(30, 30, 34));
+  // Draw modern flat background with subtle gradient
+  QLinearGradient bgGradient(0, 0, 0, height());
+  bgGradient.setColorAt(0, QColor(26, 26, 30));
+  bgGradient.setColorAt(1, QColor(22, 22, 26));
+  painter.fillRect(rect(), bgGradient);
 
-  // Draw subtle rounded border
-  painter.setPen(QPen(QColor(58, 58, 64), 1));
+  // Draw subtle rounded border with glow
+  painter.setPen(QPen(QColor(55, 55, 62), 1));
   painter.setBrush(Qt::NoBrush);
-  painter.drawRoundedRect(rect().adjusted(0, 0, -1, -1), 6, 6);
+  painter.drawRoundedRect(rect().adjusted(0, 0, -1, -1), 10, 10);
 
   // Calculate display size (scale down if brush is larger than preview area)
-  int maxDisplaySize = PREVIEW_SIZE - 8;
+  int maxDisplaySize = PREVIEW_SIZE - 10;
   int displaySize = qMin(brushSize_, maxDisplaySize);
   displaySize = qMax(displaySize, MIN_DISPLAY_SIZE);
 
@@ -60,41 +63,55 @@ void BrushPreview::paintEvent(QPaintEvent * /*event*/) {
   }
 
   // Draw subtle crosshairs
-  painter.setPen(QPen(QColor(70, 70, 76), 1));
+  painter.setPen(QPen(QColor(60, 60, 68), 1, Qt::DotLine));
   int centerX = width() / 2;
   int centerY = height() / 2;
-  painter.drawLine(centerX, 4, centerX, height() - 4);
-  painter.drawLine(4, centerY, width() - 4, centerY);
+  painter.drawLine(centerX, 6, centerX, height() - 6);
+  painter.drawLine(6, centerY, width() - 6, centerY);
 
-  // Draw brush circle with glow effect
+  // Draw multiple glow layers for enhanced effect
   QColor fillColor = brushColor_;
-  fillColor.setAlpha(160);
+  fillColor.setAlpha(180);
 
-  // Outer glow
-  QColor glowColor = brushColor_;
-  glowColor.setAlpha(40);
+  // Outer glow (larger, more diffuse)
+  QColor outerGlowColor = brushColor_;
+  outerGlowColor.setAlpha(25);
   painter.setPen(Qt::NoPen);
+  painter.setBrush(outerGlowColor);
+  int outerGlowSize = displaySize + 12;
+  int outerGlowX = centerX - outerGlowSize / 2;
+  int outerGlowY = centerY - outerGlowSize / 2;
+  painter.drawEllipse(outerGlowX, outerGlowY, outerGlowSize, outerGlowSize);
+
+  // Inner glow
+  QColor glowColor = brushColor_;
+  glowColor.setAlpha(50);
   painter.setBrush(glowColor);
   int glowSize = displaySize + 6;
   int glowX = centerX - glowSize / 2;
   int glowY = centerY - glowSize / 2;
   painter.drawEllipse(glowX, glowY, glowSize, glowSize);
 
-  // Main brush circle
-  painter.setPen(QPen(brushColor_, 2));
-  painter.setBrush(fillColor);
+  // Main brush circle with gradient
+  QRadialGradient circleGradient(centerX, centerY, displaySize / 2);
+  circleGradient.setColorAt(0, brushColor_);
+  circleGradient.setColorAt(0.7, fillColor);
+  circleGradient.setColorAt(1, QColor(brushColor_.red(), brushColor_.green(), brushColor_.blue(), 100));
+  
+  painter.setPen(QPen(brushColor_.lighter(120), 2));
+  painter.setBrush(circleGradient);
   int x = centerX - displaySize / 2;
   int y = centerY - displaySize / 2;
   painter.drawEllipse(x, y, displaySize, displaySize);
 
   // Draw actual size text if scaled
   if (brushSize_ > maxDisplaySize) {
-    painter.setPen(QColor(160, 160, 165));
+    painter.setPen(QColor(160, 160, 168));
     QFont font = painter.font();
-    font.setPointSize(8);
+    font.setPointSize(9);
     font.setWeight(QFont::Medium);
     painter.setFont(font);
     QString sizeText = QString("%1px").arg(brushSize_);
-    painter.drawText(rect(), Qt::AlignBottom | Qt::AlignHCenter, sizeText);
+    painter.drawText(rect().adjusted(0, 0, 0, -4), Qt::AlignBottom | Qt::AlignHCenter, sizeText);
   }
 }

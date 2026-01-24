@@ -129,102 +129,108 @@ void LayerPanel::setupUI() {
   
   container->setLayout(mainLayout);
   setWidget(container);
-  setMinimumWidth(180);
-  setMaximumWidth(250);
+  setMinimumWidth(190);
+  setMaximumWidth(260);
 
-  // Modern flat style
+  // Modern flat style with enhanced polish
   setStyleSheet(R"(
     QDockWidget {
-      background-color: #26262a;
-      color: #f5f5f7;
+      background-color: #1a1a1e;
+      color: #f8f8fc;
       font-weight: 500;
     }
     QDockWidget::title {
-      background-color: #34343a;
-      padding: 10px 12px;
+      background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2a2a30, stop:1 #242428);
+      padding: 12px 14px;
       font-weight: 600;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     }
     QListWidget {
-      background-color: #1e1e22;
-      color: #f5f5f7;
-      border: 1px solid #3a3a40;
-      border-radius: 8px;
-      padding: 4px;
+      background-color: #161618;
+      color: #f8f8fc;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 10px;
+      padding: 6px;
       outline: none;
     }
     QListWidget::item {
-      padding: 8px 10px;
-      border-radius: 6px;
+      padding: 10px 12px;
+      border-radius: 8px;
       margin: 2px;
     }
     QListWidget::item:hover {
-      background-color: #34343a;
+      background-color: rgba(255, 255, 255, 0.06);
     }
     QListWidget::item:selected {
-      background-color: #4285f4;
+      background-color: #3b82f6;
       color: #ffffff;
     }
     QPushButton {
-      background-color: #34343a;
-      color: #f5f5f7;
-      border: none;
-      border-radius: 6px;
-      padding: 8px;
-      min-height: 24px;
+      background-color: rgba(255, 255, 255, 0.06);
+      color: #e0e0e6;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 10px;
+      min-height: 26px;
       font-weight: 500;
     }
     QPushButton:hover {
-      background-color: #44444a;
+      background-color: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      color: #f8f8fc;
     }
     QPushButton:pressed {
-      background-color: #2a2a2e;
+      background-color: rgba(255, 255, 255, 0.04);
     }
     QPushButton:checked {
-      background-color: #4285f4;
+      background-color: #3b82f6;
       color: #ffffff;
+      border: 1px solid #60a5fa;
     }
     QPushButton:checked:hover {
-      background-color: #5c9bff;
+      background-color: #60a5fa;
     }
     QPushButton:disabled {
-      background-color: #28282c;
-      color: #666666;
+      background-color: rgba(255, 255, 255, 0.02);
+      color: #555560;
+      border: 1px solid rgba(255, 255, 255, 0.03);
     }
     QGroupBox {
-      color: #a0a0a5;
-      border: 1px solid #3a3a40;
-      border-radius: 8px;
-      margin-top: 16px;
-      padding-top: 12px;
+      color: #a0a0a8;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      margin-top: 18px;
+      padding-top: 14px;
       font-weight: 500;
     }
     QGroupBox::title {
       subcontrol-origin: margin;
-      left: 10px;
-      padding: 0 6px;
-      color: #f5f5f7;
+      left: 12px;
+      padding: 0 8px;
+      color: #f8f8fc;
     }
     QSlider::groove:horizontal {
-      background: #34343a;
-      height: 6px;
-      border-radius: 3px;
+      background: #28282e;
+      height: 8px;
+      border-radius: 4px;
     }
     QSlider::handle:horizontal {
-      background: #4285f4;
-      width: 16px;
-      height: 16px;
+      background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #60a5fa, stop:1 #3b82f6);
+      width: 18px;
+      height: 18px;
       margin: -5px 0;
-      border-radius: 8px;
+      border-radius: 9px;
+      border: 2px solid rgba(255, 255, 255, 0.15);
     }
     QSlider::handle:horizontal:hover {
-      background: #5c9bff;
+      background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #93c5fd, stop:1 #60a5fa);
     }
     QSlider::sub-page:horizontal {
-      background: #4285f4;
-      border-radius: 3px;
+      background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #3b82f6, stop:1 #60a5fa);
+      border-radius: 4px;
     }
     QLabel {
-      color: #f5f5f7;
+      color: #f8f8fc;
     }
   )");
 }
