@@ -407,9 +407,12 @@ void TransformHandleItem::applyRotation(const QPointF &mousePos) {
   QPointF localCenter = targetItem_->mapFromScene(center);
 
   // Create rotation transform around center
+  // Note: Qt's coordinate system has y-axis pointing downward, which reverses
+  // the direction of positive rotation compared to mathematical convention.
+  // We negate angleDelta to get the expected rotation direction.
   QTransform rotateTransform;
   rotateTransform.translate(localCenter.x(), localCenter.y());
-  rotateTransform.rotate(-angleDelta); // Negative because Qt's y-axis is inverted
+  rotateTransform.rotate(-angleDelta);
   rotateTransform.translate(-localCenter.x(), -localCenter.y());
 
   QTransform t = targetItem_->transform();

@@ -149,7 +149,11 @@ void Canvas::setShape(const QString &shapeType) {
       }
     }
   }
-  if (currentShape_ != Selection) { scene_->clearSelection(); this->setDragMode(QGraphicsView::NoDrag); clearTransformHandles(); }
+  if (currentShape_ != Selection) {
+    scene_->clearSelection();
+    this->setDragMode(QGraphicsView::NoDrag);
+    clearTransformHandles();
+  }
   isPanning_ = false;
 }
 
