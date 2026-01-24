@@ -905,8 +905,11 @@ void Canvas::eraseAt(const QPointF &point) {
   QPainterPath ep; ep.addEllipse(er);
   for (QGraphicsItem *item : scene_->items(er)) {
     if (item == eraserPreview_ || item == backgroundImage_) continue;
+    QPainterPath itemShape = item->shape();
+    // Check if eraser intersects either the item's shape (for filled items like
+    // pixmaps) or the stroked outline (for line-based items like paths)
     QPainterPathStroker s; s.setWidth(1);
-    if (ep.intersects(s.createStroke(item->shape()))) {
+    if (ep.intersects(itemShape) || ep.intersects(s.createStroke(itemShape))) {
       addDeleteAction(item);
       scene_->removeItem(item);
     }
