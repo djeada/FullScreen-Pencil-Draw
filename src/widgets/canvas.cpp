@@ -1273,7 +1273,6 @@ void Canvas::updateTransformHandles() {
     
     if (!hasHandle) {
       TransformHandleItem* handle = new TransformHandleItem(item, this);
-      // Note: new throws std::bad_alloc on failure in C++, doesn't return null
       scene_->addItem(handle);
       transformHandles_.append(handle);
       
