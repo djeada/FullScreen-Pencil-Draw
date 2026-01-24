@@ -197,34 +197,60 @@ LatexTextEdit::LatexTextEdit(QWidget *parent) : QTextEdit(parent) {
   setLineWidth(2);
   setStyleSheet(
       "QTextEdit {"
-      "  background-color: #1e1e2e;"
-      "  color: #cdd6f4;"
-      "  border: 2px solid #89b4fa;"
-      "  border-radius: 6px;"
-      "  padding: 8px;"
-      "  selection-background-color: #45475a;"
-      "  font-family: 'DejaVu Serif', 'Liberation Serif', serif;"
+      "  background-color: #1a1a24;"
+      "  color: #e0e6f4;"
+      "  border: 1px solid #4a5568;"
+      "  border-radius: 8px;"
+      "  padding: 10px 12px;"
+      "  selection-background-color: #3d4f6f;"
+      "  selection-color: #ffffff;"
+      "  font-family: 'STIX Two Math', 'Cambria Math', 'DejaVu Serif', 'Liberation Serif', serif;"
+      "  font-size: 14px;"
+      "  line-height: 1.4;"
       "}"
       "QTextEdit:focus {"
-      "  border: 2px solid #b4befe;"
-      "  background-color: #24243a;"
+      "  border: 1.5px solid #6b8cce;"
+      "  background-color: #1e1e2e;"
+      "  box-shadow: 0 0 8px rgba(107, 140, 206, 0.3);"
       "}"
       "QScrollBar:vertical {"
-      "  background: #313244;"
-      "  width: 10px;"
-      "  border-radius: 5px;"
+      "  background: #252535;"
+      "  width: 8px;"
+      "  border-radius: 4px;"
+      "  margin: 2px;"
       "}"
       "QScrollBar::handle:vertical {"
-      "  background: #585b70;"
-      "  border-radius: 5px;"
-      "  min-height: 20px;"
+      "  background: #4a5568;"
+      "  border-radius: 4px;"
+      "  min-height: 24px;"
       "}"
       "QScrollBar::handle:vertical:hover {"
-      "  background: #7f849c;"
+      "  background: #6b7b8f;"
+      "}"
+      "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
+      "  height: 0px;"
+      "}"
+      "QScrollBar:horizontal {"
+      "  background: #252535;"
+      "  height: 8px;"
+      "  border-radius: 4px;"
+      "  margin: 2px;"
+      "}"
+      "QScrollBar::handle:horizontal {"
+      "  background: #4a5568;"
+      "  border-radius: 4px;"
+      "  min-width: 24px;"
+      "}"
+      "QScrollBar::handle:horizontal:hover {"
+      "  background: #6b7b8f;"
+      "}"
+      "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {"
+      "  width: 0px;"
       "}");
   setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
   setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-  setPlaceholderText("Type here... Use $...$ for LaTeX math (e.g., $\\alpha^2 + \\beta^2 = \\gamma^2$)");
+  setPlaceholderText("Type here... Use $...$ for LaTeX math\n"
+                     "Examples: $\\alpha + \\beta$, $x^2 + y^2 = r^2$, $\\frac{a}{b}$");
 }
 
 void LatexTextEdit::focusOutEvent(QFocusEvent *event) {
@@ -246,16 +272,22 @@ void LatexTextEdit::keyPressEvent(QKeyEvent *event) {
   QTextEdit::keyPressEvent(event);
 }
 
-// Math-friendly font selection helper
+// Math-friendly font selection helper with optimized font stack
 static QFont selectMathFont(int pointSize) {
-  // Priority list of math-friendly fonts
+  // Priority list of math-friendly fonts with excellent Unicode coverage
+  // These fonts are known for high-quality mathematical symbol rendering
   static const QStringList mathFonts = {
-      "STIX Two Math",    // Modern STIX font
+      "STIX Two Math",    // Modern STIX font - excellent math support
+      "STIX Two Text",    // STIX for text with math
       "STIXGeneral",      // Classic STIX
-      "Cambria Math",     // Microsoft math font
-      "Latin Modern Math",// LaTeX default
+      "Cambria Math",     // Microsoft's math font
+      "Latin Modern Math",// LaTeX default font
+      "Asana Math",       // High-quality open-source math font
+      "XITS Math",        // Extended STIX
       "DejaVu Serif",     // Good Unicode coverage
+      "FreeSerif",        // GNU FreeFont with math symbols
       "Liberation Serif", // Free serif font
+      "Noto Serif",       // Google's universal font
       "Times New Roman",  // Classic fallback
       "serif"             // System serif fallback
   };
@@ -263,11 +295,16 @@ static QFont selectMathFont(int pointSize) {
   QFontDatabase fontDb;
   for (const QString &fontName : mathFonts) {
     if (fontDb.hasFamily(fontName)) {
-      return QFont(fontName, pointSize);
+      QFont font(fontName, pointSize);
+      font.setStyleHint(QFont::Serif, QFont::PreferAntialias);
+      font.setHintingPreference(QFont::PreferFullHinting);
+      return font;
     }
   }
-  // Ultimate fallback
-  return QFont("serif", pointSize);
+  // Ultimate fallback with proper styling
+  QFont fallback("serif", pointSize);
+  fallback.setStyleHint(QFont::Serif, QFont::PreferAntialias);
+  return fallback;
 }
 
 // LatexTextItem implementation
@@ -298,10 +335,31 @@ QRectF LatexTextItem::boundingRect() const {
 void LatexTextItem::paint(QPainter *painter,
                           const QStyleOptionGraphicsItem *option,
                           QWidget * /*widget*/) {
+  painter->setRenderHint(QPainter::Antialiasing, true);
+  painter->setRenderHint(QPainter::TextAntialiasing, true);
+  painter->setRenderHint(QPainter::SmoothPixmapTransform, true);
+  
   if (isEditing_) {
-    // Draw a subtle background when editing
-    painter->fillRect(boundingRect(), QColor(45, 45, 48, 200));
+    // Draw a subtle background when editing with soft shadow effect
+    QRectF bgRect = boundingRect();
+    painter->setPen(Qt::NoPen);
+    painter->setBrush(QColor(30, 30, 35, 220));
+    painter->drawRoundedRect(bgRect, 6, 6);
     return;
+  }
+
+  // Draw subtle background for LaTeX content to make it stand out
+  if (hasLatex() && !renderedContent_.isNull()) {
+    QRectF bgRect = boundingRect().adjusted(2, 2, -2, -2);
+    // Subtle gradient-like background
+    painter->setPen(Qt::NoPen);
+    painter->setBrush(QColor(40, 44, 52, 60)); // Very subtle dark background
+    painter->drawRoundedRect(bgRect, 4, 4);
+    
+    // Subtle left accent bar for mathematical content
+    QRectF accentBar(bgRect.left(), bgRect.top() + 4, 2, bgRect.height() - 8);
+    painter->setBrush(QColor(86, 156, 214, 120)); // Subtle blue accent
+    painter->drawRoundedRect(accentBar, 1, 1);
   }
 
   // Draw the rendered content
@@ -314,39 +372,58 @@ void LatexTextItem::paint(QPainter *painter,
     painter->drawText(contentRect_, Qt::AlignLeft | Qt::AlignVCenter, text_);
   }
 
-  // Draw selection highlight
+  // Draw selection highlight with refined styling
   if (option->state & QStyle::State_Selected) {
-    painter->setPen(QPen(QColor(0, 122, 204), 2, Qt::SolidLine));
+    // Outer glow effect
+    painter->setPen(Qt::NoPen);
+    painter->setBrush(QColor(0, 122, 204, 30));
+    painter->drawRoundedRect(boundingRect().adjusted(-2, -2, 2, 2), 6, 6);
+    
+    // Main selection border
+    painter->setPen(QPen(QColor(0, 122, 204, 200), 1.5, Qt::SolidLine));
     painter->setBrush(Qt::NoBrush);
-    painter->drawRect(boundingRect().adjusted(1, 1, -1, -1));
+    painter->drawRoundedRect(boundingRect().adjusted(1, 1, -1, -1), 4, 4);
+    
+    // Corner handles for resize hint
+    qreal handleSize = 4;
+    painter->setPen(Qt::NoPen);
+    painter->setBrush(QColor(0, 122, 204));
+    QRectF br = boundingRect();
+    painter->drawEllipse(QPointF(br.left(), br.top()), handleSize/2, handleSize/2);
+    painter->drawEllipse(QPointF(br.right(), br.top()), handleSize/2, handleSize/2);
+    painter->drawEllipse(QPointF(br.left(), br.bottom()), handleSize/2, handleSize/2);
+    painter->drawEllipse(QPointF(br.right(), br.bottom()), handleSize/2, handleSize/2);
   }
 
-  // Draw LaTeX indicator if content has LaTeX (subtle badge style)
+  // Draw refined LaTeX indicator badge
   if (hasLatex() && !isEditing_) {
     QRectF indicatorRect = boundingRect();
-    // Draw a subtle LaTeX badge in bottom-right corner
-    QFont indicatorFont = font_;
-    indicatorFont.setPointSize(7);
-    indicatorFont.setItalic(true);
-    indicatorFont.setWeight(QFont::Medium);
     
-    QString indicator = "TeX";
+    // Elegant font for the badge
+    QFont indicatorFont("Arial", 6);
+    indicatorFont.setWeight(QFont::Medium);
+    indicatorFont.setLetterSpacing(QFont::PercentageSpacing, 105);
+    
+    QString indicator = "LaTeX";
     QFontMetrics fm(indicatorFont);
     int textWidth = fm.horizontalAdvance(indicator);
     int textHeight = fm.height();
     
-    // Badge background (semi-transparent rounded rect)
-    QRectF badgeRect(indicatorRect.right() - textWidth - 10,
-                     indicatorRect.bottom() - textHeight - 6,
-                     textWidth + 6, textHeight + 2);
+    // Position badge in top-right corner with proper padding
+    qreal badgePadX = 5;
+    qreal badgePadY = 2;
+    QRectF badgeRect(indicatorRect.right() - textWidth - badgePadX * 2 - 4,
+                     indicatorRect.top() + 2,
+                     textWidth + badgePadX * 2, textHeight + badgePadY);
     
-    painter->setRenderHint(QPainter::Antialiasing, true);
-    painter->setPen(Qt::NoPen);
-    painter->setBrush(QColor(70, 130, 180, 140)); // Steel blue, semi-transparent
+    // Draw badge with gradient-like appearance
+    painter->setPen(QPen(QColor(86, 156, 214, 100), 0.5));
+    painter->setBrush(QColor(45, 50, 60, 180));
     painter->drawRoundedRect(badgeRect, 3, 3);
     
+    // Draw the text with subtle styling
     painter->setFont(indicatorFont);
-    painter->setPen(QColor(255, 255, 255, 220)); // White with slight transparency
+    painter->setPen(QColor(156, 220, 254, 200)); // Light cyan color
     painter->drawText(badgeRect, Qt::AlignCenter, indicator);
   }
 }
@@ -501,46 +578,57 @@ QPixmap LatexTextItem::renderLatex(const QString &text) {
       QString plainPart = text.mid(lastEnd, match.capturedStart() - lastEnd);
       htmlContent += plainPart.toHtmlEscaped();
     }
-    // Convert LaTeX to HTML with special styling
+    // Convert LaTeX to HTML with enhanced styling for math expressions
     QString latex = match.captured(1);
     QString converted = latexToHtml(latex);
-    // Wrap LaTeX content in styled span for visual distinction
-    htmlContent += "<span style='color: " + textColor_.name() + ";'>" + 
-                   converted + "</span>";
+    // Wrap LaTeX content in styled span with letter-spacing for better visual distinction
+    htmlContent += "<span style='color: " + textColor_.name() + 
+                   "; letter-spacing: 0.5px;'>" + converted + "</span>";
     lastEnd = match.capturedEnd();
   }
 
-  // Add remaining plain text
+  // Add remaining plain text after the last match
   if (lastEnd < text.length()) {
     htmlContent += text.mid(lastEnd).toHtmlEscaped();
   }
 
-  // If no LaTeX was found, just use plain text
-  if (!text.contains('$')) {
+  // If no matches were found (no LaTeX), htmlContent will be empty, so use plain text
+  if (htmlContent.isEmpty()) {
     htmlContent = text.toHtmlEscaped();
   }
 
-  // Render the HTML content using QTextDocument
+  // Render the HTML content using QTextDocument with improved settings
   QTextDocument doc;
-  doc.setDefaultFont(font_);
+  QFont renderFont = font_;
+  // Slightly increase font size for better readability of math symbols
+  if (hasLatex()) {
+    renderFont.setPointSize(renderFont.pointSize() + 1);
+  }
+  doc.setDefaultFont(renderFont);
   doc.setHtml(htmlContent);
   doc.setTextWidth(-1); // No word wrap
 
-  // Create the pixmap - use qCeil to avoid text clipping
+  // Create the pixmap with extra padding for cleaner appearance
   QSizeF size = doc.size();
-  int pixmapWidth = qMax(static_cast<int>(std::ceil(size.width())) + 4, MIN_WIDTH);
-  int pixmapHeight = qMax(static_cast<int>(std::ceil(size.height())) + 4, MIN_HEIGHT);
+  int extraPadding = hasLatex() ? 6 : 2; // More padding for math content
+  int pixmapWidth = qMax(static_cast<int>(std::ceil(size.width())) + extraPadding, MIN_WIDTH);
+  int pixmapHeight = qMax(static_cast<int>(std::ceil(size.height())) + extraPadding, MIN_HEIGHT);
   QPixmap pixmap(pixmapWidth, pixmapHeight);
   pixmap.fill(Qt::transparent);
 
   QPainter painter(&pixmap);
-  painter.setRenderHint(QPainter::Antialiasing);
-  painter.setRenderHint(QPainter::TextAntialiasing);
-  painter.setRenderHint(QPainter::SmoothPixmapTransform);
+  painter.setRenderHint(QPainter::Antialiasing, true);
+  painter.setRenderHint(QPainter::TextAntialiasing, true);
+  painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
 
-  // Set text color
+  // Set text color with proper context
   QAbstractTextDocumentLayout::PaintContext ctx;
   ctx.palette.setColor(QPalette::Text, textColor_);
+  
+  // Center the content slightly for better visual balance
+  if (hasLatex()) {
+    painter.translate(extraPadding / 2, extraPadding / 2);
+  }
   doc.documentLayout()->draw(&painter, ctx);
 
   return pixmap;
