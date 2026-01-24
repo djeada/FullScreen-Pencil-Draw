@@ -13,8 +13,18 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Find Qt libraries (prefer Qt6, fallback to Qt5)
-find_package(QT NAMES Qt6 Qt5 COMPONENTS Widgets Svg REQUIRED)
-find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Widgets Svg REQUIRED)
+find_package(QT NAMES Qt6 Qt5 COMPONENTS Widgets REQUIRED)
+find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Widgets REQUIRED)
+
+# Find Qt SVG module (optional, for SVG export functionality)
+set(HAVE_QT_SVG FALSE)
+find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Svg QUIET)
+if(Qt${QT_VERSION_MAJOR}Svg_FOUND)
+    set(HAVE_QT_SVG TRUE)
+    message(STATUS "Qt SVG module found - SVG export enabled")
+else()
+    message(STATUS "Qt SVG module not found - SVG export disabled")
+endif()
 
 # Find Qt PDF module (optional, for PDF viewing functionality)
 find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Pdf QUIET)
@@ -67,7 +77,13 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 )
 
 # Link Qt Widgets library
-target_link_libraries(${PROJECT_NAME} PRIVATE Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::Svg)
+target_link_libraries(${PROJECT_NAME} PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
+
+# Link Qt SVG if available
+if(HAVE_QT_SVG)
+    target_link_libraries(${PROJECT_NAME} PRIVATE Qt${QT_VERSION_MAJOR}::Svg)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE HAVE_QT_SVG)
+endif()
 
 # Link Qt PDF if available
 if(Qt${QT_VERSION_MAJOR}Pdf_FOUND)

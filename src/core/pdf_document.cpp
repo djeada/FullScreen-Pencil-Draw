@@ -67,6 +67,8 @@ void PdfPageCache::evictIfNeeded() {
 
 // --- PdfDocument Implementation ---
 
+#ifdef HAVE_QT_PDF
+
 PdfDocument::PdfDocument(QObject *parent)
     : QObject(parent), document_(std::make_unique<QPdfDocument>()),
       cache_(std::make_unique<PdfPageCache>(20)),
@@ -199,6 +201,68 @@ void PdfDocument::onDocumentStatusChanged() {
     break;
   }
 }
+
+#else
+
+PdfDocument::PdfDocument(QObject *parent)
+    : QObject(parent), cache_(std::make_unique<PdfPageCache>(0)),
+      status_(Status::NotLoaded) {}
+
+PdfDocument::~PdfDocument() { close(); }
+
+bool PdfDocument::load(const QString &filePath) {
+  close();
+  filePath_ = filePath;
+  errorMessage_ = tr("Qt PDF module is not available.");
+  setStatus(Status::Error);
+  emit errorOccurred(errorMessage_);
+  return false;
+}
+
+void PdfDocument::close() {
+  if (cache_) {
+    cache_->clear();
+  }
+  filePath_.clear();
+  errorMessage_.clear();
+  setStatus(Status::NotLoaded);
+}
+
+PdfDocument::Status PdfDocument::status() const { return status_; }
+
+int PdfDocument::pageCount() const { return 0; }
+
+QSizeF PdfDocument::pageSize(int pageIndex) const {
+  Q_UNUSED(pageIndex);
+  return QSizeF();
+}
+
+QString PdfDocument::filePath() const { return filePath_; }
+
+QString PdfDocument::errorMessage() const { return errorMessage_; }
+
+QImage PdfDocument::renderPage(int pageIndex, int dpi, bool inverted) {
+  Q_UNUSED(pageIndex);
+  Q_UNUSED(dpi);
+  Q_UNUSED(inverted);
+  return QImage();
+}
+
+bool PdfDocument::isPageCached(int pageIndex, int dpi) const {
+  Q_UNUSED(pageIndex);
+  Q_UNUSED(dpi);
+  return false;
+}
+
+void PdfDocument::clearCache() {
+  if (cache_) {
+    cache_->clear();
+  }
+}
+
+void PdfDocument::onDocumentStatusChanged() {}
+
+#endif
 
 void PdfDocument::setStatus(Status status) {
   if (status_ != status) {

@@ -25,7 +25,9 @@
 #include <QMouseEvent>
 #include <QPdfWriter>
 #include <QScrollBar>
+#ifdef HAVE_QT_SVG
 #include <QSvgGenerator>
+#endif
 #include <QUrl>
 #include <QWheelEvent>
 #include <cmath>
@@ -1011,7 +1013,12 @@ void Canvas::contextMenuEvent(QContextMenuEvent *event) {
   QAction *exportPNGAction = contextMenu.addAction("Export Selection as PNG");
   QAction *exportJPGAction = contextMenu.addAction("Export Selection as JPG");
 
+#ifdef HAVE_QT_SVG
   connect(exportSVGAction, &QAction::triggered, this, &Canvas::exportSelectionToSVG);
+#else
+  exportSVGAction->setEnabled(false);
+  exportSVGAction->setText("Export Selection as SVG (requires Qt SVG)");
+#endif
   connect(exportPNGAction, &QAction::triggered, this, &Canvas::exportSelectionToPNG);
   connect(exportJPGAction, &QAction::triggered, this, &Canvas::exportSelectionToJPG);
 
@@ -1039,6 +1046,11 @@ QRectF Canvas::getSelectionBoundingRect() const {
 }
 
 void Canvas::exportSelectionToSVG() {
+#ifndef HAVE_QT_SVG
+  QMessageBox::information(this, "SVG Export Unavailable",
+                           "SVG export requires the Qt SVG module, which was not found at build time.");
+  return;
+#else
   if (scene_->selectedItems().isEmpty()) return;
 
   QString fileName = QFileDialog::getSaveFileName(this, "Export Selection as SVG", "", "SVG (*.svg)");
@@ -1072,6 +1084,7 @@ void Canvas::exportSelectionToSVG() {
   }
   
   painter.end();
+#endif
 }
 
 void Canvas::exportSelectionToPNG() {
