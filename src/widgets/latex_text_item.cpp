@@ -6,6 +6,7 @@
 #include <QAbstractTextDocumentLayout>
 #include <QApplication>
 #include <QFocusEvent>
+#include <QFontDatabase>
 #include <QGraphicsScene>
 #include <QGraphicsView>
 #include <QPainter>
@@ -173,6 +174,21 @@ const QMap<QChar, QString> mathfrak = {
     {'P', "𝔓"}, {'Q', "𝔔"}, {'R', "ℜ"}, {'S', "𝔖"}, {'T', "𝔗"},
     {'U', "𝔘"}, {'V', "𝔙"}, {'W', "𝔚"}, {'X', "𝔛"}, {'Y', "𝔜"},
     {'Z', "ℨ"}};
+
+// Mathematical italic letters for variable styling
+const QMap<QChar, QString> mathItalic = {
+    {'A', "𝐴"}, {'B', "𝐵"}, {'C', "𝐶"}, {'D', "𝐷"}, {'E', "𝐸"},
+    {'F', "𝐹"}, {'G', "𝐺"}, {'H', "𝐻"}, {'I', "𝐼"}, {'J', "𝐽"},
+    {'K', "𝐾"}, {'L', "𝐿"}, {'M', "𝑀"}, {'N', "𝑁"}, {'O', "𝑂"},
+    {'P', "𝑃"}, {'Q', "𝑄"}, {'R', "𝑅"}, {'S', "𝑆"}, {'T', "𝑇"},
+    {'U', "𝑈"}, {'V', "𝑉"}, {'W', "𝑊"}, {'X', "𝑋"}, {'Y', "𝑌"},
+    {'Z', "𝑍"},
+    {'a', "𝑎"}, {'b', "𝑏"}, {'c', "𝑐"}, {'d', "𝑑"}, {'e', "𝑒"},
+    {'f', "𝑓"}, {'g', "𝑔"}, {'h', "ℎ"}, {'i', "𝑖"}, {'j', "𝑗"},
+    {'k', "𝑘"}, {'l', "𝑙"}, {'m', "𝑚"}, {'n', "𝑛"}, {'o', "𝑜"},
+    {'p', "𝑝"}, {'q', "𝑞"}, {'r', "𝑟"}, {'s', "𝑠"}, {'t', "𝑡"},
+    {'u', "𝑢"}, {'v', "𝑣"}, {'w', "𝑤"}, {'x', "𝑥"}, {'y', "𝑦"},
+    {'z', "𝑧"}};
 } // namespace LatexSymbols
 
 // LatexTextEdit implementation
@@ -181,19 +197,34 @@ LatexTextEdit::LatexTextEdit(QWidget *parent) : QTextEdit(parent) {
   setLineWidth(2);
   setStyleSheet(
       "QTextEdit {"
-      "  background-color: #2d2d30;"
-      "  color: #ffffff;"
-      "  border: 2px solid #007acc;"
-      "  border-radius: 4px;"
-      "  padding: 4px;"
-      "  selection-background-color: #264f78;"
+      "  background-color: #1e1e2e;"
+      "  color: #cdd6f4;"
+      "  border: 2px solid #89b4fa;"
+      "  border-radius: 6px;"
+      "  padding: 8px;"
+      "  selection-background-color: #45475a;"
+      "  font-family: 'DejaVu Serif', 'Liberation Serif', serif;"
       "}"
       "QTextEdit:focus {"
-      "  border: 2px solid #0098ff;"
+      "  border: 2px solid #b4befe;"
+      "  background-color: #24243a;"
+      "}"
+      "QScrollBar:vertical {"
+      "  background: #313244;"
+      "  width: 10px;"
+      "  border-radius: 5px;"
+      "}"
+      "QScrollBar::handle:vertical {"
+      "  background: #585b70;"
+      "  border-radius: 5px;"
+      "  min-height: 20px;"
+      "}"
+      "QScrollBar::handle:vertical:hover {"
+      "  background: #7f849c;"
       "}");
   setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
   setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-  setPlaceholderText("Type here... Use $...$ for LaTeX math");
+  setPlaceholderText("Type here... Use $...$ for LaTeX math (e.g., $\\alpha^2 + \\beta^2 = \\gamma^2$)");
 }
 
 void LatexTextEdit::focusOutEvent(QFocusEvent *event) {
@@ -215,9 +246,33 @@ void LatexTextEdit::keyPressEvent(QKeyEvent *event) {
   QTextEdit::keyPressEvent(event);
 }
 
+// Math-friendly font selection helper
+static QFont selectMathFont(int pointSize) {
+  // Priority list of math-friendly fonts
+  static const QStringList mathFonts = {
+      "STIX Two Math",    // Modern STIX font
+      "STIXGeneral",      // Classic STIX
+      "Cambria Math",     // Microsoft math font
+      "Latin Modern Math",// LaTeX default
+      "DejaVu Serif",     // Good Unicode coverage
+      "Liberation Serif", // Free serif font
+      "Times New Roman",  // Classic fallback
+      "serif"             // System serif fallback
+  };
+
+  QFontDatabase fontDb;
+  for (const QString &fontName : mathFonts) {
+    if (fontDb.hasFamily(fontName)) {
+      return QFont(fontName, pointSize);
+    }
+  }
+  // Ultimate fallback
+  return QFont("serif", pointSize);
+}
+
 // LatexTextItem implementation
 LatexTextItem::LatexTextItem(QGraphicsItem *parent)
-    : QGraphicsObject(parent), textColor_(Qt::white), font_("Arial", 14),
+    : QGraphicsObject(parent), textColor_(Qt::white), font_(selectMathFont(14)),
       isEditing_(false), proxyWidget_(nullptr), textEdit_(nullptr) {
   setFlags(ItemIsSelectable | ItemIsMovable | ItemIsFocusable);
   setAcceptHoverEvents(true);
@@ -266,14 +321,33 @@ void LatexTextItem::paint(QPainter *painter,
     painter->drawRect(boundingRect().adjusted(1, 1, -1, -1));
   }
 
-  // Draw LaTeX indicator if content has LaTeX
+  // Draw LaTeX indicator if content has LaTeX (subtle badge style)
   if (hasLatex() && !isEditing_) {
+    QRectF indicatorRect = boundingRect();
+    // Draw a subtle LaTeX badge in bottom-right corner
     QFont indicatorFont = font_;
-    indicatorFont.setPointSize(8);
+    indicatorFont.setPointSize(7);
     indicatorFont.setItalic(true);
+    indicatorFont.setWeight(QFont::Medium);
+    
+    QString indicator = "TeX";
+    QFontMetrics fm(indicatorFont);
+    int textWidth = fm.horizontalAdvance(indicator);
+    int textHeight = fm.height();
+    
+    // Badge background (semi-transparent rounded rect)
+    QRectF badgeRect(indicatorRect.right() - textWidth - 10,
+                     indicatorRect.bottom() - textHeight - 6,
+                     textWidth + 6, textHeight + 2);
+    
+    painter->setRenderHint(QPainter::Antialiasing, true);
+    painter->setPen(Qt::NoPen);
+    painter->setBrush(QColor(70, 130, 180, 140)); // Steel blue, semi-transparent
+    painter->drawRoundedRect(badgeRect, 3, 3);
+    
     painter->setFont(indicatorFont);
-    painter->setPen(QColor(100, 149, 237)); // Cornflower blue
-    painter->drawText(boundingRect().bottomRight() + QPointF(-25, -2), "LaTeX");
+    painter->setPen(QColor(255, 255, 255, 220)); // White with slight transparency
+    painter->drawText(badgeRect, Qt::AlignCenter, indicator);
   }
 }
 
@@ -515,9 +589,24 @@ QString LatexTextItem::latexToHtml(const QString &latex) {
     return LatexSymbols::mathfrak.value(ch, m.captured(1));
   });
 
-  // Process fractions: \frac{a}{b}
+  // Process fractions: \frac{a}{b} - using proper fraction slash with numerator/denominator
   static QRegularExpression fracPattern("\\\\frac\\{([^}]*)\\}\\{([^}]*)\\}");
-  result.replace(fracPattern, "⁽\\1⁾⁄₍\\2₎");
+  processMatches(result, fracPattern, [](const QRegularExpressionMatch &m) {
+    QString num = m.captured(1);
+    QString den = m.captured(2);
+    // Convert numerator to superscripts
+    QString superNum;
+    for (QChar ch : num) {
+      superNum += LatexSymbols::superscripts.value(ch, QString(ch));
+    }
+    // Convert denominator to subscripts  
+    QString subDen;
+    for (QChar ch : den) {
+      subDen += LatexSymbols::subscripts.value(ch, QString(ch));
+    }
+    // Use fraction slash (⁄) for proper appearance
+    return superNum + QString("⁄") + subDen;
+  });
 
   // Process superscripts: ^{...}
   static QRegularExpression supBracePattern("\\^\\{([^}]*)\\}");
@@ -561,9 +650,9 @@ QString LatexTextItem::latexToHtml(const QString &latex) {
     return ch;
   });
 
-  // Process square root: \sqrt{...}
+  // Process square root: \sqrt{...} - use proper overline styling hint
   static QRegularExpression sqrtPattern("\\\\sqrt\\{([^}]*)\\}");
-  result.replace(sqrtPattern, "√(\\1)");
+  result.replace(sqrtPattern, "√\\1");
 
   // Process n-th root: \sqrt[n]{...}
   static QRegularExpression nthRootPattern("\\\\sqrt\\[(\\d+)\\]\\{([^}]*)\\}");
@@ -574,7 +663,7 @@ QString LatexTextItem::latexToHtml(const QString &latex) {
     for (QChar ch : n) {
       superN += LatexSymbols::superscripts.value(ch, QString(ch));
     }
-    return superN + "√(" + content + ")";
+    return superN + "√" + content;
   });
 
   // Process simple \sqrt followed by a single character
@@ -586,6 +675,28 @@ QString LatexTextItem::latexToHtml(const QString &latex) {
   processMatches(result, cmdPattern, [this](const QRegularExpressionMatch &m) {
     return latexCommandToUnicode(m.captured(1));
   });
+
+  // Convert single-letter Latin variables to mathematical italic
+  // This gives a more professional mathematical appearance
+  static QRegularExpression varPattern("(?<![\\\\α-ωΑ-Ω\\w])([a-zA-Z])(?![a-zA-Z])");
+  processMatches(result, varPattern, [](const QRegularExpressionMatch &m) {
+    QChar ch = m.captured(1)[0];
+    return LatexSymbols::mathItalic.value(ch, m.captured(1));
+  });
+
+  // Add thin spaces around binary operators for better readability
+  // Use Unicode thin space (U+2009) around common operators
+  static const QString thinSpace = QString(QChar(0x2009)); // Thin space
+  static const QStringList binaryOps = {"=", "+", "−", "×", "÷", "±", "∓", 
+                                         "≤", "≥", "≠", "≈", "≡", "∼", 
+                                         "⊂", "⊃", "⊆", "⊇", "∈", "∉",
+                                         "→", "←", "↔", "⇒", "⇐", "⇔"};
+  for (const QString &op : binaryOps) {
+    result.replace(op, thinSpace + op + thinSpace);
+  }
+  
+  // Clean up any double thin spaces
+  result.replace(thinSpace + thinSpace, thinSpace);
 
   return result;
 }
