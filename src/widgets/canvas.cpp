@@ -839,7 +839,10 @@ void Canvas::mouseReleaseEvent(QMouseEvent *event) {
   if (currentShape_ == Selection) { QGraphicsView::mouseReleaseEvent(event); return; }
   if (currentShape_ == Pan) { isPanning_ = false; setCursor(Qt::OpenHandCursor); return; }
   if (currentShape_ == Arrow && tempShapeItem_) {
-    scene_->removeItem(tempShapeItem_); delete tempShapeItem_; tempShapeItem_ = nullptr;
+    // tempShapeItem_ is owned by the scene, so just remove it
+    scene_->removeItem(tempShapeItem_); 
+    delete tempShapeItem_; 
+    tempShapeItem_ = nullptr;
     drawArrow(startPoint_, ep); return;
   }
   if (currentShape_ != Pen && currentShape_ != Eraser && tempShapeItem_) tempShapeItem_ = nullptr;
@@ -1270,6 +1273,10 @@ void Canvas::updateTransformHandles() {
     
     if (!hasHandle) {
       TransformHandleItem* handle = new TransformHandleItem(item, this);
+      if (!handle) {
+        // Allocation failed - skip this item
+        continue;
+      }
       scene_->addItem(handle);
       transformHandles_.append(handle);
       

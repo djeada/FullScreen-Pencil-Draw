@@ -15,14 +15,14 @@ TransformAction::TransformAction(QGraphicsItem *item,
 TransformAction::~TransformAction() = default;
 
 void TransformAction::undo() {
-  if (item_) {
+  if (item_ && !item_.isNull()) {
     item_->setTransform(oldTransform_);
     item_->setPos(oldPos_);
   }
 }
 
 void TransformAction::redo() {
-  if (item_) {
+  if (item_ && !item_.isNull()) {
     item_->setTransform(newTransform_);
     item_->setPos(newPos_);
   }

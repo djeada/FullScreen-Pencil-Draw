@@ -129,7 +129,7 @@ bool LayerManager::deleteLayer(int index) {
   Layer *layer = layers_[index].get();
   emit layerRemoved(layer);
   
-  // Remove items from scene
+  // Remove items from scene and delete them
   for (auto *item : layer->items()) {
     if (item && item->scene() == scene_) {
       scene_->removeItem(item);
