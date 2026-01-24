@@ -263,9 +263,12 @@ void Canvas::clearCanvas() {
     }
   }
   
-  scene_->clear();
+  if (layerManager_) {
+    layerManager_->clear();
+  }
   undoStack_.clear();
   redoStack_.clear();
+  scene_->clear();
   backgroundImage_ = nullptr;
   scene_->setBackgroundBrush(backgroundColor_);
   eraserPreview_ = scene_->addEllipse(0, 0, eraserPen_.width(), eraserPen_.width(), QPen(Qt::gray), QBrush(Qt::NoBrush));

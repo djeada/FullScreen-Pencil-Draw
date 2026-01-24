@@ -310,7 +310,6 @@ void LayerManager::clear() {
     for (auto *item : layer->items()) {
       if (item && item->scene() == scene_) {
         scene_->removeItem(item);
-        delete item;
       }
     }
   }
