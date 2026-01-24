@@ -843,7 +843,8 @@ void Canvas::drawArrow(const QPointF &start, const QPointF &end) {
 }
 
 void Canvas::mousePressEvent(QMouseEvent *event) {
-  if (!event || !scene_) { QGraphicsView::mousePressEvent(event); return; }
+  if (!event) return;
+  if (!scene_) { QGraphicsView::mousePressEvent(event); return; }
   QPointF sp = mapToScene(event->pos());
   // Apply snap-to-grid for shape tools
   if (snapToGrid_ && (currentShape_ == Rectangle || currentShape_ == Circle || 
@@ -895,7 +896,8 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
 }
 
 void Canvas::mouseMoveEvent(QMouseEvent *event) {
-  if (!event || !scene_) { QGraphicsView::mouseMoveEvent(event); return; }
+  if (!event) return;
+  if (!scene_) { QGraphicsView::mouseMoveEvent(event); return; }
   QPointF cp = mapToScene(event->pos());
   // Apply snap-to-grid for shape tools during drawing
   if (snapToGrid_ && (currentShape_ == Rectangle || currentShape_ == Circle || 
@@ -930,7 +932,8 @@ void Canvas::mouseMoveEvent(QMouseEvent *event) {
 }
 
 void Canvas::mouseReleaseEvent(QMouseEvent *event) {
-  if (!event || !scene_) { QGraphicsView::mouseReleaseEvent(event); return; }
+  if (!event) return;
+  if (!scene_) { QGraphicsView::mouseReleaseEvent(event); return; }
   QPointF ep = mapToScene(event->pos());
   // Apply snap-to-grid for shape tools
   if (snapToGrid_ && (currentShape_ == Rectangle || currentShape_ == Circle || 
@@ -1374,8 +1377,10 @@ void Canvas::updateTransformHandles() {
   while (it.hasNext()) {
     TransformHandleItem* handle = it.next();
     if (!handle || !selectedItems.contains(handle->targetItem())) {
-      if (handle && scene_) scene_->removeItem(handle);
-      delete handle;
+      if (handle) {
+        if (scene_) scene_->removeItem(handle);
+        delete handle;
+      }
       it.remove();
     }
   }
@@ -1417,8 +1422,8 @@ void Canvas::updateTransformHandles() {
 
 void Canvas::clearTransformHandles() {
   for (TransformHandleItem* handle : transformHandles_) {
-    if (handle && scene_) {
-      scene_->removeItem(handle);
+    if (handle) {
+      if (scene_) scene_->removeItem(handle);
       delete handle;
     }
   }
