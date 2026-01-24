@@ -312,8 +312,7 @@ void MainWindow::setupMenuBar() {
   
   // Theme submenu
   QMenu *themeMenu = viewMenu->addMenu("&Theme");
-  QAction *toggleThemeAction = themeMenu->addAction("Toggle &Dark/Light Theme", this, SLOT(onToggleTheme()));
-  toggleThemeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_T));
+  QAction *toggleThemeAction = createAction(themeMenu, "Toggle &Dark/Light Theme", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_T), this, SLOT(onToggleTheme()));
   
   // Edit menu - add lock/unlock after other edit items
   editMenu->addSeparator();
