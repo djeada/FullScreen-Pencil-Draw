@@ -574,7 +574,7 @@ void Canvas::openFile() {
   if (fileName.isEmpty()) return;
   QPixmap pm(fileName);
   if (pm.isNull()) return;
-  // Remove old background image - scene owns it, so just remove and let scene delete
+  // Remove old background image - removeItem() doesn't delete, so we must delete manually
   if (backgroundImage_) { 
     scene_->removeItem(backgroundImage_); 
     delete backgroundImage_;
@@ -597,7 +597,7 @@ void Canvas::openRecentFile(const QString &filePath) {
     QMessageBox::warning(this, "Error", QString("Could not open file: %1").arg(filePath));
     return;
   }
-  // Remove old background image - scene owns it, so just remove and let scene delete
+  // Remove old background image - removeItem() doesn't delete, so we must delete manually
   if (backgroundImage_) { 
     scene_->removeItem(backgroundImage_); 
     delete backgroundImage_;
@@ -839,7 +839,7 @@ void Canvas::mouseReleaseEvent(QMouseEvent *event) {
   if (currentShape_ == Selection) { QGraphicsView::mouseReleaseEvent(event); return; }
   if (currentShape_ == Pan) { isPanning_ = false; setCursor(Qt::OpenHandCursor); return; }
   if (currentShape_ == Arrow && tempShapeItem_) {
-    // tempShapeItem_ is owned by the scene, so just remove it
+    // tempShapeItem_ added with addItem - removeItem doesn't delete, so we delete manually
     scene_->removeItem(tempShapeItem_); 
     delete tempShapeItem_; 
     tempShapeItem_ = nullptr;
@@ -1273,10 +1273,7 @@ void Canvas::updateTransformHandles() {
     
     if (!hasHandle) {
       TransformHandleItem* handle = new TransformHandleItem(item, this);
-      if (!handle) {
-        // Allocation failed - skip this item
-        continue;
-      }
+      // Note: new throws std::bad_alloc on failure in C++, doesn't return null
       scene_->addItem(handle);
       transformHandles_.append(handle);
       

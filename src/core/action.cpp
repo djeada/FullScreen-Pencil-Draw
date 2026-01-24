@@ -21,14 +21,14 @@ DrawAction::~DrawAction() {
 }
 
 void DrawAction::undo() {
-  if (item_ && scene_) {
+  if (item_ && !item_.isNull() && scene_) {
     scene_->removeItem(item_);
     itemOwnedByAction_ = true;  // We now own the item
   }
 }
 
 void DrawAction::redo() {
-  if (item_ && scene_) {
+  if (item_ && !item_.isNull() && scene_) {
     scene_->addItem(item_);
     itemOwnedByAction_ = false;  // Scene now owns the item
   }
@@ -46,14 +46,14 @@ DeleteAction::~DeleteAction() {
 }
 
 void DeleteAction::undo() {
-  if (item_ && scene_) {
+  if (item_ && !item_.isNull() && scene_) {
     scene_->addItem(item_);
     itemOwnedByAction_ = false;  // Scene now owns the item
   }
 }
 
 void DeleteAction::redo() {
-  if (item_ && scene_) {
+  if (item_ && !item_.isNull() && scene_) {
     scene_->removeItem(item_);
     itemOwnedByAction_ = true;  // We now own the item
   }
