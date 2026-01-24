@@ -60,6 +60,8 @@ Canvas::Canvas(QWidget *parent)
 
   // Initialize layer manager
   layerManager_ = new LayerManager(scene_, this);
+  connect(layerManager_, &LayerManager::layerRemoved, this,
+          [this](Layer * /*layer*/) { clearTransformHandles(); });
 
   eraserPreview_ =
       scene_->addEllipse(0, 0, eraserPen_.width(), eraserPen_.width(),
@@ -157,10 +159,23 @@ void Canvas::addDeleteAction(QGraphicsItem *item) {
 }
 
 void Canvas::onItemRemoved(QGraphicsItem *item) {
-  if (!layerManager_ || !item)
+  if (!item)
     return;
-  if (Layer *layer = layerManager_->findLayerForItem(item)) {
-    layer->removeItem(item);
+  if (layerManager_) {
+    if (Layer *layer = layerManager_->findLayerForItem(item)) {
+      layer->removeItem(item);
+    }
+  }
+
+  // Remove any transform handles that reference this item.
+  QMutableListIterator<TransformHandleItem*> it(transformHandles_);
+  while (it.hasNext()) {
+    TransformHandleItem* handle = it.next();
+    if (handle->targetItem() == item) {
+      scene_->removeItem(handle);
+      delete handle;
+      it.remove();
+    }
   }
 }
 
