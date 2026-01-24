@@ -660,7 +660,7 @@ void Canvas::createTextItem(const QPointF &pos) {
   scene_->addItem(textItem);
 
   // Connect to handle when editing is finished
-  // Use QPointer to safely track the textItem in case it's deleted before signal fires
+  // Use QPointer to safely track the textItem in case it gets deleted before signal fires
   connect(textItem, &LatexTextItem::editingFinished, this, [this, textItem = QPointer<LatexTextItem>(textItem)]() {
     // Check if textItem is still valid (not deleted)
     if (!textItem) {
