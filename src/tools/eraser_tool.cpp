@@ -61,7 +61,7 @@ void EraserTool::eraseAt(const QPointF &point) {
       continue;
 
     QPainterPath itemShape = item->shape();
-    
+
     // Check if eraser intersects either the item's shape (for filled items like
     // pixmaps) or the stroked outline (for line-based items like paths)
     QPainterPathStroker stroker;
