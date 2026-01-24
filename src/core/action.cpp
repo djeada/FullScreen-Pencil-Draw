@@ -13,13 +13,7 @@ Action::~Action() = default;
 DrawAction::DrawAction(QGraphicsItem *item, QGraphicsScene *scene)
     : item_(item), scene_(scene) {}
 
-DrawAction::~DrawAction() {
-  // Item ownership is managed by the scene when added
-  // If item was removed and never re-added, we need to clean it up
-  if (item_ && !item_->scene()) {
-    delete item_;
-  }
-}
+DrawAction::~DrawAction() = default;
 
 void DrawAction::undo() {
   if (item_ && scene_) {
@@ -37,13 +31,7 @@ void DrawAction::redo() {
 DeleteAction::DeleteAction(QGraphicsItem *item, QGraphicsScene *scene)
     : item_(item), scene_(scene) {}
 
-DeleteAction::~DeleteAction() {
-  // Item ownership is managed by the scene when added
-  // If item was removed and never re-added, we need to clean it up
-  if (item_ && !item_->scene()) {
-    delete item_;
-  }
-}
+DeleteAction::~DeleteAction() = default;
 
 void DeleteAction::undo() {
   if (item_ && scene_) {

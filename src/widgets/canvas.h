@@ -26,6 +26,7 @@
 #include <QGraphicsView>
 #include <QList>
 #include <QMenu>
+#include <QPointer>
 #include <QMimeData>
 #include <QMouseEvent>
 #include <QPen>
@@ -170,8 +171,8 @@ private:
   ShapeType currentShape_;
   QPointF startPoint_;
   QPointF lastPanPoint_;
-  QGraphicsItem *tempShapeItem_;
-  QGraphicsPathItem *currentPath_;
+  QPointer<QGraphicsItem> tempShapeItem_;
+  QPointer<QGraphicsPathItem> currentPath_;
   QColor backgroundColor_;
   QGraphicsEllipseItem *eraserPreview_;
   QGraphicsPixmapItem *backgroundImage_;

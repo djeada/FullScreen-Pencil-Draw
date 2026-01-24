@@ -32,6 +32,7 @@
 #include <QUrl>
 #include <QWheelEvent>
 #include <cmath>
+#include <memory>
 
 // Supported image file extensions for drag-and-drop
 static const QSet<QString> SUPPORTED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg",
@@ -817,7 +818,11 @@ void Canvas::mouseReleaseEvent(QMouseEvent *event) {
   if (currentShape_ == Selection) { QGraphicsView::mouseReleaseEvent(event); return; }
   if (currentShape_ == Pan) { isPanning_ = false; setCursor(Qt::OpenHandCursor); return; }
   if (currentShape_ == Arrow && tempShapeItem_) {
-    scene_->removeItem(tempShapeItem_); delete tempShapeItem_; tempShapeItem_ = nullptr;
+    if (tempShapeItem_->scene() == scene_) {
+      scene_->removeItem(tempShapeItem_);
+    }
+    delete tempShapeItem_;
+    tempShapeItem_ = nullptr;
     drawArrow(startPoint_, ep); return;
   }
   if (currentShape_ != Pen && currentShape_ != Eraser && tempShapeItem_) tempShapeItem_ = nullptr;
@@ -836,7 +841,7 @@ void Canvas::hideEraserPreview() { if (eraserPreview_) eraserPreview_->hide(); }
 void Canvas::copySelectedItems() {
   auto sel = scene_->selectedItems();
   if (sel.isEmpty()) return;
-  auto md = new QMimeData();
+  auto md = std::make_unique<QMimeData>();
   QByteArray ba; QDataStream ds(&ba, QIODevice::WriteOnly);
   for (auto item : sel) {
     if (auto r = dynamic_cast<QGraphicsRectItem*>(item)) { ds << QString("Rectangle") << r->rect() << r->pos() << r->pen() << r->brush(); }
@@ -848,7 +853,7 @@ void Canvas::copySelectedItems() {
     else if (auto pg = dynamic_cast<QGraphicsPolygonItem*>(item)) { ds << QString("Polygon") << pg->polygon() << pg->pos() << pg->pen() << pg->brush(); }
   }
   md->setData("application/x-canvas-items", ba);
-  QApplication::clipboard()->setMimeData(md);
+  QApplication::clipboard()->setMimeData(md.release());
 }
 
 void Canvas::cutSelectedItems() {

@@ -115,11 +115,10 @@ bool LayerManager::deleteLayer(int index) {
   Layer *layer = layers_[index].get();
   emit layerRemoved(layer);
   
-  // Remove items from scene
+  // Remove items from scene (item ownership handled by undo stack)
   for (auto *item : layer->items()) {
     if (item && item->scene() == scene_) {
       scene_->removeItem(item);
-      delete item;
     }
   }
   
@@ -307,15 +306,12 @@ Layer *LayerManager::duplicateLayer(int index) {
 void LayerManager::clear() {
   for (auto &layer : layers_) {
     emit layerRemoved(layer.get());
-    for (auto *item : layer->items()) {
-      if (item && item->scene() == scene_) {
-        scene_->removeItem(item);
-        delete item;
-      }
-    }
   }
   layers_.clear();
   activeLayerIndex_ = -1;
+  if (scene_) {
+    scene_->clear();
+  }
   
   // Recreate default layer
   createLayer("Background", Layer::Type::Vector);
