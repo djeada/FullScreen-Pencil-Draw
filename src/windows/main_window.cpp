@@ -7,6 +7,7 @@
 #include "../widgets/canvas.h"
 #include "../widgets/layer_panel.h"
 #include "../widgets/tool_panel.h"
+#include "../tools/tool_manager.h"
 #include <QApplication>
 #include <QColorDialog>
 #include <QFileDialog>
@@ -545,31 +546,31 @@ void MainWindow::setupPdfToolBar() {
   
   // Drawing tools for PDF
   _pdfToolBar->addAction("Pen", [this]() {
-    _pdfViewer->setTool(PdfViewer::Tool::Pen);
+    _pdfViewer->setToolType(ToolManager::ToolType::Pen);
   });
   _pdfToolBar->addAction("Eraser", [this]() {
-    _pdfViewer->setTool(PdfViewer::Tool::Eraser);
+    _pdfViewer->setToolType(ToolManager::ToolType::Eraser);
   });
   _pdfToolBar->addAction("Text", [this]() {
-    _pdfViewer->setTool(PdfViewer::Tool::Text);
+    _pdfViewer->setToolType(ToolManager::ToolType::Text);
   });
   _pdfToolBar->addAction("Rectangle", [this]() {
-    _pdfViewer->setTool(PdfViewer::Tool::Rectangle);
+    _pdfViewer->setToolType(ToolManager::ToolType::Rectangle);
   });
   _pdfToolBar->addAction("Circle", [this]() {
-    _pdfViewer->setTool(PdfViewer::Tool::Circle);
+    _pdfViewer->setToolType(ToolManager::ToolType::Circle);
   });
   _pdfToolBar->addAction("Arrow", [this]() {
-    _pdfViewer->setTool(PdfViewer::Tool::Arrow);
+    _pdfViewer->setToolType(ToolManager::ToolType::Arrow);
   });
   _pdfToolBar->addAction("Selection", [this]() {
-    _pdfViewer->setTool(PdfViewer::Tool::Selection);
+    _pdfViewer->setToolType(ToolManager::ToolType::Selection);
   });
   _pdfToolBar->addAction("Pan", [this]() {
-    _pdfViewer->setTool(PdfViewer::Tool::Pan);
+    _pdfViewer->setToolType(ToolManager::ToolType::Pan);
   });
   _pdfToolBar->addAction("📷 Screenshot", [this]() {
-    _pdfViewer->setTool(PdfViewer::Tool::ScreenshotSelection);
+    _pdfViewer->setScreenshotSelectionMode(true);
   });
   
   _pdfToolBar->addSeparator();

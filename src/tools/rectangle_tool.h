@@ -15,7 +15,7 @@
  */
 class RectangleTool : public ShapeTool {
 public:
-  explicit RectangleTool(Canvas *canvas);
+  explicit RectangleTool(SceneRenderer *renderer);
   ~RectangleTool() override;
 
   QString name() const override { return "Rectangle"; }

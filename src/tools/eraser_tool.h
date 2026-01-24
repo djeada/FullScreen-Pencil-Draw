@@ -16,7 +16,7 @@
  */
 class EraserTool : public Tool {
 public:
-  explicit EraserTool(Canvas *canvas);
+  explicit EraserTool(SceneRenderer *renderer);
   ~EraserTool() override;
 
   QString name() const override { return "Eraser"; }

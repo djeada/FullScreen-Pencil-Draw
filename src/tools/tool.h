@@ -13,7 +13,7 @@
 #include <QPointF>
 #include <QString>
 
-class Canvas;
+class SceneRenderer;
 
 /**
  * @brief Abstract base class for all drawing tools.
@@ -21,14 +21,17 @@ class Canvas;
  * This class provides a common interface for all tools in the application.
  * Each tool implements mouse event handlers and provides its own cursor.
  * The tool system allows for easy extension with new tools.
+ *
+ * Tools work with a SceneRenderer interface, which is implemented by both
+ * Canvas and PdfViewer, allowing the same tools to work with both.
  */
 class Tool {
 public:
   /**
    * @brief Construct a new Tool object
-   * @param canvas Pointer to the canvas this tool operates on
+   * @param renderer Pointer to the scene renderer this tool operates on
    */
-  explicit Tool(Canvas *canvas);
+  explicit Tool(SceneRenderer *renderer);
   virtual ~Tool();
 
   /**
@@ -87,7 +90,7 @@ public:
   virtual bool itemsSelectable() const { return true; }
 
 protected:
-  Canvas *canvas_;
+  SceneRenderer *renderer_;
 };
 
 #endif // TOOL_H

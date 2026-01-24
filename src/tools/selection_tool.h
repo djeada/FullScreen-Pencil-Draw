@@ -15,7 +15,7 @@
  */
 class SelectionTool : public Tool {
 public:
-  explicit SelectionTool(Canvas *canvas);
+  explicit SelectionTool(SceneRenderer *renderer);
   ~SelectionTool() override;
 
   QString name() const override { return "Select"; }

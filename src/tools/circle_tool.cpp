@@ -3,17 +3,17 @@
  * @brief Circle/ellipse drawing tool implementation.
  */
 #include "circle_tool.h"
-#include "../widgets/canvas.h"
+#include "../core/scene_renderer.h"
 
-CircleTool::CircleTool(Canvas *canvas) : ShapeTool(canvas) {}
+CircleTool::CircleTool(SceneRenderer *renderer) : ShapeTool(renderer) {}
 
 CircleTool::~CircleTool() = default;
 
 QGraphicsItem *CircleTool::createShape(const QPointF &startPos) {
   auto *ellipse = new QGraphicsEllipseItem(QRectF(startPos, startPos));
-  ellipse->setPen(canvas_->currentPen());
-  if (canvas_->isFilledShapes()) {
-    ellipse->setBrush(canvas_->currentPen().color());
+  ellipse->setPen(renderer_->currentPen());
+  if (renderer_->isFilledShapes()) {
+    ellipse->setBrush(renderer_->currentPen().color());
   }
   return ellipse;
 }

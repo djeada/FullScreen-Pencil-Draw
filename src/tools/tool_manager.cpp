@@ -15,8 +15,8 @@
 #include "text_tool.h"
 #include "tool.h"
 
-ToolManager::ToolManager(Canvas *canvas, QObject *parent)
-    : QObject(parent), canvas_(canvas), activeTool_(nullptr),
+ToolManager::ToolManager(SceneRenderer *renderer, QObject *parent)
+    : QObject(parent), renderer_(renderer), activeTool_(nullptr),
       activeToolType_(ToolType::Pen) {
   initializeTools();
   setActiveTool(ToolType::Pen);
@@ -25,16 +25,16 @@ ToolManager::ToolManager(Canvas *canvas, QObject *parent)
 ToolManager::~ToolManager() = default;
 
 void ToolManager::initializeTools() {
-  registerTool(ToolType::Pen, std::make_unique<PenTool>(canvas_));
-  registerTool(ToolType::Eraser, std::make_unique<EraserTool>(canvas_));
-  registerTool(ToolType::Text, std::make_unique<TextTool>(canvas_));
-  registerTool(ToolType::Fill, std::make_unique<FillTool>(canvas_));
-  registerTool(ToolType::Line, std::make_unique<LineTool>(canvas_));
-  registerTool(ToolType::Arrow, std::make_unique<ArrowTool>(canvas_));
-  registerTool(ToolType::Rectangle, std::make_unique<RectangleTool>(canvas_));
-  registerTool(ToolType::Circle, std::make_unique<CircleTool>(canvas_));
-  registerTool(ToolType::Selection, std::make_unique<SelectionTool>(canvas_));
-  registerTool(ToolType::Pan, std::make_unique<PanTool>(canvas_));
+  registerTool(ToolType::Pen, std::make_unique<PenTool>(renderer_));
+  registerTool(ToolType::Eraser, std::make_unique<EraserTool>(renderer_));
+  registerTool(ToolType::Text, std::make_unique<TextTool>(renderer_));
+  registerTool(ToolType::Fill, std::make_unique<FillTool>(renderer_));
+  registerTool(ToolType::Line, std::make_unique<LineTool>(renderer_));
+  registerTool(ToolType::Arrow, std::make_unique<ArrowTool>(renderer_));
+  registerTool(ToolType::Rectangle, std::make_unique<RectangleTool>(renderer_));
+  registerTool(ToolType::Circle, std::make_unique<CircleTool>(renderer_));
+  registerTool(ToolType::Selection, std::make_unique<SelectionTool>(renderer_));
+  registerTool(ToolType::Pan, std::make_unique<PanTool>(renderer_));
 }
 
 void ToolManager::registerTool(ToolType type, std::unique_ptr<Tool> tool) {

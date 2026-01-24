@@ -3,17 +3,17 @@
  * @brief Rectangle drawing tool implementation.
  */
 #include "rectangle_tool.h"
-#include "../widgets/canvas.h"
+#include "../core/scene_renderer.h"
 
-RectangleTool::RectangleTool(Canvas *canvas) : ShapeTool(canvas) {}
+RectangleTool::RectangleTool(SceneRenderer *renderer) : ShapeTool(renderer) {}
 
 RectangleTool::~RectangleTool() = default;
 
 QGraphicsItem *RectangleTool::createShape(const QPointF &startPos) {
   auto *rect = new QGraphicsRectItem(QRectF(startPos, startPos));
-  rect->setPen(canvas_->currentPen());
-  if (canvas_->isFilledShapes()) {
-    rect->setBrush(canvas_->currentPen().color());
+  rect->setPen(renderer_->currentPen());
+  if (renderer_->isFilledShapes()) {
+    rect->setBrush(renderer_->currentPen().color());
   }
   return rect;
 }
