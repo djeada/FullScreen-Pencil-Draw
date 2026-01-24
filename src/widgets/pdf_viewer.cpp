@@ -6,6 +6,7 @@
 #include "latex_text_item.h"
 #include <QApplication>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QGraphicsEllipseItem>
 #include <QGraphicsLineItem>
 #include <QGraphicsPolygonItem>
@@ -15,6 +16,7 @@
 #include <QMouseEvent>
 #include <QPdfWriter>
 #include <QScrollBar>
+#include <QUrl>
 #include <QWheelEvent>
 #include <cmath>
 
@@ -752,4 +754,61 @@ void PdfViewer::drawArrow(const QPointF &start, const QPointF &end) {
 
   addDrawAction(li);
   addDrawAction(ahi);
+}
+
+// Helper function to check if a URL points to a PDF file
+static bool isPdfFile(const QUrl &url) {
+  if (url.isLocalFile()) {
+    QString extension = QFileInfo(url.toLocalFile()).suffix().toLower();
+    return extension == "pdf";
+  }
+  return false;
+}
+
+// Helper function to check if mime data contains a PDF file
+static bool containsPdfFile(const QMimeData *mimeData) {
+  if (mimeData->hasUrls()) {
+    for (const QUrl &url : mimeData->urls()) {
+      if (isPdfFile(url)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+void PdfViewer::dragEnterEvent(QDragEnterEvent *event) {
+  // Accept the drag if it contains PDF files
+  if (containsPdfFile(event->mimeData())) {
+    event->acceptProposedAction();
+    return;
+  }
+  // Let the base class handle other drag events
+  QGraphicsView::dragEnterEvent(event);
+}
+
+void PdfViewer::dragMoveEvent(QDragMoveEvent *event) {
+  // Accept the drag move if it contains PDF files
+  if (containsPdfFile(event->mimeData())) {
+    event->acceptProposedAction();
+    return;
+  }
+  QGraphicsView::dragMoveEvent(event);
+}
+
+void PdfViewer::dropEvent(QDropEvent *event) {
+  // Handle the dropped PDF files
+  const QMimeData *mimeData = event->mimeData();
+  
+  if (mimeData->hasUrls()) {
+    for (const QUrl &url : mimeData->urls()) {
+      if (isPdfFile(url)) {
+        emit pdfFileDropped(url.toLocalFile());
+        event->acceptProposedAction();
+        return;
+      }
+    }
+  }
+  
+  QGraphicsView::dropEvent(event);
 }

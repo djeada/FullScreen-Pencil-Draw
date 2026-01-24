@@ -54,6 +54,7 @@ private slots:
   void onPdfZoomChanged(double zoom);
   void onPdfDarkModeChanged(bool enabled);
   void onExportAnnotatedPdf();
+  void onPdfFileDropped(const QString &filePath);
 #endif
 
 private:

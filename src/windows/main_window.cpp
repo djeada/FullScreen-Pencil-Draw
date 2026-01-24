@@ -476,6 +476,10 @@ void MainWindow::setupPdfViewer() {
   connect(_pdfViewer, &PdfViewer::errorOccurred, this, [this](const QString &message) {
     statusBar()->showMessage(QString("PDF Error: %1").arg(message), 5000);
   });
+  
+  // Connect drag-drop signals from PDF viewer and canvas
+  connect(_pdfViewer, &PdfViewer::pdfFileDropped, this, &MainWindow::onPdfFileDropped);
+  connect(_canvas, &Canvas::pdfFileDropped, this, &MainWindow::onPdfFileDropped);
 }
 
 void MainWindow::setupPdfToolBar() {
@@ -613,6 +617,14 @@ void MainWindow::onPdfZoomChanged(double zoom) {
 void MainWindow::onPdfDarkModeChanged(bool enabled) {
   if (_pdfDarkModeAction) {
     _pdfDarkModeAction->setChecked(enabled);
+  }
+}
+
+void MainWindow::onPdfFileDropped(const QString &filePath) {
+  if (_pdfViewer && _pdfViewer->openPdf(filePath)) {
+    statusBar()->showMessage(QString("Opened PDF: %1").arg(QFileInfo(filePath).fileName()), 3000);
+  } else {
+    statusBar()->showMessage("Failed to open PDF file", 3000);
   }
 }
 

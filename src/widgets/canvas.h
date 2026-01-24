@@ -92,6 +92,7 @@ signals:
   void rulerVisibilityChanged(bool visible);
   void measurementToolChanged(bool enabled);
   void measurementUpdated(const QString &measurement);
+  void pdfFileDropped(const QString &filePath);
 
 public slots:
   void setShape(const QString &shapeType);

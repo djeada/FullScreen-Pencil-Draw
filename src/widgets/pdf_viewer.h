@@ -8,9 +8,13 @@
 #ifndef PDF_VIEWER_H
 #define PDF_VIEWER_H
 
+#include <QDragEnterEvent>
+#include <QDragMoveEvent>
+#include <QDropEvent>
 #include <QGraphicsPixmapItem>
 #include <QGraphicsScene>
 #include <QGraphicsView>
+#include <QMimeData>
 #include <QWidget>
 #include <memory>
 
@@ -341,12 +345,21 @@ signals:
    */
   void documentModified();
 
+  /**
+   * @brief Emitted when a PDF file is dropped on the viewer
+   * @param filePath Path to the dropped PDF file
+   */
+  void pdfFileDropped(const QString &filePath);
+
 protected:
   void mousePressEvent(QMouseEvent *event) override;
   void mouseMoveEvent(QMouseEvent *event) override;
   void mouseReleaseEvent(QMouseEvent *event) override;
   void wheelEvent(QWheelEvent *event) override;
   void drawBackground(QPainter *painter, const QRectF &rect) override;
+  void dragEnterEvent(QDragEnterEvent *event) override;
+  void dragMoveEvent(QDragMoveEvent *event) override;
+  void dropEvent(QDropEvent *event) override;
 
 private:
   // Document and overlay management
