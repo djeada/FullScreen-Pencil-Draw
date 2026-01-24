@@ -99,7 +99,7 @@ void PdfViewer::setupScene() {
   setMouseTracking(true);
   setAcceptDrops(true);
 
-  // Set initial background based on dark mode (darkMode_ is false by default)
+  // Set initial background color based on dark mode setting
   if (darkMode_) {
     scene_->setBackgroundBrush(QColor(50, 50, 50)); // Dark gray background
   } else {
