@@ -13,6 +13,7 @@
 #include <QGraphicsItem>
 #include <QGraphicsScene>
 #include <QPointF>
+#include <QPointer>
 #include <memory>
 #include <vector>
 
@@ -50,6 +51,7 @@ public:
  *
  * This action tracks items that were drawn/added to the scene.
  * Undo removes the item, redo adds it back.
+ * Uses QPointer to safely track item lifetime.
  */
 class DrawAction : public Action {
 public:
@@ -61,8 +63,9 @@ public:
   QString description() const override { return "Draw"; }
 
 private:
-  QGraphicsItem *item_;
-  QGraphicsScene *scene_;
+  QPointer<QGraphicsItem> item_;
+  QPointer<QGraphicsScene> scene_;
+  bool itemOwnedByAction_;
 };
 
 /**
@@ -70,6 +73,7 @@ private:
  *
  * This action tracks items that were deleted from the scene.
  * Undo adds the item back, redo removes it again.
+ * Uses QPointer to safely track item lifetime.
  */
 class DeleteAction : public Action {
 public:
@@ -81,8 +85,9 @@ public:
   QString description() const override { return "Delete"; }
 
 private:
-  QGraphicsItem *item_;
-  QGraphicsScene *scene_;
+  QPointer<QGraphicsItem> item_;
+  QPointer<QGraphicsScene> scene_;
+  bool itemOwnedByAction_;
 };
 
 /**
@@ -91,6 +96,7 @@ private:
  * This action tracks position changes of items.
  * Undo moves the item back to its original position,
  * redo moves it to the new position.
+ * Uses QPointer to safely track item lifetime.
  */
 class MoveAction : public Action {
 public:
@@ -102,7 +108,7 @@ public:
   QString description() const override { return "Move"; }
 
 private:
-  QGraphicsItem *item_;
+  QPointer<QGraphicsItem> item_;
   QPointF oldPos_;
   QPointF newPos_;
 };
@@ -143,6 +149,7 @@ private:
  *
  * This action tracks fill operations on fillable shapes.
  * Undo restores the original brush, redo applies the fill again.
+ * Uses QPointer to safely track item lifetime.
  */
 class FillAction : public Action {
 public:
@@ -154,7 +161,7 @@ public:
   QString description() const override { return "Fill"; }
 
 private:
-  QGraphicsItem *item_;
+  QPointer<QGraphicsItem> item_;
   QBrush oldBrush_;
   QBrush newBrush_;
 };

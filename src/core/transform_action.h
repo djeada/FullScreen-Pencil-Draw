@@ -6,6 +6,7 @@
 #define TRANSFORM_ACTION_H
 
 #include "action.h"
+#include <QPointer>
 #include <QTransform>
 
 /**
@@ -14,6 +15,7 @@
  * This action tracks transformation changes (scale, rotation, etc.) of items.
  * Undo restores the item to its original transform and position,
  * redo applies the new transform and position.
+ * Uses QPointer to safely track item lifetime.
  */
 class TransformAction : public Action {
 public:
@@ -27,7 +29,7 @@ public:
   QString description() const override { return "Transform"; }
 
 private:
-  QGraphicsItem *item_;
+  QPointer<QGraphicsItem> item_;
   QTransform oldTransform_;
   QTransform newTransform_;
   QPointF oldPos_;

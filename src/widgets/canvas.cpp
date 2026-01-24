@@ -574,7 +574,12 @@ void Canvas::openFile() {
   if (fileName.isEmpty()) return;
   QPixmap pm(fileName);
   if (pm.isNull()) return;
-  if (backgroundImage_) { scene_->removeItem(backgroundImage_); delete backgroundImage_; }
+  // Remove old background image - removeItem() doesn't delete, so we must delete manually
+  if (backgroundImage_) { 
+    scene_->removeItem(backgroundImage_); 
+    delete backgroundImage_;
+    backgroundImage_ = nullptr;
+  }
   backgroundImage_ = scene_->addPixmap(pm);
   backgroundImage_->setZValue(-1000);
   backgroundImage_->setFlag(QGraphicsItem::ItemIsSelectable, false);
@@ -592,7 +597,12 @@ void Canvas::openRecentFile(const QString &filePath) {
     QMessageBox::warning(this, "Error", QString("Could not open file: %1").arg(filePath));
     return;
   }
-  if (backgroundImage_) { scene_->removeItem(backgroundImage_); delete backgroundImage_; }
+  // Remove old background image - removeItem() doesn't delete, so we must delete manually
+  if (backgroundImage_) { 
+    scene_->removeItem(backgroundImage_); 
+    delete backgroundImage_;
+    backgroundImage_ = nullptr;
+  }
   backgroundImage_ = scene_->addPixmap(pm);
   backgroundImage_->setZValue(-1000);
   backgroundImage_->setFlag(QGraphicsItem::ItemIsSelectable, false);
@@ -829,7 +839,10 @@ void Canvas::mouseReleaseEvent(QMouseEvent *event) {
   if (currentShape_ == Selection) { QGraphicsView::mouseReleaseEvent(event); return; }
   if (currentShape_ == Pan) { isPanning_ = false; setCursor(Qt::OpenHandCursor); return; }
   if (currentShape_ == Arrow && tempShapeItem_) {
-    scene_->removeItem(tempShapeItem_); delete tempShapeItem_; tempShapeItem_ = nullptr;
+    // tempShapeItem_ added with addItem - removeItem doesn't delete, so we delete manually
+    scene_->removeItem(tempShapeItem_); 
+    delete tempShapeItem_; 
+    tempShapeItem_ = nullptr;
     drawArrow(startPoint_, ep); return;
   }
   if (currentShape_ != Pen && currentShape_ != Eraser && tempShapeItem_) tempShapeItem_ = nullptr;
