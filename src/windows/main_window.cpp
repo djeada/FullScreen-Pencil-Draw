@@ -39,14 +39,17 @@ MainWindow::MainWindow(QWidget *parent)
 #endif
 {
 #ifdef HAVE_QT_PDF
+  // Split ratio constants for canvas/PDF panel
+  static constexpr double PDF_PANEL_SPLIT_RATIO = 0.4;  // PDF panel takes 40% when visible
+  
   // Create splitter for side-by-side canvas and PDF viewer
   _centralSplitter = new QSplitter(Qt::Horizontal, this);
   _centralSplitter->addWidget(_canvas);
   setupPdfViewer();
   setCentralWidget(_centralSplitter);
   
-  // Set initial sizes (canvas takes most space, PDF panel hidden initially)
-  _centralSplitter->setSizes({1000, 0});
+  // Set initial sizes (canvas takes full space, PDF panel hidden initially)
+  _centralSplitter->setSizes({1, 0});
 #else
   QWidget *centralWidget = new QWidget(this);
   QVBoxLayout *layout = new QVBoxLayout(centralWidget);
@@ -550,11 +553,17 @@ void MainWindow::setupPdfToolBar() {
 }
 
 void MainWindow::showPdfPanel() {
+  // Split ratio: canvas gets 60%, PDF panel gets 40%
+  static constexpr double CANVAS_RATIO = 0.6;
+  static constexpr double PDF_RATIO = 0.4;
+  
   if (_pdfPanel) {
     _pdfPanel->show();
-    // Set splitter sizes to show both canvas and PDF panel (60/40 split)
+    // Set splitter sizes to show both canvas and PDF panel
     int totalWidth = _centralSplitter->width();
-    _centralSplitter->setSizes({totalWidth * 6 / 10, totalWidth * 4 / 10});
+    int canvasWidth = static_cast<int>(totalWidth * CANVAS_RATIO);
+    int pdfWidth = static_cast<int>(totalWidth * PDF_RATIO);
+    _centralSplitter->setSizes({canvasWidth, pdfWidth});
   }
   _pdfToolBar->show();
   setWindowTitle("FullScreen Pencil Draw - PDF Annotation Mode");
@@ -563,8 +572,8 @@ void MainWindow::showPdfPanel() {
 void MainWindow::hidePdfPanel() {
   if (_pdfPanel) {
     _pdfPanel->hide();
-    // Give full width back to canvas
-    _centralSplitter->setSizes({1000, 0});
+    // Give full width back to canvas (use 1:0 ratio)
+    _centralSplitter->setSizes({1, 0});
   }
   _pdfToolBar->hide();
   setWindowTitle("FullScreen Pencil Draw - Professional Edition");
