@@ -827,20 +827,31 @@ static bool containsPdfFile(const QMimeData *mimeData) {
 void PdfViewer::dragEnterEvent(QDragEnterEvent *event) {
   // Accept the drag if it contains PDF files
   if (containsPdfFile(event->mimeData())) {
+    dragAccepted_ = true;
     event->acceptProposedAction();
     return;
   }
+  dragAccepted_ = false;
   // Let the base class handle other drag events
   QGraphicsView::dragEnterEvent(event);
 }
 
 void PdfViewer::dragMoveEvent(QDragMoveEvent *event) {
   // Accept the drag move if it contains PDF files
-  if (containsPdfFile(event->mimeData())) {
+  if (dragAccepted_ && containsPdfFile(event->mimeData())) {
     event->acceptProposedAction();
     return;
   }
   QGraphicsView::dragMoveEvent(event);
+}
+
+void PdfViewer::dragLeaveEvent(QDragLeaveEvent *event) {
+  if (dragAccepted_) {
+    dragAccepted_ = false;
+    event->accept();
+    return;
+  }
+  QGraphicsView::dragLeaveEvent(event);
 }
 
 void PdfViewer::dropEvent(QDropEvent *event) {
@@ -848,6 +859,7 @@ void PdfViewer::dropEvent(QDropEvent *event) {
   const QMimeData *mimeData = event->mimeData();
   
   if (mimeData->hasUrls()) {
+    dragAccepted_ = false;
     for (const QUrl &url : mimeData->urls()) {
       if (isPdfFile(url)) {
         emit pdfFileDropped(url.toLocalFile());
