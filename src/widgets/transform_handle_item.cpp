@@ -16,7 +16,7 @@ TransformHandleItem::TransformHandleItem(QGraphicsItem *targetItem,
                                          QGraphicsItem *parent)
     : QGraphicsObject(parent), targetItem_(targetItem), renderer_(renderer),
       isTransforming_(false), activeHandle_(HandleType::None),
-      wasMovable_(false), wasSelectable_(false) {
+      wasMovable_(false), wasSelectable_(false), cachedTargetBounds_() {
   setAcceptHoverEvents(true);
   setFlag(QGraphicsItem::ItemIsSelectable, false);
   setFlag(QGraphicsItem::ItemIsMovable, false);
@@ -32,6 +32,14 @@ QRectF TransformHandleItem::boundingRect() const {
     return QRectF();
 
   QRectF bounds = targetBoundsInScene();
+  
+  // Check if target item has moved and notify geometry change if needed
+  // This ensures handles follow the target item during drag operations
+  if (bounds != cachedTargetBounds_) {
+    cachedTargetBounds_ = bounds;
+    const_cast<TransformHandleItem*>(this)->prepareGeometryChange();
+  }
+  
   // Expand to include handles and rotation handle
   return bounds.adjusted(-HANDLE_SIZE, -HANDLE_SIZE - ROTATION_HANDLE_OFFSET,
                          HANDLE_SIZE, HANDLE_SIZE);
@@ -118,6 +126,7 @@ void TransformHandleItem::paint(QPainter *painter,
 }
 
 void TransformHandleItem::updateHandles() {
+  cachedTargetBounds_ = targetBoundsInScene();
   prepareGeometryChange();
   update();
 }

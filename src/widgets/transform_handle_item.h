@@ -116,6 +116,9 @@ private:
   // Original item flags to restore after transform
   bool wasMovable_;
   bool wasSelectable_;
+  
+  // Cached bounds for detecting target item movement
+  mutable QRectF cachedTargetBounds_;
 
   // Helper methods
   HandleType handleAtPoint(const QPointF &pos) const;
