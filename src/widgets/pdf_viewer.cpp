@@ -18,6 +18,7 @@
 #include <QMessageBox>
 #include <QMouseEvent>
 #include <QPdfWriter>
+#include <QPointer>
 #include <QScrollBar>
 #include <QUrl>
 #include <QWheelEvent>
@@ -736,7 +737,13 @@ void PdfViewer::createTextItem(const QPointF &pos) {
 
   scene_->addItem(textItem);
 
-  connect(textItem, &LatexTextItem::editingFinished, this, [this, textItem]() {
+  // Connect to handle when editing is finished
+  // Use QPointer to safely track the textItem in case it gets deleted before signal fires
+  connect(textItem, &LatexTextItem::editingFinished, this, [this, textItem = QPointer<LatexTextItem>(textItem)]() {
+    // Check if textItem is still valid (not deleted)
+    if (!textItem) {
+      return;
+    }
     if (textItem->text().trimmed().isEmpty()) {
       scene_->removeItem(textItem);
       textItem->deleteLater();
