@@ -63,6 +63,7 @@ void TextTool::createTextItem(const QPointF &position) {
     }
     // If the text is empty after editing, remove the item
     if (textItem->text().trimmed().isEmpty()) {
+      renderer_->onItemRemoved(textItem);
       renderer_->scene()->removeItem(textItem);
       textItem->deleteLater();
     } else {

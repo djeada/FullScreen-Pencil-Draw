@@ -55,6 +55,7 @@ private slots:
   void onPdfDarkModeChanged(bool enabled);
   void onExportAnnotatedPdf();
   void onPdfFileDropped(const QString &filePath);
+  void swapPanelOrder();  // Swap the order of canvas and PDF panel
 #endif
 
 private:
@@ -83,7 +84,6 @@ private:
   void setupPdfToolBar();
   void showPdfPanel();
   void hidePdfPanel();
-  void swapPanelOrder();  // Swap the order of canvas and PDF panel
 #endif
 
   void setupConnections();
