@@ -24,6 +24,9 @@
 #include "../core/action.h"
 #include "../core/pdf_document.h"
 #include "../core/pdf_overlay.h"
+#include "../core/scene_renderer.h"
+
+class ToolManager;
 
 /**
  * @brief Graphics item for displaying a PDF page as background.
@@ -67,28 +70,22 @@ private:
  * PdfViewer extends QGraphicsView to provide PDF viewing with
  * overlay drawing support. It renders PDF pages as a read-only
  * background and allows editable annotations on top.
+ *
+ * PdfViewer implements the SceneRenderer interface, allowing the
+ * same drawing tools to work with both Canvas and PdfViewer.
  */
-class PdfViewer : public QGraphicsView {
+class PdfViewer : public QGraphicsView, public SceneRenderer {
   Q_OBJECT
 
 public:
   /**
-   * @brief Drawing tool types
+   * @brief Screenshot selection tool type (PDF-specific)
    */
-  enum class Tool {
-    Selection,
-    Pen,
-    Eraser,
-    Line,
-    Rectangle,
-    Circle,
-    Arrow,
-    Text,
-    Fill,
-    Pan,
+  enum class SpecialTool {
+    None,
     ScreenshotSelection  // Tool for capturing a rectangle area of the PDF
   };
-  Q_ENUM(Tool)
+  Q_ENUM(SpecialTool)
 
   explicit PdfViewer(QWidget *parent = nullptr);
   ~PdfViewer() override;
@@ -159,16 +156,28 @@ public:
 
   // Drawing settings
   /**
-   * @brief Set the current drawing tool
-   * @param tool The tool to use
+   * @brief Set the current drawing tool using ToolManager
+   * @param toolType The tool type to use
    */
-  void setTool(Tool tool);
+  void setToolType(int toolType);
 
   /**
-   * @brief Get the current tool
-   * @return The current tool
+   * @brief Set screenshot selection mode (PDF-specific tool)
+   * @param enabled Whether screenshot selection is enabled
    */
-  Tool currentTool() const { return currentTool_; }
+  void setScreenshotSelectionMode(bool enabled);
+
+  /**
+   * @brief Check if screenshot selection mode is enabled
+   * @return true if screenshot selection mode is active
+   */
+  bool isScreenshotSelectionMode() const { return specialTool_ == SpecialTool::ScreenshotSelection; }
+
+  /**
+   * @brief Get the tool manager
+   * @return Pointer to the tool manager
+   */
+  ToolManager *toolManager() const { return toolManager_; }
 
   /**
    * @brief Set the pen color
@@ -201,10 +210,10 @@ public:
   void setFilledShapes(bool filled);
 
   /**
-   * @brief Check if filled shapes mode is enabled
+   * @brief Check if filled shapes mode is enabled (SceneRenderer interface)
    * @return true if shapes are filled
    */
-  bool filledShapes() const { return fillShapes_; }
+  bool isFilledShapes() const override { return fillShapes_; }
 
   // View settings
   /**
@@ -296,11 +305,66 @@ public:
    */
   bool exportAnnotatedPdf(const QString &filePath);
 
+  // SceneRenderer interface implementation
   /**
    * @brief Get the graphics scene
    * @return Pointer to the scene
    */
-  QGraphicsScene *scene() const { return scene_; }
+  QGraphicsScene *scene() const override { return scene_; }
+  
+  /**
+   * @brief Get the current pen for drawing
+   * @return Reference to the current pen
+   */
+  const QPen &currentPen() const override { return currentPen_; }
+  
+  /**
+   * @brief Get the eraser pen
+   * @return Reference to the eraser pen
+   */
+  const QPen &eraserPen() const override { return eraserPen_; }
+  
+  /**
+   * @brief Get the background item (the PDF page)
+   * @return Pointer to the page item as background
+   */
+  QGraphicsPixmapItem *backgroundImageItem() const override { return pageItem_; }
+  
+  /**
+   * @brief Add a draw action to the undo stack
+   * @param item The graphics item that was drawn
+   */
+  void addDrawAction(QGraphicsItem *item) override;
+  
+  /**
+   * @brief Add a delete action to the undo stack
+   * @param item The graphics item that was deleted
+   */
+  void addDeleteAction(QGraphicsItem *item) override;
+  
+  /**
+   * @brief Add a custom action to the undo stack
+   * @param action The action to add
+   */
+  void addAction(std::unique_ptr<Action> action) override;
+  
+  /**
+   * @brief Set the cursor
+   * @param cursor The cursor to set
+   */
+  void setCursor(const QCursor &cursor) override { QGraphicsView::setCursor(cursor); }
+  
+  /**
+   * @brief Get the horizontal scroll bar
+   * @return Pointer to the horizontal scroll bar
+   */
+  QScrollBar *horizontalScrollBar() const override { return QGraphicsView::horizontalScrollBar(); }
+  
+  /**
+   * @brief Get the vertical scroll bar
+   * @return Pointer to the vertical scroll bar
+   */
+  QScrollBar *verticalScrollBar() const override { return QGraphicsView::verticalScrollBar(); }
 
 signals:
   /**
@@ -378,8 +442,10 @@ private:
   std::unique_ptr<PdfOverlayManager> overlayManager_;
   PdfPageItem *pageItem_;
 
-  // Scene
+  // Scene and tool management
   QGraphicsScene *scene_;
+  ToolManager *toolManager_;
+  SpecialTool specialTool_;
 
   // Current state
   int currentPage_;
@@ -388,18 +454,12 @@ private:
   bool showGrid_;
   bool fillShapes_;
   double currentZoom_;
-  Tool currentTool_;
   QPen currentPen_;
   QPen eraserPen_;
 
-  // Drawing state
+  // Drawing state for screenshot selection (special tool)
   QPointF startPoint_;
-  QPointF lastPanPoint_;
-  QGraphicsItem *tempShapeItem_;
-  QGraphicsPathItem *currentPath_;
-  QVector<QPointF> pointBuffer_;
-  bool isPanning_;
-  QGraphicsRectItem *screenshotSelectionRect_;  // Rectangle for screenshot selection
+  QGraphicsRectItem *screenshotSelectionRect_;
   bool dragAccepted_ = false;
 
   // Constants
@@ -412,15 +472,8 @@ private:
   // Private methods
   void renderCurrentPage();
   void setupScene();
-  void addDrawAction(QGraphicsItem *item);
-  void addDeleteAction(QGraphicsItem *item);
   void clearRedoStack();
-  void eraseAt(const QPointF &point);
   void applyZoom(double factor);
-  void addPoint(const QPointF &point);
-  void createTextItem(const QPointF &pos);
-  void fillAt(const QPointF &point);
-  void drawArrow(const QPointF &start, const QPointF &end);
   void captureScreenshot(const QRectF &rect);
 };
 

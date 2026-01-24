@@ -3,18 +3,18 @@
  * @brief Text annotation tool implementation with inline LaTeX editing.
  */
 #include "text_tool.h"
-#include "../widgets/canvas.h"
+#include "../core/scene_renderer.h"
 #include "../widgets/latex_text_item.h"
 #include <QFont>
 
-TextTool::TextTool(Canvas *canvas) : Tool(canvas), currentEditingItem_(nullptr) {}
+TextTool::TextTool(SceneRenderer *renderer) : Tool(renderer), currentEditingItem_(nullptr) {}
 
 TextTool::~TextTool() = default;
 
 void TextTool::mousePressEvent(QMouseEvent *event, const QPointF &scenePos) {
   if (event->button() == Qt::LeftButton) {
     // Check if we clicked on an existing LatexTextItem
-    QGraphicsItem *item = canvas_->scene()->itemAt(scenePos, QTransform());
+    QGraphicsItem *item = renderer_->scene()->itemAt(scenePos, QTransform());
     if (auto *latexItem = dynamic_cast<LatexTextItem *>(item)) {
       // If item is not editing, start editing it
       if (!latexItem->isEditing()) {
@@ -47,21 +47,21 @@ void TextTool::mouseReleaseEvent(QMouseEvent * /*event*/,
 
 void TextTool::createTextItem(const QPointF &position) {
   auto *textItem = new LatexTextItem();
-  textItem->setFont(QFont("Arial", qMax(12, canvas_->currentPen().width() * 3)));
-  textItem->setTextColor(canvas_->currentPen().color());
+  textItem->setFont(QFont("Arial", qMax(12, renderer_->currentPen().width() * 3)));
+  textItem->setTextColor(renderer_->currentPen().color());
   textItem->setPos(position);
 
-  canvas_->scene()->addItem(textItem);
+  renderer_->scene()->addItem(textItem);
 
   // Connect to handle when editing is finished
   QObject::connect(textItem, &LatexTextItem::editingFinished, [this, textItem]() {
     // If the text is empty after editing, remove the item
     if (textItem->text().trimmed().isEmpty()) {
-      canvas_->scene()->removeItem(textItem);
+      renderer_->scene()->removeItem(textItem);
       textItem->deleteLater();
     } else {
       // Add to undo stack only when there's actual content
-      canvas_->addDrawAction(textItem);
+      renderer_->addDrawAction(textItem);
     }
     if (currentEditingItem_ == textItem) {
       currentEditingItem_ = nullptr;

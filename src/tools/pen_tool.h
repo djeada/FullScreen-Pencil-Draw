@@ -19,7 +19,7 @@
  */
 class PenTool : public Tool {
 public:
-  explicit PenTool(Canvas *canvas);
+  explicit PenTool(SceneRenderer *renderer);
   ~PenTool() override;
 
   QString name() const override { return "Pen"; }

@@ -6,7 +6,8 @@
 
 #ifdef HAVE_QT_PDF
 
-#include "latex_text_item.h"
+#include "../tools/tool.h"
+#include "../tools/tool_manager.h"
 #include <QApplication>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -64,14 +65,18 @@ void PdfPageItem::updatePixmap() {
 PdfViewer::PdfViewer(QWidget *parent)
     : QGraphicsView(parent), document_(std::make_unique<PdfDocument>()),
       overlayManager_(std::make_unique<PdfOverlayManager>()),
-      pageItem_(nullptr), scene_(new QGraphicsScene(this)), currentPage_(0),
-      renderDpi_(DEFAULT_DPI), darkMode_(false), showGrid_(false),
-      fillShapes_(false), currentZoom_(1.0), currentTool_(Tool::Pen),
+      pageItem_(nullptr), scene_(new QGraphicsScene(this)),
+      toolManager_(nullptr), specialTool_(SpecialTool::None),
+      currentPage_(0), renderDpi_(DEFAULT_DPI), darkMode_(false), 
+      showGrid_(false), fillShapes_(false), currentZoom_(1.0),
       currentPen_(Qt::white, 3), eraserPen_(Qt::black, 10),
-      tempShapeItem_(nullptr), currentPath_(nullptr), isPanning_(false),
       screenshotSelectionRect_(nullptr) {
 
   setupScene();
+  
+  // Initialize tool manager
+  toolManager_ = new ToolManager(this, this);
+  toolManager_->setActiveTool(ToolManager::ToolType::Pen);
 
   // Connect document signals
   connect(document_.get(), &PdfDocument::documentLoaded, this, [this]() {
@@ -199,41 +204,43 @@ void PdfViewer::renderCurrentPage() {
   scene_->setSceneRect(0, 0, pageImage.width(), pageImage.height());
 }
 
-void PdfViewer::setTool(Tool tool) {
-  currentTool_ = tool;
-  tempShapeItem_ = nullptr;
-
+void PdfViewer::setToolType(int toolType) {
+  specialTool_ = SpecialTool::None;
+  
   // Reset drag mode
   setDragMode(QGraphicsView::NoDrag);
-
-  // Set appropriate cursor
-  switch (tool) {
-  case Tool::Selection:
-    setCursor(Qt::ArrowCursor);
+  
+  // Convert int to ToolManager::ToolType and set via tool manager
+  auto type = static_cast<ToolManager::ToolType>(toolType);
+  toolManager_->setActiveTool(type);
+  
+  // Set rubber band drag for selection tool
+  if (type == ToolManager::ToolType::Selection) {
     setDragMode(QGraphicsView::RubberBandDrag);
-    break;
-  case Tool::Pan:
-    setCursor(Qt::OpenHandCursor);
-    break;
-  case Tool::Text:
-    setCursor(Qt::IBeamCursor);
-    break;
-  case Tool::Fill:
-    setCursor(Qt::PointingHandCursor);
-    break;
-  case Tool::Eraser:
-    setCursor(Qt::CrossCursor);
-    break;
-  case Tool::ScreenshotSelection:
-    setCursor(Qt::CrossCursor);
-    break;
-  default:
-    setCursor(Qt::CrossCursor);
-    break;
   }
-
+  
+  // Update cursor based on active tool
+  Tool *tool = toolManager_->activeTool();
+  if (tool) {
+    QGraphicsView::setCursor(tool->cursor());
+  }
+  
   scene_->clearSelection();
-  isPanning_ = false;
+}
+
+void PdfViewer::setScreenshotSelectionMode(bool enabled) {
+  if (enabled) {
+    specialTool_ = SpecialTool::ScreenshotSelection;
+    QGraphicsView::setCursor(Qt::CrossCursor);
+    setDragMode(QGraphicsView::NoDrag);
+  } else {
+    specialTool_ = SpecialTool::None;
+    // Restore cursor from current tool
+    Tool *tool = toolManager_->activeTool();
+    if (tool) {
+      QGraphicsView::setCursor(tool->cursor());
+    }
+  }
 }
 
 void PdfViewer::setPenColor(const QColor &color) { currentPen_.setColor(color); }
@@ -360,6 +367,17 @@ void PdfViewer::addDeleteAction(QGraphicsItem *item) {
   clearRedoStack();
 }
 
+void PdfViewer::addAction(std::unique_ptr<Action> action) {
+  if (!hasPdf()) {
+    return;
+  }
+
+  auto &undoStack = overlayManager_->undoStack(currentPage_);
+  undoStack.push_back(std::move(action));
+  clearRedoStack();
+  emit documentModified();
+}
+
 void PdfViewer::clearRedoStack() {
   if (hasPdf()) {
     overlayManager_->redoStack(currentPage_).clear();
@@ -463,91 +481,28 @@ void PdfViewer::mousePressEvent(QMouseEvent *event) {
   QPointF sp = mapToScene(event->pos());
   emit cursorPositionChanged(sp);
 
-  if (currentTool_ == Tool::Selection) {
-    QGraphicsView::mousePressEvent(event);
-    return;
-  }
-
-  if (currentTool_ == Tool::Pan) {
-    isPanning_ = true;
-    lastPanPoint_ = event->pos();
-    setCursor(Qt::ClosedHandCursor);
-    return;
-  }
-
-  startPoint_ = sp;
-
-  switch (currentTool_) {
-  case Tool::Text:
-    createTextItem(sp);
-    break;
-  case Tool::Fill:
-    fillAt(sp);
-    break;
-  case Tool::Eraser:
-    eraseAt(sp);
-    break;
-  case Tool::Pen: {
-    currentPath_ = new QGraphicsPathItem();
-    currentPath_->setPen(currentPen_);
-    currentPath_->setFlags(QGraphicsItem::ItemIsSelectable |
-                           QGraphicsItem::ItemIsMovable);
-    QPainterPath p;
-    p.moveTo(sp);
-    currentPath_->setPath(p);
-    scene_->addItem(currentPath_);
-    pointBuffer_.clear();
-    pointBuffer_.append(sp);
-    addDrawAction(currentPath_);
-  } break;
-  case Tool::Rectangle:
-  case Tool::Arrow: {
-    auto ri = new QGraphicsRectItem(QRectF(startPoint_, startPoint_));
-    ri->setPen(currentPen_);
-    if (fillShapes_ && currentTool_ == Tool::Rectangle) {
-      ri->setBrush(currentPen_.color());
-    }
-    ri->setFlags(QGraphicsItem::ItemIsSelectable |
-                 QGraphicsItem::ItemIsMovable);
-    scene_->addItem(ri);
-    tempShapeItem_ = ri;
-    if (currentTool_ == Tool::Rectangle) {
-      addDrawAction(ri);
-    }
-  } break;
-  case Tool::Circle: {
-    auto ei = new QGraphicsEllipseItem(QRectF(startPoint_, startPoint_));
-    ei->setPen(currentPen_);
-    if (fillShapes_) {
-      ei->setBrush(currentPen_.color());
-    }
-    ei->setFlags(QGraphicsItem::ItemIsSelectable |
-                 QGraphicsItem::ItemIsMovable);
-    scene_->addItem(ei);
-    tempShapeItem_ = ei;
-    addDrawAction(ei);
-  } break;
-  case Tool::Line: {
-    auto li = new QGraphicsLineItem(QLineF(startPoint_, startPoint_));
-    li->setPen(currentPen_);
-    li->setFlags(QGraphicsItem::ItemIsSelectable |
-                 QGraphicsItem::ItemIsMovable);
-    scene_->addItem(li);
-    tempShapeItem_ = li;
-    addDrawAction(li);
-  } break;
-  case Tool::ScreenshotSelection: {
-    // Create a dashed rectangle for screenshot selection
+  // Handle screenshot selection mode (PDF-specific tool)
+  if (specialTool_ == SpecialTool::ScreenshotSelection) {
+    startPoint_ = sp;
     screenshotSelectionRect_ = new QGraphicsRectItem(QRectF(startPoint_, startPoint_));
     QPen selectionPen(Qt::blue, 2, Qt::DashLine);
     screenshotSelectionRect_->setPen(selectionPen);
-    screenshotSelectionRect_->setBrush(QBrush(QColor(100, 149, 237, 50))); // Light blue with transparency
-    screenshotSelectionRect_->setZValue(1000); // Above everything else
+    screenshotSelectionRect_->setBrush(QBrush(QColor(100, 149, 237, 50)));
+    screenshotSelectionRect_->setZValue(1000);
     scene_->addItem(screenshotSelectionRect_);
-  } break;
-  default:
+    return;
+  }
+
+  // Check if current tool uses rubber band selection (let QGraphicsView handle it)
+  Tool *tool = toolManager_->activeTool();
+  if (tool && tool->usesRubberBandSelection()) {
     QGraphicsView::mousePressEvent(event);
-    break;
+    return;
+  }
+
+  // Delegate to the current tool
+  if (tool) {
+    tool->mousePressEvent(event, sp);
   }
 }
 
@@ -560,57 +515,24 @@ void PdfViewer::mouseMoveEvent(QMouseEvent *event) {
   QPointF cp = mapToScene(event->pos());
   emit cursorPositionChanged(cp);
 
-  if (currentTool_ == Tool::Selection) {
-    QGraphicsView::mouseMoveEvent(event);
-    return;
-  }
-
-  if (currentTool_ == Tool::Pan && isPanning_) {
-    QPointF d = event->pos() - lastPanPoint_;
-    lastPanPoint_ = event->pos();
-    horizontalScrollBar()->setValue(horizontalScrollBar()->value() - d.x());
-    verticalScrollBar()->setValue(verticalScrollBar()->value() - d.y());
-    return;
-  }
-
-  switch (currentTool_) {
-  case Tool::Pen:
-    if (event->buttons() & Qt::LeftButton) {
-      addPoint(cp);
-    }
-    break;
-  case Tool::Eraser:
-    if (event->buttons() & Qt::LeftButton) {
-      eraseAt(cp);
-    }
-    break;
-  case Tool::Arrow:
-  case Tool::Rectangle:
-    if (tempShapeItem_) {
-      static_cast<QGraphicsRectItem *>(tempShapeItem_)
-          ->setRect(QRectF(startPoint_, cp).normalized());
-    }
-    break;
-  case Tool::Circle:
-    if (tempShapeItem_) {
-      static_cast<QGraphicsEllipseItem *>(tempShapeItem_)
-          ->setRect(QRectF(startPoint_, cp).normalized());
-    }
-    break;
-  case Tool::Line:
-    if (tempShapeItem_) {
-      static_cast<QGraphicsLineItem *>(tempShapeItem_)
-          ->setLine(QLineF(startPoint_, cp));
-    }
-    break;
-  case Tool::ScreenshotSelection:
+  // Handle screenshot selection mode
+  if (specialTool_ == SpecialTool::ScreenshotSelection) {
     if (screenshotSelectionRect_ && (event->buttons() & Qt::LeftButton)) {
       screenshotSelectionRect_->setRect(QRectF(startPoint_, cp).normalized());
     }
-    break;
-  default:
+    return;
+  }
+
+  // Check if current tool uses rubber band selection
+  Tool *tool = toolManager_->activeTool();
+  if (tool && tool->usesRubberBandSelection()) {
     QGraphicsView::mouseMoveEvent(event);
-    break;
+    return;
+  }
+
+  // Delegate to the current tool
+  if (tool) {
+    tool->mouseMoveEvent(event, cp);
   }
 }
 
@@ -622,45 +544,29 @@ void PdfViewer::mouseReleaseEvent(QMouseEvent *event) {
 
   QPointF ep = mapToScene(event->pos());
 
-  if (currentTool_ == Tool::Selection) {
-    QGraphicsView::mouseReleaseEvent(event);
-    return;
-  }
-
-  if (currentTool_ == Tool::Pan) {
-    isPanning_ = false;
-    setCursor(Qt::OpenHandCursor);
-    return;
-  }
-
-  if (currentTool_ == Tool::Arrow && tempShapeItem_) {
-    scene_->removeItem(tempShapeItem_);
-    delete tempShapeItem_;
-    tempShapeItem_ = nullptr;
-    drawArrow(startPoint_, ep);
-    return;
-  }
-
-  if (currentTool_ == Tool::ScreenshotSelection && screenshotSelectionRect_) {
+  // Handle screenshot selection mode
+  if (specialTool_ == SpecialTool::ScreenshotSelection && screenshotSelectionRect_) {
     QRectF selectionRect = screenshotSelectionRect_->rect();
-    // Remove the selection rectangle from the scene
     scene_->removeItem(screenshotSelectionRect_);
     delete screenshotSelectionRect_;
     screenshotSelectionRect_ = nullptr;
     
-    // Capture the screenshot if the selection has a valid size
     if (selectionRect.width() > 5 && selectionRect.height() > 5) {
       captureScreenshot(selectionRect);
     }
     return;
   }
 
-  if (currentTool_ != Tool::Pen && currentTool_ != Tool::Eraser &&
-      tempShapeItem_) {
-    tempShapeItem_ = nullptr;
-  } else if (currentTool_ == Tool::Pen) {
-    currentPath_ = nullptr;
-    pointBuffer_.clear();
+  // Check if current tool uses rubber band selection
+  Tool *tool = toolManager_->activeTool();
+  if (tool && tool->usesRubberBandSelection()) {
+    QGraphicsView::mouseReleaseEvent(event);
+    return;
+  }
+
+  // Delegate to the current tool
+  if (tool) {
+    tool->mouseReleaseEvent(event, ep);
   }
 }
 
@@ -671,136 +577,6 @@ void PdfViewer::wheelEvent(QWheelEvent *event) {
   } else {
     QGraphicsView::wheelEvent(event);
   }
-}
-
-void PdfViewer::addPoint(const QPointF &point) {
-  if (!currentPath_) {
-    return;
-  }
-
-  pointBuffer_.append(point);
-
-  // Use Catmull-Rom spline interpolation for smooth curves
-  if (pointBuffer_.size() >= 4) {
-    QPainterPath path = currentPath_->path();
-
-    const QPointF &p0 = pointBuffer_[pointBuffer_.size() - 4];
-    const QPointF &p1 = pointBuffer_[pointBuffer_.size() - 3];
-    const QPointF &p2 = pointBuffer_[pointBuffer_.size() - 2];
-    const QPointF &p3 = pointBuffer_[pointBuffer_.size() - 1];
-
-    for (int i = 1; i <= 5; ++i) {
-      qreal t = i / 5.0;
-      qreal t2 = t * t;
-      qreal t3 = t2 * t;
-
-      qreal x = 0.5 * ((2 * p1.x()) + (-p0.x() + p2.x()) * t +
-                       (2 * p0.x() - 5 * p1.x() + 4 * p2.x() - p3.x()) * t2 +
-                       (-p0.x() + 3 * p1.x() - 3 * p2.x() + p3.x()) * t3);
-
-      qreal y = 0.5 * ((2 * p1.y()) + (-p0.y() + p2.y()) * t +
-                       (2 * p0.y() - 5 * p1.y() + 4 * p2.y() - p3.y()) * t2 +
-                       (-p0.y() + 3 * p1.y() - 3 * p2.y() + p3.y()) * t3);
-
-      path.lineTo(x, y);
-    }
-
-    currentPath_->setPath(path);
-  } else if (pointBuffer_.size() >= 2) {
-    QPainterPath path = currentPath_->path();
-    path.lineTo(point);
-    currentPath_->setPath(path);
-  }
-}
-
-void PdfViewer::eraseAt(const QPointF &point) {
-  QList<QGraphicsItem *> items = scene_->items(point);
-  for (QGraphicsItem *item : items) {
-    // Don't erase the PDF page item
-    if (item == pageItem_) {
-      continue;
-    }
-    addDeleteAction(item);
-    scene_->removeItem(item);
-    overlayManager_->removeItemFromPage(currentPage_, item);
-    delete item;
-    break; // Only erase one item at a time
-  }
-}
-
-void PdfViewer::createTextItem(const QPointF &pos) {
-  auto *textItem = new LatexTextItem();
-  textItem->setFont(QFont("Arial", qMax(12, currentPen_.width() * 3)));
-  textItem->setTextColor(currentPen_.color());
-  textItem->setPos(pos);
-
-  scene_->addItem(textItem);
-
-  connect(textItem, &LatexTextItem::editingFinished, this, [this, textItem]() {
-    if (textItem->text().trimmed().isEmpty()) {
-      scene_->removeItem(textItem);
-      textItem->deleteLater();
-    } else {
-      addDrawAction(textItem);
-    }
-  });
-
-  textItem->startEditing();
-}
-
-void PdfViewer::fillAt(const QPointF &point) {
-  QBrush newBrush(currentPen_.color());
-  for (QGraphicsItem *item : scene_->items(point)) {
-    if (item == pageItem_) {
-      continue;
-    }
-    
-    QBrush oldBrush;
-    bool canFill = false;
-    
-    if (auto r = dynamic_cast<QGraphicsRectItem *>(item)) {
-      oldBrush = r->brush();
-      r->setBrush(newBrush);
-      canFill = true;
-    } else if (auto e = dynamic_cast<QGraphicsEllipseItem *>(item)) {
-      oldBrush = e->brush();
-      e->setBrush(newBrush);
-      canFill = true;
-    }
-    
-    if (canFill) {
-      auto &undoStack = overlayManager_->undoStack(currentPage_);
-      undoStack.push_back(
-          std::make_unique<FillAction>(item, oldBrush, newBrush));
-      clearRedoStack();
-      emit documentModified();
-      return;
-    }
-  }
-}
-
-void PdfViewer::drawArrow(const QPointF &start, const QPointF &end) {
-  auto li = new QGraphicsLineItem(QLineF(start, end));
-  li->setPen(currentPen_);
-  li->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
-  scene_->addItem(li);
-
-  double angle = std::atan2(-(end.y() - start.y()), end.x() - start.x());
-  double sz = currentPen_.width() * 4;
-  QPolygonF ah;
-  ah << end
-     << end + QPointF(std::sin(angle + M_PI / 3) * sz,
-                      std::cos(angle + M_PI / 3) * sz)
-     << end + QPointF(std::sin(angle + M_PI - M_PI / 3) * sz,
-                      std::cos(angle + M_PI - M_PI / 3) * sz);
-  auto ahi = new QGraphicsPolygonItem(ah);
-  ahi->setPen(currentPen_);
-  ahi->setBrush(currentPen_.color());
-  ahi->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
-  scene_->addItem(ahi);
-
-  addDrawAction(li);
-  addDrawAction(ahi);
 }
 
 // Helper function to check if a URL points to a PDF file

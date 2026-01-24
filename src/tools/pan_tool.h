@@ -14,7 +14,7 @@
  */
 class PanTool : public Tool {
 public:
-  explicit PanTool(Canvas *canvas);
+  explicit PanTool(SceneRenderer *renderer);
   ~PanTool() override;
 
   QString name() const override { return "Pan"; }

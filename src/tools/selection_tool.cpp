@@ -3,9 +3,8 @@
  * @brief Selection tool implementation.
  */
 #include "selection_tool.h"
-#include "../widgets/canvas.h"
 
-SelectionTool::SelectionTool(Canvas *canvas) : Tool(canvas) {}
+SelectionTool::SelectionTool(SceneRenderer *renderer) : Tool(renderer) {}
 
 SelectionTool::~SelectionTool() = default;
 

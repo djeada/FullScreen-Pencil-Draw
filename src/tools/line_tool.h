@@ -13,7 +13,7 @@
  */
 class LineTool : public ShapeTool {
 public:
-  explicit LineTool(Canvas *canvas);
+  explicit LineTool(SceneRenderer *renderer);
   ~LineTool() override;
 
   QString name() const override { return "Line"; }

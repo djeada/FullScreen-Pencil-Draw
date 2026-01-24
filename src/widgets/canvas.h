@@ -36,6 +36,7 @@
 
 #include "../core/action.h"
 #include "../core/layer.h"
+#include "../core/scene_renderer.h"
 
 class ToolManager;
 class Tool;
@@ -46,8 +47,11 @@ class Tool;
  * Canvas is a QGraphicsView-based widget that provides the drawing surface.
  * It integrates with the ToolManager for tool-based drawing operations
  * and maintains undo/redo stacks for all actions.
+ * 
+ * Canvas implements the SceneRenderer interface, allowing drawing tools
+ * to work with it through a common abstraction.
  */
-class Canvas : public QGraphicsView {
+class Canvas : public QGraphicsView, public SceneRenderer {
   Q_OBJECT
 
 public:
@@ -60,25 +64,30 @@ public:
   double getCurrentZoom() const;
   int getCurrentOpacity() const;
   bool isGridVisible() const;
-  bool isFilledShapes() const;
+  bool isFilledShapes() const override;
   bool isSnapToGridEnabled() const;
   bool isRulerVisible() const;
   bool isMeasurementToolEnabled() const;
 
-  // Tool system accessors - used by Tool classes
-  QGraphicsScene *scene() const { return scene_; }
-  const QPen &currentPen() const { return currentPen_; }
-  const QPen &eraserPen() const { return eraserPen_; }
-  QGraphicsPixmapItem *backgroundImageItem() const { return backgroundImage_; }
+  // Tool system accessors - implements SceneRenderer interface
+  QGraphicsScene *scene() const override { return scene_; }
+  const QPen &currentPen() const override { return currentPen_; }
+  const QPen &eraserPen() const override { return eraserPen_; }
+  QGraphicsPixmapItem *backgroundImageItem() const override { return backgroundImage_; }
   QColor backgroundColor() const { return backgroundColor_; }
   
   // Layer management
   LayerManager *layerManager() const { return layerManager_; }
 
-  // Action management - used by Tool classes
-  void addDrawAction(QGraphicsItem *item);
-  void addDeleteAction(QGraphicsItem *item);
-  void addAction(std::unique_ptr<Action> action);
+  // Action management - implements SceneRenderer interface
+  void addDrawAction(QGraphicsItem *item) override;
+  void addDeleteAction(QGraphicsItem *item) override;
+  void addAction(std::unique_ptr<Action> action) override;
+  
+  // SceneRenderer interface methods using QGraphicsView
+  void setCursor(const QCursor &cursor) override { QGraphicsView::setCursor(cursor); }
+  QScrollBar *horizontalScrollBar() const override { return QGraphicsView::horizontalScrollBar(); }
+  QScrollBar *verticalScrollBar() const override { return QGraphicsView::verticalScrollBar(); }
   void clearRedoStack();
 
 signals:

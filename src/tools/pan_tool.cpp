@@ -3,10 +3,10 @@
  * @brief Pan/scroll tool implementation.
  */
 #include "pan_tool.h"
-#include "../widgets/canvas.h"
+#include "../core/scene_renderer.h"
 #include <QScrollBar>
 
-PanTool::PanTool(Canvas *canvas) : Tool(canvas), isPanning_(false) {}
+PanTool::PanTool(SceneRenderer *renderer) : Tool(renderer), isPanning_(false) {}
 
 PanTool::~PanTool() = default;
 
@@ -18,7 +18,7 @@ void PanTool::mousePressEvent(QMouseEvent *event, const QPointF & /*scenePos*/) 
   if (event->button() == Qt::LeftButton) {
     isPanning_ = true;
     lastPanPoint_ = event->pos();
-    canvas_->setCursor(Qt::ClosedHandCursor);
+    renderer_->setCursor(Qt::ClosedHandCursor);
   }
 }
 
@@ -27,10 +27,10 @@ void PanTool::mouseMoveEvent(QMouseEvent *event, const QPointF & /*scenePos*/) {
     QPoint delta = event->pos() - lastPanPoint_;
     lastPanPoint_ = event->pos();
 
-    canvas_->horizontalScrollBar()->setValue(
-        canvas_->horizontalScrollBar()->value() - delta.x());
-    canvas_->verticalScrollBar()->setValue(
-        canvas_->verticalScrollBar()->value() - delta.y());
+    renderer_->horizontalScrollBar()->setValue(
+        renderer_->horizontalScrollBar()->value() - delta.x());
+    renderer_->verticalScrollBar()->setValue(
+        renderer_->verticalScrollBar()->value() - delta.y());
   }
 }
 
@@ -38,6 +38,6 @@ void PanTool::mouseReleaseEvent(QMouseEvent *event,
                                  const QPointF & /*scenePos*/) {
   if (event->button() == Qt::LeftButton) {
     isPanning_ = false;
-    canvas_->setCursor(Qt::OpenHandCursor);
+    renderer_->setCursor(Qt::OpenHandCursor);
   }
 }

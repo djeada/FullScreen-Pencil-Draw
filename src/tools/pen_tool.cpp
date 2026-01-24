@@ -3,10 +3,10 @@
  * @brief Freehand drawing tool implementation.
  */
 #include "pen_tool.h"
-#include "../widgets/canvas.h"
+#include "../core/scene_renderer.h"
 
-PenTool::PenTool(Canvas *canvas)
-    : Tool(canvas), currentPath_(nullptr) {}
+PenTool::PenTool(SceneRenderer *renderer)
+    : Tool(renderer), currentPath_(nullptr) {}
 
 PenTool::~PenTool() = default;
 
@@ -15,7 +15,7 @@ void PenTool::mousePressEvent(QMouseEvent *event, const QPointF &scenePos) {
     return;
 
   currentPath_ = new QGraphicsPathItem();
-  currentPath_->setPen(canvas_->currentPen());
+  currentPath_->setPen(renderer_->currentPen());
   currentPath_->setFlags(QGraphicsItem::ItemIsSelectable |
                          QGraphicsItem::ItemIsMovable);
 
@@ -23,12 +23,12 @@ void PenTool::mousePressEvent(QMouseEvent *event, const QPointF &scenePos) {
   path.moveTo(scenePos);
   currentPath_->setPath(path);
 
-  canvas_->scene()->addItem(currentPath_);
+  renderer_->scene()->addItem(currentPath_);
 
   pointBuffer_.clear();
   pointBuffer_.append(scenePos);
 
-  canvas_->addDrawAction(currentPath_);
+  renderer_->addDrawAction(currentPath_);
 }
 
 void PenTool::mouseMoveEvent(QMouseEvent *event, const QPointF &scenePos) {
