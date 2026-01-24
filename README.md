@@ -1,6 +1,6 @@
 # FullScreen Pencil Draw
 
-FullScreen Pencil Draw is a professional-grade vector and raster graphics editor built with C++ and Qt6. Designed for both quick sketches and detailed illustrations, this application provides an intuitive mix of drawing tools with a modern, extensible architecture.
+A vector and raster graphics editor built with C++ and Qt6. This application provides drawing tools for quick sketches and detailed illustrations.
 
 ## Screenshots
 
@@ -9,8 +9,8 @@ FullScreen Pencil Draw is a professional-grade vector and raster graphics editor
 ## Features
 
 ### Drawing Tools
-- **Pen Tool**: Smooth freehand drawing with Catmull-Rom spline interpolation
-- **Eraser Tool**: Remove items with visual preview cursor
+- **Pen Tool**: Freehand drawing with Catmull-Rom spline interpolation
+- **Eraser Tool**: Remove items with preview cursor
 - **Text Tool**: Add text annotations with customizable font size
 - **Fill Tool**: Fill closed shapes with current color
 - **Line Tool**: Draw straight lines
@@ -24,33 +24,33 @@ FullScreen Pencil Draw is a professional-grade vector and raster graphics editor
 - **PDF Background**: PDF content is rendered as a read-only background layer
 - **Overlay Drawing**: Draw annotations on top of PDF pages using all drawing tools
 - **Per-Page Overlays**: Each page maintains its own overlay annotations
-- **Undo/Redo Per Page**: Full undo/redo support isolated to each page's overlays
-- **Dark Mode**: Toggle color inversion for comfortable viewing in low-light environments
+- **Undo/Redo Per Page**: Undo/redo support isolated to each page's overlays
+- **Dark Mode**: Toggle color inversion for viewing in low-light environments
 - **Export Annotated PDF**: Export the annotated document to a new PDF file
 
 ### Navigation & Selection
 - **Selection Tool**: Select, move, and transform items with rubber-band selection
-- **Pan Tool**: Navigate around large canvases by dragging
+- **Pan Tool**: Navigate around the canvas by dragging
 - **Zoom**: Zoom in/out with Ctrl+Scroll, keyboard shortcuts, or toolbar buttons
-- **Grid Overlay**: Toggle alignment grid for precise positioning
+- **Grid Overlay**: Toggle alignment grid for positioning
 
-### Professional Features
-- **Layer System**: Full layer management with visibility, opacity, and lock controls
-- **Brush Preview**: Visual preview widget showing actual brush size and color
+### Core Features
+- **Layer System**: Layer management with visibility, opacity, and lock controls
+- **Brush Preview**: Visual preview widget showing brush size and color
 - **Opacity Control**: Adjust brush transparency with slider
 - **Brush Size Control**: Visual display with +/- buttons and keyboard shortcuts
-- **Color Picker**: Full color dialog with current color preview
+- **Color Picker**: Color dialog with current color preview
 - **Filled Shapes Toggle**: Draw filled or outlined rectangles and circles (B key)
 - **Zoom Level Display**: Real-time zoom percentage indicator
 - **Cursor Position**: Live X/Y coordinate display
-- **Undo/Redo**: Full action history with unlimited undo levels (including fill operations)
-- **Clear Canvas Confirmation**: Prevents accidental canvas clearing
+- **Undo/Redo**: Action history with unlimited undo levels (including fill operations)
+- **Clear Canvas Confirmation**: Confirmation dialog to prevent accidental canvas clearing
 
 ### Layer System
-- **Layer Panel**: Dockable panel on the right side for layer management
+- **Layer Panel**: Dockable panel for layer management
 - **Add/Delete Layers**: Create new layers or remove existing ones
 - **Layer Visibility**: Toggle eye icon to show/hide layers
-- **Layer Lock**: Lock layers to prevent accidental edits
+- **Layer Lock**: Lock layers to prevent edits
 - **Layer Opacity**: Adjust individual layer transparency
 - **Layer Ordering**: Move layers up/down in the stack
 - **Duplicate Layers**: Create copies of existing layers
@@ -67,8 +67,8 @@ FullScreen Pencil Draw is a professional-grade vector and raster graphics editor
 - **Clear Canvas**: Reset to blank state
 
 ### Edit Operations
-- **Copy/Cut/Paste**: Full clipboard support for items
-- **Duplicate**: Quick duplicate selected items (Ctrl+D)
+- **Copy/Cut/Paste**: Clipboard support for items
+- **Duplicate**: Duplicate selected items (Ctrl+D)
 - **Delete**: Remove selected items
 - **Select All**: Select all canvas items
 - **Context Menu Export**: Right-click on selected items to export as SVG, PNG, or JPG
@@ -115,104 +115,91 @@ FullScreen Pencil Draw is a professional-grade vector and raster graphics editor
 
 ## Architecture
 
-The application follows a clean Model-View architecture:
+The application uses a Model-View architecture:
 - **Canvas**: QGraphicsView-based drawing surface with scene management
 - **ToolPanel**: Modular toolbar with signal/slot-based tool switching  
-- **LayerManager**: Centralized layer management for organizing graphics
+- **LayerManager**: Centralized layer management
 - **LayerPanel**: Dockable widget for layer manipulation
 - **Action System**: Undo/redo stack with polymorphic action classes
 - **Tool System**: Extensible tool architecture with base Tool class
 - **PdfViewer**: PDF viewing and annotation widget using Qt PDF module
 - **PdfDocument**: PDF document loading with page caching
 - **PdfOverlayManager**: Per-page overlay management for annotations
-- **Modern C++17**: Smart pointers, constexpr, structured bindings
+- Built with C++17 features
 
 ## Usage
 
-Follow these steps to start creating with FullScreen Pencil Draw:
-
-I. **Launch the Application**
+1. **Launch the Application**
 
 ```bash
-
 ./FullScreen-Pencil-Draw
 ```
 
-Alternatively, you can launch the application by double-clicking the `FullScreen-Pencil-Draw` executable in the build directory.
+You can also launch the application by double-clicking the `FullScreen-Pencil-Draw` executable in the build directory.
 
-II. **Select a Tool**
+2. **Select a Tool**
 
-- For drawing lines and shapes.
-- For removing unwanted parts of your drawing.
+Use the toolbar or keyboard shortcuts to select drawing tools, eraser, or other functions.
 
-III. **Draw on the Canvas**
+3. **Draw on the Canvas**
 
-- Click and drag your mouse (or use a stylus) on the canvas to draw.
-- Change the color and size of your selected tool directly from the toolbar to customize your drawing.
+Click and drag your mouse (or use a stylus) on the canvas to draw. Change the color and size of your selected tool from the toolbar to customize your drawing.
 
-IV. **Undo and Redo Actions**
+4. **Undo and Redo Actions**
 
-- If you make a mistake, click the "Undo" button to revert the last action.
-- If you undo an action by mistake, use the "Redo" button to reapply it.
+If you make a mistake, use the Undo button or Ctrl+Z to revert the last action. Use Redo or Ctrl+Y to reapply it.
 
-V. **Save Your Artwork**
+5. **Save Your Artwork**
 
-- Click the "Save" button located on the toolbar.
-- Select your preferred image format (PNG or JPG) and choose the destination folder to save your creation.
+Click the Save button on the toolbar or use Ctrl+S. Select your preferred image format (PNG, JPG, or BMP) and choose the destination folder to save your creation.
 
-VI. **Import Images via Drag-and-Drop**
+6. **Import Images via Drag-and-Drop**
 
-- Drag an image file (PNG, JPG, JPEG, BMP, or GIF) from your file system.
-- Drop it anywhere on the canvas.
-- A dialog will appear allowing you to specify the desired dimensions.
-- Adjust the width and height (aspect ratio is maintained by default).
-- Click OK to add the image to your canvas at the drop location.
-- The imported image can be selected, moved, resized, and edited like any other canvas item.
+Drag an image file (PNG, JPG, JPEG, BMP, or GIF) from your file system and drop it anywhere on the canvas. A dialog will appear allowing you to specify the desired dimensions. Adjust the width and height (aspect ratio is maintained by default), then click OK to add the image to your canvas at the drop location. The imported image can be selected, moved, resized, and edited like any other canvas item.
 
 ## Building the Application
 
-To build FullScreen Pencil Draw, ensure you have the necessary dependencies installed and follow the steps below.
-
 ### Prerequisites
 
-- A C++ compiler that supports C++17 or later (GCC 7+, Clang 5+, MSVC 2017+)
+- C++ compiler with C++17 support (GCC 7+, Clang 5+, MSVC 2017+)
 - CMake version 3.16 or higher
 - Qt6 base development packages and tools
 - OpenGL development libraries
 - Xvfb (optional, for running GUI applications in a headless environment)
 
-### Installation Steps
+### Build Steps
 
-I. **Clone the Repository**
+1. **Clone the Repository**
 
 ```bash
 git clone https://github.com/djeada/FullScreen-Pencil-Draw.git
 cd FullScreen-Pencil-Draw
 ```
 
-II. **Install Dependencies**
+2. **Install Dependencies**
 
+On Ubuntu/Debian:
 ```bash
 sudo apt-get update
 sudo apt-get install -y build-essential cmake qt6-base-dev qt6-tools-dev qt6-tools-dev-tools libgl1-mesa-dev xvfb
 ```
 
-Refer to the official Qt documentation for installation instructions on your operating system.
+Refer to the official Qt documentation for installation instructions on other operating systems.
 
-III. **Create a Build Directory**
+3. **Create a Build Directory**
 
 ```bash
 mkdir build
 cd build
 ```
 
-IV. **Generate Build System Files with CMake**
+4. **Configure with CMake**
 
 ```bash
 cmake -DCMAKE_BUILD_TYPE=Release ..
 ```
 
-V. **Build the Application**
+5. **Build the Application**
 
 ```bash
 make -j$(nproc)
@@ -220,56 +207,35 @@ make -j$(nproc)
 
 The `-j$(nproc)` flag enables parallel compilation using all available CPU cores.
 
-VI. **Run the Application**
+6. **Run the Application**
 
 ```bash
-
 ./FullScreen-Pencil-Draw
 ```
 
-Alternatively, double-click the executable in the `build` directory.
+You can also double-click the executable in the `build` directory.
 
 ## Troubleshooting
 
-If you encounter issues while building or running the application, consider the following steps:
+If you encounter issues while building or running the application:
 
-I. Ensure all required dependencies are installed and up to date.
-
-II. Make sure Qt6 is correctly installed and accessible by CMake.
-
-III. Look at the output logs for any error messages that can guide you in resolving issues.
-
-IV. Open an issue on the [GitHub repository](https://github.com/djeada/FullScreen-Pencil-Draw/issues) detailing the problem you’re facing.
+- Ensure all required dependencies are installed and up to date
+- Verify Qt6 is correctly installed and accessible by CMake
+- Check the output logs for error messages that can guide you in resolving issues
+- Open an issue on the [GitHub repository](https://github.com/djeada/FullScreen-Pencil-Draw/issues) with details about the problem
 
 ## Contributing
 
-Contributions are welcome! If you have suggestions, improvements, or bug fixes, feel free to open an issue or submit a pull request.
+Contributions are welcome. If you have suggestions, improvements, or bug fixes, open an issue or submit a pull request.
 
 ### How to Contribute
 
-I. **Fork the Repository**
-
-II. **Create a New Branch**
-
-```bash
-git checkout -b feature/YourFeatureName
-```
-
-III. **Make Your Changes**
-
-IV. **Commit Your Changes**
-
-```bash
-git commit -m "Add Your Feature Description"
-```
-
-V. **Push to Your Fork**
-
-```bash
-git push origin feature/YourFeatureName
-```
-
-VI. **Open a Pull Request**
+1. Fork the repository
+2. Create a new branch: `git checkout -b feature/YourFeatureName`
+3. Make your changes
+4. Commit your changes: `git commit -m "Add Your Feature Description"`
+5. Push to your fork: `git push origin feature/YourFeatureName`
+6. Open a pull request
 
 ## License
 
@@ -277,5 +243,5 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 ## Contact
 
-For any questions or feedback, please reach out via [GitHub Issues](https://github.com/djeada/FullScreen-Pencil-Draw/issues) or contact the maintainer directly.
+For questions or feedback, use [GitHub Issues](https://github.com/djeada/FullScreen-Pencil-Draw/issues).
 
