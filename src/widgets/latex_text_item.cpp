@@ -581,20 +581,19 @@ QPixmap LatexTextItem::renderLatex(const QString &text) {
     // Convert LaTeX to HTML with enhanced styling for math expressions
     QString latex = match.captured(1);
     QString converted = latexToHtml(latex);
-    // Wrap LaTeX content in styled span with slightly increased font weight
-    // for better visual distinction
+    // Wrap LaTeX content in styled span with letter-spacing for better visual distinction
     htmlContent += "<span style='color: " + textColor_.name() + 
                    "; letter-spacing: 0.5px;'>" + converted + "</span>";
     lastEnd = match.capturedEnd();
   }
 
-  // Add remaining plain text
+  // Add remaining plain text after the last match
   if (lastEnd < text.length()) {
     htmlContent += text.mid(lastEnd).toHtmlEscaped();
   }
 
-  // If no LaTeX was found, just use plain text
-  if (!text.contains('$')) {
+  // If no matches were found (no LaTeX), htmlContent will be empty, so use plain text
+  if (htmlContent.isEmpty()) {
     htmlContent = text.toHtmlEscaped();
   }
 
