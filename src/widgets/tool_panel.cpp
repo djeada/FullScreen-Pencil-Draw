@@ -32,7 +32,7 @@ ToolPanel::ToolPanel(QWidget *parent) : QToolBar(parent), brushPreview_(nullptr)
   connect(actionPen, &QAction::triggered, this, &ToolPanel::onActionPen);
   addAction(actionPen);
 
-  actionEraser = new QAction("◯ Eraser", this);
+  actionEraser = new QAction("⌫ Eraser", this);
   actionEraser->setToolTip("Erase items (E)");
   actionEraser->setCheckable(true);
   connect(actionEraser, &QAction::triggered, this, &ToolPanel::onActionEraser);
@@ -300,7 +300,7 @@ void ToolPanel::clearActiveToolStyles() {
 void ToolPanel::setActiveTool(const QString &toolName) { 
   // Map tool names to Unicode icons for display
   static const QHash<QString, QString> toolIcons = {
-    {"Pen", "✎"}, {"Eraser", "◯"}, {"Text", "T"}, {"Fill", "◉"},
+    {"Pen", "✎"}, {"Eraser", "⌫"}, {"Text", "T"}, {"Fill", "◉"},
     {"Line", "╱"}, {"Arrow", "➤"}, {"Rectangle", "▢"}, {"Circle", "◯"},
     {"Select", "⬚"}, {"Pan", "☰"}
   };
