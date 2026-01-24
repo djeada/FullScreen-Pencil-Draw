@@ -25,7 +25,11 @@ void EraserTool::activate() {
 }
 
 void EraserTool::deactivate() {
-  hidePreview();
+  if (eraserPreview_) {
+    renderer_->scene()->removeItem(eraserPreview_);
+    delete eraserPreview_;
+    eraserPreview_ = nullptr;
+  }
 }
 
 void EraserTool::mousePressEvent(QMouseEvent *event, const QPointF &scenePos) {

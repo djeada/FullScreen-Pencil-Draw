@@ -122,6 +122,10 @@ bool PdfViewer::openPdf(const QString &filePath) {
 }
 
 void PdfViewer::closePdf() {
+  if (toolManager_) {
+    toolManager_->setActiveTool(ToolManager::ToolType::Pen);
+  }
+
   // Remove page item
   if (pageItem_) {
     scene_->removeItem(pageItem_);
