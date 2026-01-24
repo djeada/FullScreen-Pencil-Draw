@@ -934,8 +934,14 @@ void Canvas::dropEvent(QDropEvent *event) {
         // Extract file extension using QFileInfo for robust handling
         QString extension = QFileInfo(filePath).suffix().toLower();
         
+        // Check if the file is a PDF - emit signal to open in PDF viewer
+        if (extension == "pdf") {
+          emit pdfFileDropped(filePath);
+          event->acceptProposedAction();
+          return;
+        }
         // Check if the file is a supported image format
-        if (SUPPORTED_IMAGE_EXTENSIONS.contains(extension)) {
+        else if (SUPPORTED_IMAGE_EXTENSIONS.contains(extension)) {
           // Get the drop position in scene coordinates
           QPointF dropPosition = mapToScene(event->position().toPoint());
           
@@ -944,7 +950,7 @@ void Canvas::dropEvent(QDropEvent *event) {
         } else {
           // Inform user about unsupported file type
           QMessageBox::warning(this, "Unsupported File", 
-                             QString("File '%1' is not a supported image format.\n\nSupported formats: PNG, JPG, JPEG, BMP, GIF")
+                             QString("File '%1' is not a supported format.\n\nSupported formats: PNG, JPG, JPEG, BMP, GIF, PDF")
                              .arg(QFileInfo(filePath).fileName()));
         }
       }
