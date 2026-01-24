@@ -11,12 +11,13 @@
 #include <QColorDialog>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QFrame>
 #include <QInputDialog>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QMenuBar>
 #include <QSpinBox>
-#include <QStackedWidget>
+#include <QSplitter>
 #include <QStatusBar>
 #include <QToolBar>
 #include <QVBoxLayout>
@@ -33,16 +34,19 @@ MainWindow::MainWindow(QWidget *parent)
       _snapToGridAction(nullptr), _autoSaveAction(nullptr),
       _rulerAction(nullptr), _measurementAction(nullptr)
 #ifdef HAVE_QT_PDF
-      , _pdfViewer(nullptr), _centralStack(nullptr), _pdfToolBar(nullptr),
-      _pdfPageLabel(nullptr), _pdfDarkModeAction(nullptr), _pdfViewerActive(false)
+      , _pdfViewer(nullptr), _centralSplitter(nullptr), _pdfPanel(nullptr),
+      _pdfToolBar(nullptr), _pdfPageLabel(nullptr), _pdfDarkModeAction(nullptr)
 #endif
 {
 #ifdef HAVE_QT_PDF
-  // Create stacked widget for switching between canvas and PDF viewer
-  _centralStack = new QStackedWidget(this);
-  _centralStack->addWidget(_canvas);
+  // Create splitter for side-by-side canvas and PDF viewer
+  _centralSplitter = new QSplitter(Qt::Horizontal, this);
+  _centralSplitter->addWidget(_canvas);
   setupPdfViewer();
-  setCentralWidget(_centralStack);
+  setCentralWidget(_centralSplitter);
+  
+  // Set initial sizes (canvas takes most space, PDF panel hidden initially)
+  _centralSplitter->setSizes({1000, 0});
 #else
   QWidget *centralWidget = new QWidget(this);
   QVBoxLayout *layout = new QVBoxLayout(centralWidget);
@@ -414,11 +418,11 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
   else if (event->key() == Qt::Key_B) { _canvas->toggleFilledShapes(); }
   else if (event->key() == Qt::Key_D && (event->modifiers() & Qt::ControlModifier)) { _canvas->duplicateSelectedItems(); }
 #ifdef HAVE_QT_PDF
-  // PDF navigation shortcuts
-  else if (event->key() == Qt::Key_PageDown && _pdfViewerActive && _pdfViewer) { _pdfViewer->nextPage(); }
-  else if (event->key() == Qt::Key_PageUp && _pdfViewerActive && _pdfViewer) { _pdfViewer->previousPage(); }
-  else if (event->key() == Qt::Key_Home && _pdfViewerActive && _pdfViewer) { _pdfViewer->firstPage(); }
-  else if (event->key() == Qt::Key_End && _pdfViewerActive && _pdfViewer) { _pdfViewer->lastPage(); }
+  // PDF navigation shortcuts (only work when PDF panel is visible)
+  else if (event->key() == Qt::Key_PageDown && _pdfPanel && _pdfPanel->isVisible() && _pdfViewer) { _pdfViewer->nextPage(); }
+  else if (event->key() == Qt::Key_PageUp && _pdfPanel && _pdfPanel->isVisible() && _pdfViewer) { _pdfViewer->previousPage(); }
+  else if (event->key() == Qt::Key_Home && _pdfPanel && _pdfPanel->isVisible() && _pdfViewer) { _pdfViewer->firstPage(); }
+  else if (event->key() == Qt::Key_End && _pdfPanel && _pdfPanel->isVisible() && _pdfViewer) { _pdfViewer->lastPage(); }
 #endif
   // Brush size
   else if (event->key() == Qt::Key_BracketRight) { _canvas->increaseBrushSize(); }
@@ -432,8 +436,28 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
 
 #ifdef HAVE_QT_PDF
 void MainWindow::setupPdfViewer() {
-  _pdfViewer = new PdfViewer(this);
-  _centralStack->addWidget(_pdfViewer);
+  // Create PDF panel with its own layout
+  _pdfPanel = new QFrame(this);
+  _pdfPanel->setFrameStyle(QFrame::StyledPanel | QFrame::Raised);
+  _pdfPanel->setMinimumWidth(200);
+  
+  QVBoxLayout *pdfLayout = new QVBoxLayout(_pdfPanel);
+  pdfLayout->setContentsMargins(0, 0, 0, 0);
+  pdfLayout->setSpacing(0);
+  
+  // Create header label for PDF panel
+  QLabel *pdfHeader = new QLabel("PDF Viewer", _pdfPanel);
+  pdfHeader->setAlignment(Qt::AlignCenter);
+  pdfHeader->setStyleSheet("QLabel { background-color: #3a3a40; color: white; padding: 8px; font-weight: bold; }");
+  pdfLayout->addWidget(pdfHeader);
+  
+  // Create PDF viewer widget
+  _pdfViewer = new PdfViewer(_pdfPanel);
+  pdfLayout->addWidget(_pdfViewer, 1);
+  
+  // Add PDF panel to splitter (initially hidden)
+  _centralSplitter->addWidget(_pdfPanel);
+  _pdfPanel->hide();
 
   // Connect PDF viewer signals
   connect(_pdfViewer, &PdfViewer::pageChanged, this, &MainWindow::onPdfPageChanged);
@@ -441,10 +465,10 @@ void MainWindow::setupPdfViewer() {
   connect(_pdfViewer, &PdfViewer::darkModeChanged, this, &MainWindow::onPdfDarkModeChanged);
   connect(_pdfViewer, &PdfViewer::cursorPositionChanged, this, &MainWindow::onCursorPositionChanged);
   connect(_pdfViewer, &PdfViewer::pdfLoaded, this, [this]() {
-    showPdfViewer();
+    showPdfPanel();
   });
   connect(_pdfViewer, &PdfViewer::pdfClosed, this, [this]() {
-    showCanvas();
+    hidePdfPanel();
   });
   connect(_pdfViewer, &PdfViewer::errorOccurred, this, [this](const QString &message) {
     statusBar()->showMessage(QString("PDF Error: %1").arg(message), 5000);
@@ -525,25 +549,24 @@ void MainWindow::setupPdfToolBar() {
   _pdfToolBar->addAction("Close PDF", this, &MainWindow::onClosePdf);
 }
 
-void MainWindow::showPdfViewer() {
-  _pdfViewerActive = true;
-  _centralStack->setCurrentWidget(_pdfViewer);
-  _pdfToolBar->show();
-  _toolPanel->hide();
-  if (_layerPanel) {
-    _layerPanel->hide();
+void MainWindow::showPdfPanel() {
+  if (_pdfPanel) {
+    _pdfPanel->show();
+    // Set splitter sizes to show both canvas and PDF panel (60/40 split)
+    int totalWidth = _centralSplitter->width();
+    _centralSplitter->setSizes({totalWidth * 6 / 10, totalWidth * 4 / 10});
   }
-  setWindowTitle("FullScreen Pencil Draw - PDF Viewer");
+  _pdfToolBar->show();
+  setWindowTitle("FullScreen Pencil Draw - PDF Annotation Mode");
 }
 
-void MainWindow::showCanvas() {
-  _pdfViewerActive = false;
-  _centralStack->setCurrentWidget(_canvas);
-  _pdfToolBar->hide();
-  _toolPanel->show();
-  if (_layerPanel) {
-    _layerPanel->show();
+void MainWindow::hidePdfPanel() {
+  if (_pdfPanel) {
+    _pdfPanel->hide();
+    // Give full width back to canvas
+    _centralSplitter->setSizes({1000, 0});
   }
+  _pdfToolBar->hide();
   setWindowTitle("FullScreen Pencil Draw - Professional Edition");
 }
 
@@ -563,7 +586,7 @@ void MainWindow::onClosePdf() {
   if (_pdfViewer) {
     _pdfViewer->closePdf();
   }
-  showCanvas();
+  hidePdfPanel();
 }
 
 void MainWindow::onPdfPageChanged(int pageIndex, int pageCount) {

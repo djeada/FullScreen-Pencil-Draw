@@ -4,7 +4,7 @@
 
 #include <QMainWindow>
 #include <QMenu>
-#include <QStackedWidget>
+#include <QSplitter>
 
 class Canvas;
 class ToolPanel;
@@ -16,6 +16,7 @@ class QToolBar;
 
 #ifdef HAVE_QT_PDF
 class PdfViewer;
+class QFrame;
 #endif
 
 class MainWindow : public QMainWindow {
@@ -70,16 +71,16 @@ private:
 
 #ifdef HAVE_QT_PDF
   PdfViewer *_pdfViewer;
-  QStackedWidget *_centralStack;
+  QSplitter *_centralSplitter;
+  QFrame *_pdfPanel;
   QToolBar *_pdfToolBar;
   QLabel *_pdfPageLabel;
   QAction *_pdfDarkModeAction;
-  bool _pdfViewerActive;
 
   void setupPdfViewer();
   void setupPdfToolBar();
-  void showPdfViewer();
-  void showCanvas();
+  void showPdfPanel();
+  void hidePdfPanel();
 #endif
 
   void setupConnections();
