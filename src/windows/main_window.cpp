@@ -35,7 +35,8 @@ MainWindow::MainWindow(QWidget *parent)
       _rulerAction(nullptr), _measurementAction(nullptr)
 #ifdef HAVE_QT_PDF
       , _pdfViewer(nullptr), _centralSplitter(nullptr), _pdfPanel(nullptr),
-      _pdfToolBar(nullptr), _pdfPageLabel(nullptr), _pdfDarkModeAction(nullptr)
+      _pdfToolBar(nullptr), _pdfPageLabel(nullptr), _pdfDarkModeAction(nullptr),
+      _pdfPanelOnLeft(false)  // PDF panel starts on the right by default
 #endif
 {
 #ifdef HAVE_QT_PDF
@@ -259,6 +260,12 @@ void MainWindow::setupMenuBar() {
   _measurementAction->setChecked(_canvas->isMeasurementToolEnabled());
   
   viewMenu->addSeparator();
+  
+#ifdef HAVE_QT_PDF
+  // Panel order option
+  viewMenu->addAction("S&wap Panel Order", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_W), this, &MainWindow::swapPanelOrder);
+  viewMenu->addSeparator();
+#endif
   
   // Theme submenu
   QMenu *themeMenu = viewMenu->addMenu("&Theme");
@@ -674,5 +681,33 @@ void MainWindow::onExportAnnotatedPdf() {
   } else {
     statusBar()->showMessage("Failed to export annotated PDF", 3000);
   }
+}
+
+void MainWindow::swapPanelOrder() {
+  if (!_centralSplitter || !_pdfPanel) {
+    return;
+  }
+  
+  // Store current sizes to preserve the layout proportions
+  QList<int> currentSizes = _centralSplitter->sizes();
+  
+  // Toggle the panel position flag
+  _pdfPanelOnLeft = !_pdfPanelOnLeft;
+  
+  if (_pdfPanelOnLeft) {
+    // Move PDF panel to position 0 (left side)
+    _centralSplitter->insertWidget(0, _pdfPanel);
+  } else {
+    // Move PDF panel to position 1 (right side) - canvas should be at position 0
+    _centralSplitter->insertWidget(0, _canvas);
+  }
+  
+  // Swap the sizes to maintain the visual proportions after swapping
+  if (currentSizes.size() == 2) {
+    _centralSplitter->setSizes({currentSizes[1], currentSizes[0]});
+  }
+  
+  QString position = _pdfPanelOnLeft ? "left" : "right";
+  statusBar()->showMessage(QString("PDF panel moved to %1").arg(position), 2000);
 }
 #endif
