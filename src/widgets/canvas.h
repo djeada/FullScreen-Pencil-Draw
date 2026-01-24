@@ -18,6 +18,7 @@
 #include <QDropEvent>
 #include <QGraphicsEllipseItem>
 #include <QGraphicsItem>
+#include <QGraphicsItemGroup>
 #include <QGraphicsLineItem>
 #include <QGraphicsPathItem>
 #include <QGraphicsRectItem>
@@ -140,6 +141,8 @@ public slots:
   void lockSelectedItems();
   void unlockSelectedItems();
   void selectAll();
+  void groupSelectedItems();
+  void ungroupSelectedItems();
   void exportSelectionToSVG();
   void exportSelectionToPNG();
   void exportSelectionToJPG();

@@ -319,6 +319,11 @@ void MainWindow::setupMenuBar() {
   createAction(editMenu, "&Lock Selected", QKeySequence(Qt::CTRL | Qt::Key_L), _canvas, SLOT(lockSelectedItems()));
   createAction(editMenu, "&Unlock All", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_L), _canvas, SLOT(unlockSelectedItems()));
   
+  // Edit menu - add group/ungroup
+  editMenu->addSeparator();
+  createAction(editMenu, "&Group", QKeySequence(Qt::CTRL | Qt::Key_G), _canvas, SLOT(groupSelectedItems()));
+  createAction(editMenu, "U&ngroup", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_U), _canvas, SLOT(ungroupSelectedItems()));
+  
   // Tools menu
   QMenu *toolsMenu = menuBar->addMenu("&Tools");
   
@@ -468,6 +473,9 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
   else if (event->matches(QKeySequence::SelectAll)) { _canvas->selectAll(); }
   else if (event->key() == Qt::Key_Escape) { this->close(); }
   else if (event->key() == Qt::Key_Delete) { _canvas->deleteSelectedItems(); }
+  // Group/Ungroup shortcuts
+  else if (event->key() == Qt::Key_G && (event->modifiers() & Qt::ControlModifier)) { _canvas->groupSelectedItems(); }
+  else if (event->key() == Qt::Key_U && (event->modifiers() & Qt::ControlModifier) && (event->modifiers() & Qt::ShiftModifier)) { _canvas->ungroupSelectedItems(); }
   // Tool shortcuts
   else if (event->key() == Qt::Key_P) { _toolPanel->onActionPen(); }
   else if (event->key() == Qt::Key_E) { _toolPanel->onActionEraser(); }
