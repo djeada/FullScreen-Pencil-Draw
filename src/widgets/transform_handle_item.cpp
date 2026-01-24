@@ -32,6 +32,14 @@ QRectF TransformHandleItem::boundingRect() const {
     return QRectF();
 
   QRectF bounds = targetBoundsInScene();
+  
+  // Check if target item has moved and notify geometry change if needed
+  // This ensures handles follow the target item during drag operations
+  if (bounds != cachedTargetBounds_) {
+    cachedTargetBounds_ = bounds;
+    const_cast<TransformHandleItem*>(this)->prepareGeometryChange();
+  }
+  
   // Expand to include handles and rotation handle
   return bounds.adjusted(-HANDLE_SIZE, -HANDLE_SIZE - ROTATION_HANDLE_OFFSET,
                          HANDLE_SIZE, HANDLE_SIZE);
@@ -71,13 +79,6 @@ void TransformHandleItem::paint(QPainter *painter,
   painter->setRenderHint(QPainter::Antialiasing);
 
   QRectF bounds = targetBoundsInScene();
-  
-  // Check if target item has moved and update geometry if needed
-  // This ensures handles follow the target item during drag operations
-  if (bounds != cachedTargetBounds_) {
-    cachedTargetBounds_ = bounds;
-    const_cast<TransformHandleItem*>(this)->prepareGeometryChange();
-  }
 
   // Draw selection rectangle with solid blue border
   QPen borderPen(SELECTION_BORDER_COLOR, SELECTION_BORDER_WIDTH);
