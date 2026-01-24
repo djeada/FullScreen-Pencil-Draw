@@ -27,9 +27,8 @@ void EraserTool::activate() {
 void EraserTool::deactivate() {
   if (eraserPreview_) {
     eraserPreview_->hide();
-    // Don't delete - item is owned by the scene
-    // Just hide it and clear our pointer reference
-    eraserPreview_ = nullptr;
+    // Keep the item in the scene for reuse - don't delete it
+    // The scene will clean it up when destroyed
   }
 }
 

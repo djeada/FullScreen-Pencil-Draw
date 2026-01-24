@@ -63,33 +63,31 @@ void Layer::clear() {
 }
 
 void Layer::updateItemsVisibility() {
+  // Use a copy to avoid iterator invalidation during removal
+  QList<QGraphicsItem*> validItems;
   for (auto *item : items_) {
-    // Check if item pointer is still valid
-    if (item && !item->scene()) {
-      // Item was removed from scene, remove from our list
-      continue;
-    }
-    if (item) {
+    // Check if item pointer is still valid and in a scene
+    if (item && item->scene()) {
       item->setVisible(visible_);
+      validItems.append(item);
     }
   }
-  // Clean up any invalid items
-  items_.removeAll(nullptr);
+  // Replace list with only valid items
+  items_ = validItems;
 }
 
 void Layer::updateItemsOpacity() {
+  // Use a copy to avoid iterator invalidation during removal
+  QList<QGraphicsItem*> validItems;
   for (auto *item : items_) {
-    // Check if item pointer is still valid
-    if (item && !item->scene()) {
-      // Item was removed from scene, remove from our list
-      continue;
-    }
-    if (item) {
+    // Check if item pointer is still valid and in a scene
+    if (item && item->scene()) {
       item->setOpacity(opacity_);
+      validItems.append(item);
     }
   }
-  // Clean up any invalid items
-  items_.removeAll(nullptr);
+  // Replace list with only valid items
+  items_ = validItems;
 }
 
 // LayerManager implementation
