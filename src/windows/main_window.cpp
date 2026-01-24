@@ -573,7 +573,9 @@ void MainWindow::onPdfPageChanged(int pageIndex, int pageCount) {
 }
 
 void MainWindow::onPdfZoomChanged(double zoom) {
-  _toolPanel->updateZoomDisplay(zoom);
+  if (_toolPanel) {
+    _toolPanel->updateZoomDisplay(zoom);
+  }
 }
 
 void MainWindow::onPdfDarkModeChanged(bool enabled) {

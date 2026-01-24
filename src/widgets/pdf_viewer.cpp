@@ -705,19 +705,21 @@ void PdfViewer::fillAt(const QPointF &point) {
     if (item == pageItem_) {
       continue;
     }
+    
+    QBrush oldBrush;
+    bool canFill = false;
+    
     if (auto r = dynamic_cast<QGraphicsRectItem *>(item)) {
-      QBrush oldBrush = r->brush();
+      oldBrush = r->brush();
       r->setBrush(newBrush);
-      auto &undoStack = overlayManager_->undoStack(currentPage_);
-      undoStack.push_back(
-          std::make_unique<FillAction>(item, oldBrush, newBrush));
-      clearRedoStack();
-      emit documentModified();
-      return;
-    }
-    if (auto e = dynamic_cast<QGraphicsEllipseItem *>(item)) {
-      QBrush oldBrush = e->brush();
+      canFill = true;
+    } else if (auto e = dynamic_cast<QGraphicsEllipseItem *>(item)) {
+      oldBrush = e->brush();
       e->setBrush(newBrush);
+      canFill = true;
+    }
+    
+    if (canFill) {
       auto &undoStack = overlayManager_->undoStack(currentPage_);
       undoStack.push_back(
           std::make_unique<FillAction>(item, oldBrush, newBrush));
