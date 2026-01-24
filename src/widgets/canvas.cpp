@@ -1001,6 +1001,35 @@ void Canvas::loadDroppedImage(const QString &filePath, const QPointF &dropPositi
   }
 }
 
+void Canvas::addImageFromScreenshot(const QImage &image) {
+  if (image.isNull()) {
+    return;
+  }
+  
+  // Convert QImage to QPixmap
+  QPixmap pixmap = QPixmap::fromImage(image);
+  
+  // Create a graphics pixmap item
+  QGraphicsPixmapItem *pixmapItem = scene_->addPixmap(pixmap);
+  
+  // Position the item at the center of the visible area
+  QPointF centerPos = mapToScene(viewport()->rect().center());
+  pixmapItem->setPos(centerPos.x() - pixmap.width() / 2.0, centerPos.y() - pixmap.height() / 2.0);
+  
+  // Make the item selectable and movable
+  pixmapItem->setFlag(QGraphicsItem::ItemIsSelectable, true);
+  pixmapItem->setFlag(QGraphicsItem::ItemIsMovable, true);
+  
+  // Select the newly added item
+  scene_->clearSelection();
+  pixmapItem->setSelected(true);
+  
+  // Add to undo stack
+  addDrawAction(pixmapItem);
+  
+  emit canvasModified();
+}
+
 void Canvas::contextMenuEvent(QContextMenuEvent *event) {
   // Only show context menu if there are selected items
   if (scene_->selectedItems().isEmpty()) {

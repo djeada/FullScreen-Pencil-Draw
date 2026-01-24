@@ -133,6 +133,7 @@ public slots:
   void exportSelectionToJPG();
   void exportToPDF();
   void openRecentFile(const QString &filePath);
+  void addImageFromScreenshot(const QImage &image);
 
 protected:
   void mousePressEvent(QMouseEvent *event) override;

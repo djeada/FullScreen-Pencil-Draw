@@ -84,7 +84,8 @@ public:
     Arrow,
     Text,
     Fill,
-    Pan
+    Pan,
+    ScreenshotSelection  // Tool for capturing a rectangle area of the PDF
   };
   Q_ENUM(Tool)
 
@@ -353,6 +354,12 @@ signals:
    */
   void pdfFileDropped(const QString &filePath);
 
+  /**
+   * @brief Emitted when a screenshot selection is captured
+   * @param image The captured image from the PDF
+   */
+  void screenshotCaptured(const QImage &image);
+
 protected:
   void mousePressEvent(QMouseEvent *event) override;
   void mouseMoveEvent(QMouseEvent *event) override;
@@ -390,6 +397,7 @@ private:
   QGraphicsPathItem *currentPath_;
   QVector<QPointF> pointBuffer_;
   bool isPanning_;
+  QGraphicsRectItem *screenshotSelectionRect_;  // Rectangle for screenshot selection
 
   // Constants
   static constexpr int GRID_SIZE = 20;
@@ -410,6 +418,7 @@ private:
   void createTextItem(const QPointF &pos);
   void fillAt(const QPointF &point);
   void drawArrow(const QPointF &start, const QPointF &end);
+  void captureScreenshot(const QRectF &rect);
 };
 
 #endif // HAVE_QT_PDF

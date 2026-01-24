@@ -114,6 +114,17 @@ void MainWindow::setupConnections() {
   connect(_toolPanel, &ToolPanel::colorSelected, _canvas, &Canvas::setPenColor);
   connect(_toolPanel, &ToolPanel::opacitySelected, _canvas, &Canvas::setOpacity);
 
+#ifdef HAVE_QT_PDF
+  // Connect color selection to PDF viewer as well
+  if (_pdfViewer) {
+    connect(_toolPanel, &ToolPanel::colorSelected, _pdfViewer, &PdfViewer::setPenColor);
+    // Connect brush size changes to PDF viewer
+    connect(_canvas, &Canvas::brushSizeChanged, _pdfViewer, &PdfViewer::setPenWidth);
+    // Connect filled shapes toggle to PDF viewer
+    connect(_canvas, &Canvas::filledShapesChanged, _pdfViewer, &PdfViewer::setFilledShapes);
+  }
+#endif
+
   // Shape tools
   connect(_toolPanel, &ToolPanel::rectangleSelected, _canvas, [this]() { _canvas->setShape("Rectangle"); });
   connect(_toolPanel, &ToolPanel::circleSelected, _canvas, [this]() { _canvas->setShape("Circle"); });
@@ -478,6 +489,12 @@ void MainWindow::setupPdfViewer() {
     statusBar()->showMessage(QString("PDF Error: %1").arg(message), 5000);
   });
   
+  // Connect screenshot signal to add captured image to main canvas
+  connect(_pdfViewer, &PdfViewer::screenshotCaptured, _canvas, &Canvas::addImageFromScreenshot);
+  connect(_pdfViewer, &PdfViewer::screenshotCaptured, this, [this]() {
+    statusBar()->showMessage("Screenshot captured and added to canvas", 3000);
+  });
+  
   // Connect drag-drop signals from PDF viewer and canvas
   connect(_pdfViewer, &PdfViewer::pdfFileDropped, this, &MainWindow::onPdfFileDropped);
   connect(_canvas, &Canvas::pdfFileDropped, this, &MainWindow::onPdfFileDropped);
@@ -544,6 +561,9 @@ void MainWindow::setupPdfToolBar() {
   _pdfToolBar->addAction("Pan", [this]() {
     _pdfViewer->setTool(PdfViewer::Tool::Pan);
   });
+  _pdfToolBar->addAction("📷 Screenshot", [this]() {
+    _pdfViewer->setTool(PdfViewer::Tool::ScreenshotSelection);
+  });
   
   _pdfToolBar->addSeparator();
   
@@ -570,6 +590,14 @@ void MainWindow::showPdfPanel() {
     int pdfWidth = static_cast<int>(totalWidth * PDF_RATIO);
     _centralSplitter->setSizes({canvasWidth, pdfWidth});
   }
+  
+  // Sync PDF viewer settings with canvas settings
+  if (_pdfViewer && _canvas) {
+    _pdfViewer->setPenColor(_canvas->getCurrentColor());
+    _pdfViewer->setPenWidth(_canvas->getCurrentBrushSize());
+    _pdfViewer->setFilledShapes(_canvas->isFilledShapes());
+  }
+  
   _pdfToolBar->show();
   setWindowTitle("FullScreen Pencil Draw - PDF Annotation Mode");
 }
