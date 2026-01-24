@@ -68,7 +68,8 @@ PdfViewer::PdfViewer(QWidget *parent)
       renderDpi_(DEFAULT_DPI), darkMode_(false), showGrid_(false),
       fillShapes_(false), currentZoom_(1.0), currentTool_(Tool::Pen),
       currentPen_(Qt::white, 3), eraserPen_(Qt::black, 10),
-      tempShapeItem_(nullptr), currentPath_(nullptr), isPanning_(false) {
+      tempShapeItem_(nullptr), currentPath_(nullptr), isPanning_(false),
+      screenshotSelectionRect_(nullptr) {
 
   setupScene();
 
@@ -98,7 +99,12 @@ void PdfViewer::setupScene() {
   setMouseTracking(true);
   setAcceptDrops(true);
 
-  scene_->setBackgroundBrush(QColor(50, 50, 50)); // Dark gray background
+  // Set initial background color based on dark mode setting
+  if (darkMode_) {
+    scene_->setBackgroundBrush(QColor(50, 50, 50)); // Dark gray background
+  } else {
+    scene_->setBackgroundBrush(QColor(240, 240, 240)); // Light gray background
+  }
 
   currentPen_.setCapStyle(Qt::RoundCap);
   currentPen_.setJoinStyle(Qt::RoundJoin);
@@ -218,6 +224,9 @@ void PdfViewer::setTool(Tool tool) {
   case Tool::Eraser:
     setCursor(Qt::CrossCursor);
     break;
+  case Tool::ScreenshotSelection:
+    setCursor(Qt::CrossCursor);
+    break;
   default:
     setCursor(Qt::CrossCursor);
     break;
@@ -242,6 +251,13 @@ void PdfViewer::setDarkMode(bool enabled) {
     if (pageItem_) {
       pageItem_->setInverted(darkMode_);
     }
+    // Update scene background based on dark mode
+    if (darkMode_) {
+      scene_->setBackgroundBrush(QColor(50, 50, 50)); // Dark gray background
+    } else {
+      scene_->setBackgroundBrush(QColor(240, 240, 240)); // Light gray background
+    }
+    viewport()->update();
     emit darkModeChanged(darkMode_);
   }
 }
@@ -520,6 +536,15 @@ void PdfViewer::mousePressEvent(QMouseEvent *event) {
     tempShapeItem_ = li;
     addDrawAction(li);
   } break;
+  case Tool::ScreenshotSelection: {
+    // Create a dashed rectangle for screenshot selection
+    screenshotSelectionRect_ = new QGraphicsRectItem(QRectF(startPoint_, startPoint_));
+    QPen selectionPen(Qt::blue, 2, Qt::DashLine);
+    screenshotSelectionRect_->setPen(selectionPen);
+    screenshotSelectionRect_->setBrush(QBrush(QColor(100, 149, 237, 50))); // Light blue with transparency
+    screenshotSelectionRect_->setZValue(1000); // Above everything else
+    scene_->addItem(screenshotSelectionRect_);
+  } break;
   default:
     QGraphicsView::mousePressEvent(event);
     break;
@@ -578,6 +603,11 @@ void PdfViewer::mouseMoveEvent(QMouseEvent *event) {
           ->setLine(QLineF(startPoint_, cp));
     }
     break;
+  case Tool::ScreenshotSelection:
+    if (screenshotSelectionRect_ && (event->buttons() & Qt::LeftButton)) {
+      screenshotSelectionRect_->setRect(QRectF(startPoint_, cp).normalized());
+    }
+    break;
   default:
     QGraphicsView::mouseMoveEvent(event);
     break;
@@ -608,6 +638,20 @@ void PdfViewer::mouseReleaseEvent(QMouseEvent *event) {
     delete tempShapeItem_;
     tempShapeItem_ = nullptr;
     drawArrow(startPoint_, ep);
+    return;
+  }
+
+  if (currentTool_ == Tool::ScreenshotSelection && screenshotSelectionRect_) {
+    QRectF selectionRect = screenshotSelectionRect_->rect();
+    // Remove the selection rectangle from the scene
+    scene_->removeItem(screenshotSelectionRect_);
+    delete screenshotSelectionRect_;
+    screenshotSelectionRect_ = nullptr;
+    
+    // Capture the screenshot if the selection has a valid size
+    if (selectionRect.width() > 5 && selectionRect.height() > 5) {
+      captureScreenshot(selectionRect);
+    }
     return;
   }
 
@@ -814,6 +858,31 @@ void PdfViewer::dropEvent(QDropEvent *event) {
   }
   
   QGraphicsView::dropEvent(event);
+}
+
+void PdfViewer::captureScreenshot(const QRectF &rect) {
+  if (!hasPdf() || rect.isEmpty()) {
+    return;
+  }
+
+  // Create an image to render the selected area
+  QImage screenshot(rect.size().toSize(), QImage::Format_ARGB32);
+  screenshot.fill(Qt::transparent);
+
+  QPainter painter(&screenshot);
+  painter.setRenderHint(QPainter::Antialiasing);
+  painter.setRenderHint(QPainter::SmoothPixmapTransform);
+
+  // Translate to the selection rectangle origin
+  painter.translate(-rect.topLeft());
+
+  // Render the scene area (including PDF page and any annotations)
+  scene_->render(&painter, QRectF(), rect);
+
+  painter.end();
+
+  // Emit the signal with the captured image
+  emit screenshotCaptured(screenshot);
 }
 
 #endif // HAVE_QT_PDF
