@@ -24,6 +24,7 @@
 #include <QMimeData>
 #include <QMouseEvent>
 #include <QPdfWriter>
+#include <QPointer>
 #include <QScrollBar>
 #ifdef HAVE_QT_SVG
 #include <QSvgGenerator>
@@ -659,7 +660,12 @@ void Canvas::createTextItem(const QPointF &pos) {
   scene_->addItem(textItem);
 
   // Connect to handle when editing is finished
-  connect(textItem, &LatexTextItem::editingFinished, this, [this, textItem]() {
+  // Use QPointer to safely track the textItem in case it gets deleted before signal fires
+  connect(textItem, &LatexTextItem::editingFinished, this, [this, textItem = QPointer<LatexTextItem>(textItem)]() {
+    // Check if textItem is still valid (not deleted)
+    if (!textItem) {
+      return;
+    }
     // If the text is empty after editing, remove the item
     if (textItem->text().trimmed().isEmpty()) {
       scene_->removeItem(textItem);
