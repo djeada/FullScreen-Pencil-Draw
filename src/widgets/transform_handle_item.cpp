@@ -28,7 +28,11 @@ TransformHandleItem::TransformHandleItem(QGraphicsItem *targetItem,
   updateHandles();
 }
 
-TransformHandleItem::~TransformHandleItem() = default;
+TransformHandleItem::~TransformHandleItem() {
+  if (targetItem_) {
+    targetItem_->removeSceneEventFilter(this);
+  }
+}
 
 QRectF TransformHandleItem::boundingRect() const {
   if (!targetItem_)
