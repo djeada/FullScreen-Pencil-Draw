@@ -40,6 +40,7 @@
 
 class ToolManager;
 class Tool;
+class TransformHandleItem;
 
 /**
  * @brief The main drawing canvas widget.
@@ -175,6 +176,9 @@ private:
   QColor backgroundColor_;
   QGraphicsEllipseItem *eraserPreview_;
   QGraphicsPixmapItem *backgroundImage_;
+  
+  // Transform handles for selected items
+  QList<TransformHandleItem*> transformHandles_;
 
   // Constants
   static constexpr int MAX_BRUSH_SIZE = 150;
@@ -223,6 +227,8 @@ private:
   QPointF calculateSmartDuplicateOffset() const;
   void drawRuler(QPainter *painter, const QRectF &rect);
   QString calculateDistance(const QPointF &p1, const QPointF &p2) const;
+  void updateTransformHandles();
+  void clearTransformHandles();
 };
 
 #endif // CANVAS_H

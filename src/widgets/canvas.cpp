@@ -5,6 +5,7 @@
 #include "canvas.h"
 #include "image_size_dialog.h"
 #include "latex_text_item.h"
+#include "transform_handle_item.h"
 #include "../core/recent_files_manager.h"
 #include <QApplication>
 #include <QClipboard>
@@ -74,9 +75,13 @@ Canvas::Canvas(QWidget *parent)
 
   currentPen_.setCapStyle(Qt::RoundCap);
   currentPen_.setJoinStyle(Qt::RoundJoin);
+  
+  // Connect to scene selection changes for transform handles
+  connect(scene_, &QGraphicsScene::selectionChanged, this, &Canvas::updateTransformHandles);
 }
 
 Canvas::~Canvas() {
+  clearTransformHandles();
   undoStack_.clear();
   redoStack_.clear();
 }
@@ -138,13 +143,17 @@ void Canvas::setShape(const QString &shapeType) {
   if (currentShape_ != Eraser) {
     hideEraserPreview();
     for (auto item : scene_->items()) {
-      if (item != eraserPreview_ && item != backgroundImage_) {
+      if (item != eraserPreview_ && item != backgroundImage_ && item->type() != TransformHandleItem::Type) {
         item->setFlag(QGraphicsItem::ItemIsSelectable, true);
         item->setFlag(QGraphicsItem::ItemIsMovable, true);
       }
     }
   }
-  if (currentShape_ != Selection) { scene_->clearSelection(); this->setDragMode(QGraphicsView::NoDrag); }
+  if (currentShape_ != Selection) {
+    scene_->clearSelection();
+    this->setDragMode(QGraphicsView::NoDrag);
+    clearTransformHandles();
+  }
   isPanning_ = false;
 }
 
@@ -1204,4 +1213,66 @@ void Canvas::exportSelectionToJPG() {
   
   painter.end();
   image.save(fileName);
+}
+
+void Canvas::updateTransformHandles() {
+  // Only show transform handles when in selection mode
+  if (currentShape_ != Selection) {
+    clearTransformHandles();
+    return;
+  }
+  
+  QList<QGraphicsItem*> selectedItems = scene_->selectedItems();
+  
+  // Remove handles for items that are no longer selected
+  QMutableListIterator<TransformHandleItem*> it(transformHandles_);
+  while (it.hasNext()) {
+    TransformHandleItem* handle = it.next();
+    if (!selectedItems.contains(handle->targetItem())) {
+      scene_->removeItem(handle);
+      delete handle;
+      it.remove();
+    }
+  }
+  
+  // Add handles for newly selected items
+  for (QGraphicsItem* item : selectedItems) {
+    // Skip non-transformable items
+    if (item == eraserPreview_ || item == backgroundImage_)
+      continue;
+    
+    // Skip TransformHandleItems themselves (check by type)
+    if (item->type() == TransformHandleItem::Type)
+      continue;
+    
+    // Check if handle already exists for this item
+    bool hasHandle = false;
+    for (TransformHandleItem* handle : transformHandles_) {
+      if (handle->targetItem() == item) {
+        hasHandle = true;
+        handle->updateHandles();
+        break;
+      }
+    }
+    
+    if (!hasHandle) {
+      TransformHandleItem* handle = new TransformHandleItem(item, this);
+      scene_->addItem(handle);
+      transformHandles_.append(handle);
+      
+      // Connect to update handles when transform completes
+      connect(handle, &TransformHandleItem::transformCompleted, this, [this, handle]() {
+        handle->updateHandles();
+        emit canvasModified();
+      });
+    }
+  }
+}
+
+void Canvas::clearTransformHandles() {
+  for (TransformHandleItem* handle : transformHandles_) {
+    scene_->removeItem(handle);
+    delete handle;
+  }
+  transformHandles_.clear();
 }
