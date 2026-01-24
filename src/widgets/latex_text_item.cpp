@@ -678,7 +678,8 @@ QString LatexTextItem::latexToHtml(const QString &latex) {
 
   // Convert single-letter Latin variables to mathematical italic
   // This gives a more professional mathematical appearance
-  static QRegularExpression varPattern("(?<![\\\\α-ωΑ-Ω\\w])([a-zA-Z])(?![a-zA-Z])");
+  // Simple pattern: match isolated Latin letters not preceded by backslash
+  static QRegularExpression varPattern("(?<!\\\\)\\b([a-zA-Z])\\b");
   processMatches(result, varPattern, [](const QRegularExpressionMatch &m) {
     QChar ch = m.captured(1)[0];
     return LatexSymbols::mathItalic.value(ch, m.captured(1));
