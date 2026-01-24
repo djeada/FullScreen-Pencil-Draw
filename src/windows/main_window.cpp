@@ -117,8 +117,42 @@ void MainWindow::setupConnections() {
   connect(_toolPanel, &ToolPanel::opacitySelected, _canvas, &Canvas::setOpacity);
 
 #ifdef HAVE_QT_PDF
-  // Connect color selection to PDF viewer as well
+  // Connect tool selections and settings to PDF viewer as well
+  // This allows the same toolbar to control both canvas and PDF viewer
   if (_pdfViewer) {
+    // Tool selections - route to PDF viewer so tools work on both renderers
+    connect(_toolPanel, &ToolPanel::penSelected, this, [this]() {
+      _pdfViewer->setToolType(ToolManager::ToolType::Pen);
+    });
+    connect(_toolPanel, &ToolPanel::eraserSelected, this, [this]() {
+      _pdfViewer->setToolType(ToolManager::ToolType::Eraser);
+    });
+    connect(_toolPanel, &ToolPanel::textSelected, this, [this]() {
+      _pdfViewer->setToolType(ToolManager::ToolType::Text);
+    });
+    connect(_toolPanel, &ToolPanel::fillSelected, this, [this]() {
+      _pdfViewer->setToolType(ToolManager::ToolType::Fill);
+    });
+    connect(_toolPanel, &ToolPanel::arrowSelected, this, [this]() {
+      _pdfViewer->setToolType(ToolManager::ToolType::Arrow);
+    });
+    connect(_toolPanel, &ToolPanel::panSelected, this, [this]() {
+      _pdfViewer->setToolType(ToolManager::ToolType::Pan);
+    });
+    connect(_toolPanel, &ToolPanel::rectangleSelected, this, [this]() {
+      _pdfViewer->setToolType(ToolManager::ToolType::Rectangle);
+    });
+    connect(_toolPanel, &ToolPanel::circleSelected, this, [this]() {
+      _pdfViewer->setToolType(ToolManager::ToolType::Circle);
+    });
+    connect(_toolPanel, &ToolPanel::lineSelected, this, [this]() {
+      _pdfViewer->setToolType(ToolManager::ToolType::Line);
+    });
+    connect(_toolPanel, &ToolPanel::selectionSelected, this, [this]() {
+      _pdfViewer->setToolType(ToolManager::ToolType::Selection);
+    });
+
+    // Connect color selection to PDF viewer
     connect(_toolPanel, &ToolPanel::colorSelected, _pdfViewer, &PdfViewer::setPenColor);
     // Connect brush size changes to PDF viewer
     connect(_canvas, &Canvas::brushSizeChanged, _pdfViewer, &PdfViewer::setPenWidth);
@@ -544,31 +578,7 @@ void MainWindow::setupPdfToolBar() {
   
   _pdfToolBar->addSeparator();
   
-  // Drawing tools for PDF
-  _pdfToolBar->addAction("Pen", [this]() {
-    _pdfViewer->setToolType(ToolManager::ToolType::Pen);
-  });
-  _pdfToolBar->addAction("Eraser", [this]() {
-    _pdfViewer->setToolType(ToolManager::ToolType::Eraser);
-  });
-  _pdfToolBar->addAction("Text", [this]() {
-    _pdfViewer->setToolType(ToolManager::ToolType::Text);
-  });
-  _pdfToolBar->addAction("Rectangle", [this]() {
-    _pdfViewer->setToolType(ToolManager::ToolType::Rectangle);
-  });
-  _pdfToolBar->addAction("Circle", [this]() {
-    _pdfViewer->setToolType(ToolManager::ToolType::Circle);
-  });
-  _pdfToolBar->addAction("Arrow", [this]() {
-    _pdfViewer->setToolType(ToolManager::ToolType::Arrow);
-  });
-  _pdfToolBar->addAction("Selection", [this]() {
-    _pdfViewer->setToolType(ToolManager::ToolType::Selection);
-  });
-  _pdfToolBar->addAction("Pan", [this]() {
-    _pdfViewer->setToolType(ToolManager::ToolType::Pan);
-  });
+  // Screenshot tool (PDF-specific - not in main toolbar)
   _pdfToolBar->addAction("📷 Screenshot", [this]() {
     _pdfViewer->setScreenshotSelectionMode(true);
   });
