@@ -346,6 +346,12 @@ public:
    * @param action The action to add
    */
   void addAction(std::unique_ptr<Action> action) override;
+
+  /**
+   * @brief Notify the renderer that an item was removed from the scene
+   * @param item The graphics item that was removed
+   */
+  void onItemRemoved(QGraphicsItem *item) override;
   
   /**
    * @brief Set the cursor

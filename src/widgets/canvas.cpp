@@ -98,7 +98,29 @@ bool Canvas::isMeasurementToolEnabled() const { return measurementToolEnabled_; 
 
 // Action management methods
 void Canvas::addDrawAction(QGraphicsItem *item) {
-  undoStack_.push_back(std::make_unique<DrawAction>(item, scene_));
+  QUuid layerId;
+  if (layerManager_) {
+    if (Layer *active = layerManager_->activeLayer()) {
+      layerId = active->id();
+    }
+  }
+
+  auto onAdd = [this, layerId](QGraphicsItem *added) {
+    if (!layerManager_ || !added)
+      return;
+    if (!layerId.isNull()) {
+      if (Layer *layer = layerManager_->layer(layerId)) {
+        layer->addItem(added);
+        return;
+      }
+    }
+    layerManager_->addItemToActiveLayer(added);
+  };
+
+  auto onRemove = [this](QGraphicsItem *removed) { onItemRemoved(removed); };
+
+  undoStack_.push_back(
+      std::make_unique<DrawAction>(item, scene_, onAdd, onRemove));
   clearRedoStack();
   // Add item to active layer
   if (layerManager_) {
@@ -108,8 +130,38 @@ void Canvas::addDrawAction(QGraphicsItem *item) {
 }
 
 void Canvas::addDeleteAction(QGraphicsItem *item) {
-  undoStack_.push_back(std::make_unique<DeleteAction>(item, scene_));
+  QUuid layerId;
+  if (layerManager_) {
+    if (Layer *layer = layerManager_->findLayerForItem(item)) {
+      layerId = layer->id();
+    }
+  }
+
+  auto onAdd = [this, layerId](QGraphicsItem *added) {
+    if (!layerManager_ || !added)
+      return;
+    if (!layerId.isNull()) {
+      if (Layer *layer = layerManager_->layer(layerId)) {
+        layer->addItem(added);
+        return;
+      }
+    }
+    layerManager_->addItemToActiveLayer(added);
+  };
+
+  auto onRemove = [this](QGraphicsItem *removed) { onItemRemoved(removed); };
+
+  undoStack_.push_back(
+      std::make_unique<DeleteAction>(item, scene_, onAdd, onRemove));
   clearRedoStack();
+}
+
+void Canvas::onItemRemoved(QGraphicsItem *item) {
+  if (!layerManager_ || !item)
+    return;
+  if (Layer *layer = layerManager_->findLayerForItem(item)) {
+    layer->removeItem(item);
+  }
 }
 
 void Canvas::addAction(std::unique_ptr<Action> action) {
@@ -498,6 +550,7 @@ void Canvas::deleteSelectedItems() {
     if (item != eraserPreview_ && item != backgroundImage_) {
       addDeleteAction(item);
       scene_->removeItem(item);
+      onItemRemoved(item);
     }
   }
 }
@@ -693,6 +746,7 @@ void Canvas::createTextItem(const QPointF &pos) {
     // If the text is empty after editing, remove the item
     if (textItem->text().trimmed().isEmpty()) {
       scene_->removeItem(textItem);
+      onItemRemoved(textItem);
       textItem->deleteLater();
     } else {
       // Add to undo stack only when there's actual content
@@ -886,6 +940,7 @@ void Canvas::cutSelectedItems() {
     if (item != eraserPreview_ && item != backgroundImage_) {
       addDeleteAction(item);
       scene_->removeItem(item);
+      onItemRemoved(item);
     }
   }
 }
@@ -933,6 +988,7 @@ void Canvas::eraseAt(const QPointF &point) {
   QPainterPath ep; ep.addEllipse(er);
   for (QGraphicsItem *item : scene_->items(er)) {
     if (item == eraserPreview_ || item == backgroundImage_) continue;
+    if (item->type() == TransformHandleItem::Type) continue;
     QPainterPath itemShape = item->shape();
     // Check if eraser intersects either the item's shape (for filled items like
     // pixmaps) or the stroked outline (for line-based items like paths)
@@ -940,6 +996,7 @@ void Canvas::eraseAt(const QPointF &point) {
     if (ep.intersects(itemShape) || ep.intersects(s.createStroke(itemShape))) {
       addDeleteAction(item);
       scene_->removeItem(item);
+      onItemRemoved(item);
     }
   }
 }

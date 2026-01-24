@@ -6,12 +6,15 @@
 #include <QGraphicsEllipseItem>
 #include <QGraphicsPolygonItem>
 #include <QGraphicsRectItem>
+#include <utility>
 
 Action::~Action() = default;
 
 // DrawAction implementation
-DrawAction::DrawAction(QGraphicsItem *item, QGraphicsScene *scene)
-    : item_(item), scene_(scene), itemOwnedByAction_(false) {}
+DrawAction::DrawAction(QGraphicsItem *item, QGraphicsScene *scene,
+                       ItemCallback onAdd, ItemCallback onRemove)
+    : item_(item), scene_(scene), itemOwnedByAction_(false),
+      onAdd_(std::move(onAdd)), onRemove_(std::move(onRemove)) {}
 
 DrawAction::~DrawAction() {
   // Clean up the item if we own it and it still exists
@@ -24,6 +27,9 @@ DrawAction::~DrawAction() {
 void DrawAction::undo() {
   if (item_ && scene_) {
     scene_->removeItem(item_);
+    if (onRemove_) {
+      onRemove_(item_);
+    }
     itemOwnedByAction_ = true;  // We now own the item
   }
 }
@@ -31,13 +37,18 @@ void DrawAction::undo() {
 void DrawAction::redo() {
   if (item_ && scene_) {
     scene_->addItem(item_);
+    if (onAdd_) {
+      onAdd_(item_);
+    }
     itemOwnedByAction_ = false;  // Scene now owns the item
   }
 }
 
 // DeleteAction implementation
-DeleteAction::DeleteAction(QGraphicsItem *item, QGraphicsScene *scene)
-    : item_(item), scene_(scene), itemOwnedByAction_(true) {}
+DeleteAction::DeleteAction(QGraphicsItem *item, QGraphicsScene *scene,
+                           ItemCallback onAdd, ItemCallback onRemove)
+    : item_(item), scene_(scene), itemOwnedByAction_(true),
+      onAdd_(std::move(onAdd)), onRemove_(std::move(onRemove)) {}
 
 DeleteAction::~DeleteAction() {
   // Clean up the item if we own it and it still exists
@@ -50,6 +61,9 @@ DeleteAction::~DeleteAction() {
 void DeleteAction::undo() {
   if (item_ && scene_) {
     scene_->addItem(item_);
+    if (onAdd_) {
+      onAdd_(item_);
+    }
     itemOwnedByAction_ = false;  // Scene now owns the item
   }
 }
@@ -57,6 +71,9 @@ void DeleteAction::undo() {
 void DeleteAction::redo() {
   if (item_ && scene_) {
     scene_->removeItem(item_);
+    if (onRemove_) {
+      onRemove_(item_);
+    }
     itemOwnedByAction_ = true;  // We now own the item
   }
 }
