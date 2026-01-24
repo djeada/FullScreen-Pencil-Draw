@@ -172,6 +172,8 @@ void Canvas::onItemRemoved(QGraphicsItem *item) {
   while (it.hasNext()) {
     TransformHandleItem* handle = it.next();
     if (handle && handle->targetItem() == item) {
+      // Clear the target item reference before deleting to avoid dangling pointer access
+      handle->clearTargetItem();
       if (scene_) scene_->removeItem(handle);
       delete handle;
       it.remove();
@@ -1382,6 +1384,8 @@ void Canvas::updateTransformHandles() {
     TransformHandleItem* handle = it.next();
     if (!handle || !selectedItems.contains(handle->targetItem())) {
       if (handle) {
+        // Clear target item reference before deleting to avoid dangling pointer access
+        handle->clearTargetItem();
         if (scene_) scene_->removeItem(handle);
         delete handle;
       }
@@ -1427,6 +1431,8 @@ void Canvas::updateTransformHandles() {
 void Canvas::clearTransformHandles() {
   for (TransformHandleItem* handle : transformHandles_) {
     if (handle) {
+      // Clear target item reference before deleting to avoid dangling pointer access
+      handle->clearTargetItem();
       if (scene_) scene_->removeItem(handle);
       delete handle;
     }
