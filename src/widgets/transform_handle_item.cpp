@@ -133,8 +133,8 @@ void TransformHandleItem::paint(QPainter *painter,
 }
 
 void TransformHandleItem::updateHandles() {
-  cachedTargetBounds_ = targetBoundsInScene();
   prepareGeometryChange();
+  cachedTargetBounds_ = targetBoundsInScene();
   update();
 }
 
