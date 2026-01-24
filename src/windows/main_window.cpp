@@ -684,7 +684,7 @@ void MainWindow::onExportAnnotatedPdf() {
 }
 
 void MainWindow::swapPanelOrder() {
-  if (!_centralSplitter || !_pdfPanel) {
+  if (!_centralSplitter || !_pdfPanel || !_canvas) {
     return;
   }
   
@@ -694,15 +694,20 @@ void MainWindow::swapPanelOrder() {
   // Toggle the panel position flag
   _pdfPanelOnLeft = !_pdfPanelOnLeft;
   
+  // Remove both widgets from the splitter first to ensure clean repositioning
+  // QSplitter::insertWidget handles this internally, but explicit removal is clearer
   if (_pdfPanelOnLeft) {
-    // Move PDF panel to position 0 (left side)
+    // PDF panel on left (index 0), Canvas on right (index 1)
     _centralSplitter->insertWidget(0, _pdfPanel);
+    _centralSplitter->insertWidget(1, _canvas);
   } else {
-    // Move PDF panel to position 1 (right side) - canvas should be at position 0
+    // Canvas on left (index 0), PDF panel on right (index 1)
     _centralSplitter->insertWidget(0, _canvas);
+    _centralSplitter->insertWidget(1, _pdfPanel);
   }
   
   // Swap the sizes to maintain the visual proportions after swapping
+  // The first size now belongs to the widget that was second before, and vice versa
   if (currentSizes.size() == 2) {
     _centralSplitter->setSizes({currentSizes[1], currentSizes[0]});
   }
