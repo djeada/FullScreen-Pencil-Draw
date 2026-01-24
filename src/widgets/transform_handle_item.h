@@ -67,6 +67,11 @@ public:
   QGraphicsItem *targetItem() const { return targetItem_; }
 
   /**
+   * @brief Clear the target item reference (should be called before target is deleted)
+   */
+  void clearTargetItem();
+
+  /**
    * @brief Check if currently transforming
    */
   bool isTransforming() const { return isTransforming_; }

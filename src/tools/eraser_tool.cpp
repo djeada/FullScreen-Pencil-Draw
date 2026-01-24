@@ -4,6 +4,7 @@
  */
 #include "eraser_tool.h"
 #include "../core/scene_renderer.h"
+#include "../widgets/transform_handle_item.h"
 #include <QPainterPathStroker>
 
 EraserTool::EraserTool(SceneRenderer *renderer)
@@ -62,6 +63,10 @@ void EraserTool::eraseAt(const QPointF &point) {
   for (QGraphicsItem *item : scene->items(eraseRect)) {
     // Skip the eraser preview and background image
     if (item == eraserPreview_ || item == renderer_->backgroundImageItem())
+      continue;
+
+    // Skip TransformHandleItems - they are UI elements, not user content
+    if (item->type() == TransformHandleItem::Type)
       continue;
 
     QPainterPath itemShape = item->shape();
