@@ -21,7 +21,6 @@ void ShapeTool::mousePressEvent(QMouseEvent *event, const QPointF &scenePos) {
     tempShape_->setFlags(QGraphicsItem::ItemIsSelectable |
                          QGraphicsItem::ItemIsMovable);
     renderer_->scene()->addItem(tempShape_);
-    renderer_->addDrawAction(tempShape_);
   }
 }
 
@@ -35,6 +34,9 @@ void ShapeTool::mouseReleaseEvent(QMouseEvent * /*event*/,
                                   const QPointF &scenePos) {
   if (tempShape_) {
     finalizeShape(startPoint_, scenePos);
+    if (tempShape_) {
+      renderer_->addDrawAction(tempShape_);
+    }
     tempShape_ = nullptr;
   }
 }
