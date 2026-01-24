@@ -11,6 +11,7 @@
 #ifdef HAVE_QT_PDF
 
 #include <QDragEnterEvent>
+#include <QDragLeaveEvent>
 #include <QDragMoveEvent>
 #include <QDropEvent>
 #include <QGraphicsPixmapItem>
@@ -368,6 +369,7 @@ protected:
   void drawBackground(QPainter *painter, const QRectF &rect) override;
   void dragEnterEvent(QDragEnterEvent *event) override;
   void dragMoveEvent(QDragMoveEvent *event) override;
+  void dragLeaveEvent(QDragLeaveEvent *event) override;
   void dropEvent(QDropEvent *event) override;
 
 private:
@@ -398,6 +400,7 @@ private:
   QVector<QPointF> pointBuffer_;
   bool isPanning_;
   QGraphicsRectItem *screenshotSelectionRect_;  // Rectangle for screenshot selection
+  bool dragAccepted_ = false;
 
   // Constants
   static constexpr int GRID_SIZE = 20;

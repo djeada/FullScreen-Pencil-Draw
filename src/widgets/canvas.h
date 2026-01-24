@@ -13,6 +13,7 @@
 #include <QClipboard>
 #include <QContextMenuEvent>
 #include <QDragEnterEvent>
+#include <QDragLeaveEvent>
 #include <QDragMoveEvent>
 #include <QDropEvent>
 #include <QGraphicsEllipseItem>
@@ -144,6 +145,7 @@ protected:
   void drawForeground(QPainter *painter, const QRectF &rect) override;
   void dragEnterEvent(QDragEnterEvent *event) override;
   void dragMoveEvent(QDragMoveEvent *event) override;
+  void dragLeaveEvent(QDragLeaveEvent *event) override;
   void dropEvent(QDropEvent *event) override;
   void contextMenuEvent(QContextMenuEvent *event) override;
 
@@ -185,6 +187,7 @@ private:
   bool showRuler_ = false;
   bool measurementToolEnabled_ = false;
   int duplicateOffset_ = 20;
+  bool dragAccepted_ = false;
 
   // Drawing state
   QVector<QPointF> pointBuffer_;

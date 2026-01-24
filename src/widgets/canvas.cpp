@@ -910,22 +910,38 @@ void Canvas::eraseAt(const QPointF &point) {
 void Canvas::dragEnterEvent(QDragEnterEvent *event) {
   // Accept the drag if it contains URLs (files)
   if (event->mimeData()->hasUrls()) {
+    dragAccepted_ = true;
     event->acceptProposedAction();
+    return;
   }
+  dragAccepted_ = false;
+  QGraphicsView::dragEnterEvent(event);
 }
 
 void Canvas::dragMoveEvent(QDragMoveEvent *event) {
   // Accept the drag move if it contains URLs (files)
-  if (event->mimeData()->hasUrls()) {
+  if (dragAccepted_ && event->mimeData()->hasUrls()) {
     event->acceptProposedAction();
+    return;
   }
+  QGraphicsView::dragMoveEvent(event);
+}
+
+void Canvas::dragLeaveEvent(QDragLeaveEvent *event) {
+  if (dragAccepted_) {
+    dragAccepted_ = false;
+    event->accept();
+    return;
+  }
+  QGraphicsView::dragLeaveEvent(event);
 }
 
 void Canvas::dropEvent(QDropEvent *event) {
   // Handle the dropped files
   const QMimeData *mimeData = event->mimeData();
-  
+
   if (mimeData->hasUrls()) {
+    dragAccepted_ = false;
     QList<QUrl> urls = mimeData->urls();
     
     // Process each dropped file
@@ -959,7 +975,10 @@ void Canvas::dropEvent(QDropEvent *event) {
     }
     
     event->acceptProposedAction();
+    return;
   }
+
+  QGraphicsView::dropEvent(event);
 }
 
 void Canvas::loadDroppedImage(const QString &filePath, const QPointF &dropPosition) {
