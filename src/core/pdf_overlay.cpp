@@ -4,6 +4,8 @@
  */
 #include "pdf_overlay.h"
 
+#ifdef HAVE_QT_PDF
+
 // --- PdfPageOverlay Implementation ---
 
 PdfPageOverlay::PdfPageOverlay() : visible_(true) {}
@@ -158,3 +160,5 @@ bool PdfOverlayManager::canRedo(int pageIndex) const {
   }
   return !redoStacks_[pageIndex].empty();
 }
+
+#endif // HAVE_QT_PDF

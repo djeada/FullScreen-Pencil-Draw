@@ -8,6 +8,8 @@
 #ifndef PDF_DOCUMENT_H
 #define PDF_DOCUMENT_H
 
+#ifdef HAVE_QT_PDF
+
 #include <QImage>
 #include <QMutex>
 #include <QObject>
@@ -226,5 +228,7 @@ private:
   void setStatus(Status status);
   QImage invertImage(const QImage &image) const;
 };
+
+#endif // HAVE_QT_PDF
 
 #endif // PDF_DOCUMENT_H

@@ -8,6 +8,8 @@
 #ifndef PDF_OVERLAY_H
 #define PDF_OVERLAY_H
 
+#ifdef HAVE_QT_PDF
+
 #include <QGraphicsItem>
 #include <QList>
 #include <QObject>
@@ -205,5 +207,7 @@ private:
   std::vector<std::vector<std::unique_ptr<Action>>> redoStacks_;
   int currentPage_;
 };
+
+#endif // HAVE_QT_PDF
 
 #endif // PDF_OVERLAY_H
