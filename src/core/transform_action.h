@@ -6,7 +6,6 @@
 #define TRANSFORM_ACTION_H
 
 #include "action.h"
-#include <QPointer>
 #include <QTransform>
 
 /**
@@ -29,7 +28,7 @@ public:
   QString description() const override { return "Transform"; }
 
 private:
-  QPointer<QGraphicsItem> item_;
+  QGraphicsItem *item_;
   QTransform oldTransform_;
   QTransform newTransform_;
   QPointF oldPos_;
