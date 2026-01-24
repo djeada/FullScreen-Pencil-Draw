@@ -172,6 +172,8 @@ void Canvas::onItemRemoved(QGraphicsItem *item) {
   while (it.hasNext()) {
     TransformHandleItem* handle = it.next();
     if (handle && handle->targetItem() == item) {
+      // Clear the target item reference before deleting to avoid dangling pointer access
+      handle->clearTargetItem();
       if (scene_) scene_->removeItem(handle);
       delete handle;
       it.remove();
@@ -1118,7 +1120,11 @@ void Canvas::dropEvent(QDropEvent *event) {
         // Check if the file is a supported image format
         else if (SUPPORTED_IMAGE_EXTENSIONS.contains(extension)) {
           // Get the drop position in scene coordinates
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
           QPointF dropPosition = mapToScene(event->position().toPoint());
+#else
+          QPointF dropPosition = mapToScene(event->pos());
+#endif
           
           // Load the dropped image
           loadDroppedImage(filePath, dropPosition);
@@ -1378,6 +1384,8 @@ void Canvas::updateTransformHandles() {
     TransformHandleItem* handle = it.next();
     if (!handle || !selectedItems.contains(handle->targetItem())) {
       if (handle) {
+        // Clear target item reference before deleting to avoid dangling pointer access
+        handle->clearTargetItem();
         if (scene_) scene_->removeItem(handle);
         delete handle;
       }
@@ -1423,6 +1431,8 @@ void Canvas::updateTransformHandles() {
 void Canvas::clearTransformHandles() {
   for (TransformHandleItem* handle : transformHandles_) {
     if (handle) {
+      // Clear target item reference before deleting to avoid dangling pointer access
+      handle->clearTargetItem();
       if (scene_) scene_->removeItem(handle);
       delete handle;
     }

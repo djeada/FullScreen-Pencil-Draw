@@ -27,6 +27,14 @@
 #include "../widgets/pdf_viewer.h"
 #endif
 
+// Helper function for Qt5/Qt6 compatibility: create action with shortcut
+static QAction* createAction(QMenu* menu, const QString& text, const QKeySequence& shortcut,
+                             QObject* receiver, const char* slot) {
+  QAction* action = menu->addAction(text, receiver, slot);
+  action->setShortcut(shortcut);
+  return action;
+}
+
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), _canvas(new Canvas(this)),
       _toolPanel(new ToolPanel(this)), _layerPanel(nullptr),
@@ -225,11 +233,11 @@ void MainWindow::setupMenuBar() {
   // File menu
   QMenu *fileMenu = menuBar->addMenu("&File");
   
-  fileMenu->addAction("&New", QKeySequence::New, this, &MainWindow::onNewCanvas);
-  fileMenu->addAction("&Open...", QKeySequence::Open, _canvas, &Canvas::openFile);
+  createAction(fileMenu, "&New", QKeySequence::New, this, SLOT(onNewCanvas()));
+  createAction(fileMenu, "&Open...", QKeySequence::Open, _canvas, SLOT(openFile()));
 
 #ifdef HAVE_QT_PDF
-  fileMenu->addAction("Open &PDF...", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_O), this, &MainWindow::onOpenPdf);
+  createAction(fileMenu, "Open &PDF...", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_O), this, SLOT(onOpenPdf()));
 #endif
   
   // Recent Files submenu
@@ -238,59 +246,59 @@ void MainWindow::setupMenuBar() {
   
   fileMenu->addSeparator();
   
-  fileMenu->addAction("&Save...", QKeySequence::Save, _canvas, &Canvas::saveToFile);
-  fileMenu->addAction("Export to &PDF...", _canvas, &Canvas::exportToPDF);
+  createAction(fileMenu, "&Save...", QKeySequence::Save, _canvas, SLOT(saveToFile()));
+  fileMenu->addAction("Export to &PDF...", _canvas, SLOT(exportToPDF()));
 
 #ifdef HAVE_QT_PDF
-  fileMenu->addAction("Export &Annotated PDF...", this, &MainWindow::onExportAnnotatedPdf);
-  fileMenu->addAction("&Close PDF", this, &MainWindow::onClosePdf);
+  fileMenu->addAction("Export &Annotated PDF...", this, SLOT(onExportAnnotatedPdf()));
+  fileMenu->addAction("&Close PDF", this, SLOT(onClosePdf()));
 #endif
   
   fileMenu->addSeparator();
   
-  fileMenu->addAction("E&xit", QKeySequence::Quit, this, &QMainWindow::close);
+  createAction(fileMenu, "E&xit", QKeySequence::Quit, this, SLOT(close()));
   
   // Edit menu
   QMenu *editMenu = menuBar->addMenu("&Edit");
   
-  editMenu->addAction("&Undo", QKeySequence::Undo, _canvas, &Canvas::undoLastAction);
-  editMenu->addAction("&Redo", QKeySequence::Redo, _canvas, &Canvas::redoLastAction);
+  createAction(editMenu, "&Undo", QKeySequence::Undo, _canvas, SLOT(undoLastAction()));
+  createAction(editMenu, "&Redo", QKeySequence::Redo, _canvas, SLOT(redoLastAction()));
   editMenu->addSeparator();
-  editMenu->addAction("Cu&t", QKeySequence::Cut, _canvas, &Canvas::cutSelectedItems);
-  editMenu->addAction("&Copy", QKeySequence::Copy, _canvas, &Canvas::copySelectedItems);
-  editMenu->addAction("&Paste", QKeySequence::Paste, _canvas, &Canvas::pasteItems);
+  createAction(editMenu, "Cu&t", QKeySequence::Cut, _canvas, SLOT(cutSelectedItems()));
+  createAction(editMenu, "&Copy", QKeySequence::Copy, _canvas, SLOT(copySelectedItems()));
+  createAction(editMenu, "&Paste", QKeySequence::Paste, _canvas, SLOT(pasteItems()));
   editMenu->addSeparator();
-  editMenu->addAction("Select &All", QKeySequence::SelectAll, _canvas, &Canvas::selectAll);
-  editMenu->addAction("&Delete", QKeySequence::Delete, _canvas, &Canvas::deleteSelectedItems);
-  editMenu->addAction("D&uplicate", QKeySequence(Qt::CTRL | Qt::Key_D), _canvas, &Canvas::duplicateSelectedItems);
+  createAction(editMenu, "Select &All", QKeySequence::SelectAll, _canvas, SLOT(selectAll()));
+  createAction(editMenu, "&Delete", QKeySequence::Delete, _canvas, SLOT(deleteSelectedItems()));
+  createAction(editMenu, "D&uplicate", QKeySequence(Qt::CTRL | Qt::Key_D), _canvas, SLOT(duplicateSelectedItems()));
   
   // View menu
   QMenu *viewMenu = menuBar->addMenu("&View");
   
-  viewMenu->addAction("Zoom &In", QKeySequence::ZoomIn, _canvas, &Canvas::zoomIn);
-  viewMenu->addAction("Zoom &Out", QKeySequence::ZoomOut, _canvas, &Canvas::zoomOut);
-  viewMenu->addAction("&Reset Zoom", QKeySequence(Qt::Key_0), _canvas, &Canvas::zoomReset);
+  createAction(viewMenu, "Zoom &In", QKeySequence::ZoomIn, _canvas, SLOT(zoomIn()));
+  createAction(viewMenu, "Zoom &Out", QKeySequence::ZoomOut, _canvas, SLOT(zoomOut()));
+  createAction(viewMenu, "&Reset Zoom", QKeySequence(Qt::Key_0), _canvas, SLOT(zoomReset()));
   viewMenu->addSeparator();
   
-  QAction *gridAction = viewMenu->addAction("Toggle &Grid", QKeySequence(Qt::Key_G), _canvas, &Canvas::toggleGrid);
+  QAction *gridAction = createAction(viewMenu, "Toggle &Grid", QKeySequence(Qt::Key_G), _canvas, SLOT(toggleGrid()));
   gridAction->setCheckable(true);
   gridAction->setChecked(_canvas->isGridVisible());
   
-  _snapToGridAction = viewMenu->addAction("&Snap to Grid", QKeySequence(Qt::CTRL | Qt::Key_G), _canvas, &Canvas::toggleSnapToGrid);
+  _snapToGridAction = createAction(viewMenu, "&Snap to Grid", QKeySequence(Qt::CTRL | Qt::Key_G), _canvas, SLOT(toggleSnapToGrid()));
   _snapToGridAction->setCheckable(true);
   _snapToGridAction->setChecked(_canvas->isSnapToGridEnabled());
   
-  QAction *filledAction = viewMenu->addAction("Toggle &Filled Shapes", QKeySequence(Qt::Key_B), _canvas, &Canvas::toggleFilledShapes);
+  QAction *filledAction = createAction(viewMenu, "Toggle &Filled Shapes", QKeySequence(Qt::Key_B), _canvas, SLOT(toggleFilledShapes()));
   filledAction->setCheckable(true);
   filledAction->setChecked(_canvas->isFilledShapes());
   
   viewMenu->addSeparator();
   
-  _rulerAction = viewMenu->addAction("Show &Ruler", QKeySequence(Qt::CTRL | Qt::Key_R), _canvas, &Canvas::toggleRuler);
+  _rulerAction = createAction(viewMenu, "Show &Ruler", QKeySequence(Qt::CTRL | Qt::Key_R), _canvas, SLOT(toggleRuler()));
   _rulerAction->setCheckable(true);
   _rulerAction->setChecked(_canvas->isRulerVisible());
   
-  _measurementAction = viewMenu->addAction("&Measurement Tool", QKeySequence(Qt::Key_M), _canvas, &Canvas::toggleMeasurementTool);
+  _measurementAction = createAction(viewMenu, "&Measurement Tool", QKeySequence(Qt::Key_M), _canvas, SLOT(toggleMeasurementTool()));
   _measurementAction->setCheckable(true);
   _measurementAction->setChecked(_canvas->isMeasurementToolEnabled());
   
@@ -298,24 +306,24 @@ void MainWindow::setupMenuBar() {
   
 #ifdef HAVE_QT_PDF
   // Panel order option
-  viewMenu->addAction("S&wap Panel Order", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_W), this, &MainWindow::swapPanelOrder);
+  createAction(viewMenu, "S&wap Panel Order", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_W), this, SLOT(swapPanelOrder()));
   viewMenu->addSeparator();
 #endif
   
   // Theme submenu
   QMenu *themeMenu = viewMenu->addMenu("&Theme");
-  QAction *toggleThemeAction = themeMenu->addAction("Toggle &Dark/Light Theme", this, &MainWindow::onToggleTheme);
-  toggleThemeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_T));
+  QAction *toggleThemeAction = createAction(themeMenu, "Toggle &Dark/Light Theme", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_T), this, SLOT(onToggleTheme()));
   
   // Edit menu - add lock/unlock after other edit items
   editMenu->addSeparator();
-  editMenu->addAction("&Lock Selected", QKeySequence(Qt::CTRL | Qt::Key_L), _canvas, &Canvas::lockSelectedItems);
-  editMenu->addAction("&Unlock All", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_L), _canvas, &Canvas::unlockSelectedItems);
+  createAction(editMenu, "&Lock Selected", QKeySequence(Qt::CTRL | Qt::Key_L), _canvas, SLOT(lockSelectedItems()));
+  createAction(editMenu, "&Unlock All", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_L), _canvas, SLOT(unlockSelectedItems()));
   
   // Tools menu
   QMenu *toolsMenu = menuBar->addMenu("&Tools");
   
-  _autoSaveAction = toolsMenu->addAction("Enable &Auto-Save", [this]() {
+  _autoSaveAction = toolsMenu->addAction("Enable &Auto-Save");
+  connect(_autoSaveAction, &QAction::triggered, this, [this]() {
     if (_autoSaveManager) {
       _autoSaveManager->setEnabled(!_autoSaveManager->isEnabled());
       _autoSaveAction->setChecked(_autoSaveManager->isEnabled());

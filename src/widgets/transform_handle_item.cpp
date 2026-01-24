@@ -33,6 +33,14 @@ TransformHandleItem::~TransformHandleItem() {
   }
 }
 
+void TransformHandleItem::clearTargetItem() {
+  if (targetItem_ && sceneEventFilterInstalled_) {
+    targetItem_->removeSceneEventFilter(this);
+    sceneEventFilterInstalled_ = false;
+  }
+  targetItem_ = nullptr;
+}
+
 QVariant TransformHandleItem::itemChange(GraphicsItemChange change,
                                          const QVariant &value) {
   if (change == QGraphicsItem::ItemSceneHasChanged) {
