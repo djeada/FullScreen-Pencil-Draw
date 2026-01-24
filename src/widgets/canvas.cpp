@@ -574,7 +574,12 @@ void Canvas::openFile() {
   if (fileName.isEmpty()) return;
   QPixmap pm(fileName);
   if (pm.isNull()) return;
-  if (backgroundImage_) { scene_->removeItem(backgroundImage_); delete backgroundImage_; }
+  // Remove old background image - scene owns it, so just remove and let scene delete
+  if (backgroundImage_) { 
+    scene_->removeItem(backgroundImage_); 
+    delete backgroundImage_;
+    backgroundImage_ = nullptr;
+  }
   backgroundImage_ = scene_->addPixmap(pm);
   backgroundImage_->setZValue(-1000);
   backgroundImage_->setFlag(QGraphicsItem::ItemIsSelectable, false);
@@ -592,7 +597,12 @@ void Canvas::openRecentFile(const QString &filePath) {
     QMessageBox::warning(this, "Error", QString("Could not open file: %1").arg(filePath));
     return;
   }
-  if (backgroundImage_) { scene_->removeItem(backgroundImage_); delete backgroundImage_; }
+  // Remove old background image - scene owns it, so just remove and let scene delete
+  if (backgroundImage_) { 
+    scene_->removeItem(backgroundImage_); 
+    delete backgroundImage_;
+    backgroundImage_ = nullptr;
+  }
   backgroundImage_ = scene_->addPixmap(pm);
   backgroundImage_->setZValue(-1000);
   backgroundImage_->setFlag(QGraphicsItem::ItemIsSelectable, false);

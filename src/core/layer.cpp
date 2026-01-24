@@ -64,18 +64,32 @@ void Layer::clear() {
 
 void Layer::updateItemsVisibility() {
   for (auto *item : items_) {
+    // Check if item pointer is still valid
+    if (item && !item->scene()) {
+      // Item was removed from scene, remove from our list
+      continue;
+    }
     if (item) {
       item->setVisible(visible_);
     }
   }
+  // Clean up any invalid items
+  items_.removeAll(nullptr);
 }
 
 void Layer::updateItemsOpacity() {
   for (auto *item : items_) {
+    // Check if item pointer is still valid
+    if (item && !item->scene()) {
+      // Item was removed from scene, remove from our list
+      continue;
+    }
     if (item) {
       item->setOpacity(opacity_);
     }
   }
+  // Clean up any invalid items
+  items_.removeAll(nullptr);
 }
 
 // LayerManager implementation
@@ -326,7 +340,8 @@ void LayerManager::updateLayerZOrder() {
   for (size_t i = 0; i < layers_.size(); ++i) {
     qreal layerZ = zBase + static_cast<qreal>(i) * 1000.0;
     for (auto *item : layers_[i]->items()) {
-      if (item) {
+      // Check if item is still valid before accessing
+      if (item && item->scene()) {
         item->setZValue(layerZ);
       }
     }
