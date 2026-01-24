@@ -9,13 +9,21 @@
 #include "../widgets/tool_panel.h"
 #include <QApplication>
 #include <QColorDialog>
+#include <QFileDialog>
 #include <QFileInfo>
 #include <QInputDialog>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QMenuBar>
+#include <QSpinBox>
+#include <QStackedWidget>
 #include <QStatusBar>
+#include <QToolBar>
 #include <QVBoxLayout>
+
+#ifdef HAVE_QT_PDF
+#include "../widgets/pdf_viewer.h"
+#endif
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), _canvas(new Canvas(this)),
@@ -23,13 +31,25 @@ MainWindow::MainWindow(QWidget *parent)
       _autoSaveManager(nullptr), _statusLabel(nullptr), 
       _measurementLabel(nullptr), _recentFilesMenu(nullptr), 
       _snapToGridAction(nullptr), _autoSaveAction(nullptr),
-      _rulerAction(nullptr), _measurementAction(nullptr) {
-
+      _rulerAction(nullptr), _measurementAction(nullptr)
+#ifdef HAVE_QT_PDF
+      , _pdfViewer(nullptr), _centralStack(nullptr), _pdfToolBar(nullptr),
+      _pdfPageLabel(nullptr), _pdfDarkModeAction(nullptr), _pdfViewerActive(false)
+#endif
+{
+#ifdef HAVE_QT_PDF
+  // Create stacked widget for switching between canvas and PDF viewer
+  _centralStack = new QStackedWidget(this);
+  _centralStack->addWidget(_canvas);
+  setupPdfViewer();
+  setCentralWidget(_centralStack);
+#else
   QWidget *centralWidget = new QWidget(this);
   QVBoxLayout *layout = new QVBoxLayout(centralWidget);
   layout->setContentsMargins(0, 0, 0, 0);
   layout->addWidget(_canvas);
   setCentralWidget(centralWidget);
+#endif
 
   this->addToolBar(Qt::LeftToolBarArea, _toolPanel);
   this->setWindowTitle("FullScreen Pencil Draw - Professional Edition");
@@ -40,6 +60,10 @@ MainWindow::MainWindow(QWidget *parent)
   setupLayerPanel();
   setupAutoSave();
   setupConnections();
+
+#ifdef HAVE_QT_PDF
+  setupPdfToolBar();
+#endif
 
   _toolPanel->updateBrushSizeDisplay(_canvas->getCurrentBrushSize());
   _toolPanel->updateColorDisplay(_canvas->getCurrentColor());
@@ -146,8 +170,12 @@ void MainWindow::setupMenuBar() {
   // File menu
   QMenu *fileMenu = menuBar->addMenu("&File");
   
-  QAction *newAction = fileMenu->addAction("&New", QKeySequence::New, this, &MainWindow::onNewCanvas);
-  QAction *openAction = fileMenu->addAction("&Open...", QKeySequence::Open, _canvas, &Canvas::openFile);
+  fileMenu->addAction("&New", QKeySequence::New, this, &MainWindow::onNewCanvas);
+  fileMenu->addAction("&Open...", QKeySequence::Open, _canvas, &Canvas::openFile);
+
+#ifdef HAVE_QT_PDF
+  fileMenu->addAction("Open &PDF...", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_O), this, &MainWindow::onOpenPdf);
+#endif
   
   // Recent Files submenu
   _recentFilesMenu = fileMenu->addMenu("Recent Files");
@@ -155,12 +183,17 @@ void MainWindow::setupMenuBar() {
   
   fileMenu->addSeparator();
   
-  QAction *saveAction = fileMenu->addAction("&Save...", QKeySequence::Save, _canvas, &Canvas::saveToFile);
-  QAction *exportPdfAction = fileMenu->addAction("Export to &PDF...", _canvas, &Canvas::exportToPDF);
+  fileMenu->addAction("&Save...", QKeySequence::Save, _canvas, &Canvas::saveToFile);
+  fileMenu->addAction("Export to &PDF...", _canvas, &Canvas::exportToPDF);
+
+#ifdef HAVE_QT_PDF
+  fileMenu->addAction("Export &Annotated PDF...", this, &MainWindow::onExportAnnotatedPdf);
+  fileMenu->addAction("&Close PDF", this, &MainWindow::onClosePdf);
+#endif
   
   fileMenu->addSeparator();
   
-  QAction *exitAction = fileMenu->addAction("E&xit", QKeySequence::Quit, this, &QMainWindow::close);
+  fileMenu->addAction("E&xit", QKeySequence::Quit, this, &QMainWindow::close);
   
   // Edit menu
   QMenu *editMenu = menuBar->addMenu("&Edit");
@@ -380,6 +413,13 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
   else if (event->key() == Qt::Key_G) { _canvas->toggleGrid(); }
   else if (event->key() == Qt::Key_B) { _canvas->toggleFilledShapes(); }
   else if (event->key() == Qt::Key_D && (event->modifiers() & Qt::ControlModifier)) { _canvas->duplicateSelectedItems(); }
+#ifdef HAVE_QT_PDF
+  // PDF navigation shortcuts
+  else if (event->key() == Qt::Key_PageDown && _pdfViewerActive && _pdfViewer) { _pdfViewer->nextPage(); }
+  else if (event->key() == Qt::Key_PageUp && _pdfViewerActive && _pdfViewer) { _pdfViewer->previousPage(); }
+  else if (event->key() == Qt::Key_Home && _pdfViewerActive && _pdfViewer) { _pdfViewer->firstPage(); }
+  else if (event->key() == Qt::Key_End && _pdfViewerActive && _pdfViewer) { _pdfViewer->lastPage(); }
+#endif
   // Brush size
   else if (event->key() == Qt::Key_BracketRight) { _canvas->increaseBrushSize(); }
   else if (event->key() == Qt::Key_BracketLeft) { _canvas->decreaseBrushSize(); }
@@ -389,3 +429,175 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
   else if (event->key() == Qt::Key_0) { _canvas->zoomReset(); }
   else { QMainWindow::keyPressEvent(event); }
 }
+
+#ifdef HAVE_QT_PDF
+void MainWindow::setupPdfViewer() {
+  _pdfViewer = new PdfViewer(this);
+  _centralStack->addWidget(_pdfViewer);
+
+  // Connect PDF viewer signals
+  connect(_pdfViewer, &PdfViewer::pageChanged, this, &MainWindow::onPdfPageChanged);
+  connect(_pdfViewer, &PdfViewer::zoomChanged, this, &MainWindow::onPdfZoomChanged);
+  connect(_pdfViewer, &PdfViewer::darkModeChanged, this, &MainWindow::onPdfDarkModeChanged);
+  connect(_pdfViewer, &PdfViewer::cursorPositionChanged, this, &MainWindow::onCursorPositionChanged);
+  connect(_pdfViewer, &PdfViewer::pdfLoaded, this, [this]() {
+    showPdfViewer();
+  });
+  connect(_pdfViewer, &PdfViewer::pdfClosed, this, [this]() {
+    showCanvas();
+  });
+  connect(_pdfViewer, &PdfViewer::errorOccurred, this, [this](const QString &message) {
+    statusBar()->showMessage(QString("PDF Error: %1").arg(message), 5000);
+  });
+}
+
+void MainWindow::setupPdfToolBar() {
+  _pdfToolBar = new QToolBar("PDF Navigation", this);
+  _pdfToolBar->setObjectName("pdfToolBar");
+  addToolBar(Qt::TopToolBarArea, _pdfToolBar);
+  _pdfToolBar->hide(); // Hidden until PDF is loaded
+
+  // Navigation buttons
+  _pdfToolBar->addAction("⏮ First", _pdfViewer, &PdfViewer::firstPage);
+  _pdfToolBar->addAction("◀ Previous", _pdfViewer, &PdfViewer::previousPage);
+  
+  // Page indicator
+  _pdfPageLabel = new QLabel("Page 0 / 0", this);
+  _pdfPageLabel->setMinimumWidth(100);
+  _pdfPageLabel->setAlignment(Qt::AlignCenter);
+  _pdfToolBar->addWidget(_pdfPageLabel);
+  
+  _pdfToolBar->addAction("Next ▶", _pdfViewer, &PdfViewer::nextPage);
+  _pdfToolBar->addAction("Last ⏭", _pdfViewer, &PdfViewer::lastPage);
+  
+  _pdfToolBar->addSeparator();
+  
+  // Zoom controls
+  _pdfToolBar->addAction("Zoom In", _pdfViewer, &PdfViewer::zoomIn);
+  _pdfToolBar->addAction("Zoom Out", _pdfViewer, &PdfViewer::zoomOut);
+  _pdfToolBar->addAction("Reset Zoom", _pdfViewer, &PdfViewer::zoomReset);
+  
+  _pdfToolBar->addSeparator();
+  
+  // Dark mode toggle
+  _pdfDarkModeAction = _pdfToolBar->addAction("Dark Mode", [this]() {
+    _pdfViewer->setDarkMode(!_pdfViewer->darkMode());
+  });
+  _pdfDarkModeAction->setCheckable(true);
+  
+  _pdfToolBar->addSeparator();
+  
+  // Drawing tools for PDF
+  _pdfToolBar->addAction("Pen", [this]() {
+    _pdfViewer->setTool(PdfViewer::Tool::Pen);
+  });
+  _pdfToolBar->addAction("Eraser", [this]() {
+    _pdfViewer->setTool(PdfViewer::Tool::Eraser);
+  });
+  _pdfToolBar->addAction("Text", [this]() {
+    _pdfViewer->setTool(PdfViewer::Tool::Text);
+  });
+  _pdfToolBar->addAction("Rectangle", [this]() {
+    _pdfViewer->setTool(PdfViewer::Tool::Rectangle);
+  });
+  _pdfToolBar->addAction("Circle", [this]() {
+    _pdfViewer->setTool(PdfViewer::Tool::Circle);
+  });
+  _pdfToolBar->addAction("Arrow", [this]() {
+    _pdfViewer->setTool(PdfViewer::Tool::Arrow);
+  });
+  _pdfToolBar->addAction("Selection", [this]() {
+    _pdfViewer->setTool(PdfViewer::Tool::Selection);
+  });
+  _pdfToolBar->addAction("Pan", [this]() {
+    _pdfViewer->setTool(PdfViewer::Tool::Pan);
+  });
+  
+  _pdfToolBar->addSeparator();
+  
+  // Undo/Redo
+  _pdfToolBar->addAction("Undo", _pdfViewer, &PdfViewer::undo);
+  _pdfToolBar->addAction("Redo", _pdfViewer, &PdfViewer::redo);
+  
+  _pdfToolBar->addSeparator();
+  
+  // Close PDF
+  _pdfToolBar->addAction("Close PDF", this, &MainWindow::onClosePdf);
+}
+
+void MainWindow::showPdfViewer() {
+  _pdfViewerActive = true;
+  _centralStack->setCurrentWidget(_pdfViewer);
+  _pdfToolBar->show();
+  _toolPanel->hide();
+  if (_layerPanel) {
+    _layerPanel->hide();
+  }
+  setWindowTitle("FullScreen Pencil Draw - PDF Viewer");
+}
+
+void MainWindow::showCanvas() {
+  _pdfViewerActive = false;
+  _centralStack->setCurrentWidget(_canvas);
+  _pdfToolBar->hide();
+  _toolPanel->show();
+  if (_layerPanel) {
+    _layerPanel->show();
+  }
+  setWindowTitle("FullScreen Pencil Draw - Professional Edition");
+}
+
+void MainWindow::onOpenPdf() {
+  QString fileName = QFileDialog::getOpenFileName(
+      this, "Open PDF File", "", "PDF Files (*.pdf);;All Files (*)");
+  if (fileName.isEmpty()) {
+    return;
+  }
+  
+  if (!_pdfViewer->openPdf(fileName)) {
+    statusBar()->showMessage("Failed to open PDF file", 3000);
+  }
+}
+
+void MainWindow::onClosePdf() {
+  if (_pdfViewer) {
+    _pdfViewer->closePdf();
+  }
+  showCanvas();
+}
+
+void MainWindow::onPdfPageChanged(int pageIndex, int pageCount) {
+  if (_pdfPageLabel) {
+    _pdfPageLabel->setText(QString("Page %1 / %2").arg(pageIndex + 1).arg(pageCount));
+  }
+}
+
+void MainWindow::onPdfZoomChanged(double zoom) {
+  _toolPanel->updateZoomDisplay(zoom);
+}
+
+void MainWindow::onPdfDarkModeChanged(bool enabled) {
+  if (_pdfDarkModeAction) {
+    _pdfDarkModeAction->setChecked(enabled);
+  }
+}
+
+void MainWindow::onExportAnnotatedPdf() {
+  if (!_pdfViewer || !_pdfViewer->hasPdf()) {
+    statusBar()->showMessage("No PDF loaded to export", 3000);
+    return;
+  }
+  
+  QString fileName = QFileDialog::getSaveFileName(
+      this, "Export Annotated PDF", "", "PDF Files (*.pdf)");
+  if (fileName.isEmpty()) {
+    return;
+  }
+  
+  if (_pdfViewer->exportAnnotatedPdf(fileName)) {
+    statusBar()->showMessage(QString("Exported annotated PDF to: %1").arg(fileName), 3000);
+  } else {
+    statusBar()->showMessage("Failed to export annotated PDF", 3000);
+  }
+}
+#endif

@@ -4,6 +4,7 @@
 
 #include <QMainWindow>
 #include <QMenu>
+#include <QStackedWidget>
 
 class Canvas;
 class ToolPanel;
@@ -11,6 +12,11 @@ class LayerPanel;
 class AutoSaveManager;
 class QLabel;
 class QAction;
+class QToolBar;
+
+#ifdef HAVE_QT_PDF
+class PdfViewer;
+#endif
 
 class MainWindow : public QMainWindow {
   Q_OBJECT
@@ -39,6 +45,16 @@ private slots:
   void openRecentFile();
   void onAutoSavePerformed(const QString &path);
 
+#ifdef HAVE_QT_PDF
+  // PDF viewer slots
+  void onOpenPdf();
+  void onClosePdf();
+  void onPdfPageChanged(int pageIndex, int pageCount);
+  void onPdfZoomChanged(double zoom);
+  void onPdfDarkModeChanged(bool enabled);
+  void onExportAnnotatedPdf();
+#endif
+
 private:
   Canvas *_canvas;
   ToolPanel *_toolPanel;
@@ -51,6 +67,20 @@ private:
   QAction *_autoSaveAction;
   QAction *_rulerAction;
   QAction *_measurementAction;
+
+#ifdef HAVE_QT_PDF
+  PdfViewer *_pdfViewer;
+  QStackedWidget *_centralStack;
+  QToolBar *_pdfToolBar;
+  QLabel *_pdfPageLabel;
+  QAction *_pdfDarkModeAction;
+  bool _pdfViewerActive;
+
+  void setupPdfViewer();
+  void setupPdfToolBar();
+  void showPdfViewer();
+  void showCanvas();
+#endif
 
   void setupConnections();
   void setupStatusBar();
