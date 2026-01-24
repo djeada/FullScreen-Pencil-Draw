@@ -187,11 +187,12 @@ private:
   QGraphicsProxyWidget *proxyWidget_;
   LatexTextEdit *textEdit_;
 
-  static constexpr int MIN_WIDTH = 150;
-  static constexpr int MIN_HEIGHT = 30;
-  static constexpr int PADDING = 8;
-  static constexpr int EDIT_MIN_WIDTH = 250;
-  static constexpr int EDIT_MIN_HEIGHT = 60;
+  // Layout constants for refined visual appearance
+  static constexpr int MIN_WIDTH = 120;
+  static constexpr int MIN_HEIGHT = 28;
+  static constexpr int PADDING = 10;
+  static constexpr int EDIT_MIN_WIDTH = 280;
+  static constexpr int EDIT_MIN_HEIGHT = 70;
 };
 
 #endif // LATEX_TEXT_ITEM_H
