@@ -78,6 +78,8 @@ signals:
   void transformCompleted();
 
 protected:
+  QVariant itemChange(GraphicsItemChange change,
+                      const QVariant &value) override;
   void hoverMoveEvent(QGraphicsSceneHoverEvent *event) override;
   void hoverLeaveEvent(QGraphicsSceneHoverEvent *event) override;
   bool sceneEventFilter(QGraphicsItem *watched, QEvent *event) override;
@@ -102,6 +104,7 @@ private:
   // Target item
   QGraphicsItem *targetItem_;
   SceneRenderer *renderer_;
+  bool sceneEventFilterInstalled_;
 
   // State
   bool isTransforming_;
@@ -128,6 +131,7 @@ private:
   void applyResize(const QPointF &mousePos);
   void applyRotation(const QPointF &mousePos);
   QRectF targetBoundsInScene() const;
+  void ensureSceneEventFilter();
 };
 
 #endif // TRANSFORM_HANDLE_ITEM_H

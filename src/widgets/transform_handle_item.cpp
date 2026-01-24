@@ -15,23 +15,30 @@ TransformHandleItem::TransformHandleItem(QGraphicsItem *targetItem,
                                          SceneRenderer *renderer,
                                          QGraphicsItem *parent)
     : QGraphicsObject(parent), targetItem_(targetItem), renderer_(renderer),
-      isTransforming_(false), activeHandle_(HandleType::None),
-      wasMovable_(false), wasSelectable_(false), cachedTargetBounds_() {
+      sceneEventFilterInstalled_(false), isTransforming_(false),
+      activeHandle_(HandleType::None), wasMovable_(false),
+      wasSelectable_(false), cachedTargetBounds_() {
   setAcceptHoverEvents(true);
   setFlag(QGraphicsItem::ItemIsSelectable, false);
   setFlag(QGraphicsItem::ItemIsMovable, false);
   // High Z value so handles appear above everything
   setZValue(10000);
-  if (targetItem_) {
-    targetItem_->installSceneEventFilter(this);
-  }
+  ensureSceneEventFilter();
   updateHandles();
 }
 
 TransformHandleItem::~TransformHandleItem() {
-  if (targetItem_) {
+  if (targetItem_ && sceneEventFilterInstalled_) {
     targetItem_->removeSceneEventFilter(this);
   }
+}
+
+QVariant TransformHandleItem::itemChange(GraphicsItemChange change,
+                                         const QVariant &value) {
+  if (change == QGraphicsItem::ItemSceneHasChanged) {
+    ensureSceneEventFilter();
+  }
+  return QGraphicsObject::itemChange(change, value);
 }
 
 QRectF TransformHandleItem::boundingRect() const {
@@ -75,6 +82,15 @@ QRectF TransformHandleItem::targetBoundsInScene() const {
   if (!targetItem_)
     return QRectF();
   return targetItem_->mapToScene(targetItem_->boundingRect()).boundingRect();
+}
+
+void TransformHandleItem::ensureSceneEventFilter() {
+  if (!targetItem_ || sceneEventFilterInstalled_)
+    return;
+  if (scene() && targetItem_->scene() == scene()) {
+    targetItem_->installSceneEventFilter(this);
+    sceneEventFilterInstalled_ = true;
+  }
 }
 
 void TransformHandleItem::paint(QPainter *painter,

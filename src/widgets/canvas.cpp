@@ -263,6 +263,7 @@ void Canvas::clearCanvas() {
     }
   }
   
+  clearTransformHandles();
   if (layerManager_) {
     layerManager_->clear();
   }
@@ -492,6 +493,7 @@ void Canvas::selectAll() {
 }
 
 void Canvas::deleteSelectedItems() {
+  clearTransformHandles();
   for (QGraphicsItem *item : scene_->selectedItems()) {
     if (item != eraserPreview_ && item != backgroundImage_) {
       addDeleteAction(item);
@@ -925,6 +927,7 @@ void Canvas::addPoint(const QPointF &point) {
 }
 
 void Canvas::eraseAt(const QPointF &point) {
+  clearTransformHandles();
   qreal sz = eraserPen_.width();
   QRectF er(point.x() - sz/2, point.y() - sz/2, sz, sz);
   QPainterPath ep; ep.addEllipse(er);

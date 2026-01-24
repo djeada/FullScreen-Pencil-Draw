@@ -63,7 +63,7 @@ public:
   QString description() const override { return "Draw"; }
 
 private:
-  QPointer<QGraphicsItem> item_;
+  QGraphicsItem *item_;
   QPointer<QGraphicsScene> scene_;
   bool itemOwnedByAction_;
 };
@@ -85,7 +85,7 @@ public:
   QString description() const override { return "Delete"; }
 
 private:
-  QPointer<QGraphicsItem> item_;
+  QGraphicsItem *item_;
   QPointer<QGraphicsScene> scene_;
   bool itemOwnedByAction_;
 };
@@ -108,7 +108,7 @@ public:
   QString description() const override { return "Move"; }
 
 private:
-  QPointer<QGraphicsItem> item_;
+  QGraphicsItem *item_;
   QPointF oldPos_;
   QPointF newPos_;
 };
@@ -161,7 +161,7 @@ public:
   QString description() const override { return "Fill"; }
 
 private:
-  QPointer<QGraphicsItem> item_;
+  QGraphicsItem *item_;
   QBrush oldBrush_;
   QBrush newBrush_;
 };

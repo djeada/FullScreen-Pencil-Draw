@@ -15,20 +15,21 @@ DrawAction::DrawAction(QGraphicsItem *item, QGraphicsScene *scene)
 
 DrawAction::~DrawAction() {
   // Clean up the item if we own it and it still exists
-  if (itemOwnedByAction_ && !item_.isNull()) {
-    delete item_.data();
+  if (itemOwnedByAction_ && item_) {
+    delete item_;
+    item_ = nullptr;
   }
 }
 
 void DrawAction::undo() {
-  if (item_ && !item_.isNull() && scene_) {
+  if (item_ && scene_) {
     scene_->removeItem(item_);
     itemOwnedByAction_ = true;  // We now own the item
   }
 }
 
 void DrawAction::redo() {
-  if (item_ && !item_.isNull() && scene_) {
+  if (item_ && scene_) {
     scene_->addItem(item_);
     itemOwnedByAction_ = false;  // Scene now owns the item
   }
@@ -40,20 +41,21 @@ DeleteAction::DeleteAction(QGraphicsItem *item, QGraphicsScene *scene)
 
 DeleteAction::~DeleteAction() {
   // Clean up the item if we own it and it still exists
-  if (itemOwnedByAction_ && !item_.isNull()) {
-    delete item_.data();
+  if (itemOwnedByAction_ && item_) {
+    delete item_;
+    item_ = nullptr;
   }
 }
 
 void DeleteAction::undo() {
-  if (item_ && !item_.isNull() && scene_) {
+  if (item_ && scene_) {
     scene_->addItem(item_);
     itemOwnedByAction_ = false;  // Scene now owns the item
   }
 }
 
 void DeleteAction::redo() {
-  if (item_ && !item_.isNull() && scene_) {
+  if (item_ && scene_) {
     scene_->removeItem(item_);
     itemOwnedByAction_ = true;  // We now own the item
   }
@@ -67,13 +69,13 @@ MoveAction::MoveAction(QGraphicsItem *item, const QPointF &oldPos,
 MoveAction::~MoveAction() = default;
 
 void MoveAction::undo() {
-  if (item_ && !item_.isNull()) {
+  if (item_) {
     item_->setPos(oldPos_);
   }
 }
 
 void MoveAction::redo() {
-  if (item_ && !item_.isNull()) {
+  if (item_) {
     item_->setPos(newPos_);
   }
 }
@@ -108,25 +110,25 @@ FillAction::FillAction(QGraphicsItem *item, const QBrush &oldBrush, const QBrush
 FillAction::~FillAction() = default;
 
 void FillAction::undo() {
-  if (!item_ || item_.isNull()) return;
+  if (!item_) return;
   
-  if (auto *rect = dynamic_cast<QGraphicsRectItem *>(item_.data())) {
+  if (auto *rect = dynamic_cast<QGraphicsRectItem *>(item_)) {
     rect->setBrush(oldBrush_);
-  } else if (auto *ellipse = dynamic_cast<QGraphicsEllipseItem *>(item_.data())) {
+  } else if (auto *ellipse = dynamic_cast<QGraphicsEllipseItem *>(item_)) {
     ellipse->setBrush(oldBrush_);
-  } else if (auto *polygon = dynamic_cast<QGraphicsPolygonItem *>(item_.data())) {
+  } else if (auto *polygon = dynamic_cast<QGraphicsPolygonItem *>(item_)) {
     polygon->setBrush(oldBrush_);
   }
 }
 
 void FillAction::redo() {
-  if (!item_ || item_.isNull()) return;
+  if (!item_) return;
   
-  if (auto *rect = dynamic_cast<QGraphicsRectItem *>(item_.data())) {
+  if (auto *rect = dynamic_cast<QGraphicsRectItem *>(item_)) {
     rect->setBrush(newBrush_);
-  } else if (auto *ellipse = dynamic_cast<QGraphicsEllipseItem *>(item_.data())) {
+  } else if (auto *ellipse = dynamic_cast<QGraphicsEllipseItem *>(item_)) {
     ellipse->setBrush(newBrush_);
-  } else if (auto *polygon = dynamic_cast<QGraphicsPolygonItem *>(item_.data())) {
+  } else if (auto *polygon = dynamic_cast<QGraphicsPolygonItem *>(item_)) {
     polygon->setBrush(newBrush_);
   }
 }
