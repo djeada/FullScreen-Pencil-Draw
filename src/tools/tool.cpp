@@ -4,7 +4,7 @@
  */
 #include "tool.h"
 
-Tool::Tool(Canvas *canvas) : canvas_(canvas) {}
+Tool::Tool(SceneRenderer *renderer) : renderer_(renderer) {}
 
 Tool::~Tool() = default;
 

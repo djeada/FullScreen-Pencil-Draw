@@ -14,7 +14,7 @@
  */
 class FillTool : public Tool {
 public:
-  explicit FillTool(Canvas *canvas);
+  explicit FillTool(SceneRenderer *renderer);
   ~FillTool() override;
 
   QString name() const override { return "Fill"; }

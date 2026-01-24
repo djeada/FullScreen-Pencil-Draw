@@ -15,7 +15,7 @@
  */
 class ShapeTool : public Tool {
 public:
-  explicit ShapeTool(Canvas *canvas);
+  explicit ShapeTool(SceneRenderer *renderer);
   ~ShapeTool() override;
 
   QCursor cursor() const override { return Qt::CrossCursor; }

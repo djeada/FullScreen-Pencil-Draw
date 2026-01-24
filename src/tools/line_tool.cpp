@@ -3,15 +3,15 @@
  * @brief Straight line drawing tool implementation.
  */
 #include "line_tool.h"
-#include "../widgets/canvas.h"
+#include "../core/scene_renderer.h"
 
-LineTool::LineTool(Canvas *canvas) : ShapeTool(canvas) {}
+LineTool::LineTool(SceneRenderer *renderer) : ShapeTool(renderer) {}
 
 LineTool::~LineTool() = default;
 
 QGraphicsItem *LineTool::createShape(const QPointF &startPos) {
   auto *line = new QGraphicsLineItem(QLineF(startPos, startPos));
-  line->setPen(canvas_->currentPen());
+  line->setPen(renderer_->currentPen());
   return line;
 }
 

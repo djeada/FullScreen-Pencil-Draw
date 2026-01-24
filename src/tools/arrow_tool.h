@@ -16,7 +16,7 @@
  */
 class ArrowTool : public ShapeTool {
 public:
-  explicit ArrowTool(Canvas *canvas);
+  explicit ArrowTool(SceneRenderer *renderer);
   ~ArrowTool() override;
 
   QString name() const override { return "Arrow"; }

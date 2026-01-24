@@ -15,7 +15,7 @@
  */
 class CircleTool : public ShapeTool {
 public:
-  explicit CircleTool(Canvas *canvas);
+  explicit CircleTool(SceneRenderer *renderer);
   ~CircleTool() override;
 
   QString name() const override { return "Circle"; }

@@ -4,12 +4,12 @@
  */
 #include "fill_tool.h"
 #include "../core/action.h"
-#include "../widgets/canvas.h"
+#include "../core/scene_renderer.h"
 #include <QGraphicsEllipseItem>
 #include <QGraphicsPolygonItem>
 #include <QGraphicsRectItem>
 
-FillTool::FillTool(Canvas *canvas) : Tool(canvas) {}
+FillTool::FillTool(SceneRenderer *renderer) : Tool(renderer) {}
 
 FillTool::~FillTool() = default;
 
@@ -30,20 +30,20 @@ void FillTool::mouseReleaseEvent(QMouseEvent * /*event*/,
 }
 
 void FillTool::fillAt(const QPointF &point) {
-  QGraphicsScene *scene = canvas_->scene();
-  QColor fillColor = canvas_->currentPen().color();
+  QGraphicsScene *scene = renderer_->scene();
+  QColor fillColor = renderer_->currentPen().color();
   QBrush newBrush(fillColor);
 
   for (QGraphicsItem *item : scene->items(point)) {
     // Skip background image
-    if (item == canvas_->backgroundImageItem())
+    if (item == renderer_->backgroundImageItem())
       continue;
 
     // Fill rectangles
     if (auto *rect = dynamic_cast<QGraphicsRectItem *>(item)) {
       QBrush oldBrush = rect->brush();
       rect->setBrush(newBrush);
-      canvas_->addAction(std::make_unique<FillAction>(item, oldBrush, newBrush));
+      renderer_->addAction(std::make_unique<FillAction>(item, oldBrush, newBrush));
       return;
     }
 
@@ -51,7 +51,7 @@ void FillTool::fillAt(const QPointF &point) {
     if (auto *ellipse = dynamic_cast<QGraphicsEllipseItem *>(item)) {
       QBrush oldBrush = ellipse->brush();
       ellipse->setBrush(newBrush);
-      canvas_->addAction(std::make_unique<FillAction>(item, oldBrush, newBrush));
+      renderer_->addAction(std::make_unique<FillAction>(item, oldBrush, newBrush));
       return;
     }
 
@@ -59,7 +59,7 @@ void FillTool::fillAt(const QPointF &point) {
     if (auto *polygon = dynamic_cast<QGraphicsPolygonItem *>(item)) {
       QBrush oldBrush = polygon->brush();
       polygon->setBrush(newBrush);
-      canvas_->addAction(std::make_unique<FillAction>(item, oldBrush, newBrush));
+      renderer_->addAction(std::make_unique<FillAction>(item, oldBrush, newBrush));
       return;
     }
   }

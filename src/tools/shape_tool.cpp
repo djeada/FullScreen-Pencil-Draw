@@ -3,10 +3,10 @@
  * @brief Abstract base class for shape drawing tools implementation.
  */
 #include "shape_tool.h"
-#include "../widgets/canvas.h"
+#include "../core/scene_renderer.h"
 
-ShapeTool::ShapeTool(Canvas *canvas)
-    : Tool(canvas), tempShape_(nullptr) {}
+ShapeTool::ShapeTool(SceneRenderer *renderer)
+    : Tool(renderer), tempShape_(nullptr) {}
 
 ShapeTool::~ShapeTool() = default;
 
@@ -20,8 +20,8 @@ void ShapeTool::mousePressEvent(QMouseEvent *event, const QPointF &scenePos) {
   if (tempShape_) {
     tempShape_->setFlags(QGraphicsItem::ItemIsSelectable |
                          QGraphicsItem::ItemIsMovable);
-    canvas_->scene()->addItem(tempShape_);
-    canvas_->addDrawAction(tempShape_);
+    renderer_->scene()->addItem(tempShape_);
+    renderer_->addDrawAction(tempShape_);
   }
 }
 

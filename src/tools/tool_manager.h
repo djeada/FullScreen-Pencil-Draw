@@ -10,13 +10,15 @@
 #include <memory>
 
 class Tool;
-class Canvas;
+class SceneRenderer;
 
 /**
  * @brief Manages all drawing tools and tool switching.
  *
  * The ToolManager provides a centralized way to register, activate,
  * and manage tools. It ensures proper cleanup when switching tools.
+ * It works with the SceneRenderer interface, allowing the same tools
+ * to be used with both Canvas and PdfViewer.
  */
 class ToolManager : public QObject {
   Q_OBJECT
@@ -39,7 +41,7 @@ public:
   };
   Q_ENUM(ToolType)
 
-  explicit ToolManager(Canvas *canvas, QObject *parent = nullptr);
+  explicit ToolManager(SceneRenderer *renderer, QObject *parent = nullptr);
   ~ToolManager() override;
 
   /**
@@ -83,7 +85,7 @@ signals:
   void toolChanged(ToolType type, Tool *tool);
 
 private:
-  Canvas *canvas_;
+  SceneRenderer *renderer_;
   Tool *activeTool_;
   ToolType activeToolType_;
   std::map<ToolType, std::unique_ptr<Tool>> tools_;

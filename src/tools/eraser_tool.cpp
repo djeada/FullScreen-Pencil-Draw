@@ -3,11 +3,11 @@
  * @brief Eraser tool implementation.
  */
 #include "eraser_tool.h"
-#include "../widgets/canvas.h"
+#include "../core/scene_renderer.h"
 #include <QPainterPathStroker>
 
-EraserTool::EraserTool(Canvas *canvas)
-    : Tool(canvas), eraserPreview_(nullptr) {}
+EraserTool::EraserTool(SceneRenderer *renderer)
+    : Tool(renderer), eraserPreview_(nullptr) {}
 
 EraserTool::~EraserTool() {
   // Preview is owned by the scene, don't delete here
@@ -15,8 +15,8 @@ EraserTool::~EraserTool() {
 
 void EraserTool::activate() {
   if (!eraserPreview_) {
-    int size = canvas_->eraserPen().width();
-    eraserPreview_ = canvas_->scene()->addEllipse(0, 0, size, size,
+    int size = renderer_->eraserPen().width();
+    eraserPreview_ = renderer_->scene()->addEllipse(0, 0, size, size,
                                                    QPen(Qt::gray),
                                                    QBrush(Qt::NoBrush));
     eraserPreview_->setZValue(1000);
@@ -47,17 +47,17 @@ void EraserTool::mouseReleaseEvent(QMouseEvent * /*event*/,
 }
 
 void EraserTool::eraseAt(const QPointF &point) {
-  qreal size = canvas_->eraserPen().width();
+  qreal size = renderer_->eraserPen().width();
   QRectF eraseRect(point.x() - size / 2, point.y() - size / 2, size, size);
   QPainterPath erasePath;
   erasePath.addEllipse(eraseRect);
 
-  QGraphicsScene *scene = canvas_->scene();
+  QGraphicsScene *scene = renderer_->scene();
   QList<QGraphicsItem *> itemsToRemove;
 
   for (QGraphicsItem *item : scene->items(eraseRect)) {
     // Skip the eraser preview and background image
-    if (item == eraserPreview_ || item == canvas_->backgroundImageItem())
+    if (item == eraserPreview_ || item == renderer_->backgroundImageItem())
       continue;
 
     QPainterPathStroker stroker;
@@ -68,7 +68,7 @@ void EraserTool::eraseAt(const QPointF &point) {
   }
 
   for (QGraphicsItem *item : itemsToRemove) {
-    canvas_->addDeleteAction(item);
+    renderer_->addDeleteAction(item);
     scene->removeItem(item);
   }
 }
@@ -77,10 +77,10 @@ void EraserTool::updatePreview(const QPointF &pos) {
   if (!eraserPreview_)
     return;
 
-  qreal radius = canvas_->eraserPen().width() / 2.0;
+  qreal radius = renderer_->eraserPen().width() / 2.0;
   eraserPreview_->setRect(pos.x() - radius, pos.y() - radius,
-                          canvas_->eraserPen().width(),
-                          canvas_->eraserPen().width());
+                          renderer_->eraserPen().width(),
+                          renderer_->eraserPen().width());
   if (!eraserPreview_->isVisible()) {
     eraserPreview_->show();
   }

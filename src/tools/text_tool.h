@@ -19,7 +19,7 @@ class LatexTextItem;
  */
 class TextTool : public Tool {
 public:
-  explicit TextTool(Canvas *canvas);
+  explicit TextTool(SceneRenderer *renderer);
   ~TextTool() override;
 
   QString name() const override { return "Text"; }
