@@ -90,6 +90,9 @@ bool PdfDocument::load(const QString &filePath) {
 
   auto error = document_->load(filePath);
   if (error != QPdfDocument::Error::None) {
+    // Make sure document is closed on error
+    document_->close();
+    
     switch (error) {
     case QPdfDocument::Error::FileNotFound:
       errorMessage_ = tr("File not found: %1").arg(filePath);

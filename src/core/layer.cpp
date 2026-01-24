@@ -63,16 +63,24 @@ void Layer::clear() {
 }
 
 void Layer::updateItemsVisibility() {
-  for (auto *item : items_) {
-    if (item) {
+  // Remove invalid items in-place by iterating backwards
+  for (int i = items_.size() - 1; i >= 0; --i) {
+    auto *item = items_[i];
+    if (!item || !item->scene()) {
+      items_.removeAt(i);
+    } else {
       item->setVisible(visible_);
     }
   }
 }
 
 void Layer::updateItemsOpacity() {
-  for (auto *item : items_) {
-    if (item) {
+  // Remove invalid items in-place by iterating backwards
+  for (int i = items_.size() - 1; i >= 0; --i) {
+    auto *item = items_[i];
+    if (!item || !item->scene()) {
+      items_.removeAt(i);
+    } else {
       item->setOpacity(opacity_);
     }
   }
@@ -115,7 +123,7 @@ bool LayerManager::deleteLayer(int index) {
   Layer *layer = layers_[index].get();
   emit layerRemoved(layer);
   
-  // Remove items from scene
+  // Remove items from scene and delete them
   for (auto *item : layer->items()) {
     if (item && item->scene() == scene_) {
       scene_->removeItem(item);
@@ -326,7 +334,8 @@ void LayerManager::updateLayerZOrder() {
   for (size_t i = 0; i < layers_.size(); ++i) {
     qreal layerZ = zBase + static_cast<qreal>(i) * 1000.0;
     for (auto *item : layers_[i]->items()) {
-      if (item) {
+      // Check if item is still valid before accessing
+      if (item && item->scene()) {
         item->setZValue(layerZ);
       }
     }

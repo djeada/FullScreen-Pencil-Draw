@@ -26,9 +26,9 @@ void EraserTool::activate() {
 
 void EraserTool::deactivate() {
   if (eraserPreview_) {
-    renderer_->scene()->removeItem(eraserPreview_);
-    delete eraserPreview_;
-    eraserPreview_ = nullptr;
+    eraserPreview_->hide();
+    // Keep the item in the scene for reuse - don't delete it
+    // The scene will clean it up when destroyed
   }
 }
 
