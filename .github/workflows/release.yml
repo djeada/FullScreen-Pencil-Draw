@@ -1,0 +1,76 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v3
+        with:
+          cached: true
+
+      - name: Configure CMake
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+        shell: bash
+
+      - name: Build
+        run: cmake --build build --config Release
+        shell: bash
+
+      - name: Package artifact
+        run: |
+          set -e
+          mkdir -p artifacts
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            cp build/Release/FullScreen-Pencil-Draw.exe artifacts/ || cp build/FullScreen-Pencil-Draw.exe artifacts/
+            powershell -Command "Compress-Archive -Path artifacts\\FullScreen-Pencil-Draw.exe -DestinationPath FullScreen-Pencil-Draw-${{ runner.os }}.zip"
+            echo "ASSET=FullScreen-Pencil-Draw-${RUNNER_OS}.zip" >> $GITHUB_ENV
+          elif [[ "$RUNNER_OS" == "macOS" ]]; then
+            APP_PATH="build/FullScreen-Pencil-Draw.app"
+            if [[ -d "$APP_PATH" ]]; then
+              ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "FullScreen-Pencil-Draw-${RUNNER_OS}.zip"
+              echo "ASSET=FullScreen-Pencil-Draw-${RUNNER_OS}.zip" >> $GITHUB_ENV
+            else
+              cp build/FullScreen-Pencil-Draw artifacts/
+              (cd artifacts && zip -r "../FullScreen-Pencil-Draw-${RUNNER_OS}.zip" FullScreen-Pencil-Draw)
+              echo "ASSET=FullScreen-Pencil-Draw-${RUNNER_OS}.zip" >> $GITHUB_ENV
+            fi
+          else
+            cp build/FullScreen-Pencil-Draw artifacts/
+            tar -czf FullScreen-Pencil-Draw-${RUNNER_OS}.tar.gz -C artifacts FullScreen-Pencil-Draw
+            echo "ASSET=FullScreen-Pencil-Draw-${RUNNER_OS}.tar.gz" >> $GITHUB_ENV
+          fi
+        shell: bash
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FullScreen-Pencil-Draw-${{ runner.os }}
+          path: ${{ env.ASSET }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*.*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
