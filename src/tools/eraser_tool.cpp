@@ -60,9 +60,14 @@ void EraserTool::eraseAt(const QPointF &point) {
     if (item == eraserPreview_ || item == renderer_->backgroundImageItem())
       continue;
 
+    QPainterPath itemShape = item->shape();
+
+    // Check if eraser intersects either the item's shape (for filled items like
+    // pixmaps) or the stroked outline (for line-based items like paths)
     QPainterPathStroker stroker;
     stroker.setWidth(1);
-    if (erasePath.intersects(stroker.createStroke(item->shape()))) {
+    if (erasePath.intersects(itemShape) ||
+        erasePath.intersects(stroker.createStroke(itemShape))) {
       itemsToRemove.append(item);
     }
   }
