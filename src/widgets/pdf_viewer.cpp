@@ -355,7 +355,22 @@ void PdfViewer::addDrawAction(QGraphicsItem *item) {
   }
 
   auto &undoStack = overlayManager_->undoStack(currentPage_);
-  undoStack.push_back(std::make_unique<DrawAction>(item, scene_));
+  int pageIndex = currentPage_;
+  auto onAdd = [this, pageIndex](QGraphicsItem *added) {
+    if (!overlayManager_ || !added)
+      return;
+    if (overlayManager_->overlay(pageIndex)) {
+      overlayManager_->addItemToPage(pageIndex, added);
+    }
+  };
+  auto onRemove = [this, pageIndex](QGraphicsItem *removed) {
+    if (!overlayManager_ || !removed)
+      return;
+    overlayManager_->removeItemFromPage(pageIndex, removed);
+  };
+
+  undoStack.push_back(
+      std::make_unique<DrawAction>(item, scene_, onAdd, onRemove));
   clearRedoStack();
   overlayManager_->addItemToPage(currentPage_, item);
   emit documentModified();
@@ -367,7 +382,29 @@ void PdfViewer::addDeleteAction(QGraphicsItem *item) {
   }
 
   auto &undoStack = overlayManager_->undoStack(currentPage_);
-  undoStack.push_back(std::make_unique<DeleteAction>(item, scene_));
+  int pageIndex = -1;
+  if (overlayManager_) {
+    pageIndex = overlayManager_->findPageForItem(item);
+  }
+  if (pageIndex < 0) {
+    pageIndex = currentPage_;
+  }
+
+  auto onAdd = [this, pageIndex](QGraphicsItem *added) {
+    if (!overlayManager_ || !added)
+      return;
+    if (overlayManager_->overlay(pageIndex)) {
+      overlayManager_->addItemToPage(pageIndex, added);
+    }
+  };
+  auto onRemove = [this, pageIndex](QGraphicsItem *removed) {
+    if (!overlayManager_ || !removed)
+      return;
+    overlayManager_->removeItemFromPage(pageIndex, removed);
+  };
+
+  undoStack.push_back(
+      std::make_unique<DeleteAction>(item, scene_, onAdd, onRemove));
   clearRedoStack();
 }
 
@@ -380,6 +417,15 @@ void PdfViewer::addAction(std::unique_ptr<Action> action) {
   undoStack.push_back(std::move(action));
   clearRedoStack();
   emit documentModified();
+}
+
+void PdfViewer::onItemRemoved(QGraphicsItem *item) {
+  if (!overlayManager_ || !item)
+    return;
+  int pageIndex = overlayManager_->findPageForItem(item);
+  if (pageIndex >= 0) {
+    overlayManager_->removeItemFromPage(pageIndex, item);
+  }
 }
 
 void PdfViewer::clearRedoStack() {

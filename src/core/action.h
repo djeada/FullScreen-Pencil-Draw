@@ -14,6 +14,7 @@
 #include <QGraphicsScene>
 #include <QPointF>
 #include <QPointer>
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -55,7 +56,10 @@ public:
  */
 class DrawAction : public Action {
 public:
-  DrawAction(QGraphicsItem *item, QGraphicsScene *scene);
+  using ItemCallback = std::function<void(QGraphicsItem *)>;
+
+  DrawAction(QGraphicsItem *item, QGraphicsScene *scene,
+             ItemCallback onAdd = {}, ItemCallback onRemove = {});
   ~DrawAction() override;
 
   void undo() override;
@@ -66,6 +70,8 @@ private:
   QGraphicsItem *item_;
   QPointer<QGraphicsScene> scene_;
   bool itemOwnedByAction_;
+  ItemCallback onAdd_;
+  ItemCallback onRemove_;
 };
 
 /**
@@ -77,7 +83,10 @@ private:
  */
 class DeleteAction : public Action {
 public:
-  DeleteAction(QGraphicsItem *item, QGraphicsScene *scene);
+  using ItemCallback = std::function<void(QGraphicsItem *)>;
+
+  DeleteAction(QGraphicsItem *item, QGraphicsScene *scene,
+               ItemCallback onAdd = {}, ItemCallback onRemove = {});
   ~DeleteAction() override;
 
   void undo() override;
@@ -88,6 +97,8 @@ private:
   QGraphicsItem *item_;
   QPointer<QGraphicsScene> scene_;
   bool itemOwnedByAction_;
+  ItemCallback onAdd_;
+  ItemCallback onRemove_;
 };
 
 /**

@@ -79,6 +79,7 @@ void EraserTool::eraseAt(const QPointF &point) {
   for (QGraphicsItem *item : itemsToRemove) {
     renderer_->addDeleteAction(item);
     scene->removeItem(item);
+    renderer_->onItemRemoved(item);
   }
 }
 

@@ -84,6 +84,7 @@ public:
   void addDrawAction(QGraphicsItem *item) override;
   void addDeleteAction(QGraphicsItem *item) override;
   void addAction(std::unique_ptr<Action> action) override;
+  void onItemRemoved(QGraphicsItem *item) override;
   
   // SceneRenderer interface methods using QGraphicsView
   void setCursor(const QCursor &cursor) override { QGraphicsView::setCursor(cursor); }

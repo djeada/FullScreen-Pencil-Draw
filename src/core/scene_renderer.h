@@ -72,6 +72,12 @@ public:
   virtual void addDeleteAction(QGraphicsItem *item) = 0;
 
   /**
+   * @brief Notify the renderer that an item was removed from the scene
+   * @param item The graphics item that was removed
+   */
+  virtual void onItemRemoved(QGraphicsItem *item) = 0;
+
+  /**
    * @brief Add a custom action to the undo stack
    * @param action The action to add
    */
