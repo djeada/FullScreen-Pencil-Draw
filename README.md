@@ -30,6 +30,9 @@ A vector and raster graphics editor built with C++ and Qt6. This application pro
 
 ### Navigation & Selection
 - **Selection Tool**: Select, move, and transform items with rubber-band selection
+- **Resize Handles**: 8 resize handles (corners and edges) for scaling selected items
+- **Rotation Handle**: Rotate selected items using the rotation handle above the selection
+- **Transform Undo/Redo**: Full undo/redo support for resize and rotate operations
 - **Pan Tool**: Navigate around the canvas by dragging
 - **Zoom**: Zoom in/out with Ctrl+Scroll, keyboard shortcuts, or toolbar buttons
 - **Grid Overlay**: Toggle alignment grid for positioning
