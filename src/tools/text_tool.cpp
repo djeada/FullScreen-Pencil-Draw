@@ -6,6 +6,7 @@
 #include "../core/scene_renderer.h"
 #include "../widgets/latex_text_item.h"
 #include <QFont>
+#include <QPointer>
 
 TextTool::TextTool(SceneRenderer *renderer) : Tool(renderer), currentEditingItem_(nullptr) {}
 
@@ -54,7 +55,12 @@ void TextTool::createTextItem(const QPointF &position) {
   renderer_->scene()->addItem(textItem);
 
   // Connect to handle when editing is finished
-  QObject::connect(textItem, &LatexTextItem::editingFinished, [this, textItem]() {
+  // Use QPointer to safely track the textItem in case it gets deleted before signal fires
+  QObject::connect(textItem, &LatexTextItem::editingFinished, [this, textItem = QPointer<LatexTextItem>(textItem)]() {
+    // Check if textItem is still valid (not deleted)
+    if (!textItem) {
+      return;
+    }
     // If the text is empty after editing, remove the item
     if (textItem->text().trimmed().isEmpty()) {
       renderer_->scene()->removeItem(textItem);

@@ -19,6 +19,7 @@
 #include <QMessageBox>
 #include <QMouseEvent>
 #include <QPdfWriter>
+#include <QPointer>
 #include <QScrollBar>
 #include <QUrl>
 #include <QWheelEvent>
@@ -578,6 +579,142 @@ void PdfViewer::wheelEvent(QWheelEvent *event) {
   }
 }
 
+void PdfViewer::addPoint(const QPointF &point) {
+  if (!currentPath_) {
+    return;
+  }
+
+  pointBuffer_.append(point);
+
+  // Use Catmull-Rom spline interpolation for smooth curves
+  if (pointBuffer_.size() >= 4) {
+    QPainterPath path = currentPath_->path();
+
+    const QPointF &p0 = pointBuffer_[pointBuffer_.size() - 4];
+    const QPointF &p1 = pointBuffer_[pointBuffer_.size() - 3];
+    const QPointF &p2 = pointBuffer_[pointBuffer_.size() - 2];
+    const QPointF &p3 = pointBuffer_[pointBuffer_.size() - 1];
+
+    for (int i = 1; i <= 5; ++i) {
+      qreal t = i / 5.0;
+      qreal t2 = t * t;
+      qreal t3 = t2 * t;
+
+      qreal x = 0.5 * ((2 * p1.x()) + (-p0.x() + p2.x()) * t +
+                       (2 * p0.x() - 5 * p1.x() + 4 * p2.x() - p3.x()) * t2 +
+                       (-p0.x() + 3 * p1.x() - 3 * p2.x() + p3.x()) * t3);
+
+      qreal y = 0.5 * ((2 * p1.y()) + (-p0.y() + p2.y()) * t +
+                       (2 * p0.y() - 5 * p1.y() + 4 * p2.y() - p3.y()) * t2 +
+                       (-p0.y() + 3 * p1.y() - 3 * p2.y() + p3.y()) * t3);
+
+      path.lineTo(x, y);
+    }
+
+    currentPath_->setPath(path);
+  } else if (pointBuffer_.size() >= 2) {
+    QPainterPath path = currentPath_->path();
+    path.lineTo(point);
+    currentPath_->setPath(path);
+  }
+}
+
+void PdfViewer::eraseAt(const QPointF &point) {
+  QList<QGraphicsItem *> items = scene_->items(point);
+  for (QGraphicsItem *item : items) {
+    // Don't erase the PDF page item
+    if (item == pageItem_) {
+      continue;
+    }
+    addDeleteAction(item);
+    scene_->removeItem(item);
+    overlayManager_->removeItemFromPage(currentPage_, item);
+    delete item;
+    break; // Only erase one item at a time
+  }
+}
+
+void PdfViewer::createTextItem(const QPointF &pos) {
+  auto *textItem = new LatexTextItem();
+  textItem->setFont(QFont("Arial", qMax(12, currentPen_.width() * 3)));
+  textItem->setTextColor(currentPen_.color());
+  textItem->setPos(pos);
+
+  scene_->addItem(textItem);
+
+  // Connect to handle when editing is finished
+  // Use QPointer to safely track the textItem in case it gets deleted before signal fires
+  connect(textItem, &LatexTextItem::editingFinished, this, [this, textItem = QPointer<LatexTextItem>(textItem)]() {
+    // Check if textItem is still valid (not deleted)
+    if (!textItem) {
+      return;
+    }
+    if (textItem->text().trimmed().isEmpty()) {
+      scene_->removeItem(textItem);
+      textItem->deleteLater();
+    } else {
+      addDrawAction(textItem);
+    }
+  });
+
+  textItem->startEditing();
+}
+
+void PdfViewer::fillAt(const QPointF &point) {
+  QBrush newBrush(currentPen_.color());
+  for (QGraphicsItem *item : scene_->items(point)) {
+    if (item == pageItem_) {
+      continue;
+    }
+    
+    QBrush oldBrush;
+    bool canFill = false;
+    
+    if (auto r = dynamic_cast<QGraphicsRectItem *>(item)) {
+      oldBrush = r->brush();
+      r->setBrush(newBrush);
+      canFill = true;
+    } else if (auto e = dynamic_cast<QGraphicsEllipseItem *>(item)) {
+      oldBrush = e->brush();
+      e->setBrush(newBrush);
+      canFill = true;
+    }
+    
+    if (canFill) {
+      auto &undoStack = overlayManager_->undoStack(currentPage_);
+      undoStack.push_back(
+          std::make_unique<FillAction>(item, oldBrush, newBrush));
+      clearRedoStack();
+      emit documentModified();
+      return;
+    }
+  }
+}
+
+void PdfViewer::drawArrow(const QPointF &start, const QPointF &end) {
+  auto li = new QGraphicsLineItem(QLineF(start, end));
+  li->setPen(currentPen_);
+  li->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
+  scene_->addItem(li);
+
+  double angle = std::atan2(-(end.y() - start.y()), end.x() - start.x());
+  double sz = currentPen_.width() * 4;
+  QPolygonF ah;
+  ah << end
+     << end + QPointF(std::sin(angle + M_PI / 3) * sz,
+                      std::cos(angle + M_PI / 3) * sz)
+     << end + QPointF(std::sin(angle + M_PI - M_PI / 3) * sz,
+                      std::cos(angle + M_PI - M_PI / 3) * sz);
+  auto ahi = new QGraphicsPolygonItem(ah);
+  ahi->setPen(currentPen_);
+  ahi->setBrush(currentPen_.color());
+  ahi->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
+  scene_->addItem(ahi);
+
+  addDrawAction(li);
+  addDrawAction(ahi);
+}
+
 // Helper function to check if a URL points to a PDF file
 static bool isPdfFile(const QUrl &url) {
   if (url.isLocalFile()) {
@@ -654,17 +791,17 @@ void PdfViewer::captureScreenshot(const QRectF &rect) {
 
   // Create an image to render the selected area
   QImage screenshot(rect.size().toSize(), QImage::Format_ARGB32);
-  screenshot.fill(Qt::transparent);
+  // Fill with white background (standard PDF background color)
+  // instead of transparent to ensure proper visibility
+  screenshot.fill(Qt::white);
 
   QPainter painter(&screenshot);
   painter.setRenderHint(QPainter::Antialiasing);
   painter.setRenderHint(QPainter::SmoothPixmapTransform);
 
-  // Translate to the selection rectangle origin
-  painter.translate(-rect.topLeft());
-
   // Render the scene area (including PDF page and any annotations)
-  scene_->render(&painter, QRectF(), rect);
+  // Let scene_->render() handle the transformation from source rect to target
+  scene_->render(&painter, screenshot.rect(), rect);
 
   painter.end();
 
