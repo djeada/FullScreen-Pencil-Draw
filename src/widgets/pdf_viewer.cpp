@@ -879,17 +879,17 @@ void PdfViewer::captureScreenshot(const QRectF &rect) {
 
   // Create an image to render the selected area
   QImage screenshot(rect.size().toSize(), QImage::Format_ARGB32);
-  screenshot.fill(Qt::transparent);
+  // Fill with white background (standard PDF background color)
+  // instead of transparent to ensure proper visibility
+  screenshot.fill(Qt::white);
 
   QPainter painter(&screenshot);
   painter.setRenderHint(QPainter::Antialiasing);
   painter.setRenderHint(QPainter::SmoothPixmapTransform);
 
-  // Translate to the selection rectangle origin
-  painter.translate(-rect.topLeft());
-
   // Render the scene area (including PDF page and any annotations)
-  scene_->render(&painter, QRectF(), rect);
+  // Let scene_->render() handle the transformation from source rect to target
+  scene_->render(&painter, screenshot.rect(), rect);
 
   painter.end();
 
