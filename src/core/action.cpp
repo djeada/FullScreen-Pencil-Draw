@@ -15,7 +15,7 @@ DrawAction::DrawAction(QGraphicsItem *item, QGraphicsScene *scene)
 
 DrawAction::~DrawAction() {
   // Clean up the item if we own it and it still exists
-  if (itemOwnedByAction_ && item_) {
+  if (itemOwnedByAction_ && !item_.isNull()) {
     delete item_.data();
   }
 }
@@ -40,7 +40,7 @@ DeleteAction::DeleteAction(QGraphicsItem *item, QGraphicsScene *scene)
 
 DeleteAction::~DeleteAction() {
   // Clean up the item if we own it and it still exists
-  if (itemOwnedByAction_ && item_) {
+  if (itemOwnedByAction_ && !item_.isNull()) {
     delete item_.data();
   }
 }
