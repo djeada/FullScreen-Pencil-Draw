@@ -22,10 +22,17 @@ TransformHandleItem::TransformHandleItem(QGraphicsItem *targetItem,
   setFlag(QGraphicsItem::ItemIsMovable, false);
   // High Z value so handles appear above everything
   setZValue(10000);
+  if (targetItem_) {
+    targetItem_->installSceneEventFilter(this);
+  }
   updateHandles();
 }
 
-TransformHandleItem::~TransformHandleItem() = default;
+TransformHandleItem::~TransformHandleItem() {
+  if (targetItem_) {
+    targetItem_->removeSceneEventFilter(this);
+  }
+}
 
 QRectF TransformHandleItem::boundingRect() const {
   if (!targetItem_)
@@ -219,6 +226,13 @@ void TransformHandleItem::hoverMoveEvent(QGraphicsSceneHoverEvent *event) {
     unsetCursor();
   }
   QGraphicsObject::hoverMoveEvent(event);
+}
+
+bool TransformHandleItem::sceneEventFilter(QGraphicsItem *watched, QEvent *event) {
+  if (watched == targetItem_ && event->type() == QEvent::GraphicsSceneMove) {
+    updateHandles();
+  }
+  return QGraphicsObject::sceneEventFilter(watched, event);
 }
 
 void TransformHandleItem::hoverLeaveEvent(QGraphicsSceneHoverEvent *event) {
