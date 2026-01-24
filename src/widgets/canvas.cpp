@@ -171,8 +171,8 @@ void Canvas::onItemRemoved(QGraphicsItem *item) {
   QMutableListIterator<TransformHandleItem*> it(transformHandles_);
   while (it.hasNext()) {
     TransformHandleItem* handle = it.next();
-    if (handle->targetItem() == item) {
-      scene_->removeItem(handle);
+    if (handle && handle->targetItem() == item) {
+      if (scene_) scene_->removeItem(handle);
       delete handle;
       it.remove();
     }
@@ -207,9 +207,11 @@ void Canvas::setShape(const QString &shapeType) {
   else if (shapeType == "Circle") { currentShape_ = Circle; setCursor(Qt::CrossCursor); }
   else if (shapeType == "Selection") { currentShape_ = Selection; setCursor(Qt::ArrowCursor); this->setDragMode(QGraphicsView::RubberBandDrag); }
   tempShapeItem_ = nullptr;
+  if (!scene_) return;
   if (currentShape_ != Eraser) {
     hideEraserPreview();
     for (auto item : scene_->items()) {
+      if (!item) continue;
       if (item != eraserPreview_ && item != backgroundImage_ && item->type() != TransformHandleItem::Type) {
         item->setFlag(QGraphicsItem::ItemIsSelectable, true);
         item->setFlag(QGraphicsItem::ItemIsMovable, true);
@@ -227,7 +229,7 @@ void Canvas::setShape(const QString &shapeType) {
 void Canvas::setPenTool() {
   currentShape_ = Pen; tempShapeItem_ = nullptr;
   this->setDragMode(QGraphicsView::NoDrag);
-  hideEraserPreview(); scene_->clearSelection();
+  hideEraserPreview(); if (scene_) scene_->clearSelection();
   setCursor(Qt::CrossCursor); isPanning_ = false;
 }
 
@@ -235,8 +237,10 @@ void Canvas::setEraserTool() {
   currentShape_ = Eraser; tempShapeItem_ = nullptr;
   eraserPen_.setColor(backgroundColor_);
   this->setDragMode(QGraphicsView::NoDrag);
+  if (!scene_) return;
   scene_->clearSelection();
   for (auto item : scene_->items()) {
+    if (!item) continue;
     if (item != eraserPreview_ && item != backgroundImage_) {
       item->setFlag(QGraphicsItem::ItemIsSelectable, false);
       item->setFlag(QGraphicsItem::ItemIsMovable, false);
@@ -248,21 +252,21 @@ void Canvas::setEraserTool() {
 void Canvas::setTextTool() {
   currentShape_ = Text; tempShapeItem_ = nullptr;
   this->setDragMode(QGraphicsView::NoDrag);
-  hideEraserPreview(); scene_->clearSelection();
+  hideEraserPreview(); if (scene_) scene_->clearSelection();
   setCursor(Qt::IBeamCursor); isPanning_ = false;
 }
 
 void Canvas::setFillTool() {
   currentShape_ = Fill; tempShapeItem_ = nullptr;
   this->setDragMode(QGraphicsView::NoDrag);
-  hideEraserPreview(); scene_->clearSelection();
+  hideEraserPreview(); if (scene_) scene_->clearSelection();
   setCursor(Qt::PointingHandCursor); isPanning_ = false;
 }
 
 void Canvas::setArrowTool() {
   currentShape_ = Arrow; tempShapeItem_ = nullptr;
   this->setDragMode(QGraphicsView::NoDrag);
-  hideEraserPreview(); scene_->clearSelection();
+  hideEraserPreview(); if (scene_) scene_->clearSelection();
   setCursor(Qt::CrossCursor); isPanning_ = false;
 }
 
@@ -311,10 +315,12 @@ void Canvas::decreaseBrushSize() {
 }
 
 void Canvas::clearCanvas() {
+  if (!scene_) return;
   // Ask for confirmation if there are drawable items on the canvas
   // (excluding system items like eraser preview and background image)
   int drawableItemCount = 0;
   for (auto item : scene_->items()) {
+    if (!item) continue;
     if (item != eraserPreview_ && item != backgroundImage_) {
       drawableItemCount++;
     }
@@ -346,6 +352,7 @@ void Canvas::clearCanvas() {
 
 void Canvas::newCanvas(int width, int height, const QColor &bgColor) {
   clearCanvas();
+  if (!scene_) return;
   backgroundColor_ = bgColor;
   eraserPen_.setColor(backgroundColor_);
   scene_->setSceneRect(0, 0, width, height);
@@ -420,7 +427,10 @@ void Canvas::toggleMeasurementTool() {
 }
 
 void Canvas::lockSelectedItems() {
-  for (QGraphicsItem *item : scene_->selectedItems()) {
+  if (!scene_) return;
+  QList<QGraphicsItem *> selectedItems = scene_->selectedItems();
+  for (QGraphicsItem *item : selectedItems) {
+    if (!item) continue;
     if (item != eraserPreview_ && item != backgroundImage_) {
       item->setFlag(QGraphicsItem::ItemIsMovable, false);
       item->setFlag(QGraphicsItem::ItemIsSelectable, false);
@@ -432,8 +442,10 @@ void Canvas::lockSelectedItems() {
 }
 
 void Canvas::unlockSelectedItems() {
+  if (!scene_) return;
   // Unlock all locked items (since they can't be selected when locked)
   for (QGraphicsItem *item : scene_->items()) {
+    if (!item) continue;
     if (item != eraserPreview_ && item != backgroundImage_) {
       if (item->data(0).toString() == "locked") {
         item->setFlag(QGraphicsItem::ItemIsMovable, true);
@@ -524,6 +536,7 @@ QPointF Canvas::snapToGridPoint(const QPointF &point) const {
 }
 
 QPointF Canvas::calculateSmartDuplicateOffset() const {
+  if (!scene_) return QPointF(GRID_SIZE, GRID_SIZE);
   // Calculate smart offset based on selected items and available space
   QList<QGraphicsItem *> selected = scene_->selectedItems();
   if (selected.isEmpty()) return QPointF(GRID_SIZE, GRID_SIZE);
@@ -531,6 +544,7 @@ QPointF Canvas::calculateSmartDuplicateOffset() const {
   // Get bounding rect of selected items
   QRectF boundingRect;
   for (QGraphicsItem *item : selected) {
+    if (!item) continue;
     if (item != eraserPreview_ && item != backgroundImage_) {
       if (boundingRect.isEmpty()) {
         boundingRect = item->sceneBoundingRect();
@@ -555,13 +569,18 @@ QPointF Canvas::calculateSmartDuplicateOffset() const {
 }
 
 void Canvas::selectAll() {
+  if (!scene_) return;
   for (auto item : scene_->items())
-    if (item != eraserPreview_ && item != backgroundImage_) item->setSelected(true);
+    if (item && item != eraserPreview_ && item != backgroundImage_) item->setSelected(true);
 }
 
 void Canvas::deleteSelectedItems() {
+  if (!scene_) return;
   clearTransformHandles();
-  for (QGraphicsItem *item : scene_->selectedItems()) {
+  // Copy the list to avoid modifying while iterating
+  QList<QGraphicsItem *> selectedItems = scene_->selectedItems();
+  for (QGraphicsItem *item : selectedItems) {
+    if (!item) continue;
     if (item != eraserPreview_ && item != backgroundImage_) {
       addDeleteAction(item);
       scene_->removeItem(item);
@@ -571,10 +590,13 @@ void Canvas::deleteSelectedItems() {
 }
 
 void Canvas::duplicateSelectedItems() {
+  if (!scene_) return;
   QList<QGraphicsItem *> newItems;
   QPointF offset = calculateSmartDuplicateOffset();
-  
-  for (QGraphicsItem *item : scene_->selectedItems()) {
+  // Copy the list to avoid issues with modification during iteration
+  QList<QGraphicsItem *> selectedItems = scene_->selectedItems();
+  for (QGraphicsItem *item : selectedItems) {
+    if (!item) continue;
     if (auto r = dynamic_cast<QGraphicsRectItem *>(item)) {
       auto n = new QGraphicsRectItem(r->rect()); n->setPen(r->pen()); n->setBrush(r->brush());
       QPointF newPos = snapToGrid_ ? snapToGridPoint(r->pos() + offset) : r->pos() + offset;
@@ -609,7 +631,7 @@ void Canvas::duplicateSelectedItems() {
     }
   }
   scene_->clearSelection();
-  for (auto i : newItems) i->setSelected(true);
+  for (auto i : newItems) if (i) i->setSelected(true);
 }
 
 void Canvas::saveToFile() {
@@ -774,8 +796,12 @@ void Canvas::createTextItem(const QPointF &pos) {
 }
 
 void Canvas::fillAt(const QPointF &point) {
+  if (!scene_) return;
   QBrush newBrush(currentPen_.color());
-  for (QGraphicsItem *item : scene_->items(point)) {
+  // Copy the list to avoid issues with scene modification during iteration
+  QList<QGraphicsItem *> itemsAtPoint = scene_->items(point);
+  for (QGraphicsItem *item : itemsAtPoint) {
+    if (!item) continue;
     if (item == eraserPreview_ || item == backgroundImage_) continue;
     if (auto r = dynamic_cast<QGraphicsRectItem *>(item)) {
       QBrush oldBrush = r->brush();
@@ -799,6 +825,7 @@ void Canvas::fillAt(const QPointF &point) {
 }
 
 void Canvas::drawArrow(const QPointF &start, const QPointF &end) {
+  if (!scene_) return;
   auto li = new QGraphicsLineItem(QLineF(start, end));
   li->setPen(currentPen_);
   li->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
@@ -816,6 +843,7 @@ void Canvas::drawArrow(const QPointF &start, const QPointF &end) {
 }
 
 void Canvas::mousePressEvent(QMouseEvent *event) {
+  if (!event || !scene_) { QGraphicsView::mousePressEvent(event); return; }
   QPointF sp = mapToScene(event->pos());
   // Apply snap-to-grid for shape tools
   if (snapToGrid_ && (currentShape_ == Rectangle || currentShape_ == Circle || 
@@ -867,6 +895,7 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
 }
 
 void Canvas::mouseMoveEvent(QMouseEvent *event) {
+  if (!event || !scene_) { QGraphicsView::mouseMoveEvent(event); return; }
   QPointF cp = mapToScene(event->pos());
   // Apply snap-to-grid for shape tools during drawing
   if (snapToGrid_ && (currentShape_ == Rectangle || currentShape_ == Circle || 
@@ -901,6 +930,7 @@ void Canvas::mouseMoveEvent(QMouseEvent *event) {
 }
 
 void Canvas::mouseReleaseEvent(QMouseEvent *event) {
+  if (!event || !scene_) { QGraphicsView::mouseReleaseEvent(event); return; }
   QPointF ep = mapToScene(event->pos());
   // Apply snap-to-grid for shape tools
   if (snapToGrid_ && (currentShape_ == Rectangle || currentShape_ == Circle || 
@@ -930,11 +960,13 @@ void Canvas::updateEraserPreview(const QPointF &pos) {
 void Canvas::hideEraserPreview() { if (eraserPreview_) eraserPreview_->hide(); }
 
 void Canvas::copySelectedItems() {
+  if (!scene_) return;
   auto sel = scene_->selectedItems();
   if (sel.isEmpty()) return;
   auto md = new QMimeData();
   QByteArray ba; QDataStream ds(&ba, QIODevice::WriteOnly);
   for (auto item : sel) {
+    if (!item) continue;
     if (auto r = dynamic_cast<QGraphicsRectItem*>(item)) { ds << QString("Rectangle") << r->rect() << r->pos() << r->pen() << r->brush(); }
     else if (auto e = dynamic_cast<QGraphicsEllipseItem*>(item)) { if (item == eraserPreview_) continue; ds << QString("Ellipse") << e->rect() << e->pos() << e->pen() << e->brush(); }
     else if (auto l = dynamic_cast<QGraphicsLineItem*>(item)) { ds << QString("Line") << l->line() << l->pos() << l->pen(); }
@@ -948,10 +980,12 @@ void Canvas::copySelectedItems() {
 }
 
 void Canvas::cutSelectedItems() {
+  if (!scene_) return;
   auto sel = scene_->selectedItems();
   if (sel.isEmpty()) return;
   copySelectedItems();
   for (auto item : sel) {
+    if (!item) continue;
     if (item != eraserPreview_ && item != backgroundImage_) {
       addDeleteAction(item);
       scene_->removeItem(item);
@@ -961,8 +995,9 @@ void Canvas::cutSelectedItems() {
 }
 
 void Canvas::pasteItems() {
+  if (!scene_) return;
   auto md = QApplication::clipboard()->mimeData();
-  if (!md->hasFormat("application/x-canvas-items")) return;
+  if (!md || !md->hasFormat("application/x-canvas-items")) return;
   QByteArray ba = md->data("application/x-canvas-items");
   QDataStream ds(&ba, QIODevice::ReadOnly);
   QList<QGraphicsItem*> pi;
@@ -977,7 +1012,7 @@ void Canvas::pasteItems() {
     else if (t == "Polygon") { QPolygonF pg; QPointF p; QPen pn; QBrush b; ds >> pg >> p >> pn >> b; auto n = new QGraphicsPolygonItem(pg); n->setPen(pn); n->setBrush(b); n->setPos(p + QPointF(20,20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable); scene_->addItem(n); pi.append(n); addDrawAction(n); }
   }
   scene_->clearSelection();
-  for (auto i : pi) i->setSelected(true);
+  for (auto i : pi) if (i) i->setSelected(true);
 }
 
 void Canvas::addPoint(const QPointF &point) {
@@ -997,11 +1032,16 @@ void Canvas::addPoint(const QPointF &point) {
 }
 
 void Canvas::eraseAt(const QPointF &point) {
+  if (!scene_) return;
   clearTransformHandles();
   qreal sz = eraserPen_.width();
   QRectF er(point.x() - sz/2, point.y() - sz/2, sz, sz);
   QPainterPath ep; ep.addEllipse(er);
-  for (QGraphicsItem *item : scene_->items(er)) {
+  // Copy the list to avoid modifying the scene while iterating
+  QList<QGraphicsItem *> itemsToCheck = scene_->items(er);
+  QList<QGraphicsItem *> itemsToRemove;
+  for (QGraphicsItem *item : itemsToCheck) {
+    if (!item) continue;
     if (item == eraserPreview_ || item == backgroundImage_) continue;
     if (item->type() == TransformHandleItem::Type) continue;
     QPainterPath itemShape = item->shape();
@@ -1009,10 +1049,15 @@ void Canvas::eraseAt(const QPointF &point) {
     // pixmaps) or the stroked outline (for line-based items like paths)
     QPainterPathStroker s; s.setWidth(1);
     if (ep.intersects(itemShape) || ep.intersects(s.createStroke(itemShape))) {
-      addDeleteAction(item);
-      scene_->removeItem(item);
-      onItemRemoved(item);
+      itemsToRemove.append(item);
     }
+  }
+  // Now safely remove items after iteration is complete
+  for (QGraphicsItem *item : itemsToRemove) {
+    if (!item) continue;
+    addDeleteAction(item);
+    scene_->removeItem(item);
+    onItemRemoved(item);
   }
 }
 
@@ -1160,7 +1205,7 @@ void Canvas::addImageFromScreenshot(const QImage &image) {
 
 void Canvas::contextMenuEvent(QContextMenuEvent *event) {
   // Only show context menu if there are selected items
-  if (scene_->selectedItems().isEmpty()) {
+  if (!scene_ || scene_->selectedItems().isEmpty()) {
     QGraphicsView::contextMenuEvent(event);
     return;
   }
@@ -1183,12 +1228,14 @@ void Canvas::contextMenuEvent(QContextMenuEvent *event) {
 }
 
 QRectF Canvas::getSelectionBoundingRect() const {
+  if (!scene_) return QRectF();
   QList<QGraphicsItem*> selectedItems = scene_->selectedItems();
   if (selectedItems.isEmpty()) return QRectF();
   
   QRectF boundingRect;
   bool firstItem = true;
   for (QGraphicsItem *item : selectedItems) {
+    if (!item) continue;
     if (item != eraserPreview_ && item != backgroundImage_) {
       if (firstItem) {
         boundingRect = item->sceneBoundingRect();
@@ -1208,7 +1255,7 @@ void Canvas::exportSelectionToSVG() {
                            "SVG export requires the Qt SVG module, which was not found at build time.");
   return;
 #else
-  if (scene_->selectedItems().isEmpty()) return;
+  if (!scene_ || scene_->selectedItems().isEmpty()) return;
 
   QString fileName = QFileDialog::getSaveFileName(this, "Export Selection as SVG", "", "SVG (*.svg)");
   if (fileName.isEmpty()) return;
@@ -1231,7 +1278,9 @@ void Canvas::exportSelectionToSVG() {
   painter.setRenderHint(QPainter::TextAntialiasing);
   painter.translate(-boundingRect.topLeft());
   
-  for (QGraphicsItem *item : scene_->selectedItems()) {
+  QList<QGraphicsItem*> selectedItems = scene_->selectedItems();
+  for (QGraphicsItem *item : selectedItems) {
+    if (!item) continue;
     if (item != eraserPreview_ && item != backgroundImage_) {
       painter.save();
       painter.setTransform(item->sceneTransform(), true);
@@ -1245,7 +1294,7 @@ void Canvas::exportSelectionToSVG() {
 }
 
 void Canvas::exportSelectionToPNG() {
-  if (scene_->selectedItems().isEmpty()) return;
+  if (!scene_ || scene_->selectedItems().isEmpty()) return;
 
   QString fileName = QFileDialog::getSaveFileName(this, "Export Selection as PNG", "", "PNG (*.png)");
   if (fileName.isEmpty()) return;
@@ -1262,7 +1311,9 @@ void Canvas::exportSelectionToPNG() {
   painter.setRenderHint(QPainter::TextAntialiasing);
   painter.translate(-boundingRect.topLeft());
   
-  for (QGraphicsItem *item : scene_->selectedItems()) {
+  QList<QGraphicsItem*> selectedItems = scene_->selectedItems();
+  for (QGraphicsItem *item : selectedItems) {
+    if (!item) continue;
     if (item != eraserPreview_ && item != backgroundImage_) {
       painter.save();
       painter.setTransform(item->sceneTransform(), true);
@@ -1276,7 +1327,7 @@ void Canvas::exportSelectionToPNG() {
 }
 
 void Canvas::exportSelectionToJPG() {
-  if (scene_->selectedItems().isEmpty()) return;
+  if (!scene_ || scene_->selectedItems().isEmpty()) return;
 
   QString fileName = QFileDialog::getSaveFileName(this, "Export Selection as JPG", "", "JPEG (*.jpg)");
   if (fileName.isEmpty()) return;
@@ -1293,7 +1344,9 @@ void Canvas::exportSelectionToJPG() {
   painter.setRenderHint(QPainter::TextAntialiasing);
   painter.translate(-boundingRect.topLeft());
   
-  for (QGraphicsItem *item : scene_->selectedItems()) {
+  QList<QGraphicsItem*> selectedItems = scene_->selectedItems();
+  for (QGraphicsItem *item : selectedItems) {
+    if (!item) continue;
     if (item != eraserPreview_ && item != backgroundImage_) {
       painter.save();
       painter.setTransform(item->sceneTransform(), true);
@@ -1313,14 +1366,15 @@ void Canvas::updateTransformHandles() {
     return;
   }
   
+  if (!scene_) return;
   QList<QGraphicsItem*> selectedItems = scene_->selectedItems();
   
   // Remove handles for items that are no longer selected
   QMutableListIterator<TransformHandleItem*> it(transformHandles_);
   while (it.hasNext()) {
     TransformHandleItem* handle = it.next();
-    if (!selectedItems.contains(handle->targetItem())) {
-      scene_->removeItem(handle);
+    if (!handle || !selectedItems.contains(handle->targetItem())) {
+      if (handle && scene_) scene_->removeItem(handle);
       delete handle;
       it.remove();
     }
@@ -1328,6 +1382,7 @@ void Canvas::updateTransformHandles() {
   
   // Add handles for newly selected items
   for (QGraphicsItem* item : selectedItems) {
+    if (!item) continue;
     // Skip non-transformable items
     if (item == eraserPreview_ || item == backgroundImage_)
       continue;
@@ -1339,7 +1394,7 @@ void Canvas::updateTransformHandles() {
     // Check if handle already exists for this item
     bool hasHandle = false;
     for (TransformHandleItem* handle : transformHandles_) {
-      if (handle->targetItem() == item) {
+      if (handle && handle->targetItem() == item) {
         hasHandle = true;
         handle->updateHandles();
         break;
@@ -1353,7 +1408,7 @@ void Canvas::updateTransformHandles() {
       
       // Connect to update handles when transform completes
       connect(handle, &TransformHandleItem::transformCompleted, this, [this, handle]() {
-        handle->updateHandles();
+        if (handle) handle->updateHandles();
         emit canvasModified();
       });
     }
@@ -1362,8 +1417,10 @@ void Canvas::updateTransformHandles() {
 
 void Canvas::clearTransformHandles() {
   for (TransformHandleItem* handle : transformHandles_) {
-    scene_->removeItem(handle);
-    delete handle;
+    if (handle && scene_) {
+      scene_->removeItem(handle);
+      delete handle;
+    }
   }
   transformHandles_.clear();
 }
