@@ -3,10 +3,11 @@
  * @brief Freehand drawing tool implementation.
  */
 #include "pen_tool.h"
+#include "../core/scene_controller.h"
 #include "../core/scene_renderer.h"
 
 PenTool::PenTool(SceneRenderer *renderer)
-    : Tool(renderer), currentPath_(nullptr) {}
+    : Tool(renderer), currentPath_(nullptr), currentPathId_() {}
 
 PenTool::~PenTool() = default;
 
@@ -23,7 +24,14 @@ void PenTool::mousePressEvent(QMouseEvent *event, const QPointF &scenePos) {
   path.moveTo(scenePos);
   currentPath_->setPath(path);
 
-  renderer_->scene()->addItem(currentPath_);
+  // Use SceneController if available, otherwise fall back to direct scene access
+  SceneController *controller = renderer_->sceneController();
+  if (controller) {
+    currentPathId_ = controller->addItem(currentPath_);
+  } else {
+    renderer_->scene()->addItem(currentPath_);
+    currentPathId_ = renderer_->registerItem(currentPath_);
+  }
 
   pointBuffer_.clear();
   pointBuffer_.append(scenePos);
@@ -40,7 +48,25 @@ void PenTool::mouseMoveEvent(QMouseEvent *event, const QPointF &scenePos) {
 void PenTool::mouseReleaseEvent(QMouseEvent * /*event*/,
                                  const QPointF & /*scenePos*/) {
   currentPath_ = nullptr;
+  currentPathId_ = ItemId();
   pointBuffer_.clear();
+}
+
+void PenTool::deactivate() {
+  // Clean up any in-progress path
+  if (currentPath_) {
+    SceneController *controller = renderer_->sceneController();
+    if (controller && currentPathId_.isValid()) {
+      controller->removeItem(currentPathId_, false);  // Don't keep for undo
+    } else if (currentPath_->scene()) {
+      renderer_->scene()->removeItem(currentPath_);
+      delete currentPath_;
+    }
+    currentPath_ = nullptr;
+    currentPathId_ = ItemId();
+  }
+  pointBuffer_.clear();
+  Tool::deactivate();
 }
 
 void PenTool::addPoint(const QPointF &point) {

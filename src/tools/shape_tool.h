@@ -6,6 +6,7 @@
 #define SHAPE_TOOL_H
 
 #include "tool.h"
+#include "../core/item_id.h"
 
 /**
  * @brief Abstract base class for shape drawing tools.
@@ -23,6 +24,8 @@ public:
   void mousePressEvent(QMouseEvent *event, const QPointF &scenePos) override;
   void mouseMoveEvent(QMouseEvent *event, const QPointF &scenePos) override;
   void mouseReleaseEvent(QMouseEvent *event, const QPointF &scenePos) override;
+  
+  void deactivate() override;
 
 protected:
   /**
@@ -47,7 +50,14 @@ protected:
    */
   virtual void finalizeShape(const QPointF &startPos, const QPointF &endPos);
 
-  QGraphicsItem *tempShape_;
+  /**
+   * @brief Get the temporary shape item
+   * @return Pointer to the temp shape, or nullptr
+   */
+  QGraphicsItem *tempShape() const;
+
+  QGraphicsItem *tempShape_;     // Cached pointer (for backwards compatibility)
+  ItemId tempShapeId_;           // Stable ID for safe reference
   QPointF startPoint_;
 };
 

@@ -3,12 +3,13 @@
  * @brief Eraser tool implementation.
  */
 #include "eraser_tool.h"
+#include "../core/scene_controller.h"
 #include "../core/scene_renderer.h"
 #include "../widgets/transform_handle_item.h"
 #include <QPainterPathStroker>
 
 EraserTool::EraserTool(SceneRenderer *renderer)
-    : Tool(renderer), eraserPreview_(nullptr) {}
+    : Tool(renderer), eraserPreview_(nullptr), eraserPreviewId_() {}
 
 EraserTool::~EraserTool() {
   // Preview is owned by the scene, don't delete here
@@ -21,6 +22,7 @@ void EraserTool::activate() {
                                                    QPen(Qt::gray),
                                                    QBrush(Qt::NoBrush));
     eraserPreview_->setZValue(1000);
+    eraserPreviewId_ = renderer_->registerItem(eraserPreview_);
   }
   eraserPreview_->show();
 }
@@ -58,6 +60,7 @@ void EraserTool::eraseAt(const QPointF &point) {
   erasePath.addEllipse(eraseRect);
 
   QGraphicsScene *scene = renderer_->scene();
+  SceneController *controller = renderer_->sceneController();
   QList<QGraphicsItem *> itemsToRemove;
 
   for (QGraphicsItem *item : scene->items(eraseRect)) {
@@ -83,8 +86,20 @@ void EraserTool::eraseAt(const QPointF &point) {
 
   for (QGraphicsItem *item : itemsToRemove) {
     renderer_->addDeleteAction(item);
-    scene->removeItem(item);
-    renderer_->onItemRemoved(item);
+    
+    // Use SceneController if available for safe deletion
+    if (controller) {
+      ItemId itemId = controller->idForItem(item);
+      if (itemId.isValid()) {
+        controller->removeItem(itemId, true);  // Keep for undo
+      } else {
+        scene->removeItem(item);
+        renderer_->onItemRemoved(item);
+      }
+    } else {
+      scene->removeItem(item);
+      renderer_->onItemRemoved(item);
+    }
   }
 }
 

@@ -15,7 +15,11 @@
 #include <QScrollBar>
 #include <memory>
 
+#include "item_id.h"
+
 class Action;
+class SceneController;
+class ItemStore;
 
 /**
  * @brief Abstract interface for scene renderers.
@@ -100,6 +104,30 @@ public:
    * @return Pointer to the vertical scroll bar
    */
   virtual QScrollBar *verticalScrollBar() const = 0;
+
+  /**
+   * @brief Get the scene controller for item lifecycle management
+   * @return Pointer to the SceneController, or nullptr if not available
+   * @note Tools should use this for creating/removing items when available
+   */
+  virtual SceneController *sceneController() const { return nullptr; }
+
+  /**
+   * @brief Get the item store for ItemId resolution
+   * @return Pointer to the ItemStore, or nullptr if not available
+   */
+  virtual ItemStore *itemStore() const { return nullptr; }
+
+  /**
+   * @brief Register an item and get its ItemId
+   * @param item The item to register
+   * @return The assigned ItemId
+   * @note If sceneController() is available, uses that; otherwise returns null ItemId
+   */
+  virtual ItemId registerItem(QGraphicsItem *item) {
+    (void)item;
+    return ItemId();
+  }
 };
 
 #endif // SCENE_RENDERER_H

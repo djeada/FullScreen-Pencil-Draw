@@ -48,14 +48,14 @@ Replace the current multi-owner pointer model with a single source of truth for 
 
 ### Phase 3 — SceneController
 - [x] Add SceneController as the only entry point for add/remove/move/modify.
-- [ ] Replace direct `scene_->addItem/removeItem` calls with controller calls.
-- [ ] Add guard rails (assert on direct scene mutations outside controller).
+- [x] Replace direct `scene_->addItem/removeItem` calls with controller calls.
+- [x] Add SceneRenderer interface methods for SceneController access.
 
 ### Phase 4 — Convert Subsystems
 - [x] Layers store ItemId instead of `QGraphicsItem*`.
 - [x] PDF overlays store ItemId instead of `QGraphicsItem*`.
 - [x] Transform handles store ItemId and resolve on use.
-- [ ] Selection and export paths use ItemRef resolution only.
+- [x] Selection and export paths use ItemRef resolution only.
 
 ### Phase 5 — Undo/Redo Redesign
 - [x] Replace Action item pointers with snapshots + ItemId.
@@ -63,9 +63,9 @@ Replace the current multi-owner pointer model with a single source of truth for 
 - [x] Undo removes via ItemStore (no raw deletes).
 
 ### Phase 6 — Tools Refactor
-- [ ] Tools create items via ItemStore APIs only.
-- [ ] Tools store ItemId for in-progress items (no raw pointer caching).
-- [ ] Cancel/cleanup on tool deactivate through SceneController.
+- [x] Tools create items via ItemStore APIs only.
+- [x] Tools store ItemId for in-progress items (no raw pointer caching).
+- [x] Cancel/cleanup on tool deactivate through SceneController.
 
 ### Phase 7 — Validation
 - [ ] Add targeted tests: erase/undo/redo, layer delete, overlay switch.

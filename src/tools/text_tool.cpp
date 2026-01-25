@@ -3,12 +3,14 @@
  * @brief Text annotation tool implementation with inline LaTeX editing.
  */
 #include "text_tool.h"
+#include "../core/scene_controller.h"
 #include "../core/scene_renderer.h"
 #include "../widgets/latex_text_item.h"
 #include <QFont>
 #include <QPointer>
 
-TextTool::TextTool(SceneRenderer *renderer) : Tool(renderer), currentEditingItem_(nullptr) {}
+TextTool::TextTool(SceneRenderer *renderer)
+    : Tool(renderer), currentEditingItem_(nullptr), currentEditingItemId_() {}
 
 TextTool::~TextTool() = default;
 
@@ -21,6 +23,7 @@ void TextTool::mousePressEvent(QMouseEvent *event, const QPointF &scenePos) {
       if (!latexItem->isEditing()) {
         latexItem->startEditing();
         currentEditingItem_ = latexItem;
+        currentEditingItemId_ = renderer_->registerItem(latexItem);
       }
       return;
     }
@@ -29,6 +32,7 @@ void TextTool::mousePressEvent(QMouseEvent *event, const QPointF &scenePos) {
     if (currentEditingItem_ && currentEditingItem_->isEditing()) {
       // The editing will be finished by the focus out event
       currentEditingItem_ = nullptr;
+      currentEditingItemId_ = ItemId();
     }
 
     // Create a new LatexTextItem with inline editing
@@ -46,36 +50,61 @@ void TextTool::mouseReleaseEvent(QMouseEvent * /*event*/,
   // Nothing to do on release
 }
 
+void TextTool::deactivate() {
+  // Finish editing if in progress
+  if (currentEditingItem_ && currentEditingItem_->isEditing()) {
+    currentEditingItem_->finishEditing();
+  }
+  currentEditingItem_ = nullptr;
+  currentEditingItemId_ = ItemId();
+  Tool::deactivate();
+}
+
 void TextTool::createTextItem(const QPointF &position) {
+  SceneController *controller = renderer_->sceneController();
+  
   auto *textItem = new LatexTextItem();
   textItem->setFont(QFont("Arial", qMax(12, renderer_->currentPen().width() * 3)));
   textItem->setTextColor(renderer_->currentPen().color());
   textItem->setPos(position);
 
-  renderer_->scene()->addItem(textItem);
+  // Add to scene via SceneController if available
+  ItemId textItemId;
+  if (controller) {
+    textItemId = controller->addItem(textItem);
+  } else {
+    renderer_->scene()->addItem(textItem);
+    textItemId = renderer_->registerItem(textItem);
+  }
 
   // Connect to handle when editing is finished
   // Use QPointer to safely track the textItem in case it gets deleted before signal fires
-  QObject::connect(textItem, &LatexTextItem::editingFinished, [this, textItem = QPointer<LatexTextItem>(textItem)]() {
+  QObject::connect(textItem, &LatexTextItem::editingFinished, [this, textItem = QPointer<LatexTextItem>(textItem), textItemId, controller]() {
     // Check if textItem is still valid (not deleted)
     if (!textItem) {
       return;
     }
     // If the text is empty after editing, remove the item
     if (textItem->text().trimmed().isEmpty()) {
-      renderer_->onItemRemoved(textItem);
-      renderer_->scene()->removeItem(textItem);
-      textItem->deleteLater();
+      if (controller && textItemId.isValid()) {
+        controller->removeItem(textItemId, false);  // Don't keep for undo
+      } else {
+        renderer_->onItemRemoved(textItem);
+        renderer_->scene()->removeItem(textItem);
+        textItem->deleteLater();
+      }
     } else {
       // Add to undo stack only when there's actual content
       renderer_->addDrawAction(textItem);
     }
     if (currentEditingItem_ == textItem) {
       currentEditingItem_ = nullptr;
+      currentEditingItemId_ = ItemId();
     }
   });
 
   // Start inline editing immediately
   textItem->startEditing();
   currentEditingItem_ = textItem;
+  currentEditingItemId_ = textItemId;
 }

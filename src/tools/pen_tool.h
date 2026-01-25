@@ -6,6 +6,7 @@
 #define PEN_TOOL_H
 
 #include "tool.h"
+#include "../core/item_id.h"
 #include <QGraphicsPathItem>
 #include <QPainterPath>
 #include <QVector>
@@ -28,11 +29,14 @@ public:
   void mousePressEvent(QMouseEvent *event, const QPointF &scenePos) override;
   void mouseMoveEvent(QMouseEvent *event, const QPointF &scenePos) override;
   void mouseReleaseEvent(QMouseEvent *event, const QPointF &scenePos) override;
+  
+  void deactivate() override;
 
 private:
   void addPoint(const QPointF &point);
 
   QGraphicsPathItem *currentPath_;
+  ItemId currentPathId_;         // Stable ID for safe reference
   QVector<QPointF> pointBuffer_;
   static constexpr int MIN_POINTS_FOR_SPLINE = 4;
 };
