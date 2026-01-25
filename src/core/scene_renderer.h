@@ -16,9 +16,9 @@
 #include <memory>
 
 #include "item_id.h"
+#include "scene_controller.h"
 
 class Action;
-class SceneController;
 class ItemStore;
 
 /**

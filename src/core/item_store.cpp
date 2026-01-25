@@ -4,7 +4,35 @@
  */
 #include "item_store.h"
 #include <QCoreApplication>
+#include <QList>
+#include <QSet>
 #include <algorithm>
+
+namespace {
+void collectDescendants(QGraphicsItem *item, QList<QGraphicsItem *> &out) {
+  if (!item) {
+    return;
+  }
+  const auto children = item->childItems();
+  for (QGraphicsItem *child : children) {
+    if (!child) {
+      continue;
+    }
+    out.append(child);
+    collectDescendants(child, out);
+  }
+}
+
+bool hasAncestorInSet(QGraphicsItem *item, const QSet<QGraphicsItem *> &set) {
+  for (QGraphicsItem *parent = item ? item->parentItem() : nullptr; parent;
+       parent = parent->parentItem()) {
+    if (set.contains(parent)) {
+      return true;
+    }
+  }
+  return false;
+}
+} // namespace
 
 ItemStore::ItemStore(QGraphicsScene *scene, QObject *parent)
     : QObject(parent), scene_(scene) {}
@@ -14,8 +42,20 @@ ItemStore::~ItemStore() {
   flushDeletions();
 
   // Clean up snapshot items (kept for potential undo)
-  for (auto &pair : snapshotItems_) {
-    delete pair.second;
+  QSet<QGraphicsItem *> snapshotPtrs;
+  for (const auto &pair : snapshotItems_) {
+    snapshotPtrs.insert(pair.second);
+  }
+  for (const auto &pair : snapshotItems_) {
+    QGraphicsItem *item = pair.second;
+    if (!item) {
+      continue;
+    }
+    // Avoid double-deleting child items when a parent is also tracked.
+    if (hasAncestorInSet(item, snapshotPtrs)) {
+      continue;
+    }
+    delete item;
   }
   snapshotItems_.clear();
 }
@@ -115,6 +155,28 @@ void ItemStore::scheduleDelete(const ItemId &id, bool keepSnapshot) {
 
   emit itemAboutToBeDeleted(id);
 
+  // Also notify and remove any registered descendants to avoid stale pointers.
+  QList<QGraphicsItem *> descendants;
+  collectDescendants(item, descendants);
+  if (!descendants.isEmpty()) {
+    for (QGraphicsItem *child : descendants) {
+      if (!child) {
+        continue;
+      }
+      auto childIt = reverseMap_.find(child);
+      if (childIt == reverseMap_.end()) {
+        continue;
+      }
+      ItemId childId = childIt->second;
+      emit itemAboutToBeDeleted(childId);
+      items_.erase(childId);
+      reverseMap_.erase(child);
+      if (keepSnapshot) {
+        snapshotItems_[childId] = child;
+      }
+    }
+  }
+
   // Remove from scene immediately (safe during event handling)
   if (scene_ && item->scene() == scene_) {
     scene_->removeItem(item);
@@ -135,8 +197,23 @@ void ItemStore::scheduleDelete(const ItemId &id, bool keepSnapshot) {
 
 void ItemStore::flushDeletions() {
   // Actually delete items in the queue
-  for (auto &pair : deletionQueue_) {
-    delete pair.second;
+  QSet<QGraphicsItem *> queuedPtrs;
+  for (const auto &pair : deletionQueue_) {
+    queuedPtrs.insert(pair.second);
+  }
+  for (const auto &pair : deletionQueue_) {
+    QGraphicsItem *item = pair.second;
+    if (!item) {
+      continue;
+    }
+    // Avoid double-deleting child items when a parent is also queued.
+    if (hasAncestorInSet(item, queuedPtrs)) {
+      continue;
+    }
+    if (scene_ && item->scene() == scene_) {
+      scene_->removeItem(item);
+    }
+    delete item;
   }
   deletionQueue_.clear();
 }
@@ -162,6 +239,32 @@ bool ItemStore::restoreItem(const ItemId &id) {
   // Add back to scene
   if (scene_ && !item->scene()) {
     scene_->addItem(item);
+  }
+
+  // Re-register any descendants that were stored as snapshots
+  QList<QGraphicsItem *> descendants;
+  collectDescendants(item, descendants);
+  if (!descendants.isEmpty()) {
+    for (QGraphicsItem *child : descendants) {
+      if (!child) {
+        continue;
+      }
+      ItemId childId;
+      auto snapIt = snapshotItems_.begin();
+      while (snapIt != snapshotItems_.end()) {
+        if (snapIt->second == child) {
+          childId = snapIt->first;
+          snapIt = snapshotItems_.erase(snapIt);
+          break;
+        }
+        ++snapIt;
+      }
+      if (childId.isValid()) {
+        items_[childId] = child;
+        reverseMap_[child] = childId;
+        emit itemRestored(childId);
+      }
+    }
   }
 
   emit itemRestored(id);
