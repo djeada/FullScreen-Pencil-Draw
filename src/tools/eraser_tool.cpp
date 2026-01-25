@@ -65,7 +65,10 @@ void EraserTool::eraseAt(const QPointF &point) {
   SceneController *controller = renderer_->sceneController();
   QList<QGraphicsItem *> itemsToRemove;
 
-  for (QGraphicsItem *item : scene->items(eraseRect)) {
+  // Use Qt::IntersectsItemBoundingRect for reliable detection of filled items like pixmaps
+  // The default Qt::IntersectsItemShape can fail for QGraphicsPixmapItem because its shape()
+  // returns a complex outline of non-transparent pixels, making hit-testing unreliable
+  for (QGraphicsItem *item : scene->items(eraseRect, Qt::IntersectsItemBoundingRect)) {
     // Skip the eraser preview and background image
     if (item == eraserPreview_ || item == renderer_->backgroundImageItem())
       continue;
