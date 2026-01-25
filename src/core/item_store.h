@@ -127,6 +127,12 @@ public:
   int itemCount() const;
 
   /**
+   * @brief Get all registered ItemIds
+   * @return Vector of all active ItemIds
+   */
+  std::vector<ItemId> allItemIds() const;
+
+  /**
    * @brief Get the associated scene
    * @return Pointer to the QGraphicsScene
    */

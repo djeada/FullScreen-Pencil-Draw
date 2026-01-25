@@ -79,9 +79,16 @@ public:
 
   /**
    * @brief Get the target item being transformed
-   * @note Resolves from ItemId if available
+   * @note Returns cached pointer during transforms for performance.
+   *       Otherwise resolves from ItemId if ItemStore is available.
    */
-  QGraphicsItem *targetItem() const { return resolveTargetItem(); }
+  QGraphicsItem *targetItem() const { 
+    // Use cached pointer during active transforms for performance
+    if (isTransforming_ && targetItem_) {
+      return targetItem_;
+    }
+    return resolveTargetItem(); 
+  }
 
   /**
    * @brief Get the target item's ItemId

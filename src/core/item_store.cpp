@@ -178,6 +178,15 @@ int ItemStore::itemCount() const {
   return static_cast<int>(items_.size());
 }
 
+std::vector<ItemId> ItemStore::allItemIds() const {
+  std::vector<ItemId> result;
+  result.reserve(items_.size());
+  for (const auto &pair : items_) {
+    result.push_back(pair.first);
+  }
+  return result;
+}
+
 void ItemStore::clear() {
   // Schedule all items for deletion
   std::vector<ItemId> ids;

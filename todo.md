@@ -34,33 +34,33 @@ Replace the current multi-owner pointer model with a single source of truth for 
 
 ## Task Plan (Detailed)
 ### Phase 1 — Design + Contracts
-- [ ] Write a short design doc describing ItemStore/ItemRef/SceneController APIs.
-- [ ] Define the exact deletion semantics (deferred queue + flush point).
-- [ ] Document invariants and add them to CONTRIBUTING.
+- [x] Write a short design doc describing ItemStore/ItemRef/SceneController APIs.
+- [x] Define the exact deletion semantics (deferred queue + flush point).
+- [x] Document invariants and add them to CONTRIBUTING.
 
 ### Phase 2 — Core Infrastructure
-- [ ] Implement ItemId type.
-- [ ] Implement ItemStore:
+- [x] Implement ItemId type.
+- [x] Implement ItemStore:
   - create/destroy APIs
   - map ItemId -> QGraphicsItem*
   - deferred deletion queue
-- [ ] Implement ItemRef resolver with null-on-missing behavior.
+- [x] Implement ItemRef resolver with null-on-missing behavior.
 
 ### Phase 3 — SceneController
-- [ ] Add SceneController as the only entry point for add/remove/move/modify.
+- [x] Add SceneController as the only entry point for add/remove/move/modify.
 - [ ] Replace direct `scene_->addItem/removeItem` calls with controller calls.
 - [ ] Add guard rails (assert on direct scene mutations outside controller).
 
 ### Phase 4 — Convert Subsystems
-- [ ] Layers store ItemId instead of `QGraphicsItem*`.
-- [ ] PDF overlays store ItemId instead of `QGraphicsItem*`.
-- [ ] Transform handles store ItemId and resolve on use.
+- [x] Layers store ItemId instead of `QGraphicsItem*`.
+- [x] PDF overlays store ItemId instead of `QGraphicsItem*`.
+- [x] Transform handles store ItemId and resolve on use.
 - [ ] Selection and export paths use ItemRef resolution only.
 
 ### Phase 5 — Undo/Redo Redesign
-- [ ] Replace Action item pointers with snapshots + ItemId.
-- [ ] Redo recreates items if missing.
-- [ ] Undo removes via ItemStore (no raw deletes).
+- [x] Replace Action item pointers with snapshots + ItemId.
+- [x] Redo recreates items if missing.
+- [x] Undo removes via ItemStore (no raw deletes).
 
 ### Phase 6 — Tools Refactor
 - [ ] Tools create items via ItemStore APIs only.

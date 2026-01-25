@@ -154,9 +154,5 @@ void SceneController::clearAll() {
 }
 
 std::vector<ItemId> SceneController::allItemIds() const {
-  std::vector<ItemId> result;
-  // We need to iterate over items in the store
-  // For now, we expose this through the store's items
-  // This is a simplified implementation
-  return result;
+  return itemStore_->allItemIds();
 }
