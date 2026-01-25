@@ -52,10 +52,8 @@ void FillTool::fillAt(const QPointF &point) {
         ItemId itemId = store->idForItem(item);
         if (itemId.isValid()) {
           renderer_->addAction(std::make_unique<FillAction>(itemId, store, oldBrush, newBrush));
-          return;
         }
       }
-      renderer_->addAction(std::make_unique<FillAction>(item, oldBrush, newBrush));
       return;
     }
 
@@ -68,10 +66,8 @@ void FillTool::fillAt(const QPointF &point) {
         ItemId itemId = store->idForItem(item);
         if (itemId.isValid()) {
           renderer_->addAction(std::make_unique<FillAction>(itemId, store, oldBrush, newBrush));
-          return;
         }
       }
-      renderer_->addAction(std::make_unique<FillAction>(item, oldBrush, newBrush));
       return;
     }
 
@@ -84,10 +80,8 @@ void FillTool::fillAt(const QPointF &point) {
         ItemId itemId = store->idForItem(item);
         if (itemId.isValid()) {
           renderer_->addAction(std::make_unique<FillAction>(itemId, store, oldBrush, newBrush));
-          return;
         }
       }
-      renderer_->addAction(std::make_unique<FillAction>(item, oldBrush, newBrush));
       return;
     }
   }

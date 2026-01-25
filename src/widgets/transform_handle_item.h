@@ -1,6 +1,8 @@
 /**
  * @file transform_handle_item.h
  * @brief Visual transform handles for resize and rotate operations.
+ * 
+ * Items are tracked by ItemId only - never by raw pointer.
  */
 #ifndef TRANSFORM_HANDLE_ITEM_H
 #define TRANSFORM_HANDLE_ITEM_H
@@ -49,10 +51,6 @@ public:
   enum { Type = UserType + 100 };
   int type() const override { return Type; }
 
-  explicit TransformHandleItem(QGraphicsItem *targetItem,
-                               SceneRenderer *renderer,
-                               QGraphicsItem *parent = nullptr);
-  
   /**
    * @brief Construct with ItemId for safe reference
    * @param targetId The ItemId of the target item
@@ -79,16 +77,9 @@ public:
 
   /**
    * @brief Get the target item being transformed
-   * @note Returns cached pointer during transforms for performance.
-   *       Otherwise resolves from ItemId if ItemStore is available.
+   * @note Always resolves from ItemStore for safety.
    */
-  QGraphicsItem *targetItem() const { 
-    // Use cached pointer during active transforms for performance
-    if (isTransforming_ && targetItem_) {
-      return targetItem_;
-    }
-    return resolveTargetItem(); 
-  }
+  QGraphicsItem *targetItem() const;
 
   /**
    * @brief Get the target item's ItemId
@@ -142,11 +133,8 @@ private:
   static inline const QColor SELECTION_BORDER_COLOR = QColor(0, 120, 215);
   static inline const QColor ROTATION_HANDLE_COLOR = QColor(76, 175, 80);
 
-  // Target item - uses both raw pointer (for performance during transforms)
-  // and ItemId (for safe long-term storage and undo/redo)
-  QGraphicsItem *targetItem_;
-  ItemId targetItemId_;       // Stable ID for safe reference
-  ItemStore *itemStore_;      // For resolving ItemId
+  ItemId targetItemId_;
+  ItemStore *itemStore_;
   SceneRenderer *renderer_;
   bool sceneEventFilterInstalled_;
 

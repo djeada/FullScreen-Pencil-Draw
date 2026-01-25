@@ -74,30 +74,37 @@ void EraserTool::eraseAt(const QPointF &point) {
     if (item->type() == TransformHandleItem::Type)
       continue;
 
+    // Get bounding rect in scene coordinates - this is always reliable
+    QRectF itemSceneBounds = item->sceneBoundingRect();
+    
+    // Simple and reliable: if eraser point is inside item's scene bounding rect, erase it
+    // This works for filled items like pixmaps, rectangles, ellipses
+    if (itemSceneBounds.contains(point)) {
+      itemsToRemove.append(item);
+      continue;
+    }
+    
+    // For line-based items (paths), check if eraser touches the stroked shape
+    // Transform click point to item-local coordinates for shape check
+    QPointF localPoint = item->mapFromScene(point);
     QPainterPath itemShape = item->shape();
-
-    // Check if eraser intersects either the item's shape (for filled items like
-    // pixmaps) or the stroked outline (for line-based items like paths)
+    
+    // Stroke the shape with eraser size to create a "hit area" around lines
     QPainterPathStroker stroker;
-    stroker.setWidth(1);
-    if (erasePath.intersects(itemShape) ||
-        erasePath.intersects(stroker.createStroke(itemShape))) {
+    stroker.setWidth(size);
+    QPainterPath strokedShape = stroker.createStroke(itemShape);
+    if (strokedShape.contains(localPoint)) {
       itemsToRemove.append(item);
     }
   }
 
   for (QGraphicsItem *item : itemsToRemove) {
+    // First add to undo stack
     renderer_->addDeleteAction(item);
     
-    // Use SceneController if available for safe deletion
+    // Then actually remove the item
     if (controller) {
-      ItemId itemId = controller->idForItem(item);
-      if (itemId.isValid()) {
-        controller->removeItem(itemId, true);  // Keep for undo
-      } else {
-        scene->removeItem(item);
-        renderer_->onItemRemoved(item);
-      }
+      controller->removeItem(item, true);  // Keep for undo
     } else {
       scene->removeItem(item);
       renderer_->onItemRemoved(item);

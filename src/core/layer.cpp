@@ -17,8 +17,7 @@ Layer::~Layer() = default;
 Layer::Layer(Layer &&other) noexcept
     : id_(other.id_), name_(std::move(other.name_)), type_(other.type_),
       visible_(other.visible_), locked_(other.locked_), opacity_(other.opacity_),
-      items_(std::move(other.items_)), itemIds_(std::move(other.itemIds_)),
-      itemStore_(other.itemStore_) {}
+      itemIds_(std::move(other.itemIds_)), itemStore_(other.itemStore_) {}
 
 Layer &Layer::operator=(Layer &&other) noexcept {
   if (this != &other) {
@@ -28,7 +27,6 @@ Layer &Layer::operator=(Layer &&other) noexcept {
     visible_ = other.visible_;
     locked_ = other.locked_;
     opacity_ = other.opacity_;
-    items_ = std::move(other.items_);
     itemIds_ = std::move(other.itemIds_);
     itemStore_ = other.itemStore_;
   }
@@ -48,17 +46,18 @@ void Layer::setOpacity(qreal opacity) {
 }
 
 void Layer::addItem(QGraphicsItem *item) {
-  if (item && !items_.contains(item)) {
-    items_.append(item);
-    
-    // Also track by ItemId if we have an ItemStore
-    if (itemStore_) {
-      ItemId id = itemStore_->idForItem(item);
-      if (id.isValid() && !itemIds_.contains(id)) {
-        itemIds_.append(id);
-      }
-    }
-    
+  if (!item) {
+    return;
+  }
+  
+  // Must have ItemStore to add items safely
+  if (!itemStore_) {
+    return;
+  }
+  
+  ItemId id = itemStore_->idForItem(item);
+  if (id.isValid() && !itemIds_.contains(id)) {
+    itemIds_.append(id);
     item->setVisible(visible_);
     item->setOpacity(opacity_);
   }
@@ -73,45 +72,51 @@ void Layer::addItem(const ItemId &id, ItemStore *store) {
     itemIds_.append(id);
   }
   
-  // Also maintain backwards-compatible raw pointer list
+  // Apply layer properties to item
   QGraphicsItem *item = store ? store->item(id) : nullptr;
-  if (item && !items_.contains(item)) {
-    items_.append(item);
+  if (item) {
     item->setVisible(visible_);
     item->setOpacity(opacity_);
   }
 }
 
 bool Layer::removeItem(QGraphicsItem *item) {
-  bool removed = items_.removeOne(item);
-  
-  // Also remove by ItemId if we have an ItemStore
-  if (itemStore_) {
-    ItemId id = itemStore_->idForItem(item);
-    if (id.isValid()) {
-      itemIds_.removeOne(id);
-    }
+  if (!item || !itemStore_) {
+    return false;
   }
   
-  return removed;
+  ItemId id = itemStore_->idForItem(item);
+  if (id.isValid()) {
+    return itemIds_.removeOne(id);
+  }
+  return false;
 }
 
 bool Layer::removeItem(const ItemId &id) {
-  bool removed = itemIds_.removeOne(id);
-  
-  // Also remove from backwards-compatible raw pointer list
-  if (itemStore_) {
-    QGraphicsItem *item = itemStore_->item(id);
-    if (item) {
-      items_.removeOne(item);
-    }
+  return itemIds_.removeOne(id);
+}
+
+QList<QGraphicsItem *> Layer::items() const {
+  QList<QGraphicsItem *> result;
+  if (!itemStore_) {
+    return result;
   }
   
-  return removed;
+  for (const ItemId &id : itemIds_) {
+    if (QGraphicsItem *item = itemStore_->item(id)) {
+      result.append(item);
+    }
+  }
+  return result;
 }
 
 bool Layer::containsItem(QGraphicsItem *item) const {
-  return items_.contains(item);
+  if (!item || !itemStore_) {
+    return false;
+  }
+  
+  ItemId id = itemStore_->idForItem(item);
+  return id.isValid() && itemIds_.contains(id);
 }
 
 bool Layer::containsItem(const ItemId &id) const {
@@ -119,55 +124,40 @@ bool Layer::containsItem(const ItemId &id) const {
 }
 
 void Layer::clear() {
-  items_.clear();
   itemIds_.clear();
 }
 
 void Layer::updateItemsVisibility() {
-  if (itemStore_ && !itemIds_.isEmpty()) {
-    for (int i = itemIds_.size() - 1; i >= 0; --i) {
-      const ItemId &id = itemIds_[i];
-      QGraphicsItem *item = itemStore_->item(id);
-      if (!item) {
-        itemIds_.removeAt(i);
-        continue;
-      }
-      item->setVisible(visible_);
-    }
+  if (!itemStore_) {
     return;
   }
-  // Remove invalid items in-place by iterating backwards
-  for (int i = items_.size() - 1; i >= 0; --i) {
-    auto *item = items_[i];
-    if (!item || !item->scene()) {
-      items_.removeAt(i);
-    } else {
-      item->setVisible(visible_);
+  
+  for (int i = itemIds_.size() - 1; i >= 0; --i) {
+    const ItemId &id = itemIds_[i];
+    QGraphicsItem *item = itemStore_->item(id);
+    if (!item) {
+      // Item was deleted, remove stale ID
+      itemIds_.removeAt(i);
+      continue;
     }
+    item->setVisible(visible_);
   }
 }
 
 void Layer::updateItemsOpacity() {
-  if (itemStore_ && !itemIds_.isEmpty()) {
-    for (int i = itemIds_.size() - 1; i >= 0; --i) {
-      const ItemId &id = itemIds_[i];
-      QGraphicsItem *item = itemStore_->item(id);
-      if (!item) {
-        itemIds_.removeAt(i);
-        continue;
-      }
-      item->setOpacity(opacity_);
-    }
+  if (!itemStore_) {
     return;
   }
-  // Remove invalid items in-place by iterating backwards
-  for (int i = items_.size() - 1; i >= 0; --i) {
-    auto *item = items_[i];
-    if (!item || !item->scene()) {
-      items_.removeAt(i);
-    } else {
-      item->setOpacity(opacity_);
+  
+  for (int i = itemIds_.size() - 1; i >= 0; --i) {
+    const ItemId &id = itemIds_[i];
+    QGraphicsItem *item = itemStore_->item(id);
+    if (!item) {
+      // Item was deleted, remove stale ID
+      itemIds_.removeAt(i);
+      continue;
     }
+    item->setOpacity(opacity_);
   }
 }
 
@@ -205,6 +195,18 @@ void LayerManager::setItemStore(ItemStore *store) {
     if (layer) {
       layer->setItemStore(store);
     }
+  }
+
+  // Connect to itemAboutToBeDeleted to remove stale ItemIds from layers
+  if (store) {
+    connect(store, &ItemStore::itemAboutToBeDeleted, this,
+            [this](const ItemId &id) {
+              for (auto &layer : layers_) {
+                if (layer) {
+                  layer->removeItem(id);
+                }
+              }
+            });
   }
 }
 

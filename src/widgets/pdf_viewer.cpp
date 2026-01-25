@@ -388,10 +388,9 @@ void PdfViewer::addDrawAction(QGraphicsItem *item) {
 
   if (store && itemId.isValid()) {
     undoStack.push_back(
-        std::make_unique<DrawAction>(itemId, store, scene_, onAdd, onRemove));
+        std::make_unique<DrawAction>(itemId, store, onAdd, onRemove));
   } else {
-    undoStack.push_back(
-        std::make_unique<DrawAction>(item, scene_, onAdd, onRemove));
+    qWarning() << "Cannot create DrawAction without ItemStore";
   }
   clearRedoStack();
   overlayManager_->addItemToPage(currentPage_, item);
@@ -436,10 +435,9 @@ void PdfViewer::addDeleteAction(QGraphicsItem *item) {
 
   if (store && itemId.isValid()) {
     undoStack.push_back(
-        std::make_unique<DeleteAction>(itemId, store, scene_, onAdd, onRemove));
+        std::make_unique<DeleteAction>(itemId, store, onAdd, onRemove));
   } else {
-    undoStack.push_back(
-        std::make_unique<DeleteAction>(item, scene_, onAdd, onRemove));
+    qWarning() << "Cannot create DeleteAction without ItemStore";
   }
   clearRedoStack();
 }
