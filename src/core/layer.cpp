@@ -4,6 +4,7 @@
  */
 #include "layer.h"
 #include "item_store.h"
+#include "scene_controller.h"
 #include <algorithm>
 
 // Layer implementation
@@ -123,6 +124,18 @@ void Layer::clear() {
 }
 
 void Layer::updateItemsVisibility() {
+  if (itemStore_ && !itemIds_.isEmpty()) {
+    for (int i = itemIds_.size() - 1; i >= 0; --i) {
+      const ItemId &id = itemIds_[i];
+      QGraphicsItem *item = itemStore_->item(id);
+      if (!item) {
+        itemIds_.removeAt(i);
+        continue;
+      }
+      item->setVisible(visible_);
+    }
+    return;
+  }
   // Remove invalid items in-place by iterating backwards
   for (int i = items_.size() - 1; i >= 0; --i) {
     auto *item = items_[i];
@@ -135,6 +148,18 @@ void Layer::updateItemsVisibility() {
 }
 
 void Layer::updateItemsOpacity() {
+  if (itemStore_ && !itemIds_.isEmpty()) {
+    for (int i = itemIds_.size() - 1; i >= 0; --i) {
+      const ItemId &id = itemIds_[i];
+      QGraphicsItem *item = itemStore_->item(id);
+      if (!item) {
+        itemIds_.removeAt(i);
+        continue;
+      }
+      item->setOpacity(opacity_);
+    }
+    return;
+  }
   // Remove invalid items in-place by iterating backwards
   for (int i = items_.size() - 1; i >= 0; --i) {
     auto *item = items_[i];
@@ -148,7 +173,8 @@ void Layer::updateItemsOpacity() {
 
 // LayerManager implementation
 LayerManager::LayerManager(QGraphicsScene *scene, QObject *parent)
-    : QObject(parent), scene_(scene), activeLayerIndex_(-1) {
+    : QObject(parent), scene_(scene), itemStore_(nullptr), sceneController_(nullptr),
+      activeLayerIndex_(-1) {
   // Create default layer
   createLayer("Background", Layer::Type::Vector);
 }
@@ -157,6 +183,9 @@ LayerManager::~LayerManager() = default;
 
 Layer *LayerManager::createLayer(const QString &name, Layer::Type type) {
   auto layer = std::make_unique<Layer>(name, type);
+  if (itemStore_) {
+    layer->setItemStore(itemStore_);
+  }
   Layer *ptr = layer.get();
   layers_.push_back(std::move(layer));
   
@@ -168,6 +197,15 @@ Layer *LayerManager::createLayer(const QString &name, Layer::Type type) {
   updateLayerZOrder();
   emit layerAdded(ptr);
   return ptr;
+}
+
+void LayerManager::setItemStore(ItemStore *store) {
+  itemStore_ = store;
+  for (auto &layer : layers_) {
+    if (layer) {
+      layer->setItemStore(store);
+    }
+  }
 }
 
 bool LayerManager::deleteLayer(int index) {
@@ -183,11 +221,23 @@ bool LayerManager::deleteLayer(int index) {
   Layer *layer = layers_[index].get();
   emit layerRemoved(layer);
   
-  // Remove items from scene and delete them
-  for (auto *item : layer->items()) {
-    if (item && item->scene() == scene_) {
-      scene_->removeItem(item);
-      delete item;
+  // Remove items from scene and delete them via controller/store
+  const QList<ItemId> ids = layer->itemIds();
+  if (sceneController_) {
+    for (const ItemId &id : ids) {
+      sceneController_->removeItem(id, false);
+    }
+  } else if (itemStore_) {
+    for (const ItemId &id : ids) {
+      itemStore_->scheduleDelete(id);
+    }
+    itemStore_->flushDeletions();
+  } else {
+    for (auto *item : layer->items()) {
+      if (item && item->scene() == scene_) {
+        scene_->removeItem(item);
+        delete item;
+      }
     }
   }
   
@@ -291,6 +341,17 @@ bool LayerManager::moveLayerDown(int index) {
 }
 
 Layer *LayerManager::findLayerForItem(QGraphicsItem *item) const {
+  if (itemStore_) {
+    ItemId id = itemStore_->idForItem(item);
+    if (id.isValid()) {
+      for (const auto &layer : layers_) {
+        if (layer && layer->containsItem(id)) {
+          return layer.get();
+        }
+      }
+      return nullptr;
+    }
+  }
   for (const auto &layer : layers_) {
     if (layer->containsItem(item)) {
       return layer.get();
@@ -302,6 +363,13 @@ Layer *LayerManager::findLayerForItem(QGraphicsItem *item) const {
 void LayerManager::addItemToActiveLayer(QGraphicsItem *item) {
   Layer *active = activeLayer();
   if (active && item) {
+    if (itemStore_) {
+      ItemId id = itemStore_->idForItem(item);
+      if (id.isValid()) {
+        active->addItem(id, itemStore_);
+        return;
+      }
+    }
     active->addItem(item);
   }
 }
@@ -315,8 +383,8 @@ bool LayerManager::mergeDown(int index) {
   Layer *target = layers_[index - 1].get();
   
   // Move all items from source to target
-  for (auto *item : source->items()) {
-    target->addItem(item);
+  for (const ItemId &id : source->itemIds()) {
+    target->addItem(id, itemStore_);
   }
   source->clear();
   
@@ -331,8 +399,8 @@ Layer *LayerManager::flattenAll() {
   
   // Move all items to the first layer
   for (size_t i = 1; i < layers_.size(); ++i) {
-    for (auto *item : layers_[i]->items()) {
-      layers_[0]->addItem(item);
+    for (const ItemId &id : layers_[i]->itemIds()) {
+      layers_[0]->addItem(id, itemStore_);
     }
     layers_[i]->clear();
   }
@@ -375,9 +443,21 @@ Layer *LayerManager::duplicateLayer(int index) {
 void LayerManager::clear() {
   for (auto &layer : layers_) {
     emit layerRemoved(layer.get());
-    for (auto *item : layer->items()) {
-      if (item && item->scene() == scene_) {
-        scene_->removeItem(item);
+    const QList<ItemId> ids = layer->itemIds();
+    if (sceneController_) {
+      for (const ItemId &id : ids) {
+        sceneController_->removeItem(id, false);
+      }
+    } else if (itemStore_) {
+      for (const ItemId &id : ids) {
+        itemStore_->scheduleDelete(id);
+      }
+      itemStore_->flushDeletions();
+    } else {
+      for (auto *item : layer->items()) {
+        if (item && item->scene() == scene_) {
+          scene_->removeItem(item);
+        }
       }
     }
   }
@@ -393,10 +473,18 @@ void LayerManager::updateLayerZOrder() {
   qreal zBase = 0.0;
   for (size_t i = 0; i < layers_.size(); ++i) {
     qreal layerZ = zBase + static_cast<qreal>(i) * 1000.0;
-    for (auto *item : layers_[i]->items()) {
-      // Check if item is still valid before accessing
-      if (item && item->scene()) {
-        item->setZValue(layerZ);
+    if (itemStore_) {
+      for (const ItemId &id : layers_[i]->itemIds()) {
+        if (QGraphicsItem *item = itemStore_->item(id)) {
+          item->setZValue(layerZ);
+        }
+      }
+    } else {
+      for (auto *item : layers_[i]->items()) {
+        // Check if item is still valid before accessing
+        if (item && item->scene()) {
+          item->setZValue(layerZ);
+        }
       }
     }
   }

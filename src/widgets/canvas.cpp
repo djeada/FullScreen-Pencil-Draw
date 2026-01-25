@@ -6,6 +6,8 @@
 #include "image_size_dialog.h"
 #include "latex_text_item.h"
 #include "transform_handle_item.h"
+#include "../core/scene_controller.h"
+#include "../core/item_store.h"
 #include "../core/recent_files_manager.h"
 #include <QApplication>
 #include <QClipboard>
@@ -84,7 +86,7 @@ static QGraphicsItem *cloneItem(QGraphicsItem *item, QGraphicsEllipseItem *erase
 
 Canvas::Canvas(QWidget *parent)
     : QGraphicsView(parent), scene_(new QGraphicsScene(this)),
-      layerManager_(nullptr), tempShapeItem_(nullptr), currentShape_(Pen),
+      sceneController_(nullptr), layerManager_(nullptr), tempShapeItem_(nullptr), currentShape_(Pen),
       currentPen_(Qt::white, 3), eraserPen_(Qt::black, 10), currentPath_(nullptr),
       backgroundColor_(Qt::black), eraserPreview_(nullptr),
       backgroundImage_(nullptr), isPanning_(false) {
@@ -102,10 +104,36 @@ Canvas::Canvas(QWidget *parent)
   scene_->setBackgroundBrush(backgroundColor_);
   eraserPen_.setColor(backgroundColor_);
 
+  // Initialize scene controller (single source of truth)
+  sceneController_ = new SceneController(scene_, this);
+
   // Initialize layer manager
   layerManager_ = new LayerManager(scene_, this);
+  layerManager_->setSceneController(sceneController_);
+  layerManager_->setItemStore(sceneController_->itemStore());
+  sceneController_->setLayerManager(layerManager_);
   connect(layerManager_, &LayerManager::layerRemoved, this,
           [this](Layer * /*layer*/) { clearTransformHandles(); });
+
+  if (sceneController_ && sceneController_->itemStore()) {
+    connect(sceneController_->itemStore(), &ItemStore::itemAboutToBeDeleted,
+            this, [this](const ItemId &id) {
+              QMutableListIterator<TransformHandleItem *> it(transformHandles_);
+              while (it.hasNext()) {
+                TransformHandleItem *handle = it.next();
+                if (!handle) {
+                  it.remove();
+                  continue;
+                }
+                if (handle->targetItemId().isValid() && handle->targetItemId() == id) {
+                  handle->clearTargetItem();
+                  if (scene_) scene_->removeItem(handle);
+                  delete handle;
+                  it.remove();
+                }
+              }
+            });
+  }
 
   eraserPreview_ =
       scene_->addEllipse(0, 0, eraserPen_.width(), eraserPen_.width(),
@@ -142,8 +170,28 @@ bool Canvas::isSnapToGridEnabled() const { return snapToGrid_; }
 bool Canvas::isRulerVisible() const { return showRuler_; }
 bool Canvas::isMeasurementToolEnabled() const { return measurementToolEnabled_; }
 
+ItemStore *Canvas::itemStore() const {
+  return sceneController_ ? sceneController_->itemStore() : nullptr;
+}
+
+ItemId Canvas::registerItem(QGraphicsItem *item) {
+  if (!sceneController_ || !item) {
+    return ItemId();
+  }
+  return sceneController_->addItem(item);
+}
+
 // Action management methods
 void Canvas::addDrawAction(QGraphicsItem *item) {
+  ItemStore *store = itemStore();
+  ItemId itemId;
+  if (store && item) {
+    itemId = store->idForItem(item);
+    if (!itemId.isValid()) {
+      itemId = registerItem(item);
+    }
+  }
+
   QUuid layerId;
   if (layerManager_) {
     if (Layer *active = layerManager_->activeLayer()) {
@@ -165,8 +213,13 @@ void Canvas::addDrawAction(QGraphicsItem *item) {
 
   auto onRemove = [this](QGraphicsItem *removed) { onItemRemoved(removed); };
 
-  undoStack_.push_back(
-      std::make_unique<DrawAction>(item, scene_, onAdd, onRemove));
+  if (store && itemId.isValid()) {
+    undoStack_.push_back(
+        std::make_unique<DrawAction>(itemId, store, scene_, onAdd, onRemove));
+  } else {
+    undoStack_.push_back(
+        std::make_unique<DrawAction>(item, scene_, onAdd, onRemove));
+  }
   clearRedoStack();
   // Add item to active layer
   if (layerManager_) {
@@ -176,6 +229,15 @@ void Canvas::addDrawAction(QGraphicsItem *item) {
 }
 
 void Canvas::addDeleteAction(QGraphicsItem *item) {
+  ItemStore *store = itemStore();
+  ItemId itemId;
+  if (store && item) {
+    itemId = store->idForItem(item);
+    if (!itemId.isValid()) {
+      itemId = registerItem(item);
+    }
+  }
+
   QUuid layerId;
   if (layerManager_) {
     if (Layer *layer = layerManager_->findLayerForItem(item)) {
@@ -197,14 +259,24 @@ void Canvas::addDeleteAction(QGraphicsItem *item) {
 
   auto onRemove = [this](QGraphicsItem *removed) { onItemRemoved(removed); };
 
-  undoStack_.push_back(
-      std::make_unique<DeleteAction>(item, scene_, onAdd, onRemove));
+  if (store && itemId.isValid()) {
+    undoStack_.push_back(
+        std::make_unique<DeleteAction>(itemId, store, scene_, onAdd, onRemove));
+  } else {
+    undoStack_.push_back(
+        std::make_unique<DeleteAction>(item, scene_, onAdd, onRemove));
+  }
   clearRedoStack();
 }
 
 void Canvas::onItemRemoved(QGraphicsItem *item) {
   if (!item)
     return;
+  ItemStore *store = itemStore();
+  ItemId removedId;
+  if (store) {
+    removedId = store->idForItem(item);
+  }
   if (layerManager_) {
     if (Layer *layer = layerManager_->findLayerForItem(item)) {
       layer->removeItem(item);
@@ -215,7 +287,18 @@ void Canvas::onItemRemoved(QGraphicsItem *item) {
   QMutableListIterator<TransformHandleItem*> it(transformHandles_);
   while (it.hasNext()) {
     TransformHandleItem* handle = it.next();
-    if (handle && handle->targetItem() == item) {
+    if (!handle) {
+      it.remove();
+      continue;
+    }
+    if (removedId.isValid()) {
+      if (handle->targetItemId().isValid() && handle->targetItemId() == removedId) {
+        handle->clearTargetItem();
+        if (scene_) scene_->removeItem(handle);
+        delete handle;
+        it.remove();
+      }
+    } else if (handle->targetItem() == item) {
       // Clear the target item reference before deleting to avoid dangling pointer access
       handle->clearTargetItem();
       if (scene_) scene_->removeItem(handle);
@@ -388,12 +471,22 @@ void Canvas::clearCanvas() {
   }
   undoStack_.clear();
   redoStack_.clear();
-  scene_->clear();
-  backgroundImage_ = nullptr;
+  if (sceneController_) {
+    sceneController_->clearAll();
+  }
+  if (backgroundImage_) {
+    scene_->removeItem(backgroundImage_);
+    delete backgroundImage_;
+    backgroundImage_ = nullptr;
+  }
   scene_->setBackgroundBrush(backgroundColor_);
-  eraserPreview_ = scene_->addEllipse(0, 0, eraserPen_.width(), eraserPen_.width(), QPen(Qt::gray), QBrush(Qt::NoBrush));
-  eraserPreview_->setZValue(1000);
-  eraserPreview_->hide();
+  if (eraserPreview_) {
+    eraserPreview_->hide();
+  } else {
+    eraserPreview_ = scene_->addEllipse(0, 0, eraserPen_.width(), eraserPen_.width(), QPen(Qt::gray), QBrush(Qt::NoBrush));
+    eraserPreview_->setZValue(1000);
+    eraserPreview_->hide();
+  }
 }
 
 void Canvas::newCanvas(int width, int height, const QColor &bgColor) {
@@ -524,6 +617,21 @@ void Canvas::groupSelectedItems() {
   // Clear transform handles before grouping
   clearTransformHandles();
   
+  ItemStore *store = itemStore();
+  SceneController *controller = sceneController_;
+  QList<ItemId> itemIds;
+  if (store) {
+    for (QGraphicsItem *item : itemsToGroup) {
+      ItemId id = store->idForItem(item);
+      if (!id.isValid()) {
+        id = registerItem(item);
+      }
+      if (id.isValid()) {
+        itemIds.append(id);
+      }
+    }
+  }
+
   // Create the group
   QGraphicsItemGroup *group = new QGraphicsItemGroup();
   
@@ -533,15 +641,32 @@ void Canvas::groupSelectedItems() {
     group->addToGroup(item);
   }
   
-  // Add group to scene
-  scene_->addItem(group);
+  // Add group to scene (register with controller if available)
+  ItemId groupId;
+  if (controller) {
+    Layer *targetLayer = nullptr;
+    if (layerManager_ && !itemsToGroup.isEmpty()) {
+      targetLayer = layerManager_->findLayerForItem(itemsToGroup.first());
+    }
+    groupId = controller->addItem(group, targetLayer);
+  } else {
+    scene_->addItem(group);
+  }
   group->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
   
   // Create undo action
-  auto action = std::make_unique<GroupAction>(
-      group, itemsToGroup, scene_,
-      [this](QGraphicsItem *item) { onItemRemoved(item); },
-      [this](QGraphicsItem *item) { onItemRemoved(item); });
+  std::unique_ptr<Action> action;
+  if (store && groupId.isValid() && !itemIds.isEmpty()) {
+    action = std::make_unique<GroupAction>(
+        groupId, itemIds, store, scene_,
+        [this](QGraphicsItem *item) { onItemRemoved(item); },
+        [this](QGraphicsItem *item) { onItemRemoved(item); });
+  } else {
+    action = std::make_unique<GroupAction>(
+        group, itemsToGroup, scene_,
+        [this](QGraphicsItem *item) { onItemRemoved(item); },
+        [this](QGraphicsItem *item) { onItemRemoved(item); });
+  }
   addAction(std::move(action));
   
   // Select the new group
@@ -556,6 +681,7 @@ void Canvas::ungroupSelectedItems() {
   // Clear transform handles before ungrouping
   clearTransformHandles();
   
+  ItemStore *store = itemStore();
   for (QGraphicsItem *item : selectedItems) {
     QGraphicsItemGroup *group = dynamic_cast<QGraphicsItemGroup *>(item);
     if (!group) continue;
@@ -584,10 +710,32 @@ void Canvas::ungroupSelectedItems() {
     }
     
     // Create undo action
-    auto action = std::make_unique<UngroupAction>(
-        group, childItems, scene_,
-        [this](QGraphicsItem *item) { onItemRemoved(item); },
-        [this](QGraphicsItem *item) { onItemRemoved(item); });
+    std::unique_ptr<Action> action;
+    if (store) {
+      ItemId groupId = store->idForItem(group);
+      QList<ItemId> itemIds;
+      for (QGraphicsItem *child : childItems) {
+        ItemId id = store->idForItem(child);
+        if (!id.isValid()) {
+          id = registerItem(child);
+        }
+        if (id.isValid()) {
+          itemIds.append(id);
+        }
+      }
+      if (groupId.isValid() && !itemIds.isEmpty()) {
+        action = std::make_unique<UngroupAction>(
+            groupId, itemIds, store, scene_,
+            [this](QGraphicsItem *item) { onItemRemoved(item); },
+            [this](QGraphicsItem *item) { onItemRemoved(item); });
+      }
+    }
+    if (!action) {
+      action = std::make_unique<UngroupAction>(
+          group, childItems, scene_,
+          [this](QGraphicsItem *item) { onItemRemoved(item); },
+          [this](QGraphicsItem *item) { onItemRemoved(item); });
+    }
     addAction(std::move(action));
   }
 }
@@ -719,8 +867,12 @@ void Canvas::deleteSelectedItems() {
     if (!item) continue;
     if (item != eraserPreview_ && item != backgroundImage_) {
       addDeleteAction(item);
-      scene_->removeItem(item);
-      onItemRemoved(item);
+      if (sceneController_) {
+        sceneController_->removeItem(item, true);
+      } else {
+        scene_->removeItem(item);
+        onItemRemoved(item);
+      }
     }
   }
 }
@@ -905,7 +1057,11 @@ void Canvas::createTextItem(const QPointF &pos) {
   textItem->setTextColor(currentPen_.color());
   textItem->setPos(pos);
 
-  scene_->addItem(textItem);
+  if (sceneController_) {
+    sceneController_->addItem(textItem);
+  } else {
+    scene_->addItem(textItem);
+  }
 
   // Connect to handle when editing is finished
   // Use QPointer to safely track the textItem in case it gets deleted before signal fires
@@ -916,9 +1072,13 @@ void Canvas::createTextItem(const QPointF &pos) {
     }
     // If the text is empty after editing, remove the item
     if (textItem->text().trimmed().isEmpty()) {
-      scene_->removeItem(textItem);
-      onItemRemoved(textItem);
-      textItem->deleteLater();
+      if (sceneController_) {
+        sceneController_->removeItem(textItem, false);
+      } else {
+        scene_->removeItem(textItem);
+        onItemRemoved(textItem);
+        textItem->deleteLater();
+      }
     } else {
       // Add to undo stack only when there's actual content
       addDrawAction(textItem);
@@ -934,25 +1094,53 @@ void Canvas::fillAt(const QPointF &point) {
   QBrush newBrush(currentPen_.color());
   // Copy the list to avoid issues with scene modification during iteration
   QList<QGraphicsItem *> itemsAtPoint = scene_->items(point);
+  ItemStore *store = itemStore();
   for (QGraphicsItem *item : itemsAtPoint) {
     if (!item) continue;
     if (item == eraserPreview_ || item == backgroundImage_) continue;
     if (auto r = dynamic_cast<QGraphicsRectItem *>(item)) {
       QBrush oldBrush = r->brush();
       r->setBrush(newBrush);
-      addAction(std::make_unique<FillAction>(item, oldBrush, newBrush));
+      if (store) {
+        ItemId id = store->idForItem(item);
+        if (id.isValid()) {
+          addAction(std::make_unique<FillAction>(id, store, oldBrush, newBrush));
+        } else {
+          addAction(std::make_unique<FillAction>(item, oldBrush, newBrush));
+        }
+      } else {
+        addAction(std::make_unique<FillAction>(item, oldBrush, newBrush));
+      }
       return;
     }
     if (auto e = dynamic_cast<QGraphicsEllipseItem *>(item)) {
       QBrush oldBrush = e->brush();
       e->setBrush(newBrush);
-      addAction(std::make_unique<FillAction>(item, oldBrush, newBrush));
+      if (store) {
+        ItemId id = store->idForItem(item);
+        if (id.isValid()) {
+          addAction(std::make_unique<FillAction>(id, store, oldBrush, newBrush));
+        } else {
+          addAction(std::make_unique<FillAction>(item, oldBrush, newBrush));
+        }
+      } else {
+        addAction(std::make_unique<FillAction>(item, oldBrush, newBrush));
+      }
       return;
     }
     if (auto p = dynamic_cast<QGraphicsPolygonItem *>(item)) {
       QBrush oldBrush = p->brush();
       p->setBrush(newBrush);
-      addAction(std::make_unique<FillAction>(item, oldBrush, newBrush));
+      if (store) {
+        ItemId id = store->idForItem(item);
+        if (id.isValid()) {
+          addAction(std::make_unique<FillAction>(id, store, oldBrush, newBrush));
+        } else {
+          addAction(std::make_unique<FillAction>(item, oldBrush, newBrush));
+        }
+      } else {
+        addAction(std::make_unique<FillAction>(item, oldBrush, newBrush));
+      }
       return;
     }
   }
@@ -1125,8 +1313,12 @@ void Canvas::cutSelectedItems() {
     if (!item) continue;
     if (item != eraserPreview_ && item != backgroundImage_) {
       addDeleteAction(item);
-      scene_->removeItem(item);
-      onItemRemoved(item);
+      if (sceneController_) {
+        sceneController_->removeItem(item, true);
+      } else {
+        scene_->removeItem(item);
+        onItemRemoved(item);
+      }
     }
   }
 }
@@ -1193,8 +1385,12 @@ void Canvas::eraseAt(const QPointF &point) {
   for (QGraphicsItem *item : itemsToRemove) {
     if (!item) continue;
     addDeleteAction(item);
-    scene_->removeItem(item);
-    onItemRemoved(item);
+    if (sceneController_) {
+      sceneController_->removeItem(item, true);
+    } else {
+      scene_->removeItem(item);
+      onItemRemoved(item);
+    }
   }
 }
 
@@ -1301,7 +1497,7 @@ void Canvas::loadDroppedImage(const QString &filePath, const QPointF &dropPositi
     QPixmap scaledPixmap = pixmap.scaled(newWidth, newHeight, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
     
     // Create a graphics pixmap item
-    QGraphicsPixmapItem *pixmapItem = scene_->addPixmap(scaledPixmap);
+    QGraphicsPixmapItem *pixmapItem = new QGraphicsPixmapItem(scaledPixmap);
     
     // Position the item at the drop location (centered)
     pixmapItem->setPos(dropPosition.x() - newWidth / 2.0, dropPosition.y() - newHeight / 2.0);
@@ -1310,6 +1506,13 @@ void Canvas::loadDroppedImage(const QString &filePath, const QPointF &dropPositi
     pixmapItem->setFlag(QGraphicsItem::ItemIsSelectable, true);
     pixmapItem->setFlag(QGraphicsItem::ItemIsMovable, true);
     
+    // Add to scene via SceneController if available
+    if (sceneController_) {
+      sceneController_->addItem(pixmapItem);
+    } else {
+      scene_->addItem(pixmapItem);
+    }
+
     // Add to undo stack
     addDrawAction(pixmapItem);
   }
@@ -1324,7 +1527,7 @@ void Canvas::addImageFromScreenshot(const QImage &image) {
   QPixmap pixmap = QPixmap::fromImage(image);
   
   // Create a graphics pixmap item
-  QGraphicsPixmapItem *pixmapItem = scene_->addPixmap(pixmap);
+  QGraphicsPixmapItem *pixmapItem = new QGraphicsPixmapItem(pixmap);
   
   // Position the item at the center of the visible area
   QPointF centerPos = mapToScene(viewport()->rect().center());
@@ -1334,6 +1537,13 @@ void Canvas::addImageFromScreenshot(const QImage &image) {
   pixmapItem->setFlag(QGraphicsItem::ItemIsSelectable, true);
   pixmapItem->setFlag(QGraphicsItem::ItemIsMovable, true);
   
+  // Add to scene via SceneController if available
+  if (sceneController_) {
+    sceneController_->addItem(pixmapItem);
+  } else {
+    scene_->addItem(pixmapItem);
+  }
+
   // Select the newly added item
   scene_->clearSelection();
   pixmapItem->setSelected(true);
@@ -1508,13 +1718,31 @@ void Canvas::updateTransformHandles() {
   }
   
   if (!scene_) return;
+  ItemStore *store = itemStore();
   QList<QGraphicsItem*> selectedItems = scene_->selectedItems();
   
   // Remove handles for items that are no longer selected
   QMutableListIterator<TransformHandleItem*> it(transformHandles_);
   while (it.hasNext()) {
     TransformHandleItem* handle = it.next();
-    if (!handle || !selectedItems.contains(handle->targetItem())) {
+    if (!handle) {
+      it.remove();
+      continue;
+    }
+    bool stillSelected = false;
+    if (store && handle->targetItemId().isValid()) {
+      for (QGraphicsItem *item : selectedItems) {
+        if (!item) continue;
+        ItemId id = store->idForItem(item);
+        if (id.isValid() && id == handle->targetItemId()) {
+          stillSelected = true;
+          break;
+        }
+      }
+    } else {
+      stillSelected = selectedItems.contains(handle->targetItem());
+    }
+    if (!stillSelected) {
       if (handle) {
         // Clear target item reference before deleting to avoid dangling pointer access
         handle->clearTargetItem();
@@ -1539,7 +1767,15 @@ void Canvas::updateTransformHandles() {
     // Check if handle already exists for this item
     bool hasHandle = false;
     for (TransformHandleItem* handle : transformHandles_) {
-      if (handle && handle->targetItem() == item) {
+      if (!handle) continue;
+      if (store && handle->targetItemId().isValid()) {
+        ItemId id = store->idForItem(item);
+        if (id.isValid() && handle->targetItemId() == id) {
+          hasHandle = true;
+          handle->updateHandles();
+          break;
+        }
+      } else if (handle->targetItem() == item) {
         hasHandle = true;
         handle->updateHandles();
         break;
@@ -1547,7 +1783,19 @@ void Canvas::updateTransformHandles() {
     }
     
     if (!hasHandle) {
-      TransformHandleItem* handle = new TransformHandleItem(item, this);
+      TransformHandleItem* handle = nullptr;
+      if (store) {
+        ItemId id = store->idForItem(item);
+        if (!id.isValid()) {
+          id = registerItem(item);
+        }
+        if (id.isValid()) {
+          handle = new TransformHandleItem(id, store, this);
+        }
+      }
+      if (!handle) {
+        handle = new TransformHandleItem(item, this);
+      }
       scene_->addItem(handle);
       transformHandles_.append(handle);
       

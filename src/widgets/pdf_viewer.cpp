@@ -67,13 +67,17 @@ PdfViewer::PdfViewer(QWidget *parent)
     : QGraphicsView(parent), document_(std::make_unique<PdfDocument>()),
       overlayManager_(std::make_unique<PdfOverlayManager>()),
       pageItem_(nullptr), scene_(new QGraphicsScene(this)),
-      toolManager_(nullptr), specialTool_(SpecialTool::None),
+      sceneController_(nullptr), toolManager_(nullptr), specialTool_(SpecialTool::None),
       currentPage_(0), renderDpi_(DEFAULT_DPI), darkMode_(false), 
       showGrid_(false), fillShapes_(false), currentZoom_(1.0),
       currentPen_(Qt::white, 3), eraserPen_(Qt::black, 10),
       screenshotSelectionRect_(nullptr) {
 
   setupScene();
+
+  // Initialize scene controller (single source of truth)
+  sceneController_ = new SceneController(scene_, this);
+  overlayManager_->setItemStore(sceneController_->itemStore());
   
   // Initialize tool manager
   toolManager_ = new ToolManager(this, this);
@@ -135,7 +139,11 @@ void PdfViewer::closePdf() {
 
   // Clear overlays and scene
   overlayManager_->clear();
-  scene_->clear();
+  if (sceneController_) {
+    sceneController_->clearAll();
+  } else {
+    scene_->clear();
+  }
 
   document_->close();
   currentPage_ = 0;
@@ -354,6 +362,15 @@ void PdfViewer::addDrawAction(QGraphicsItem *item) {
     return;
   }
 
+  ItemStore *store = itemStore();
+  ItemId itemId;
+  if (store && item) {
+    itemId = store->idForItem(item);
+    if (!itemId.isValid()) {
+      itemId = registerItem(item);
+    }
+  }
+
   auto &undoStack = overlayManager_->undoStack(currentPage_);
   int pageIndex = currentPage_;
   auto onAdd = [this, pageIndex](QGraphicsItem *added) {
@@ -369,8 +386,13 @@ void PdfViewer::addDrawAction(QGraphicsItem *item) {
     overlayManager_->removeItemFromPage(pageIndex, removed);
   };
 
-  undoStack.push_back(
-      std::make_unique<DrawAction>(item, scene_, onAdd, onRemove));
+  if (store && itemId.isValid()) {
+    undoStack.push_back(
+        std::make_unique<DrawAction>(itemId, store, scene_, onAdd, onRemove));
+  } else {
+    undoStack.push_back(
+        std::make_unique<DrawAction>(item, scene_, onAdd, onRemove));
+  }
   clearRedoStack();
   overlayManager_->addItemToPage(currentPage_, item);
   emit documentModified();
@@ -379,6 +401,15 @@ void PdfViewer::addDrawAction(QGraphicsItem *item) {
 void PdfViewer::addDeleteAction(QGraphicsItem *item) {
   if (!hasPdf()) {
     return;
+  }
+
+  ItemStore *store = itemStore();
+  ItemId itemId;
+  if (store && item) {
+    itemId = store->idForItem(item);
+    if (!itemId.isValid()) {
+      itemId = registerItem(item);
+    }
   }
 
   auto &undoStack = overlayManager_->undoStack(currentPage_);
@@ -403,8 +434,13 @@ void PdfViewer::addDeleteAction(QGraphicsItem *item) {
     overlayManager_->removeItemFromPage(pageIndex, removed);
   };
 
-  undoStack.push_back(
-      std::make_unique<DeleteAction>(item, scene_, onAdd, onRemove));
+  if (store && itemId.isValid()) {
+    undoStack.push_back(
+        std::make_unique<DeleteAction>(itemId, store, scene_, onAdd, onRemove));
+  } else {
+    undoStack.push_back(
+        std::make_unique<DeleteAction>(item, scene_, onAdd, onRemove));
+  }
   clearRedoStack();
 }
 
@@ -483,12 +519,24 @@ bool PdfViewer::exportAnnotatedPdf(const QString &filePath) {
 
     // Draw overlay items for this page
     if (auto *overlay = overlayManager_->overlay(i)) {
-      for (QGraphicsItem *item : overlay->items()) {
-        if (item) {
-          painter.save();
-          painter.setTransform(item->sceneTransform(), true);
-          item->paint(&painter, nullptr, nullptr);
-          painter.restore();
+      ItemStore *store = itemStore();
+      if (store) {
+        for (const ItemId &id : overlay->itemIds()) {
+          if (QGraphicsItem *item = store->item(id)) {
+            painter.save();
+            painter.setTransform(item->sceneTransform(), true);
+            item->paint(&painter, nullptr, nullptr);
+            painter.restore();
+          }
+        }
+      } else {
+        for (QGraphicsItem *item : overlay->items()) {
+          if (item) {
+            painter.save();
+            painter.setTransform(item->sceneTransform(), true);
+            item->paint(&painter, nullptr, nullptr);
+            painter.restore();
+          }
         }
       }
     }

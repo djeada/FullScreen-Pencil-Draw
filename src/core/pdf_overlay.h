@@ -123,7 +123,7 @@ public:
    * @brief Set the ItemStore for this overlay (for ID-based operations)
    * @param store The ItemStore to use
    */
-  void setItemStore(ItemStore *store) { itemStore_ = store; }
+  void setItemStore(ItemStore *store);
 
 private:
   QList<QGraphicsItem *> items_;  // Deprecated: kept for backwards compatibility
@@ -150,6 +150,12 @@ public:
    * @param pageCount Number of pages
    */
   void initialize(int pageCount);
+
+  /**
+   * @brief Set the ItemStore used for ID-based resolution
+   * @param store The ItemStore to use
+   */
+  void setItemStore(ItemStore *store);
 
   /**
    * @brief Get the overlay for a specific page
@@ -245,6 +251,7 @@ private:
   std::vector<std::vector<std::unique_ptr<Action>>> undoStacks_;
   std::vector<std::vector<std::unique_ptr<Action>>> redoStacks_;
   int currentPage_;
+  ItemStore *itemStore_;
 };
 
 #endif // HAVE_QT_PDF
