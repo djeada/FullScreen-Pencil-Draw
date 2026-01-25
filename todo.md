@@ -280,7 +280,7 @@ These features can be implemented quickly and provide immediate value:
 7. [x] **Ruler/Guides** - Visual guides for alignment
 8. [x] **Measurement Tool** - Display distances between objects
 9. [x] **Lock Objects** - Prevent accidental modification
-10. [ ] **Group/Ungroup** - Combine multiple objects
+10. [x] **Group/Ungroup** - Combine multiple objects (Ctrl+G to group, Ctrl+Shift+U to ungroup)
 
 ---
 

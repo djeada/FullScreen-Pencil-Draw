@@ -177,4 +177,64 @@ private:
   QBrush newBrush_;
 };
 
+class QGraphicsItemGroup;
+
+/**
+ * @brief Action for grouping multiple items together.
+ *
+ * This action tracks group operations.
+ * Undo ungroups the items, redo groups them again.
+ */
+class GroupAction : public Action {
+public:
+  using ItemCallback = std::function<void(QGraphicsItem *)>;
+
+  GroupAction(QGraphicsItemGroup *group, const QList<QGraphicsItem *> &items,
+              QGraphicsScene *scene, ItemCallback onAdd = {},
+              ItemCallback onRemove = {});
+  ~GroupAction() override;
+
+  void undo() override;
+  void redo() override;
+  QString description() const override { return "Group"; }
+
+private:
+  QGraphicsItemGroup *group_;
+  QList<QGraphicsItem *> items_;
+  QList<QPointF> originalPositions_;
+  QPointer<QGraphicsScene> scene_;
+  bool groupOwnedByAction_;
+  ItemCallback onAdd_;
+  ItemCallback onRemove_;
+};
+
+/**
+ * @brief Action for ungrouping a group into individual items.
+ *
+ * This action tracks ungroup operations.
+ * Undo regroups the items, redo ungroups them again.
+ */
+class UngroupAction : public Action {
+public:
+  using ItemCallback = std::function<void(QGraphicsItem *)>;
+
+  UngroupAction(QGraphicsItemGroup *group, const QList<QGraphicsItem *> &items,
+                QGraphicsScene *scene, ItemCallback onAdd = {},
+                ItemCallback onRemove = {});
+  ~UngroupAction() override;
+
+  void undo() override;
+  void redo() override;
+  QString description() const override { return "Ungroup"; }
+
+private:
+  QGraphicsItemGroup *group_;
+  QList<QGraphicsItem *> items_;
+  QPointF groupPosition_;
+  QPointer<QGraphicsScene> scene_;
+  bool groupOwnedByAction_;
+  ItemCallback onAdd_;
+  ItemCallback onRemove_;
+};
+
 #endif // ACTION_H

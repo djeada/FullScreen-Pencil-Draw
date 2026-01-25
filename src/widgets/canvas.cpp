@@ -458,6 +458,96 @@ void Canvas::unlockSelectedItems() {
   }
 }
 
+void Canvas::groupSelectedItems() {
+  if (!scene_) return;
+  QList<QGraphicsItem *> selectedItems = scene_->selectedItems();
+  
+  // Need at least 2 items to group
+  if (selectedItems.size() < 2) return;
+  
+  // Filter out items that shouldn't be grouped
+  QList<QGraphicsItem *> itemsToGroup;
+  for (QGraphicsItem *item : selectedItems) {
+    if (!item) continue;
+    if (item == eraserPreview_ || item == backgroundImage_) continue;
+    // Skip transform handles
+    if (dynamic_cast<TransformHandleItem *>(item)) continue;
+    itemsToGroup.append(item);
+  }
+  
+  if (itemsToGroup.size() < 2) return;
+  
+  // Clear transform handles before grouping
+  clearTransformHandles();
+  
+  // Create the group
+  QGraphicsItemGroup *group = new QGraphicsItemGroup();
+  
+  // Remove items from scene and add to group
+  for (QGraphicsItem *item : itemsToGroup) {
+    scene_->removeItem(item);
+    group->addToGroup(item);
+  }
+  
+  // Add group to scene
+  scene_->addItem(group);
+  group->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
+  
+  // Create undo action
+  auto action = std::make_unique<GroupAction>(
+      group, itemsToGroup, scene_,
+      [this](QGraphicsItem *item) { onItemRemoved(item); },
+      [this](QGraphicsItem *item) { onItemRemoved(item); });
+  addAction(std::move(action));
+  
+  // Select the new group
+  scene_->clearSelection();
+  group->setSelected(true);
+}
+
+void Canvas::ungroupSelectedItems() {
+  if (!scene_) return;
+  QList<QGraphicsItem *> selectedItems = scene_->selectedItems();
+  
+  // Clear transform handles before ungrouping
+  clearTransformHandles();
+  
+  for (QGraphicsItem *item : selectedItems) {
+    QGraphicsItemGroup *group = dynamic_cast<QGraphicsItemGroup *>(item);
+    if (!group) continue;
+    
+    // Get all children of the group
+    QList<QGraphicsItem *> childItems = group->childItems();
+    if (childItems.isEmpty()) continue;
+    
+    // Store scene positions before ungrouping
+    QList<QPointF> scenePositions;
+    for (QGraphicsItem *child : childItems) {
+      scenePositions.append(child->scenePos());
+    }
+    
+    // Remove group from scene
+    scene_->removeItem(group);
+    
+    // Remove items from group and add to scene
+    for (int i = 0; i < childItems.size(); ++i) {
+      QGraphicsItem *child = childItems[i];
+      group->removeFromGroup(child);
+      scene_->addItem(child);
+      child->setPos(scenePositions[i]);
+      child->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
+      child->setSelected(true);
+    }
+    
+    // Create undo action
+    auto action = std::make_unique<UngroupAction>(
+        group, childItems, scene_,
+        [this](QGraphicsItem *item) { onItemRemoved(item); },
+        [this](QGraphicsItem *item) { onItemRemoved(item); });
+    addAction(std::move(action));
+  }
+}
+
 QString Canvas::calculateDistance(const QPointF &p1, const QPointF &p2) const {
   qreal dx = p2.x() - p1.x();
   qreal dy = p2.y() - p1.y();
@@ -599,7 +689,50 @@ void Canvas::duplicateSelectedItems() {
   QList<QGraphicsItem *> selectedItems = scene_->selectedItems();
   for (QGraphicsItem *item : selectedItems) {
     if (!item) continue;
-    if (auto r = dynamic_cast<QGraphicsRectItem *>(item)) {
+    if (auto g = dynamic_cast<QGraphicsItemGroup *>(item)) {
+      // Duplicate entire group
+      QGraphicsItemGroup *newGroup = new QGraphicsItemGroup();
+      QPointF groupOffset = snapToGrid_ ? snapToGridPoint(g->pos() + offset) : g->pos() + offset;
+      newGroup->setPos(groupOffset);
+      
+      // Duplicate each child item and add to new group
+      for (QGraphicsItem *child : g->childItems()) {
+        QGraphicsItem *newChild = nullptr;
+        if (auto r = dynamic_cast<QGraphicsRectItem *>(child)) {
+          auto n = new QGraphicsRectItem(r->rect()); n->setPen(r->pen()); n->setBrush(r->brush());
+          n->setPos(r->pos());
+          newChild = n;
+        } else if (auto e = dynamic_cast<QGraphicsEllipseItem *>(child)) {
+          auto n = new QGraphicsEllipseItem(e->rect()); n->setPen(e->pen()); n->setBrush(e->brush());
+          n->setPos(e->pos());
+          newChild = n;
+        } else if (auto l = dynamic_cast<QGraphicsLineItem *>(child)) {
+          auto n = new QGraphicsLineItem(l->line()); n->setPen(l->pen());
+          n->setPos(l->pos());
+          newChild = n;
+        } else if (auto p = dynamic_cast<QGraphicsPathItem *>(child)) {
+          auto n = new QGraphicsPathItem(p->path()); n->setPen(p->pen());
+          n->setPos(p->pos());
+          newChild = n;
+        } else if (auto lt = dynamic_cast<LatexTextItem *>(child)) {
+          auto n = new LatexTextItem(); n->setText(lt->text()); n->setFont(lt->font()); n->setTextColor(lt->textColor());
+          n->setPos(lt->pos());
+          newChild = n;
+        } else if (auto t = dynamic_cast<QGraphicsTextItem *>(child)) {
+          auto n = new QGraphicsTextItem(t->toPlainText()); n->setFont(t->font()); n->setDefaultTextColor(t->defaultTextColor());
+          n->setPos(t->pos());
+          newChild = n;
+        }
+        if (newChild) {
+          newGroup->addToGroup(newChild);
+        }
+      }
+      
+      scene_->addItem(newGroup);
+      newGroup->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
+      newItems.append(newGroup);
+      addDrawAction(newGroup);
+    } else if (auto r = dynamic_cast<QGraphicsRectItem *>(item)) {
       auto n = new QGraphicsRectItem(r->rect()); n->setPen(r->pen()); n->setBrush(r->brush());
       QPointF newPos = snapToGrid_ ? snapToGridPoint(r->pos() + offset) : r->pos() + offset;
       n->setPos(newPos); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
