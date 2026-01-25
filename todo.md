@@ -178,6 +178,80 @@ This document outlines features to be implemented to enhance FullScreen Pencil D
 - For cloud storage: Backend service needed (REST API)
 - For user auth: Authentication service integration
 
+---
+
+## 🛡️ Stability & Safety Architecture Overhaul (High Priority)
+
+### Goal
+Make item lifetime, selection, undo/redo, layers, and overlays **memory-safe** and **consistent** by centralizing ownership and replacing raw-pointer assumptions.
+
+### Phase 0 — Audit + Crash Inventory (1–2 weeks)
+- [ ] Create a crash log doc (stack traces + reproduction steps)
+- [ ] List every place that creates, removes, or deletes QGraphicsItem
+- [ ] Add temporary runtime checks (asserts + qWarning) for invalid item use
+- [ ] Build with sanitizers (ASan/UBSan) and run stress scenarios
+
+### Phase 1 — Define the Lifetime Model (Design Doc)
+- [ ] Choose a single ownership model (recommended: Item Registry with stable IDs)
+- [ ] Document invariants:
+  - Only the registry can create/destroy items
+  - No subsystem stores raw pointers long-term
+  - All deletions are deferred (never during paint)
+- [ ] Draft migration plan and compatibility shims
+
+### Phase 2 — Item Registry + Stable IDs (Core Infrastructure)
+- [ ] Add `ItemId` type (QUuid or uint64)
+- [ ] Create `ItemRegistry` / `ItemStore`:
+  - map ItemId -> QGraphicsItem*
+  - create/destroy APIs
+  - deferred delete queue (QMetaObject::invokeMethod)
+- [ ] Introduce a lightweight `ItemRef` handle:
+  - stores ItemId
+  - resolves through registry on demand
+  - returns nullptr if missing
+
+### Phase 3 — Convert Items to Tracked Objects
+- [ ] Create tracked item subclasses (e.g., TrackedRectItem, TrackedPathItem)
+- [ ] Assign ItemId at creation
+- [ ] Ensure registry is notified on destruction
+- [ ] Update tools to create items only through registry APIs
+
+### Phase 4 — Replace Raw Pointers in Core Systems
+- [ ] Layers store ItemId instead of QGraphicsItem*
+- [ ] PDF overlays store ItemId instead of QGraphicsItem*
+- [ ] Transform handles store ItemId and resolve safely
+- [ ] Selection and export paths use ItemRefs, never raw pointers
+
+### Phase 5 — Undo/Redo Redesign (Snapshot-Based)
+- [ ] Replace `Action` item pointers with:
+  - ItemId
+  - serialized snapshot of item state (geometry + style)
+- [ ] Redo re-creates items if missing
+- [ ] Undo removes via registry (no direct delete)
+
+### Phase 6 — Centralized Scene Controller
+- [ ] Add a SceneController/DocumentController that:
+  - owns the registry
+  - mediates add/remove/move/modify
+  - updates layers/overlays/handles in one place
+- [ ] Disallow direct `scene_->addItem/removeItem` outside controller
+
+### Phase 7 — Guard Painting and Movement
+- [ ] Defer deletions to avoid paint-time destruction
+- [ ] Block re-entrant scene mutations during paint
+- [ ] Add guard rails for tools (cancel on deactivation)
+
+### Phase 8 — Test & Validation
+- [ ] Add unit tests for registry + ItemRef
+- [ ] Add integration tests for delete/undo/redo/selection
+- [ ] Stress tests: rapid create/delete, layer deletes, PDF overlay switching
+- [ ] Run ASan/UBSan + gdb to confirm no invalid access
+
+### Phase 9 — Documentation & Guidelines
+- [ ] Add a “No raw QGraphicsItem* ownership” rule to CONTRIBUTING
+- [ ] Document item lifecycle and deletion rules
+- [ ] Add diagram of SceneController flow and ownership
+
 ### Suggested Technology Stack for New Features
 - **Real-time Communication**: WebSocket, SignalR, or Socket.io
 - **Cloud Backend**: REST API with PostgreSQL/MongoDB
