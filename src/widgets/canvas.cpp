@@ -1358,7 +1358,7 @@ void Canvas::eraseAt(const QPointF &point) {
     if (!item) continue;
     if (item == eraserPreview_ || item == backgroundImage_) continue;
     if (item->type() == TransformHandleItem::Type) continue;
-    QPainterPath itemShape = item->shape();
+    QPainterPath itemShape = item->sceneTransform().map(item->shape());
     // Check if eraser intersects either the item's shape (for filled items like
     // pixmaps) or the stroked outline (for line-based items like paths)
     QPainterPathStroker s; s.setWidth(1);
