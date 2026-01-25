@@ -1,6 +1,8 @@
 /**
  * @file transform_handle_item.cpp
  * @brief Implementation of visual transform handles.
+ * 
+ * Items are tracked by ItemId only - never by raw pointer.
  */
 #include "transform_handle_item.h"
 #include "../core/item_store.h"
@@ -12,37 +14,15 @@
 #include <QPainterPath>
 #include <QtMath>
 
-TransformHandleItem::TransformHandleItem(QGraphicsItem *targetItem,
-                                         SceneRenderer *renderer,
-                                         QGraphicsItem *parent)
-    : QGraphicsObject(parent), targetItem_(targetItem), targetItemId_(),
-      itemStore_(nullptr), renderer_(renderer),
-      sceneEventFilterInstalled_(false), isTransforming_(false),
-      activeHandle_(HandleType::None), wasMovable_(false),
-      wasSelectable_(false), cachedTargetBounds_() {
-  setAcceptHoverEvents(true);
-  setFlag(QGraphicsItem::ItemIsSelectable, false);
-  setFlag(QGraphicsItem::ItemIsMovable, false);
-  // High Z value so handles appear above everything
-  setZValue(10000);
-  ensureSceneEventFilter();
-  updateHandles();
-}
-
 TransformHandleItem::TransformHandleItem(const ItemId &targetId,
                                          ItemStore *store,
                                          SceneRenderer *renderer,
                                          QGraphicsItem *parent)
-    : QGraphicsObject(parent), targetItem_(nullptr), targetItemId_(targetId),
+    : QGraphicsObject(parent), targetItemId_(targetId),
       itemStore_(store), renderer_(renderer),
       sceneEventFilterInstalled_(false), isTransforming_(false),
       activeHandle_(HandleType::None), wasMovable_(false),
       wasSelectable_(false), cachedTargetBounds_() {
-  // Resolve the target item from the store
-  if (store && targetId.isValid()) {
-    targetItem_ = store->item(targetId);
-  }
-  
   setAcceptHoverEvents(true);
   setFlag(QGraphicsItem::ItemIsSelectable, false);
   setFlag(QGraphicsItem::ItemIsMovable, false);
@@ -52,14 +32,14 @@ TransformHandleItem::TransformHandleItem(const ItemId &targetId,
   updateHandles();
 }
 
+QGraphicsItem *TransformHandleItem::targetItem() const {
+  if (!itemStore_ || !targetItemId_.isValid()) return nullptr;
+  return itemStore_->item(targetItemId_);
+}
+
 QGraphicsItem *TransformHandleItem::resolveTargetItem() const {
-  // If we have a valid ItemStore and ItemId, resolve from there
-  // This ensures we get nullptr if the item was deleted
-  if (itemStore_ && targetItemId_.isValid()) {
-    return itemStore_->item(targetItemId_);
-  }
-  // Fall back to cached pointer (legacy behavior)
-  return targetItem_;
+  if (!itemStore_ || !targetItemId_.isValid()) return nullptr;
+  return itemStore_->item(targetItemId_);
 }
 
 TransformHandleItem::~TransformHandleItem() {
@@ -75,7 +55,6 @@ void TransformHandleItem::clearTargetItem() {
     target->removeSceneEventFilter(this);
     sceneEventFilterInstalled_ = false;
   }
-  targetItem_ = nullptr;
   targetItemId_ = ItemId();
 }
 
@@ -384,9 +363,6 @@ void TransformHandleItem::mouseReleaseEvent(QGraphicsSceneMouseEvent *event) {
       if (itemStore_ && targetItemId_.isValid()) {
         renderer_->addAction(std::make_unique<TransformAction>(
             targetItemId_, itemStore_, originalTransform_, newTransform, originalPos_, newPos));
-      } else {
-        renderer_->addAction(std::make_unique<TransformAction>(
-            target, originalTransform_, newTransform, originalPos_, newPos));
       }
     }
     

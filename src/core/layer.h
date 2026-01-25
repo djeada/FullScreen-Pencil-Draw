@@ -146,11 +146,11 @@ public:
   bool removeItem(const ItemId &id);
 
   /**
-   * @brief Get all items in this layer
-   * @return List of graphics items
-   * @deprecated Use itemIds() instead for safer access
+   * @brief Get all items in this layer (resolved from ItemStore)
+   * @return List of graphics items (resolved at call time, safe from dangling)
+   * @note Returns empty list if no ItemStore is set
    */
-  const QList<QGraphicsItem *> &items() const { return items_; }
+  QList<QGraphicsItem *> items() const;
 
   /**
    * @brief Get all ItemIds in this layer
@@ -197,7 +197,6 @@ private:
   bool visible_;
   bool locked_;
   qreal opacity_;
-  QList<QGraphicsItem *> items_;  // Deprecated: kept for backwards compatibility
   QList<ItemId> itemIds_;         // Primary storage: stable ItemIds
   ItemStore *itemStore_;          // For resolving ItemIds to items
 

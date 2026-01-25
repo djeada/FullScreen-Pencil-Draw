@@ -1,6 +1,8 @@
 /**
  * @file action.cpp
  * @brief Implementation of the undo/redo action system.
+ * 
+ * All actions use ItemId-based storage only. Item pointers are NEVER cached.
  */
 #include "action.h"
 #include "item_store.h"
@@ -13,195 +15,82 @@
 Action::~Action() = default;
 
 // DrawAction implementation
-DrawAction::DrawAction(QGraphicsItem *item, QGraphicsScene *scene,
+DrawAction::DrawAction(const ItemId &id, ItemStore *store,
                        ItemCallback onAdd, ItemCallback onRemove)
-    : item_(item), itemId_(), itemStore_(nullptr), scene_(scene),
-      itemOwnedByAction_(false), onAdd_(std::move(onAdd)),
-      onRemove_(std::move(onRemove)) {}
+    : itemId_(id), itemStore_(store),
+      onAdd_(std::move(onAdd)), onRemove_(std::move(onRemove)) {}
 
-DrawAction::DrawAction(const ItemId &id, ItemStore *store, QGraphicsScene *scene,
-                       ItemCallback onAdd, ItemCallback onRemove)
-    : item_(nullptr), itemId_(id), itemStore_(store), scene_(scene),
-      itemOwnedByAction_(false), onAdd_(std::move(onAdd)),
-      onRemove_(std::move(onRemove)) {
-  // Cache the item pointer for backwards compatibility
-  if (store && id.isValid()) {
-    item_ = store->item(id);
-  }
-}
-
-DrawAction::~DrawAction() {
-  // If ItemStore owns lifecycle, don't delete directly
-  if (itemStore_ && itemId_.isValid()) {
-    return;
-  }
-  // Clean up the item if we own it and it still exists
-  if (itemOwnedByAction_ && item_) {
-    delete item_;
-    item_ = nullptr;
-  }
-}
-
-QGraphicsItem *DrawAction::resolveItem() const {
-  if (itemStore_ && itemId_.isValid()) {
-    return itemStore_->item(itemId_);
-  }
-  return item_;
-}
+DrawAction::~DrawAction() = default;
 
 void DrawAction::undo() {
-  if (itemStore_ && itemId_.isValid()) {
-    QGraphicsItem *item = itemStore_->item(itemId_);
-    if (item && onRemove_) {
-      onRemove_(item);
-    }
-    itemStore_->scheduleDelete(itemId_, true);
-    return;
+  if (!itemStore_ || !itemId_.isValid()) return;
+  
+  QGraphicsItem *item = itemStore_->item(itemId_);
+  if (item && onRemove_) {
+    onRemove_(item);
   }
-  QGraphicsItem *item = resolveItem();
-  if (item && scene_) {
-    scene_->removeItem(item);
-    if (onRemove_) {
-      onRemove_(item);
-    }
-    itemOwnedByAction_ = true;  // We now own the item
-  }
+  itemStore_->scheduleDelete(itemId_, true);
 }
 
 void DrawAction::redo() {
-  if (itemStore_ && itemId_.isValid()) {
-    bool restored = itemStore_->restoreItem(itemId_);
-    QGraphicsItem *item = itemStore_->item(itemId_);
-    if (!item && item_) {
-      // Fallback: re-register cached item
-      itemStore_->registerItem(item_);
-      item = item_;
-    }
-    if (item && onAdd_) {
-      onAdd_(item);
-    }
-    (void)restored;
-    return;
-  }
-  QGraphicsItem *item = resolveItem();
-  if (item && scene_) {
-    scene_->addItem(item);
-    if (onAdd_) {
-      onAdd_(item);
-    }
-    itemOwnedByAction_ = false;  // Scene now owns the item
+  if (!itemStore_ || !itemId_.isValid()) return;
+  
+  itemStore_->restoreItem(itemId_);
+  QGraphicsItem *item = itemStore_->item(itemId_);
+  if (item && onAdd_) {
+    onAdd_(item);
   }
 }
 
 // DeleteAction implementation
-DeleteAction::DeleteAction(QGraphicsItem *item, QGraphicsScene *scene,
+DeleteAction::DeleteAction(const ItemId &id, ItemStore *store,
                            ItemCallback onAdd, ItemCallback onRemove)
-    : item_(item), itemId_(), itemStore_(nullptr), scene_(scene),
-      itemOwnedByAction_(true), onAdd_(std::move(onAdd)),
-      onRemove_(std::move(onRemove)) {}
+    : itemId_(id), itemStore_(store),
+      onAdd_(std::move(onAdd)), onRemove_(std::move(onRemove)) {}
 
-DeleteAction::DeleteAction(const ItemId &id, ItemStore *store, QGraphicsScene *scene,
-                           ItemCallback onAdd, ItemCallback onRemove)
-    : item_(nullptr), itemId_(id), itemStore_(store), scene_(scene),
-      itemOwnedByAction_(true), onAdd_(std::move(onAdd)),
-      onRemove_(std::move(onRemove)) {
-  // Cache the item pointer for backwards compatibility
-  if (store && id.isValid()) {
-    item_ = store->item(id);
-  }
-}
-
-DeleteAction::~DeleteAction() {
-  // If ItemStore owns lifecycle, don't delete directly
-  if (itemStore_ && itemId_.isValid()) {
-    return;
-  }
-  // Clean up the item if we own it and it still exists
-  if (itemOwnedByAction_ && item_) {
-    delete item_;
-    item_ = nullptr;
-  }
-}
-
-QGraphicsItem *DeleteAction::resolveItem() const {
-  if (itemStore_ && itemId_.isValid()) {
-    return itemStore_->item(itemId_);
-  }
-  return item_;
-}
+DeleteAction::~DeleteAction() = default;
 
 void DeleteAction::undo() {
-  if (itemStore_ && itemId_.isValid()) {
-    if (itemStore_->restoreItem(itemId_) || itemStore_->item(itemId_)) {
-      QGraphicsItem *item = itemStore_->item(itemId_);
-      if (item && onAdd_) {
-        onAdd_(item);
-      }
-    }
-    return;
-  }
-  QGraphicsItem *item = resolveItem();
-  if (item && scene_) {
-    scene_->addItem(item);
-    if (onAdd_) {
+  if (!itemStore_ || !itemId_.isValid()) return;
+  
+  if (itemStore_->restoreItem(itemId_) || itemStore_->item(itemId_)) {
+    QGraphicsItem *item = itemStore_->item(itemId_);
+    if (item && onAdd_) {
       onAdd_(item);
     }
-    itemOwnedByAction_ = false;  // Scene now owns the item
   }
 }
 
 void DeleteAction::redo() {
-  if (itemStore_ && itemId_.isValid()) {
-    QGraphicsItem *item = itemStore_->item(itemId_);
-    if (item && onRemove_) {
-      onRemove_(item);
-    }
-    itemStore_->scheduleDelete(itemId_, true);
-    return;
+  if (!itemStore_ || !itemId_.isValid()) return;
+  
+  QGraphicsItem *item = itemStore_->item(itemId_);
+  if (item && onRemove_) {
+    onRemove_(item);
   }
-  QGraphicsItem *item = resolveItem();
-  if (item && scene_) {
-    scene_->removeItem(item);
-    if (onRemove_) {
-      onRemove_(item);
-    }
-    itemOwnedByAction_ = true;  // We now own the item
-  }
+  itemStore_->scheduleDelete(itemId_, true);
 }
 
 // MoveAction implementation
-MoveAction::MoveAction(QGraphicsItem *item, const QPointF &oldPos,
-                       const QPointF &newPos)
-    : item_(item), itemId_(), itemStore_(nullptr), oldPos_(oldPos),
-      newPos_(newPos) {}
-
-MoveAction::MoveAction(const ItemId &id, ItemStore *store, const QPointF &oldPos,
-                       const QPointF &newPos)
-    : item_(nullptr), itemId_(id), itemStore_(store), oldPos_(oldPos),
-      newPos_(newPos) {
-  if (store && id.isValid()) {
-    item_ = store->item(id);
-  }
-}
+MoveAction::MoveAction(const ItemId &id, ItemStore *store,
+                       const QPointF &oldPos, const QPointF &newPos)
+    : itemId_(id), itemStore_(store), oldPos_(oldPos), newPos_(newPos) {}
 
 MoveAction::~MoveAction() = default;
 
-QGraphicsItem *MoveAction::resolveItem() const {
-  if (itemStore_ && itemId_.isValid()) {
-    return itemStore_->item(itemId_);
-  }
-  return item_;
-}
-
 void MoveAction::undo() {
-  QGraphicsItem *item = resolveItem();
+  if (!itemStore_ || !itemId_.isValid()) return;
+  
+  QGraphicsItem *item = itemStore_->item(itemId_);
   if (item) {
     item->setPos(oldPos_);
   }
 }
 
 void MoveAction::redo() {
-  QGraphicsItem *item = resolveItem();
+  if (!itemStore_ || !itemId_.isValid()) return;
+  
+  QGraphicsItem *item = itemStore_->item(itemId_);
   if (item) {
     item->setPos(newPos_);
   }
@@ -231,30 +120,16 @@ void CompositeAction::redo() {
 }
 
 // FillAction implementation
-FillAction::FillAction(QGraphicsItem *item, const QBrush &oldBrush, const QBrush &newBrush)
-    : item_(item), itemId_(), itemStore_(nullptr), oldBrush_(oldBrush),
-      newBrush_(newBrush) {}
-
-FillAction::FillAction(const ItemId &id, ItemStore *store, const QBrush &oldBrush,
-                       const QBrush &newBrush)
-    : item_(nullptr), itemId_(id), itemStore_(store), oldBrush_(oldBrush),
-      newBrush_(newBrush) {
-  if (store && id.isValid()) {
-    item_ = store->item(id);
-  }
-}
+FillAction::FillAction(const ItemId &id, ItemStore *store,
+                       const QBrush &oldBrush, const QBrush &newBrush)
+    : itemId_(id), itemStore_(store), oldBrush_(oldBrush), newBrush_(newBrush) {}
 
 FillAction::~FillAction() = default;
 
-QGraphicsItem *FillAction::resolveItem() const {
-  if (itemStore_ && itemId_.isValid()) {
-    return itemStore_->item(itemId_);
-  }
-  return item_;
-}
-
 void FillAction::undo() {
-  QGraphicsItem *item = resolveItem();
+  if (!itemStore_ || !itemId_.isValid()) return;
+  
+  QGraphicsItem *item = itemStore_->item(itemId_);
   if (!item) return;
   
   if (auto *rect = dynamic_cast<QGraphicsRectItem *>(item)) {
@@ -267,7 +142,9 @@ void FillAction::undo() {
 }
 
 void FillAction::redo() {
-  QGraphicsItem *item = resolveItem();
+  if (!itemStore_ || !itemId_.isValid()) return;
+  
+  QGraphicsItem *item = itemStore_->item(itemId_);
   if (!item) return;
   
   if (auto *rect = dynamic_cast<QGraphicsRectItem *>(item)) {
@@ -280,75 +157,38 @@ void FillAction::redo() {
 }
 
 // GroupAction implementation
-GroupAction::GroupAction(QGraphicsItemGroup *group,
-                         const QList<QGraphicsItem *> &items,
-                         QGraphicsScene *scene, ItemCallback onAdd,
-                         ItemCallback onRemove)
-    : group_(group), groupId_(), items_(items), itemIds_(), itemStore_(nullptr),
-      scene_(scene), groupOwnedByAction_(false),
-      onAdd_(std::move(onAdd)), onRemove_(std::move(onRemove)) {
-  // Store original positions relative to scene
-  for (QGraphicsItem *item : items_) {
-    originalPositions_.append(item->scenePos());
-  }
-}
-
 GroupAction::GroupAction(const ItemId &groupId, const QList<ItemId> &itemIds,
-                         ItemStore *store, QGraphicsScene *scene,
+                         ItemStore *store, const QList<QPointF> &originalPositions,
                          ItemCallback onAdd, ItemCallback onRemove)
-    : group_(nullptr), groupId_(groupId), items_(), itemIds_(itemIds),
-      itemStore_(store), scene_(scene), groupOwnedByAction_(false),
-      onAdd_(std::move(onAdd)), onRemove_(std::move(onRemove)) {
-  // Resolve items for backwards compatibility
-  if (store) {
-    if (groupId.isValid()) {
-      group_ = dynamic_cast<QGraphicsItemGroup *>(store->item(groupId));
-    }
-    for (const ItemId &id : itemIds) {
-      if (QGraphicsItem *item = store->item(id)) {
-        items_.append(item);
-        originalPositions_.append(item->scenePos());
-      }
-    }
-  }
-}
+    : groupId_(groupId), itemIds_(itemIds), itemStore_(store),
+      originalPositions_(originalPositions),
+      onAdd_(std::move(onAdd)), onRemove_(std::move(onRemove)) {}
 
-GroupAction::~GroupAction() {
-  if (itemStore_ && groupId_.isValid()) {
-    return;
-  }
-  if (groupOwnedByAction_ && group_) {
-    delete group_;
-    group_ = nullptr;
-  }
-}
+GroupAction::~GroupAction() = default;
 
 void GroupAction::undo() {
-  if (itemStore_ && groupId_.isValid()) {
-    group_ = dynamic_cast<QGraphicsItemGroup *>(itemStore_->item(groupId_));
-    items_.clear();
-    for (const ItemId &id : itemIds_) {
-      if (QGraphicsItem *item = itemStore_->item(id)) {
-        items_.append(item);
-      }
-    }
-  }
-  if (!group_ || !scene_) return;
+  if (!itemStore_ || !groupId_.isValid()) return;
+  
+  auto *group = dynamic_cast<QGraphicsItemGroup *>(itemStore_->item(groupId_));
+  if (!group) return;
+  
+  QGraphicsScene *scene = group->scene();
+  if (!scene) return;
 
   // Remove group from scene
-  scene_->removeItem(group_);
+  scene->removeItem(group);
   if (onRemove_) {
-    onRemove_(group_);
+    onRemove_(group);
   }
 
   // Re-add individual items to scene at their original positions
-  for (int i = 0; i < items_.size(); ++i) {
-    QGraphicsItem *item = items_[i];
+  for (int i = 0; i < itemIds_.size(); ++i) {
+    QGraphicsItem *item = itemStore_->item(itemIds_[i]);
     if (item) {
-      // Remove from group first (this doesn't add to scene)
-      group_->removeFromGroup(item);
+      // Remove from group first
+      group->removeFromGroup(item);
       // Add to scene
-      scene_->addItem(item);
+      scene->addItem(item);
       // Restore original scene position
       if (i < originalPositions_.size()) {
         item->setPos(originalPositions_[i]);
@@ -360,26 +200,30 @@ void GroupAction::undo() {
       }
     }
   }
-
-  groupOwnedByAction_ = true;
 }
 
 void GroupAction::redo() {
-  if (itemStore_ && groupId_.isValid()) {
-    group_ = dynamic_cast<QGraphicsItemGroup *>(itemStore_->item(groupId_));
-    items_.clear();
-    for (const ItemId &id : itemIds_) {
-      if (QGraphicsItem *item = itemStore_->item(id)) {
-        items_.append(item);
-      }
+  if (!itemStore_ || !groupId_.isValid()) return;
+  
+  auto *group = dynamic_cast<QGraphicsItemGroup *>(itemStore_->item(groupId_));
+  if (!group) return;
+
+  // Get scene from first available item
+  QGraphicsScene *scene = nullptr;
+  for (const ItemId &id : itemIds_) {
+    QGraphicsItem *item = itemStore_->item(id);
+    if (item && item->scene()) {
+      scene = item->scene();
+      break;
     }
   }
-  if (!group_ || !scene_) return;
+  if (!scene) return;
 
-  // Remove individual items and add to group
-  for (QGraphicsItem *item : items_) {
+  // Remove individual items from scene and add to group
+  for (const ItemId &id : itemIds_) {
+    QGraphicsItem *item = itemStore_->item(id);
     if (item && item->scene()) {
-      scene_->removeItem(item);
+      scene->removeItem(item);
       if (onRemove_) {
         onRemove_(item);
       }
@@ -387,82 +231,54 @@ void GroupAction::redo() {
   }
 
   // Add items to group
-  for (QGraphicsItem *item : items_) {
+  for (const ItemId &id : itemIds_) {
+    QGraphicsItem *item = itemStore_->item(id);
     if (item) {
-      group_->addToGroup(item);
+      group->addToGroup(item);
     }
   }
 
   // Add group to scene
-  scene_->addItem(group_);
-  group_->setFlags(QGraphicsItem::ItemIsSelectable |
-                   QGraphicsItem::ItemIsMovable);
+  scene->addItem(group);
+  group->setFlags(QGraphicsItem::ItemIsSelectable |
+                  QGraphicsItem::ItemIsMovable);
   if (onAdd_) {
-    onAdd_(group_);
+    onAdd_(group);
   }
-
-  groupOwnedByAction_ = false;
 }
 
 // UngroupAction implementation
-UngroupAction::UngroupAction(QGraphicsItemGroup *group,
-                             const QList<QGraphicsItem *> &items,
-                             QGraphicsScene *scene, ItemCallback onAdd,
-                             ItemCallback onRemove)
-    : group_(group), groupId_(), items_(items), itemIds_(), itemStore_(nullptr),
-      scene_(scene), groupOwnedByAction_(true),
-      onAdd_(std::move(onAdd)), onRemove_(std::move(onRemove)) {
-  groupPosition_ = group_->pos();
-}
-
 UngroupAction::UngroupAction(const ItemId &groupId, const QList<ItemId> &itemIds,
-                             ItemStore *store, QGraphicsScene *scene,
+                             ItemStore *store, const QPointF &groupPosition,
                              ItemCallback onAdd, ItemCallback onRemove)
-    : group_(nullptr), groupId_(groupId), items_(), itemIds_(itemIds),
-      itemStore_(store), scene_(scene), groupOwnedByAction_(true),
-      onAdd_(std::move(onAdd)), onRemove_(std::move(onRemove)) {
-  // Resolve items for backwards compatibility
-  if (store) {
-    if (groupId.isValid()) {
-      group_ = dynamic_cast<QGraphicsItemGroup *>(store->item(groupId));
-    }
-    for (const ItemId &id : itemIds) {
-      if (QGraphicsItem *item = store->item(id)) {
-        items_.append(item);
-      }
-    }
-  }
-  if (group_) {
-    groupPosition_ = group_->pos();
-  }
-}
+    : groupId_(groupId), itemIds_(itemIds), itemStore_(store),
+      groupPosition_(groupPosition),
+      onAdd_(std::move(onAdd)), onRemove_(std::move(onRemove)) {}
 
-UngroupAction::~UngroupAction() {
-  if (itemStore_ && groupId_.isValid()) {
-    return;
-  }
-  if (groupOwnedByAction_ && group_) {
-    delete group_;
-    group_ = nullptr;
-  }
-}
+UngroupAction::~UngroupAction() = default;
 
 void UngroupAction::undo() {
-  if (itemStore_ && groupId_.isValid()) {
-    group_ = dynamic_cast<QGraphicsItemGroup *>(itemStore_->item(groupId_));
-    items_.clear();
-    for (const ItemId &id : itemIds_) {
-      if (QGraphicsItem *item = itemStore_->item(id)) {
-        items_.append(item);
-      }
+  if (!itemStore_ || !groupId_.isValid()) return;
+  
+  auto *group = dynamic_cast<QGraphicsItemGroup *>(itemStore_->item(groupId_));
+  if (!group) return;
+
+  // Get scene from first available item
+  QGraphicsScene *scene = nullptr;
+  for (const ItemId &id : itemIds_) {
+    QGraphicsItem *item = itemStore_->item(id);
+    if (item && item->scene()) {
+      scene = item->scene();
+      break;
     }
   }
-  if (!group_ || !scene_) return;
+  if (!scene) return;
 
   // Remove individual items from scene
-  for (QGraphicsItem *item : items_) {
+  for (const ItemId &id : itemIds_) {
+    QGraphicsItem *item = itemStore_->item(id);
     if (item && item->scene()) {
-      scene_->removeItem(item);
+      scene->removeItem(item);
       if (onRemove_) {
         onRemove_(item);
       }
@@ -470,56 +286,54 @@ void UngroupAction::undo() {
   }
 
   // Recreate the group
-  for (QGraphicsItem *item : items_) {
+  for (const ItemId &id : itemIds_) {
+    QGraphicsItem *item = itemStore_->item(id);
     if (item) {
-      group_->addToGroup(item);
+      group->addToGroup(item);
     }
   }
 
   // Add group to scene
-  scene_->addItem(group_);
-  group_->setPos(groupPosition_);
-  group_->setFlags(QGraphicsItem::ItemIsSelectable |
-                   QGraphicsItem::ItemIsMovable);
+  scene->addItem(group);
+  group->setPos(groupPosition_);
+  group->setFlags(QGraphicsItem::ItemIsSelectable |
+                  QGraphicsItem::ItemIsMovable);
   if (onAdd_) {
-    onAdd_(group_);
+    onAdd_(group);
   }
-
-  groupOwnedByAction_ = false;
 }
 
 void UngroupAction::redo() {
-  if (itemStore_ && groupId_.isValid()) {
-    group_ = dynamic_cast<QGraphicsItemGroup *>(itemStore_->item(groupId_));
-    items_.clear();
-    for (const ItemId &id : itemIds_) {
-      if (QGraphicsItem *item = itemStore_->item(id)) {
-        items_.append(item);
-      }
-    }
-  }
-  if (!group_ || !scene_) return;
+  if (!itemStore_ || !groupId_.isValid()) return;
+  
+  auto *group = dynamic_cast<QGraphicsItemGroup *>(itemStore_->item(groupId_));
+  if (!group) return;
+  
+  QGraphicsScene *scene = group->scene();
+  if (!scene) return;
 
   // Store positions relative to scene before ungrouping
   QList<QPointF> scenePositions;
-  for (QGraphicsItem *item : items_) {
+  for (const ItemId &id : itemIds_) {
+    QGraphicsItem *item = itemStore_->item(id);
     if (item) {
       scenePositions.append(item->scenePos());
     }
   }
 
   // Remove group from scene
-  scene_->removeItem(group_);
+  scene->removeItem(group);
   if (onRemove_) {
-    onRemove_(group_);
+    onRemove_(group);
   }
 
   // Remove items from group and add to scene
-  for (int i = 0; i < items_.size(); ++i) {
-    QGraphicsItem *item = items_[i];
+  int i = 0;
+  for (const ItemId &id : itemIds_) {
+    QGraphicsItem *item = itemStore_->item(id);
     if (item) {
-      group_->removeFromGroup(item);
-      scene_->addItem(item);
+      group->removeFromGroup(item);
+      scene->addItem(item);
       if (i < scenePositions.size()) {
         item->setPos(scenePositions[i]);
       }
@@ -528,8 +342,7 @@ void UngroupAction::redo() {
       if (onAdd_) {
         onAdd_(item);
       }
+      ++i;
     }
   }
-
-  groupOwnedByAction_ = true;
 }

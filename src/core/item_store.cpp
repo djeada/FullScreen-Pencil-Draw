@@ -153,6 +153,11 @@ void ItemStore::scheduleDelete(const ItemId &id, bool keepSnapshot) {
 
   QGraphicsItem *item = it->second;
 
+  // Remove from scene FIRST, before any signal emissions that might trigger paint
+  if (item->scene()) {
+    item->scene()->removeItem(item);
+  }
+
   emit itemAboutToBeDeleted(id);
 
   // Also notify and remove any registered descendants to avoid stale pointers.
@@ -162,6 +167,10 @@ void ItemStore::scheduleDelete(const ItemId &id, bool keepSnapshot) {
     for (QGraphicsItem *child : descendants) {
       if (!child) {
         continue;
+      }
+      // Remove child from scene too
+      if (child->scene()) {
+        child->scene()->removeItem(child);
       }
       auto childIt = reverseMap_.find(child);
       if (childIt == reverseMap_.end()) {
@@ -175,11 +184,6 @@ void ItemStore::scheduleDelete(const ItemId &id, bool keepSnapshot) {
         snapshotItems_[childId] = child;
       }
     }
-  }
-
-  // Remove from scene immediately (safe during event handling)
-  if (scene_ && item->scene() == scene_) {
-    scene_->removeItem(item);
   }
 
   // Remove from active tracking
@@ -210,8 +214,9 @@ void ItemStore::flushDeletions() {
     if (hasAncestorInSet(item, queuedPtrs)) {
       continue;
     }
-    if (scene_ && item->scene() == scene_) {
-      scene_->removeItem(item);
+    // Always remove from ANY scene, not just our tracked scene
+    if (item->scene()) {
+      item->scene()->removeItem(item);
     }
     delete item;
   }

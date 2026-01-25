@@ -142,7 +142,8 @@ Canvas::Canvas(QWidget *parent)
   eraserPreview_->hide();
 
   this->setMouseTracking(true);
-  scene_->setItemIndexMethod(QGraphicsScene::BspTreeIndex);
+  // Use NoIndex to avoid potential issues with BSP tree and deleted items
+  scene_->setItemIndexMethod(QGraphicsScene::NoIndex);
 
   // Enable drag and drop
   this->setAcceptDrops(true);
@@ -215,10 +216,9 @@ void Canvas::addDrawAction(QGraphicsItem *item) {
 
   if (store && itemId.isValid()) {
     undoStack_.push_back(
-        std::make_unique<DrawAction>(itemId, store, scene_, onAdd, onRemove));
+        std::make_unique<DrawAction>(itemId, store, onAdd, onRemove));
   } else {
-    undoStack_.push_back(
-        std::make_unique<DrawAction>(item, scene_, onAdd, onRemove));
+    qWarning() << "Cannot create DrawAction without ItemStore";
   }
   clearRedoStack();
   // Add item to active layer
@@ -261,10 +261,9 @@ void Canvas::addDeleteAction(QGraphicsItem *item) {
 
   if (store && itemId.isValid()) {
     undoStack_.push_back(
-        std::make_unique<DeleteAction>(itemId, store, scene_, onAdd, onRemove));
+        std::make_unique<DeleteAction>(itemId, store, onAdd, onRemove));
   } else {
-    undoStack_.push_back(
-        std::make_unique<DeleteAction>(item, scene_, onAdd, onRemove));
+    qWarning() << "Cannot create DeleteAction without ItemStore";
   }
   clearRedoStack();
 }
@@ -620,6 +619,7 @@ void Canvas::groupSelectedItems() {
   ItemStore *store = itemStore();
   SceneController *controller = sceneController_;
   QList<ItemId> itemIds;
+  QList<QPointF> originalPositions;
   if (store) {
     for (QGraphicsItem *item : itemsToGroup) {
       ItemId id = store->idForItem(item);
@@ -628,6 +628,7 @@ void Canvas::groupSelectedItems() {
       }
       if (id.isValid()) {
         itemIds.append(id);
+        originalPositions.append(item->scenePos());
       }
     }
   }
@@ -655,19 +656,15 @@ void Canvas::groupSelectedItems() {
   group->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
   
   // Create undo action
-  std::unique_ptr<Action> action;
   if (store && groupId.isValid() && !itemIds.isEmpty()) {
-    action = std::make_unique<GroupAction>(
-        groupId, itemIds, store, scene_,
+    auto action = std::make_unique<GroupAction>(
+        groupId, itemIds, store, originalPositions,
         [this](QGraphicsItem *item) { onItemRemoved(item); },
         [this](QGraphicsItem *item) { onItemRemoved(item); });
+    addAction(std::move(action));
   } else {
-    action = std::make_unique<GroupAction>(
-        group, itemsToGroup, scene_,
-        [this](QGraphicsItem *item) { onItemRemoved(item); },
-        [this](QGraphicsItem *item) { onItemRemoved(item); });
+    qWarning() << "Cannot create GroupAction without ItemStore";
   }
-  addAction(std::move(action));
   
   // Select the new group
   scene_->clearSelection();
@@ -696,6 +693,9 @@ void Canvas::ungroupSelectedItems() {
       scenePositions.append(child->scenePos());
     }
     
+    // Store group position for undo
+    QPointF groupPosition = group->pos();
+    
     // Remove group from scene
     scene_->removeItem(group);
     
@@ -710,7 +710,6 @@ void Canvas::ungroupSelectedItems() {
     }
     
     // Create undo action
-    std::unique_ptr<Action> action;
     if (store) {
       ItemId groupId = store->idForItem(group);
       QList<ItemId> itemIds;
@@ -724,19 +723,17 @@ void Canvas::ungroupSelectedItems() {
         }
       }
       if (groupId.isValid() && !itemIds.isEmpty()) {
-        action = std::make_unique<UngroupAction>(
-            groupId, itemIds, store, scene_,
+        auto action = std::make_unique<UngroupAction>(
+            groupId, itemIds, store, groupPosition,
             [this](QGraphicsItem *item) { onItemRemoved(item); },
             [this](QGraphicsItem *item) { onItemRemoved(item); });
+        addAction(std::move(action));
+      } else {
+        qWarning() << "Cannot create UngroupAction without valid IDs";
       }
+    } else {
+      qWarning() << "Cannot create UngroupAction without ItemStore";
     }
-    if (!action) {
-      action = std::make_unique<UngroupAction>(
-          group, childItems, scene_,
-          [this](QGraphicsItem *item) { onItemRemoved(item); },
-          [this](QGraphicsItem *item) { onItemRemoved(item); });
-    }
-    addAction(std::move(action));
   }
 }
 
@@ -1105,11 +1102,7 @@ void Canvas::fillAt(const QPointF &point) {
         ItemId id = store->idForItem(item);
         if (id.isValid()) {
           addAction(std::make_unique<FillAction>(id, store, oldBrush, newBrush));
-        } else {
-          addAction(std::make_unique<FillAction>(item, oldBrush, newBrush));
         }
-      } else {
-        addAction(std::make_unique<FillAction>(item, oldBrush, newBrush));
       }
       return;
     }
@@ -1120,11 +1113,7 @@ void Canvas::fillAt(const QPointF &point) {
         ItemId id = store->idForItem(item);
         if (id.isValid()) {
           addAction(std::make_unique<FillAction>(id, store, oldBrush, newBrush));
-        } else {
-          addAction(std::make_unique<FillAction>(item, oldBrush, newBrush));
         }
-      } else {
-        addAction(std::make_unique<FillAction>(item, oldBrush, newBrush));
       }
       return;
     }
@@ -1135,11 +1124,7 @@ void Canvas::fillAt(const QPointF &point) {
         ItemId id = store->idForItem(item);
         if (id.isValid()) {
           addAction(std::make_unique<FillAction>(id, store, oldBrush, newBrush));
-        } else {
-          addAction(std::make_unique<FillAction>(item, oldBrush, newBrush));
         }
-      } else {
-        addAction(std::make_unique<FillAction>(item, oldBrush, newBrush));
       }
       return;
     }
@@ -1794,7 +1779,8 @@ void Canvas::updateTransformHandles() {
         }
       }
       if (!handle) {
-        handle = new TransformHandleItem(item, this);
+        qWarning() << "Cannot create TransformHandleItem without ItemStore";
+        continue;
       }
       scene_->addItem(handle);
       transformHandles_.append(handle);
