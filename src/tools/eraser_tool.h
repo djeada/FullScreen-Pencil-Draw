@@ -6,6 +6,7 @@
 #define ERASER_TOOL_H
 
 #include "tool.h"
+#include "../core/item_id.h"
 #include <QGraphicsEllipseItem>
 
 /**
@@ -37,6 +38,7 @@ private:
   void hidePreview();
 
   QGraphicsEllipseItem *eraserPreview_;
+  ItemId eraserPreviewId_;     // Stable ID for eraser preview
 };
 
 #endif // ERASER_TOOL_H

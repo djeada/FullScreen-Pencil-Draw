@@ -4,6 +4,8 @@
  */
 #include "fill_tool.h"
 #include "../core/action.h"
+#include "../core/item_store.h"
+#include "../core/scene_controller.h"
 #include "../core/scene_renderer.h"
 #include <QGraphicsEllipseItem>
 #include <QGraphicsPolygonItem>
@@ -31,6 +33,7 @@ void FillTool::mouseReleaseEvent(QMouseEvent * /*event*/,
 
 void FillTool::fillAt(const QPointF &point) {
   QGraphicsScene *scene = renderer_->scene();
+  ItemStore *store = renderer_->itemStore();
   QColor fillColor = renderer_->currentPen().color();
   QBrush newBrush(fillColor);
 
@@ -43,6 +46,15 @@ void FillTool::fillAt(const QPointF &point) {
     if (auto *rect = dynamic_cast<QGraphicsRectItem *>(item)) {
       QBrush oldBrush = rect->brush();
       rect->setBrush(newBrush);
+      
+      // Use ItemId-based action if store is available
+      if (store) {
+        ItemId itemId = store->idForItem(item);
+        if (itemId.isValid()) {
+          renderer_->addAction(std::make_unique<FillAction>(itemId, store, oldBrush, newBrush));
+          return;
+        }
+      }
       renderer_->addAction(std::make_unique<FillAction>(item, oldBrush, newBrush));
       return;
     }
@@ -51,6 +63,14 @@ void FillTool::fillAt(const QPointF &point) {
     if (auto *ellipse = dynamic_cast<QGraphicsEllipseItem *>(item)) {
       QBrush oldBrush = ellipse->brush();
       ellipse->setBrush(newBrush);
+      
+      if (store) {
+        ItemId itemId = store->idForItem(item);
+        if (itemId.isValid()) {
+          renderer_->addAction(std::make_unique<FillAction>(itemId, store, oldBrush, newBrush));
+          return;
+        }
+      }
       renderer_->addAction(std::make_unique<FillAction>(item, oldBrush, newBrush));
       return;
     }
@@ -59,6 +79,14 @@ void FillTool::fillAt(const QPointF &point) {
     if (auto *polygon = dynamic_cast<QGraphicsPolygonItem *>(item)) {
       QBrush oldBrush = polygon->brush();
       polygon->setBrush(newBrush);
+      
+      if (store) {
+        ItemId itemId = store->idForItem(item);
+        if (itemId.isValid()) {
+          renderer_->addAction(std::make_unique<FillAction>(itemId, store, oldBrush, newBrush));
+          return;
+        }
+      }
       renderer_->addAction(std::make_unique<FillAction>(item, oldBrush, newBrush));
       return;
     }

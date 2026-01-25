@@ -12,7 +12,10 @@
 #include <QPen>
 #include <QBrush>
 
+#include "../core/item_id.h"
+
 class SceneRenderer;
+class ItemStore;
 
 /**
  * @brief Enum for handle types
@@ -49,6 +52,19 @@ public:
   explicit TransformHandleItem(QGraphicsItem *targetItem,
                                SceneRenderer *renderer,
                                QGraphicsItem *parent = nullptr);
+  
+  /**
+   * @brief Construct with ItemId for safe reference
+   * @param targetId The ItemId of the target item
+   * @param store The ItemStore to resolve the item from
+   * @param renderer The SceneRenderer for undo/redo
+   * @param parent Optional parent item
+   */
+  TransformHandleItem(const ItemId &targetId,
+                      ItemStore *store,
+                      SceneRenderer *renderer,
+                      QGraphicsItem *parent = nullptr);
+  
   ~TransformHandleItem() override;
 
   QRectF boundingRect() const override;
@@ -63,8 +79,28 @@ public:
 
   /**
    * @brief Get the target item being transformed
+   * @note Returns cached pointer during transforms for performance.
+   *       Otherwise resolves from ItemId if ItemStore is available.
    */
-  QGraphicsItem *targetItem() const { return targetItem_; }
+  QGraphicsItem *targetItem() const { 
+    // Use cached pointer during active transforms for performance
+    if (isTransforming_ && targetItem_) {
+      return targetItem_;
+    }
+    return resolveTargetItem(); 
+  }
+
+  /**
+   * @brief Get the target item's ItemId
+   * @return The ItemId, or null if not set
+   */
+  ItemId targetItemId() const { return targetItemId_; }
+
+  /**
+   * @brief Set the ItemStore for ID-based resolution
+   * @param store The ItemStore to use
+   */
+  void setItemStore(ItemStore *store) { itemStore_ = store; }
 
   /**
    * @brief Clear the target item reference (should be called before target is deleted)
@@ -106,8 +142,11 @@ private:
   static inline const QColor SELECTION_BORDER_COLOR = QColor(0, 120, 215);
   static inline const QColor ROTATION_HANDLE_COLOR = QColor(76, 175, 80);
 
-  // Target item
+  // Target item - uses both raw pointer (for performance during transforms)
+  // and ItemId (for safe long-term storage and undo/redo)
   QGraphicsItem *targetItem_;
+  ItemId targetItemId_;       // Stable ID for safe reference
+  ItemStore *itemStore_;      // For resolving ItemId
   SceneRenderer *renderer_;
   bool sceneEventFilterInstalled_;
 
@@ -137,6 +176,12 @@ private:
   void applyRotation(const QPointF &mousePos);
   QRectF targetBoundsInScene() const;
   void ensureSceneEventFilter();
+  
+  /**
+   * @brief Resolve targetItem_ from targetItemId_ if needed
+   * @return The resolved item, or nullptr if not found
+   */
+  QGraphicsItem *resolveTargetItem() const;
 };
 
 #endif // TRANSFORM_HANDLE_ITEM_H
