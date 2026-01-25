@@ -22,6 +22,7 @@
 #include "item_id.h"
 
 class ItemStore;
+class SceneController;
 
 /**
  * @brief Represents a single layer in the canvas.
@@ -218,6 +219,18 @@ public:
   ~LayerManager() override;
 
   /**
+   * @brief Set the ItemStore used for ID-based operations
+   * @param store The ItemStore to use
+   */
+  void setItemStore(ItemStore *store);
+
+  /**
+   * @brief Set the SceneController for safe deletion operations
+   * @param controller The SceneController to use
+   */
+  void setSceneController(SceneController *controller) { sceneController_ = controller; }
+
+  /**
    * @brief Create a new layer
    * @param name The layer name
    * @param type The layer type
@@ -368,6 +381,8 @@ signals:
 
 private:
   QGraphicsScene *scene_;
+  ItemStore *itemStore_;
+  SceneController *sceneController_;
   std::vector<std::unique_ptr<Layer>> layers_;
   int activeLayerIndex_;
 

@@ -17,6 +17,10 @@ SceneController::~SceneController() {
 
 void SceneController::setLayerManager(LayerManager *layerManager) {
   layerManager_ = layerManager;
+  if (layerManager_) {
+    layerManager_->setItemStore(itemStore_);
+    layerManager_->setSceneController(this);
+  }
 }
 
 ItemId SceneController::addItem(QGraphicsItem *item) {

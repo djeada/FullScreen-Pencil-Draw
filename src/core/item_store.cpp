@@ -28,6 +28,9 @@ ItemId ItemStore::registerItem(QGraphicsItem *item) {
   // Check if already registered
   auto reverseIt = reverseMap_.find(item);
   if (reverseIt != reverseMap_.end()) {
+    if (scene_ && !item->scene()) {
+      scene_->addItem(item);
+    }
     return reverseIt->second;
   }
 

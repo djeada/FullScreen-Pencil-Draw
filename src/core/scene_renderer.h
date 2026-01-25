@@ -125,7 +125,9 @@ public:
    * @note If sceneController() is available, uses that; otherwise returns null ItemId
    */
   virtual ItemId registerItem(QGraphicsItem *item) {
-    (void)item;
+    if (auto *controller = sceneController()) {
+      return controller->addItem(item);
+    }
     return ItemId();
   }
 };

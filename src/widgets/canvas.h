@@ -42,6 +42,8 @@
 class ToolManager;
 class Tool;
 class TransformHandleItem;
+class SceneController;
+class ItemStore;
 
 /**
  * @brief The main drawing canvas widget.
@@ -77,6 +79,9 @@ public:
   const QPen &eraserPen() const override { return eraserPen_; }
   QGraphicsPixmapItem *backgroundImageItem() const override { return backgroundImage_; }
   QColor backgroundColor() const { return backgroundColor_; }
+  SceneController *sceneController() const override { return sceneController_; }
+  ItemStore *itemStore() const override;
+  ItemId registerItem(QGraphicsItem *item) override;
   
   // Layer management
   LayerManager *layerManager() const { return layerManager_; }
@@ -169,6 +174,7 @@ private:
 
   // Member variables
   QGraphicsScene *scene_;
+  SceneController *sceneController_;
   LayerManager *layerManager_;
   QPen currentPen_;
   QPen eraserPen_;

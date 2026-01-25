@@ -25,6 +25,7 @@
 #include "../core/pdf_document.h"
 #include "../core/pdf_overlay.h"
 #include "../core/scene_renderer.h"
+#include "../core/scene_controller.h"
 #include "../tools/tool_manager.h"
 
 /**
@@ -328,6 +329,25 @@ public:
    * @return Pointer to the page item as background
    */
   QGraphicsPixmapItem *backgroundImageItem() const override { return pageItem_; }
+
+  /**
+   * @brief Get the scene controller for item lifecycle management
+   * @return Pointer to the SceneController
+   */
+  SceneController *sceneController() const override { return sceneController_; }
+
+  /**
+   * @brief Get the item store for ItemId resolution
+   * @return Pointer to the ItemStore
+   */
+  ItemStore *itemStore() const override { return sceneController_ ? sceneController_->itemStore() : nullptr; }
+
+  /**
+   * @brief Register an item and get its ItemId
+   * @param item The item to register
+   * @return The assigned ItemId
+   */
+  ItemId registerItem(QGraphicsItem *item) override { return sceneController_ ? sceneController_->addItem(item) : ItemId(); }
   
   /**
    * @brief Add a draw action to the undo stack
@@ -449,6 +469,7 @@ private:
 
   // Scene and tool management
   QGraphicsScene *scene_;
+  SceneController *sceneController_;
   ToolManager *toolManager_;
   SpecialTool specialTool_;
 

@@ -381,8 +381,13 @@ void TransformHandleItem::mouseReleaseEvent(QGraphicsSceneMouseEvent *event) {
     QPointF newPos = target->pos();
 
     if (newTransform != originalTransform_ || newPos != originalPos_) {
-      renderer_->addAction(std::make_unique<TransformAction>(
-          target, originalTransform_, newTransform, originalPos_, newPos));
+      if (itemStore_ && targetItemId_.isValid()) {
+        renderer_->addAction(std::make_unique<TransformAction>(
+            targetItemId_, itemStore_, originalTransform_, newTransform, originalPos_, newPos));
+      } else {
+        renderer_->addAction(std::make_unique<TransformAction>(
+            target, originalTransform_, newTransform, originalPos_, newPos));
+      }
     }
     
     // Restore the item's original flags

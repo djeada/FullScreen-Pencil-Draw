@@ -115,6 +115,11 @@ public:
   void startEditing();
 
   /**
+   * @brief Finish editing and render the LaTeX content.
+   */
+  void finishEditing();
+
+  /**
    * @brief Check if currently in editing mode.
    * @return true if editing
    */
@@ -145,11 +150,6 @@ private slots:
   void onEditingCancelled();
 
 private:
-  /**
-   * @brief Finish editing and render the LaTeX content.
-   */
-  void finishEditing();
-
   /**
    * @brief Render the text content (including LaTeX if present).
    */

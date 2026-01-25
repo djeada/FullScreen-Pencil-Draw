@@ -24,6 +24,8 @@
 
 #include "item_id.h"
 
+#include "item_id.h"
+
 class ItemStore;
 
 /**

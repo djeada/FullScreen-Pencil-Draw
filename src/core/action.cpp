@@ -31,6 +31,10 @@ DrawAction::DrawAction(const ItemId &id, ItemStore *store, QGraphicsScene *scene
 }
 
 DrawAction::~DrawAction() {
+  // If ItemStore owns lifecycle, don't delete directly
+  if (itemStore_ && itemId_.isValid()) {
+    return;
+  }
   // Clean up the item if we own it and it still exists
   if (itemOwnedByAction_ && item_) {
     delete item_;
@@ -46,6 +50,14 @@ QGraphicsItem *DrawAction::resolveItem() const {
 }
 
 void DrawAction::undo() {
+  if (itemStore_ && itemId_.isValid()) {
+    QGraphicsItem *item = itemStore_->item(itemId_);
+    if (item && onRemove_) {
+      onRemove_(item);
+    }
+    itemStore_->scheduleDelete(itemId_, true);
+    return;
+  }
   QGraphicsItem *item = resolveItem();
   if (item && scene_) {
     scene_->removeItem(item);
@@ -57,6 +69,20 @@ void DrawAction::undo() {
 }
 
 void DrawAction::redo() {
+  if (itemStore_ && itemId_.isValid()) {
+    bool restored = itemStore_->restoreItem(itemId_);
+    QGraphicsItem *item = itemStore_->item(itemId_);
+    if (!item && item_) {
+      // Fallback: re-register cached item
+      itemStore_->registerItem(item_);
+      item = item_;
+    }
+    if (item && onAdd_) {
+      onAdd_(item);
+    }
+    (void)restored;
+    return;
+  }
   QGraphicsItem *item = resolveItem();
   if (item && scene_) {
     scene_->addItem(item);
@@ -86,6 +112,10 @@ DeleteAction::DeleteAction(const ItemId &id, ItemStore *store, QGraphicsScene *s
 }
 
 DeleteAction::~DeleteAction() {
+  // If ItemStore owns lifecycle, don't delete directly
+  if (itemStore_ && itemId_.isValid()) {
+    return;
+  }
   // Clean up the item if we own it and it still exists
   if (itemOwnedByAction_ && item_) {
     delete item_;
@@ -101,6 +131,15 @@ QGraphicsItem *DeleteAction::resolveItem() const {
 }
 
 void DeleteAction::undo() {
+  if (itemStore_ && itemId_.isValid()) {
+    if (itemStore_->restoreItem(itemId_) || itemStore_->item(itemId_)) {
+      QGraphicsItem *item = itemStore_->item(itemId_);
+      if (item && onAdd_) {
+        onAdd_(item);
+      }
+    }
+    return;
+  }
   QGraphicsItem *item = resolveItem();
   if (item && scene_) {
     scene_->addItem(item);
@@ -112,6 +151,14 @@ void DeleteAction::undo() {
 }
 
 void DeleteAction::redo() {
+  if (itemStore_ && itemId_.isValid()) {
+    QGraphicsItem *item = itemStore_->item(itemId_);
+    if (item && onRemove_) {
+      onRemove_(item);
+    }
+    itemStore_->scheduleDelete(itemId_, true);
+    return;
+  }
   QGraphicsItem *item = resolveItem();
   if (item && scene_) {
     scene_->removeItem(item);
@@ -267,6 +314,9 @@ GroupAction::GroupAction(const ItemId &groupId, const QList<ItemId> &itemIds,
 }
 
 GroupAction::~GroupAction() {
+  if (itemStore_ && groupId_.isValid()) {
+    return;
+  }
   if (groupOwnedByAction_ && group_) {
     delete group_;
     group_ = nullptr;
@@ -274,6 +324,15 @@ GroupAction::~GroupAction() {
 }
 
 void GroupAction::undo() {
+  if (itemStore_ && groupId_.isValid()) {
+    group_ = dynamic_cast<QGraphicsItemGroup *>(itemStore_->item(groupId_));
+    items_.clear();
+    for (const ItemId &id : itemIds_) {
+      if (QGraphicsItem *item = itemStore_->item(id)) {
+        items_.append(item);
+      }
+    }
+  }
   if (!group_ || !scene_) return;
 
   // Remove group from scene
@@ -306,6 +365,15 @@ void GroupAction::undo() {
 }
 
 void GroupAction::redo() {
+  if (itemStore_ && groupId_.isValid()) {
+    group_ = dynamic_cast<QGraphicsItemGroup *>(itemStore_->item(groupId_));
+    items_.clear();
+    for (const ItemId &id : itemIds_) {
+      if (QGraphicsItem *item = itemStore_->item(id)) {
+        items_.append(item);
+      }
+    }
+  }
   if (!group_ || !scene_) return;
 
   // Remove individual items and add to group
@@ -370,6 +438,9 @@ UngroupAction::UngroupAction(const ItemId &groupId, const QList<ItemId> &itemIds
 }
 
 UngroupAction::~UngroupAction() {
+  if (itemStore_ && groupId_.isValid()) {
+    return;
+  }
   if (groupOwnedByAction_ && group_) {
     delete group_;
     group_ = nullptr;
@@ -377,6 +448,15 @@ UngroupAction::~UngroupAction() {
 }
 
 void UngroupAction::undo() {
+  if (itemStore_ && groupId_.isValid()) {
+    group_ = dynamic_cast<QGraphicsItemGroup *>(itemStore_->item(groupId_));
+    items_.clear();
+    for (const ItemId &id : itemIds_) {
+      if (QGraphicsItem *item = itemStore_->item(id)) {
+        items_.append(item);
+      }
+    }
+  }
   if (!group_ || !scene_) return;
 
   // Remove individual items from scene
@@ -409,6 +489,15 @@ void UngroupAction::undo() {
 }
 
 void UngroupAction::redo() {
+  if (itemStore_ && groupId_.isValid()) {
+    group_ = dynamic_cast<QGraphicsItemGroup *>(itemStore_->item(groupId_));
+    items_.clear();
+    for (const ItemId &id : itemIds_) {
+      if (QGraphicsItem *item = itemStore_->item(id)) {
+        items_.append(item);
+      }
+    }
+  }
   if (!group_ || !scene_) return;
 
   // Store positions relative to scene before ungrouping

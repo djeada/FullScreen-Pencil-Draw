@@ -27,6 +27,10 @@ PdfPageOverlay &PdfPageOverlay::operator=(PdfPageOverlay &&other) noexcept {
   return *this;
 }
 
+void PdfPageOverlay::setItemStore(ItemStore *store) {
+  itemStore_ = store;
+}
+
 void PdfPageOverlay::addItem(QGraphicsItem *item) {
   if (item && !items_.contains(item)) {
     items_.append(item);
@@ -103,6 +107,18 @@ void PdfPageOverlay::clear() {
 
 void PdfPageOverlay::setVisible(bool visible) {
   visible_ = visible;
+  if (itemStore_ && !itemIds_.isEmpty()) {
+    for (int i = itemIds_.size() - 1; i >= 0; --i) {
+      const ItemId &id = itemIds_[i];
+      QGraphicsItem *item = itemStore_->item(id);
+      if (!item) {
+        itemIds_.removeAt(i);
+        continue;
+      }
+      item->setVisible(visible);
+    }
+    return;
+  }
   for (QGraphicsItem *item : items_) {
     if (item) {
       item->setVisible(visible);
@@ -113,9 +129,18 @@ void PdfPageOverlay::setVisible(bool visible) {
 // --- PdfOverlayManager Implementation ---
 
 PdfOverlayManager::PdfOverlayManager(QObject *parent)
-    : QObject(parent), currentPage_(-1) {}
+    : QObject(parent), currentPage_(-1), itemStore_(nullptr) {}
 
 PdfOverlayManager::~PdfOverlayManager() { clear(); }
+
+void PdfOverlayManager::setItemStore(ItemStore *store) {
+  itemStore_ = store;
+  for (auto &overlay : overlays_) {
+    if (overlay) {
+      overlay->setItemStore(store);
+    }
+  }
+}
 
 void PdfOverlayManager::initialize(int pageCount) {
   clear();
@@ -123,7 +148,11 @@ void PdfOverlayManager::initialize(int pageCount) {
   undoStacks_.resize(pageCount);
   redoStacks_.resize(pageCount);
   for (int i = 0; i < pageCount; ++i) {
-    overlays_.push_back(std::make_unique<PdfPageOverlay>());
+    auto overlay = std::make_unique<PdfPageOverlay>();
+    if (itemStore_) {
+      overlay->setItemStore(itemStore_);
+    }
+    overlays_.push_back(std::move(overlay));
   }
   currentPage_ = 0;
 }
@@ -144,7 +173,16 @@ const PdfPageOverlay *PdfOverlayManager::overlay(int pageIndex) const {
 
 void PdfOverlayManager::addItemToPage(int pageIndex, QGraphicsItem *item) {
   if (auto *ov = overlay(pageIndex)) {
-    ov->addItem(item);
+    if (itemStore_) {
+      ItemId id = itemStore_->idForItem(item);
+      if (id.isValid()) {
+        ov->addItem(id, itemStore_);
+      } else {
+        ov->addItem(item);
+      }
+    } else {
+      ov->addItem(item);
+    }
     emit overlayModified(pageIndex);
   }
 }
@@ -152,7 +190,18 @@ void PdfOverlayManager::addItemToPage(int pageIndex, QGraphicsItem *item) {
 bool PdfOverlayManager::removeItemFromPage(int pageIndex,
                                            QGraphicsItem *item) {
   if (auto *ov = overlay(pageIndex)) {
-    if (ov->removeItem(item)) {
+    bool removed = false;
+    if (itemStore_) {
+      ItemId id = itemStore_->idForItem(item);
+      if (id.isValid()) {
+        removed = ov->removeItem(id);
+      } else {
+        removed = ov->removeItem(item);
+      }
+    } else {
+      removed = ov->removeItem(item);
+    }
+    if (removed) {
       emit overlayModified(pageIndex);
       return true;
     }
@@ -161,6 +210,17 @@ bool PdfOverlayManager::removeItemFromPage(int pageIndex,
 }
 
 int PdfOverlayManager::findPageForItem(QGraphicsItem *item) const {
+  if (itemStore_) {
+    ItemId id = itemStore_->idForItem(item);
+    if (id.isValid()) {
+      for (int i = 0; i < static_cast<int>(overlays_.size()); ++i) {
+        if (overlays_[i] && overlays_[i]->containsItem(id)) {
+          return i;
+        }
+      }
+      return -1;
+    }
+  }
   for (int i = 0; i < static_cast<int>(overlays_.size()); ++i) {
     if (overlays_[i] && overlays_[i]->containsItem(item)) {
       return i;
