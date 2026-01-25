@@ -22,7 +22,7 @@ TransformHandleItem::TransformHandleItem(const ItemId &targetId,
       itemStore_(store), renderer_(renderer),
       sceneEventFilterInstalled_(false), isTransforming_(false),
       activeHandle_(HandleType::None), wasMovable_(false),
-      wasSelectable_(false), cachedTargetBounds_() {
+      wasSelectable_(false), cachedTargetBounds_(), previousTargetBounds_() {
   setAcceptHoverEvents(true);
   setFlag(QGraphicsItem::ItemIsSelectable, false);
   setFlag(QGraphicsItem::ItemIsMovable, false);
@@ -81,16 +81,15 @@ QRectF TransformHandleItem::boundingRect() const {
   
   QRectF expandedBounds = expandForHandles(bounds);
   
-  // If target item has moved, return union of old and new bounds to ensure
-  // the old anchor positions get repainted (cleared) along with the new positions.
+  // If we have previous bounds that differ from current, include them in the
+  // bounding rect to ensure the old anchor positions get repainted (cleared).
   // This prevents the visual trail artifact when items are dragged.
-  if (bounds != cachedTargetBounds_ && !cachedTargetBounds_.isEmpty()) {
-    QRectF oldExpandedBounds = expandForHandles(cachedTargetBounds_);
-    cachedTargetBounds_ = bounds;
+  // Note: previousTargetBounds_ is set in updateHandles() before prepareGeometryChange().
+  if (!previousTargetBounds_.isEmpty() && previousTargetBounds_ != bounds) {
+    QRectF oldExpandedBounds = expandForHandles(previousTargetBounds_);
     return expandedBounds.united(oldExpandedBounds);
   }
   
-  cachedTargetBounds_ = bounds;
   return expandedBounds;
 }
 
@@ -187,8 +186,23 @@ void TransformHandleItem::paint(QPainter *painter,
 }
 
 void TransformHandleItem::updateHandles() {
+  // Store the current cached bounds as previous bounds before updating.
+  // This allows boundingRect() to include the old region for proper repainting,
+  // which clears the old anchor positions when the item moves.
+  previousTargetBounds_ = cachedTargetBounds_;
+  
+  // Notify the scene that geometry is about to change.
+  // At this point, boundingRect() will return a union of old and new bounds
+  // because previousTargetBounds_ holds the old position.
   prepareGeometryChange();
+  
+  // Update the cached bounds to the new position
   cachedTargetBounds_ = targetBoundsInScene();
+  
+  // Note: We don't clear previousTargetBounds_ here because prepareGeometryChange()
+  // has already captured the bounding rect. The previous bounds will be updated
+  // on the next call to updateHandles().
+  
   update();
 }
 

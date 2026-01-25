@@ -155,6 +155,8 @@ private:
   
   // Cached bounds for detecting target item movement
   mutable QRectF cachedTargetBounds_;
+  // Previous bounds to invalidate during repaint (ensures old anchor positions are cleared)
+  mutable QRectF previousTargetBounds_;
 
   // Helper methods
   HandleType handleAtPoint(const QPointF &pos) const;
