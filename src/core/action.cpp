@@ -3,6 +3,7 @@
  * @brief Implementation of the undo/redo action system.
  */
 #include "action.h"
+#include "item_store.h"
 #include <QGraphicsEllipseItem>
 #include <QGraphicsItemGroup>
 #include <QGraphicsPolygonItem>
@@ -14,8 +15,20 @@ Action::~Action() = default;
 // DrawAction implementation
 DrawAction::DrawAction(QGraphicsItem *item, QGraphicsScene *scene,
                        ItemCallback onAdd, ItemCallback onRemove)
-    : item_(item), scene_(scene), itemOwnedByAction_(false),
-      onAdd_(std::move(onAdd)), onRemove_(std::move(onRemove)) {}
+    : item_(item), itemId_(), itemStore_(nullptr), scene_(scene),
+      itemOwnedByAction_(false), onAdd_(std::move(onAdd)),
+      onRemove_(std::move(onRemove)) {}
+
+DrawAction::DrawAction(const ItemId &id, ItemStore *store, QGraphicsScene *scene,
+                       ItemCallback onAdd, ItemCallback onRemove)
+    : item_(nullptr), itemId_(id), itemStore_(store), scene_(scene),
+      itemOwnedByAction_(false), onAdd_(std::move(onAdd)),
+      onRemove_(std::move(onRemove)) {
+  // Cache the item pointer for backwards compatibility
+  if (store && id.isValid()) {
+    item_ = store->item(id);
+  }
+}
 
 DrawAction::~DrawAction() {
   // Clean up the item if we own it and it still exists
@@ -25,21 +38,30 @@ DrawAction::~DrawAction() {
   }
 }
 
+QGraphicsItem *DrawAction::resolveItem() const {
+  if (itemStore_ && itemId_.isValid()) {
+    return itemStore_->item(itemId_);
+  }
+  return item_;
+}
+
 void DrawAction::undo() {
-  if (item_ && scene_) {
-    scene_->removeItem(item_);
+  QGraphicsItem *item = resolveItem();
+  if (item && scene_) {
+    scene_->removeItem(item);
     if (onRemove_) {
-      onRemove_(item_);
+      onRemove_(item);
     }
     itemOwnedByAction_ = true;  // We now own the item
   }
 }
 
 void DrawAction::redo() {
-  if (item_ && scene_) {
-    scene_->addItem(item_);
+  QGraphicsItem *item = resolveItem();
+  if (item && scene_) {
+    scene_->addItem(item);
     if (onAdd_) {
-      onAdd_(item_);
+      onAdd_(item);
     }
     itemOwnedByAction_ = false;  // Scene now owns the item
   }
@@ -48,8 +70,20 @@ void DrawAction::redo() {
 // DeleteAction implementation
 DeleteAction::DeleteAction(QGraphicsItem *item, QGraphicsScene *scene,
                            ItemCallback onAdd, ItemCallback onRemove)
-    : item_(item), scene_(scene), itemOwnedByAction_(true),
-      onAdd_(std::move(onAdd)), onRemove_(std::move(onRemove)) {}
+    : item_(item), itemId_(), itemStore_(nullptr), scene_(scene),
+      itemOwnedByAction_(true), onAdd_(std::move(onAdd)),
+      onRemove_(std::move(onRemove)) {}
+
+DeleteAction::DeleteAction(const ItemId &id, ItemStore *store, QGraphicsScene *scene,
+                           ItemCallback onAdd, ItemCallback onRemove)
+    : item_(nullptr), itemId_(id), itemStore_(store), scene_(scene),
+      itemOwnedByAction_(true), onAdd_(std::move(onAdd)),
+      onRemove_(std::move(onRemove)) {
+  // Cache the item pointer for backwards compatibility
+  if (store && id.isValid()) {
+    item_ = store->item(id);
+  }
+}
 
 DeleteAction::~DeleteAction() {
   // Clean up the item if we own it and it still exists
@@ -59,21 +93,30 @@ DeleteAction::~DeleteAction() {
   }
 }
 
+QGraphicsItem *DeleteAction::resolveItem() const {
+  if (itemStore_ && itemId_.isValid()) {
+    return itemStore_->item(itemId_);
+  }
+  return item_;
+}
+
 void DeleteAction::undo() {
-  if (item_ && scene_) {
-    scene_->addItem(item_);
+  QGraphicsItem *item = resolveItem();
+  if (item && scene_) {
+    scene_->addItem(item);
     if (onAdd_) {
-      onAdd_(item_);
+      onAdd_(item);
     }
     itemOwnedByAction_ = false;  // Scene now owns the item
   }
 }
 
 void DeleteAction::redo() {
-  if (item_ && scene_) {
-    scene_->removeItem(item_);
+  QGraphicsItem *item = resolveItem();
+  if (item && scene_) {
+    scene_->removeItem(item);
     if (onRemove_) {
-      onRemove_(item_);
+      onRemove_(item);
     }
     itemOwnedByAction_ = true;  // We now own the item
   }
@@ -82,19 +125,38 @@ void DeleteAction::redo() {
 // MoveAction implementation
 MoveAction::MoveAction(QGraphicsItem *item, const QPointF &oldPos,
                        const QPointF &newPos)
-    : item_(item), oldPos_(oldPos), newPos_(newPos) {}
+    : item_(item), itemId_(), itemStore_(nullptr), oldPos_(oldPos),
+      newPos_(newPos) {}
+
+MoveAction::MoveAction(const ItemId &id, ItemStore *store, const QPointF &oldPos,
+                       const QPointF &newPos)
+    : item_(nullptr), itemId_(id), itemStore_(store), oldPos_(oldPos),
+      newPos_(newPos) {
+  if (store && id.isValid()) {
+    item_ = store->item(id);
+  }
+}
 
 MoveAction::~MoveAction() = default;
 
+QGraphicsItem *MoveAction::resolveItem() const {
+  if (itemStore_ && itemId_.isValid()) {
+    return itemStore_->item(itemId_);
+  }
+  return item_;
+}
+
 void MoveAction::undo() {
-  if (item_) {
-    item_->setPos(oldPos_);
+  QGraphicsItem *item = resolveItem();
+  if (item) {
+    item->setPos(oldPos_);
   }
 }
 
 void MoveAction::redo() {
-  if (item_) {
-    item_->setPos(newPos_);
+  QGraphicsItem *item = resolveItem();
+  if (item) {
+    item->setPos(newPos_);
   }
 }
 
@@ -123,30 +185,49 @@ void CompositeAction::redo() {
 
 // FillAction implementation
 FillAction::FillAction(QGraphicsItem *item, const QBrush &oldBrush, const QBrush &newBrush)
-    : item_(item), oldBrush_(oldBrush), newBrush_(newBrush) {}
+    : item_(item), itemId_(), itemStore_(nullptr), oldBrush_(oldBrush),
+      newBrush_(newBrush) {}
+
+FillAction::FillAction(const ItemId &id, ItemStore *store, const QBrush &oldBrush,
+                       const QBrush &newBrush)
+    : item_(nullptr), itemId_(id), itemStore_(store), oldBrush_(oldBrush),
+      newBrush_(newBrush) {
+  if (store && id.isValid()) {
+    item_ = store->item(id);
+  }
+}
 
 FillAction::~FillAction() = default;
 
+QGraphicsItem *FillAction::resolveItem() const {
+  if (itemStore_ && itemId_.isValid()) {
+    return itemStore_->item(itemId_);
+  }
+  return item_;
+}
+
 void FillAction::undo() {
-  if (!item_) return;
+  QGraphicsItem *item = resolveItem();
+  if (!item) return;
   
-  if (auto *rect = dynamic_cast<QGraphicsRectItem *>(item_)) {
+  if (auto *rect = dynamic_cast<QGraphicsRectItem *>(item)) {
     rect->setBrush(oldBrush_);
-  } else if (auto *ellipse = dynamic_cast<QGraphicsEllipseItem *>(item_)) {
+  } else if (auto *ellipse = dynamic_cast<QGraphicsEllipseItem *>(item)) {
     ellipse->setBrush(oldBrush_);
-  } else if (auto *polygon = dynamic_cast<QGraphicsPolygonItem *>(item_)) {
+  } else if (auto *polygon = dynamic_cast<QGraphicsPolygonItem *>(item)) {
     polygon->setBrush(oldBrush_);
   }
 }
 
 void FillAction::redo() {
-  if (!item_) return;
+  QGraphicsItem *item = resolveItem();
+  if (!item) return;
   
-  if (auto *rect = dynamic_cast<QGraphicsRectItem *>(item_)) {
+  if (auto *rect = dynamic_cast<QGraphicsRectItem *>(item)) {
     rect->setBrush(newBrush_);
-  } else if (auto *ellipse = dynamic_cast<QGraphicsEllipseItem *>(item_)) {
+  } else if (auto *ellipse = dynamic_cast<QGraphicsEllipseItem *>(item)) {
     ellipse->setBrush(newBrush_);
-  } else if (auto *polygon = dynamic_cast<QGraphicsPolygonItem *>(item_)) {
+  } else if (auto *polygon = dynamic_cast<QGraphicsPolygonItem *>(item)) {
     polygon->setBrush(newBrush_);
   }
 }
@@ -156,11 +237,32 @@ GroupAction::GroupAction(QGraphicsItemGroup *group,
                          const QList<QGraphicsItem *> &items,
                          QGraphicsScene *scene, ItemCallback onAdd,
                          ItemCallback onRemove)
-    : group_(group), items_(items), scene_(scene), groupOwnedByAction_(false),
+    : group_(group), groupId_(), items_(items), itemIds_(), itemStore_(nullptr),
+      scene_(scene), groupOwnedByAction_(false),
       onAdd_(std::move(onAdd)), onRemove_(std::move(onRemove)) {
   // Store original positions relative to scene
   for (QGraphicsItem *item : items_) {
     originalPositions_.append(item->scenePos());
+  }
+}
+
+GroupAction::GroupAction(const ItemId &groupId, const QList<ItemId> &itemIds,
+                         ItemStore *store, QGraphicsScene *scene,
+                         ItemCallback onAdd, ItemCallback onRemove)
+    : group_(nullptr), groupId_(groupId), items_(), itemIds_(itemIds),
+      itemStore_(store), scene_(scene), groupOwnedByAction_(false),
+      onAdd_(std::move(onAdd)), onRemove_(std::move(onRemove)) {
+  // Resolve items for backwards compatibility
+  if (store) {
+    if (groupId.isValid()) {
+      group_ = dynamic_cast<QGraphicsItemGroup *>(store->item(groupId));
+    }
+    for (const ItemId &id : itemIds) {
+      if (QGraphicsItem *item = store->item(id)) {
+        items_.append(item);
+        originalPositions_.append(item->scenePos());
+      }
+    }
   }
 }
 
@@ -239,9 +341,32 @@ UngroupAction::UngroupAction(QGraphicsItemGroup *group,
                              const QList<QGraphicsItem *> &items,
                              QGraphicsScene *scene, ItemCallback onAdd,
                              ItemCallback onRemove)
-    : group_(group), items_(items), scene_(scene), groupOwnedByAction_(true),
+    : group_(group), groupId_(), items_(items), itemIds_(), itemStore_(nullptr),
+      scene_(scene), groupOwnedByAction_(true),
       onAdd_(std::move(onAdd)), onRemove_(std::move(onRemove)) {
   groupPosition_ = group_->pos();
+}
+
+UngroupAction::UngroupAction(const ItemId &groupId, const QList<ItemId> &itemIds,
+                             ItemStore *store, QGraphicsScene *scene,
+                             ItemCallback onAdd, ItemCallback onRemove)
+    : group_(nullptr), groupId_(groupId), items_(), itemIds_(itemIds),
+      itemStore_(store), scene_(scene), groupOwnedByAction_(true),
+      onAdd_(std::move(onAdd)), onRemove_(std::move(onRemove)) {
+  // Resolve items for backwards compatibility
+  if (store) {
+    if (groupId.isValid()) {
+      group_ = dynamic_cast<QGraphicsItemGroup *>(store->item(groupId));
+    }
+    for (const ItemId &id : itemIds) {
+      if (QGraphicsItem *item = store->item(id)) {
+        items_.append(item);
+      }
+    }
+  }
+  if (group_) {
+    groupPosition_ = group_->pos();
+  }
 }
 
 UngroupAction::~UngroupAction() {

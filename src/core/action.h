@@ -5,6 +5,10 @@
  * This file defines the polymorphic action classes used to implement
  * undo/redo functionality. Each action represents a reversible operation
  * on the canvas.
+ *
+ * Actions now support ItemId-based storage for safer undo/redo across
+ * item deletion and recreation. The ItemStore is used to resolve ItemIds
+ * to items when available.
  */
 #ifndef ACTION_H
 #define ACTION_H
@@ -17,6 +21,10 @@
 #include <functional>
 #include <memory>
 #include <vector>
+
+#include "item_id.h"
+
+class ItemStore;
 
 /**
  * @brief Abstract base class for all undoable actions.
@@ -52,7 +60,7 @@ public:
  *
  * This action tracks items that were drawn/added to the scene.
  * Undo removes the item, redo adds it back.
- * Uses QPointer to safely track item lifetime.
+ * Supports both raw pointer and ItemId-based resolution.
  */
 class DrawAction : public Action {
 public:
@@ -60,6 +68,18 @@ public:
 
   DrawAction(QGraphicsItem *item, QGraphicsScene *scene,
              ItemCallback onAdd = {}, ItemCallback onRemove = {});
+  
+  /**
+   * @brief Construct with ItemId for safe reference
+   * @param id The ItemId of the item
+   * @param store The ItemStore for resolution
+   * @param scene The scene
+   * @param onAdd Callback when item is added
+   * @param onRemove Callback when item is removed
+   */
+  DrawAction(const ItemId &id, ItemStore *store, QGraphicsScene *scene,
+             ItemCallback onAdd = {}, ItemCallback onRemove = {});
+  
   ~DrawAction() override;
 
   void undo() override;
@@ -68,10 +88,14 @@ public:
 
 private:
   QGraphicsItem *item_;
+  ItemId itemId_;           // Stable ID for safe reference
+  ItemStore *itemStore_;    // For resolving ItemId
   QPointer<QGraphicsScene> scene_;
   bool itemOwnedByAction_;
   ItemCallback onAdd_;
   ItemCallback onRemove_;
+  
+  QGraphicsItem *resolveItem() const;
 };
 
 /**
@@ -79,7 +103,7 @@ private:
  *
  * This action tracks items that were deleted from the scene.
  * Undo adds the item back, redo removes it again.
- * Uses QPointer to safely track item lifetime.
+ * Supports both raw pointer and ItemId-based resolution.
  */
 class DeleteAction : public Action {
 public:
@@ -87,6 +111,18 @@ public:
 
   DeleteAction(QGraphicsItem *item, QGraphicsScene *scene,
                ItemCallback onAdd = {}, ItemCallback onRemove = {});
+  
+  /**
+   * @brief Construct with ItemId for safe reference
+   * @param id The ItemId of the item
+   * @param store The ItemStore for resolution
+   * @param scene The scene
+   * @param onAdd Callback when item is added
+   * @param onRemove Callback when item is removed
+   */
+  DeleteAction(const ItemId &id, ItemStore *store, QGraphicsScene *scene,
+               ItemCallback onAdd = {}, ItemCallback onRemove = {});
+  
   ~DeleteAction() override;
 
   void undo() override;
@@ -95,10 +131,14 @@ public:
 
 private:
   QGraphicsItem *item_;
+  ItemId itemId_;           // Stable ID for safe reference
+  ItemStore *itemStore_;    // For resolving ItemId
   QPointer<QGraphicsScene> scene_;
   bool itemOwnedByAction_;
   ItemCallback onAdd_;
   ItemCallback onRemove_;
+  
+  QGraphicsItem *resolveItem() const;
 };
 
 /**
@@ -107,11 +147,17 @@ private:
  * This action tracks position changes of items.
  * Undo moves the item back to its original position,
  * redo moves it to the new position.
- * Uses QPointer to safely track item lifetime.
+ * Supports both raw pointer and ItemId-based resolution.
  */
 class MoveAction : public Action {
 public:
   MoveAction(QGraphicsItem *item, const QPointF &oldPos, const QPointF &newPos);
+  
+  /**
+   * @brief Construct with ItemId for safe reference
+   */
+  MoveAction(const ItemId &id, ItemStore *store, const QPointF &oldPos, const QPointF &newPos);
+  
   ~MoveAction() override;
 
   void undo() override;
@@ -120,8 +166,12 @@ public:
 
 private:
   QGraphicsItem *item_;
+  ItemId itemId_;           // Stable ID for safe reference
+  ItemStore *itemStore_;    // For resolving ItemId
   QPointF oldPos_;
   QPointF newPos_;
+  
+  QGraphicsItem *resolveItem() const;
 };
 
 /**
@@ -160,11 +210,17 @@ private:
  *
  * This action tracks fill operations on fillable shapes.
  * Undo restores the original brush, redo applies the fill again.
- * Uses QPointer to safely track item lifetime.
+ * Supports both raw pointer and ItemId-based resolution.
  */
 class FillAction : public Action {
 public:
   FillAction(QGraphicsItem *item, const QBrush &oldBrush, const QBrush &newBrush);
+  
+  /**
+   * @brief Construct with ItemId for safe reference
+   */
+  FillAction(const ItemId &id, ItemStore *store, const QBrush &oldBrush, const QBrush &newBrush);
+  
   ~FillAction() override;
 
   void undo() override;
@@ -173,8 +229,12 @@ public:
 
 private:
   QGraphicsItem *item_;
+  ItemId itemId_;           // Stable ID for safe reference
+  ItemStore *itemStore_;    // For resolving ItemId
   QBrush oldBrush_;
   QBrush newBrush_;
+  
+  QGraphicsItem *resolveItem() const;
 };
 
 class QGraphicsItemGroup;
@@ -184,6 +244,7 @@ class QGraphicsItemGroup;
  *
  * This action tracks group operations.
  * Undo ungroups the items, redo groups them again.
+ * Supports both raw pointer and ItemId-based resolution.
  */
 class GroupAction : public Action {
 public:
@@ -192,6 +253,14 @@ public:
   GroupAction(QGraphicsItemGroup *group, const QList<QGraphicsItem *> &items,
               QGraphicsScene *scene, ItemCallback onAdd = {},
               ItemCallback onRemove = {});
+  
+  /**
+   * @brief Construct with ItemIds for safe reference
+   */
+  GroupAction(const ItemId &groupId, const QList<ItemId> &itemIds,
+              ItemStore *store, QGraphicsScene *scene,
+              ItemCallback onAdd = {}, ItemCallback onRemove = {});
+  
   ~GroupAction() override;
 
   void undo() override;
@@ -200,7 +269,10 @@ public:
 
 private:
   QGraphicsItemGroup *group_;
+  ItemId groupId_;              // Stable ID for group
   QList<QGraphicsItem *> items_;
+  QList<ItemId> itemIds_;       // Stable IDs for items
+  ItemStore *itemStore_;
   QList<QPointF> originalPositions_;
   QPointer<QGraphicsScene> scene_;
   bool groupOwnedByAction_;
@@ -213,6 +285,7 @@ private:
  *
  * This action tracks ungroup operations.
  * Undo regroups the items, redo ungroups them again.
+ * Supports both raw pointer and ItemId-based resolution.
  */
 class UngroupAction : public Action {
 public:
@@ -221,6 +294,14 @@ public:
   UngroupAction(QGraphicsItemGroup *group, const QList<QGraphicsItem *> &items,
                 QGraphicsScene *scene, ItemCallback onAdd = {},
                 ItemCallback onRemove = {});
+  
+  /**
+   * @brief Construct with ItemIds for safe reference
+   */
+  UngroupAction(const ItemId &groupId, const QList<ItemId> &itemIds,
+                ItemStore *store, QGraphicsScene *scene,
+                ItemCallback onAdd = {}, ItemCallback onRemove = {});
+  
   ~UngroupAction() override;
 
   void undo() override;
@@ -229,7 +310,10 @@ public:
 
 private:
   QGraphicsItemGroup *group_;
+  ItemId groupId_;              // Stable ID for group
   QList<QGraphicsItem *> items_;
+  QList<ItemId> itemIds_;       // Stable IDs for items
+  ItemStore *itemStore_;
   QPointF groupPosition_;
   QPointer<QGraphicsScene> scene_;
   bool groupOwnedByAction_;
