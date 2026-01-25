@@ -9,7 +9,7 @@
 #include <QPainterPathStroker>
 
 EraserTool::EraserTool(SceneRenderer *renderer)
-    : Tool(renderer), eraserPreview_(nullptr), eraserPreviewId_() {}
+    : Tool(renderer), eraserPreview_(nullptr) {}
 
 EraserTool::~EraserTool() {
   // Preview is owned by the scene, don't delete here
@@ -22,7 +22,9 @@ void EraserTool::activate() {
                                                    QPen(Qt::gray),
                                                    QBrush(Qt::NoBrush));
     eraserPreview_->setZValue(1000);
-    eraserPreviewId_ = renderer_->registerItem(eraserPreview_);
+    // Do NOT register with ItemStore - this is a UI helper, not user content.
+    // Registering would cause it to be deleted by SceneController::clearAll()
+    // while this tool still holds a raw pointer to it.
   }
   eraserPreview_->show();
 }

@@ -6,7 +6,6 @@
 #define ERASER_TOOL_H
 
 #include "tool.h"
-#include "../core/item_id.h"
 #include <QGraphicsEllipseItem>
 
 /**
@@ -38,7 +37,9 @@ private:
   void hidePreview();
 
   QGraphicsEllipseItem *eraserPreview_;
-  ItemId eraserPreviewId_;     // Stable ID for eraser preview
+  // Note: eraserPreview_ is a UI helper, NOT registered with ItemStore.
+  // This prevents SceneController::clearAll() from deleting it while
+  // this tool still holds a pointer to it.
 };
 
 #endif // ERASER_TOOL_H
