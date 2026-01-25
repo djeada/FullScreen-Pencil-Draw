@@ -3,6 +3,7 @@
  * @brief Implementation of visual transform handles.
  */
 #include "transform_handle_item.h"
+#include "../core/item_store.h"
 #include "../core/scene_renderer.h"
 #include "../core/transform_action.h"
 #include <QCursor>
@@ -14,7 +15,8 @@
 TransformHandleItem::TransformHandleItem(QGraphicsItem *targetItem,
                                          SceneRenderer *renderer,
                                          QGraphicsItem *parent)
-    : QGraphicsObject(parent), targetItem_(targetItem), renderer_(renderer),
+    : QGraphicsObject(parent), targetItem_(targetItem), targetItemId_(),
+      itemStore_(nullptr), renderer_(renderer),
       sceneEventFilterInstalled_(false), isTransforming_(false),
       activeHandle_(HandleType::None), wasMovable_(false),
       wasSelectable_(false), cachedTargetBounds_() {
@@ -27,18 +29,54 @@ TransformHandleItem::TransformHandleItem(QGraphicsItem *targetItem,
   updateHandles();
 }
 
+TransformHandleItem::TransformHandleItem(const ItemId &targetId,
+                                         ItemStore *store,
+                                         SceneRenderer *renderer,
+                                         QGraphicsItem *parent)
+    : QGraphicsObject(parent), targetItem_(nullptr), targetItemId_(targetId),
+      itemStore_(store), renderer_(renderer),
+      sceneEventFilterInstalled_(false), isTransforming_(false),
+      activeHandle_(HandleType::None), wasMovable_(false),
+      wasSelectable_(false), cachedTargetBounds_() {
+  // Resolve the target item from the store
+  if (store && targetId.isValid()) {
+    targetItem_ = store->item(targetId);
+  }
+  
+  setAcceptHoverEvents(true);
+  setFlag(QGraphicsItem::ItemIsSelectable, false);
+  setFlag(QGraphicsItem::ItemIsMovable, false);
+  // High Z value so handles appear above everything
+  setZValue(10000);
+  ensureSceneEventFilter();
+  updateHandles();
+}
+
+QGraphicsItem *TransformHandleItem::resolveTargetItem() const {
+  // If we have a valid ItemStore and ItemId, resolve from there
+  // This ensures we get nullptr if the item was deleted
+  if (itemStore_ && targetItemId_.isValid()) {
+    return itemStore_->item(targetItemId_);
+  }
+  // Fall back to cached pointer (legacy behavior)
+  return targetItem_;
+}
+
 TransformHandleItem::~TransformHandleItem() {
-  if (targetItem_ && sceneEventFilterInstalled_) {
-    targetItem_->removeSceneEventFilter(this);
+  QGraphicsItem *target = resolveTargetItem();
+  if (target && sceneEventFilterInstalled_) {
+    target->removeSceneEventFilter(this);
   }
 }
 
 void TransformHandleItem::clearTargetItem() {
-  if (targetItem_ && sceneEventFilterInstalled_) {
-    targetItem_->removeSceneEventFilter(this);
+  QGraphicsItem *target = resolveTargetItem();
+  if (target && sceneEventFilterInstalled_) {
+    target->removeSceneEventFilter(this);
     sceneEventFilterInstalled_ = false;
   }
   targetItem_ = nullptr;
+  targetItemId_ = ItemId();
 }
 
 QVariant TransformHandleItem::itemChange(GraphicsItemChange change,
@@ -50,7 +88,8 @@ QVariant TransformHandleItem::itemChange(GraphicsItemChange change,
 }
 
 QRectF TransformHandleItem::boundingRect() const {
-  if (!targetItem_)
+  QGraphicsItem *target = resolveTargetItem();
+  if (!target)
     return QRectF();
 
   QRectF bounds = targetBoundsInScene();
@@ -96,16 +135,18 @@ QPainterPath TransformHandleItem::shape() const {
 }
 
 QRectF TransformHandleItem::targetBoundsInScene() const {
-  if (!targetItem_)
+  QGraphicsItem *target = resolveTargetItem();
+  if (!target)
     return QRectF();
-  return targetItem_->mapToScene(targetItem_->boundingRect()).boundingRect();
+  return target->mapToScene(target->boundingRect()).boundingRect();
 }
 
 void TransformHandleItem::ensureSceneEventFilter() {
-  if (!targetItem_ || sceneEventFilterInstalled_)
+  QGraphicsItem *target = resolveTargetItem();
+  if (!target || sceneEventFilterInstalled_)
     return;
-  if (scene() && targetItem_->scene() == scene()) {
-    targetItem_->installSceneEventFilter(this);
+  if (scene() && target->scene() == scene()) {
+    target->installSceneEventFilter(this);
     sceneEventFilterInstalled_ = true;
   }
 }
@@ -113,7 +154,8 @@ void TransformHandleItem::ensureSceneEventFilter() {
 void TransformHandleItem::paint(QPainter *painter,
                                 const QStyleOptionGraphicsItem * /*option*/,
                                 QWidget * /*widget*/) {
-  if (!targetItem_)
+  QGraphicsItem *target = resolveTargetItem();
+  if (!target)
     return;
 
   painter->setRenderHint(QPainter::Antialiasing);
@@ -191,7 +233,8 @@ HandleType TransformHandleItem::handleAtPoint(const QPointF &pos) const {
 }
 
 QRectF TransformHandleItem::handleRect(HandleType type) const {
-  if (!targetItem_)
+  QGraphicsItem *target = resolveTargetItem();
+  if (!target)
     return QRectF();
 
   QRectF bounds = targetBoundsInScene();
@@ -262,7 +305,8 @@ void TransformHandleItem::hoverMoveEvent(QGraphicsSceneHoverEvent *event) {
 }
 
 bool TransformHandleItem::sceneEventFilter(QGraphicsItem *watched, QEvent *event) {
-  if (watched == targetItem_ && event->type() == QEvent::GraphicsSceneMove) {
+  QGraphicsItem *target = resolveTargetItem();
+  if (watched == target && event->type() == QEvent::GraphicsSceneMove) {
     updateHandles();
   }
   return QGraphicsObject::sceneEventFilter(watched, event);
@@ -290,16 +334,17 @@ void TransformHandleItem::mousePressEvent(QGraphicsSceneMouseEvent *event) {
   lastMousePos_ = event->scenePos();
 
   // Store original state for undo
-  if (targetItem_) {
-    originalTransform_ = targetItem_->transform();
-    originalPos_ = targetItem_->pos();
+  QGraphicsItem *target = resolveTargetItem();
+  if (target) {
+    originalTransform_ = target->transform();
+    originalPos_ = target->pos();
     originalBounds_ = targetBoundsInScene();
     transformOrigin_ = originalBounds_.center();
     
     // Temporarily disable item's movable/selectable flags to prevent interference
-    wasMovable_ = targetItem_->flags() & QGraphicsItem::ItemIsMovable;
-    wasSelectable_ = targetItem_->flags() & QGraphicsItem::ItemIsSelectable;
-    targetItem_->setFlag(QGraphicsItem::ItemIsMovable, false);
+    wasMovable_ = target->flags() & QGraphicsItem::ItemIsMovable;
+    wasSelectable_ = target->flags() & QGraphicsItem::ItemIsSelectable;
+    target->setFlag(QGraphicsItem::ItemIsMovable, false);
   }
 }
 
@@ -330,17 +375,18 @@ void TransformHandleItem::mouseReleaseEvent(QGraphicsSceneMouseEvent *event) {
   event->accept();
 
   // Create undo action if transform changed
-  if (targetItem_ && renderer_) {
-    QTransform newTransform = targetItem_->transform();
-    QPointF newPos = targetItem_->pos();
+  QGraphicsItem *target = resolveTargetItem();
+  if (target && renderer_) {
+    QTransform newTransform = target->transform();
+    QPointF newPos = target->pos();
 
     if (newTransform != originalTransform_ || newPos != originalPos_) {
       renderer_->addAction(std::make_unique<TransformAction>(
-          targetItem_, originalTransform_, newTransform, originalPos_, newPos));
+          target, originalTransform_, newTransform, originalPos_, newPos));
     }
     
     // Restore the item's original flags
-    targetItem_->setFlag(QGraphicsItem::ItemIsMovable, wasMovable_);
+    target->setFlag(QGraphicsItem::ItemIsMovable, wasMovable_);
   }
 
   isTransforming_ = false;
@@ -350,7 +396,8 @@ void TransformHandleItem::mouseReleaseEvent(QGraphicsSceneMouseEvent *event) {
 }
 
 void TransformHandleItem::applyResize(const QPointF &mousePos) {
-  if (!targetItem_)
+  QGraphicsItem *target = resolveTargetItem();
+  if (!target)
     return;
 
   QRectF currentBounds = targetBoundsInScene();
@@ -430,8 +477,8 @@ void TransformHandleItem::applyResize(const QPointF &mousePos) {
   }
 
   // Apply scale transformation
-  QTransform t = targetItem_->transform();
-  QPointF localAnchor = targetItem_->mapFromScene(anchor);
+  QTransform t = target->transform();
+  QPointF localAnchor = target->mapFromScene(anchor);
 
   // Create scaling transform around the anchor point
   QTransform scaleTransform;
@@ -439,16 +486,17 @@ void TransformHandleItem::applyResize(const QPointF &mousePos) {
   scaleTransform.scale(scaleX, scaleY);
   scaleTransform.translate(-localAnchor.x(), -localAnchor.y());
 
-  targetItem_->setTransform(t * scaleTransform);
+  target->setTransform(t * scaleTransform);
 
   // Adjust position to keep anchor point fixed
-  QPointF newAnchorPos = targetItem_->mapToScene(localAnchor);
+  QPointF newAnchorPos = target->mapToScene(localAnchor);
   QPointF posAdjust = anchor - newAnchorPos;
-  targetItem_->setPos(targetItem_->pos() + posAdjust);
+  target->setPos(target->pos() + posAdjust);
 }
 
 void TransformHandleItem::applyRotation(const QPointF &mousePos) {
-  if (!targetItem_)
+  QGraphicsItem *target = resolveTargetItem();
+  if (!target)
     return;
 
   // Calculate rotation center (center of original bounds)
@@ -460,7 +508,7 @@ void TransformHandleItem::applyRotation(const QPointF &mousePos) {
   qreal angleDelta = lineToCurrent.angle() - lineToLast.angle();
 
   // Get the center in item coordinates
-  QPointF localCenter = targetItem_->mapFromScene(center);
+  QPointF localCenter = target->mapFromScene(center);
 
   // Create rotation transform around center
   // Note: Qt's coordinate system has y-axis pointing downward, which reverses
@@ -471,11 +519,11 @@ void TransformHandleItem::applyRotation(const QPointF &mousePos) {
   rotateTransform.rotate(-angleDelta);
   rotateTransform.translate(-localCenter.x(), -localCenter.y());
 
-  QTransform t = targetItem_->transform();
-  targetItem_->setTransform(t * rotateTransform);
+  QTransform t = target->transform();
+  target->setTransform(t * rotateTransform);
 
   // Adjust position to keep center fixed
-  QPointF newCenterPos = targetItem_->mapToScene(localCenter);
+  QPointF newCenterPos = target->mapToScene(localCenter);
   QPointF posAdjust = center - newCenterPos;
-  targetItem_->setPos(targetItem_->pos() + posAdjust);
+  target->setPos(target->pos() + posAdjust);
 }
