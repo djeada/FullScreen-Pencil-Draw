@@ -101,3 +101,10 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 if(QT_VERSION_MAJOR EQUAL 6)
     qt_finalize_executable(${PROJECT_NAME})
 endif()
+
+# Add tests subdirectory (optional, controlled by BUILD_TESTING)
+option(BUILD_TESTING "Build unit tests" OFF)
+if(BUILD_TESTING)
+    enable_testing()
+    add_subdirectory(tests)
+endif()

@@ -68,8 +68,8 @@ Replace the current multi-owner pointer model with a single source of truth for 
 - [x] Cancel/cleanup on tool deactivate through SceneController.
 
 ### Phase 7 — Validation
-- [ ] Add targeted tests: erase/undo/redo, layer delete, overlay switch.
-- [ ] Add stress tests: rapid create/delete/move and repaint.
+- [x] Add targeted tests: erase/undo/redo, layer delete, overlay switch.
+- [x] Add stress tests: rapid create/delete/move and repaint.
 - [ ] Run ASan/UBSan; confirm no invalid memory access.
 
 ## Notes

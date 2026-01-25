@@ -23,7 +23,12 @@ void TextTool::mousePressEvent(QMouseEvent *event, const QPointF &scenePos) {
       if (!latexItem->isEditing()) {
         latexItem->startEditing();
         currentEditingItem_ = latexItem;
-        currentEditingItemId_ = renderer_->registerItem(latexItem);
+        // Only register if we have a store and item doesn't have an ID yet
+        ItemStore *store = renderer_->itemStore();
+        if (store) {
+          ItemId existingId = store->idForItem(latexItem);
+          currentEditingItemId_ = existingId.isValid() ? existingId : renderer_->registerItem(latexItem);
+        }
       }
       return;
     }
