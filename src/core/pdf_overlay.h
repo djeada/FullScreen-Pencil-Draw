@@ -18,6 +18,9 @@
 #include <vector>
 
 #include "action.h"
+#include "item_id.h"
+
+class ItemStore;
 
 /**
  * @brief Stores overlay content for a single PDF page.
@@ -45,6 +48,13 @@ public:
   void addItem(QGraphicsItem *item);
 
   /**
+   * @brief Add an item to this overlay by ItemId
+   * @param id The ItemId of the item to add
+   * @param store The ItemStore to resolve the item from
+   */
+  void addItem(const ItemId &id, ItemStore *store);
+
+  /**
    * @brief Remove an item from this overlay
    * @param item The item to remove
    * @return true if the item was found and removed
@@ -52,10 +62,24 @@ public:
   bool removeItem(QGraphicsItem *item);
 
   /**
+   * @brief Remove an item from this overlay by ItemId
+   * @param id The ItemId of the item to remove
+   * @return true if the item was found and removed
+   */
+  bool removeItem(const ItemId &id);
+
+  /**
    * @brief Get all items in this overlay
    * @return List of graphics items
+   * @deprecated Use itemIds() instead for safer access
    */
   const QList<QGraphicsItem *> &items() const { return items_; }
+
+  /**
+   * @brief Get all ItemIds in this overlay
+   * @return List of ItemIds
+   */
+  const QList<ItemId> &itemIds() const { return itemIds_; }
 
   /**
    * @brief Check if an item belongs to this overlay
@@ -63,6 +87,13 @@ public:
    * @return true if the item is in this overlay
    */
   bool containsItem(QGraphicsItem *item) const;
+
+  /**
+   * @brief Check if an item belongs to this overlay by ItemId
+   * @param id The ItemId to check
+   * @return true if the item is in this overlay
+   */
+  bool containsItem(const ItemId &id) const;
 
   /**
    * @brief Clear all items from the overlay
@@ -74,7 +105,7 @@ public:
    * @brief Get the number of items in this overlay
    * @return Item count
    */
-  int itemCount() const { return items_.size(); }
+  int itemCount() const { return itemIds_.size(); }
 
   /**
    * @brief Set visibility of all items in the overlay
@@ -88,8 +119,16 @@ public:
    */
   bool isVisible() const { return visible_; }
 
+  /**
+   * @brief Set the ItemStore for this overlay (for ID-based operations)
+   * @param store The ItemStore to use
+   */
+  void setItemStore(ItemStore *store) { itemStore_ = store; }
+
 private:
-  QList<QGraphicsItem *> items_;
+  QList<QGraphicsItem *> items_;  // Deprecated: kept for backwards compatibility
+  QList<ItemId> itemIds_;         // Primary storage: stable ItemIds
+  ItemStore *itemStore_;          // For resolving ItemIds to items
   bool visible_;
 };
 

@@ -3,6 +3,7 @@
  * @brief Arrow drawing tool implementation.
  */
 #include "arrow_tool.h"
+#include "../core/scene_controller.h"
 #include "../core/scene_renderer.h"
 #include <cmath>
 
@@ -30,10 +31,16 @@ void ArrowTool::updateShape(const QPointF &startPos,
 
 void ArrowTool::finalizeShape(const QPointF &startPos, const QPointF &endPos) {
   if (tempShape_) {
-    // Remove the temporary preview rectangle
-    renderer_->scene()->removeItem(tempShape_);
-    delete tempShape_;
+    // Remove the temporary preview rectangle using SceneController if available
+    SceneController *controller = renderer_->sceneController();
+    if (controller && tempShapeId_.isValid()) {
+      controller->removeItem(tempShapeId_, false);  // Don't keep for undo
+    } else {
+      renderer_->scene()->removeItem(tempShape_);
+      delete tempShape_;
+    }
     tempShape_ = nullptr;
+    tempShapeId_ = ItemId();
 
     // Draw the actual arrow
     drawArrow(startPos, endPos);
@@ -41,12 +48,19 @@ void ArrowTool::finalizeShape(const QPointF &startPos, const QPointF &endPos) {
 }
 
 void ArrowTool::drawArrow(const QPointF &start, const QPointF &end) {
+  SceneController *controller = renderer_->sceneController();
+  
   // Create line
   auto *line = new QGraphicsLineItem(QLineF(start, end));
   line->setPen(renderer_->currentPen());
   line->setFlags(QGraphicsItem::ItemIsSelectable |
                  QGraphicsItem::ItemIsMovable);
-  renderer_->scene()->addItem(line);
+  
+  if (controller) {
+    controller->addItem(line);
+  } else {
+    renderer_->scene()->addItem(line);
+  }
 
   // Calculate arrowhead
   double angle = std::atan2(-(end.y() - start.y()), end.x() - start.x());
@@ -64,7 +78,12 @@ void ArrowTool::drawArrow(const QPointF &start, const QPointF &end) {
   arrowHeadItem->setBrush(renderer_->currentPen().color());
   arrowHeadItem->setFlags(QGraphicsItem::ItemIsSelectable |
                           QGraphicsItem::ItemIsMovable);
-  renderer_->scene()->addItem(arrowHeadItem);
+  
+  if (controller) {
+    controller->addItem(arrowHeadItem);
+  } else {
+    renderer_->scene()->addItem(arrowHeadItem);
+  }
 
   renderer_->addDrawAction(line);
   renderer_->addDrawAction(arrowHeadItem);

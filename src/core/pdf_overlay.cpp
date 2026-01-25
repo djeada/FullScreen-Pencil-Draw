@@ -3,22 +3,26 @@
  * @brief Implementation of PDF overlay management.
  */
 #include "pdf_overlay.h"
+#include "item_store.h"
 
 #ifdef HAVE_QT_PDF
 
 // --- PdfPageOverlay Implementation ---
 
-PdfPageOverlay::PdfPageOverlay() : visible_(true) {}
+PdfPageOverlay::PdfPageOverlay() : visible_(true), itemStore_(nullptr) {}
 
 PdfPageOverlay::~PdfPageOverlay() { clear(); }
 
 PdfPageOverlay::PdfPageOverlay(PdfPageOverlay &&other) noexcept
-    : items_(std::move(other.items_)), visible_(other.visible_) {}
+    : items_(std::move(other.items_)), itemIds_(std::move(other.itemIds_)),
+      visible_(other.visible_), itemStore_(other.itemStore_) {}
 
 PdfPageOverlay &PdfPageOverlay::operator=(PdfPageOverlay &&other) noexcept {
   if (this != &other) {
     items_ = std::move(other.items_);
+    itemIds_ = std::move(other.itemIds_);
     visible_ = other.visible_;
+    itemStore_ = other.itemStore_;
   }
   return *this;
 }
@@ -26,19 +30,76 @@ PdfPageOverlay &PdfPageOverlay::operator=(PdfPageOverlay &&other) noexcept {
 void PdfPageOverlay::addItem(QGraphicsItem *item) {
   if (item && !items_.contains(item)) {
     items_.append(item);
+    
+    // Also track by ItemId if we have an ItemStore
+    if (itemStore_) {
+      ItemId id = itemStore_->idForItem(item);
+      if (id.isValid() && !itemIds_.contains(id)) {
+        itemIds_.append(id);
+      }
+    }
+    
+    item->setVisible(visible_);
+  }
+}
+
+void PdfPageOverlay::addItem(const ItemId &id, ItemStore *store) {
+  if (!id.isValid()) {
+    return;
+  }
+  
+  if (!itemIds_.contains(id)) {
+    itemIds_.append(id);
+  }
+  
+  // Also maintain backwards-compatible raw pointer list
+  QGraphicsItem *item = store ? store->item(id) : nullptr;
+  if (item && !items_.contains(item)) {
+    items_.append(item);
     item->setVisible(visible_);
   }
 }
 
 bool PdfPageOverlay::removeItem(QGraphicsItem *item) {
-  return items_.removeOne(item);
+  bool removed = items_.removeOne(item);
+  
+  // Also remove by ItemId if we have an ItemStore
+  if (itemStore_) {
+    ItemId id = itemStore_->idForItem(item);
+    if (id.isValid()) {
+      itemIds_.removeOne(id);
+    }
+  }
+  
+  return removed;
+}
+
+bool PdfPageOverlay::removeItem(const ItemId &id) {
+  bool removed = itemIds_.removeOne(id);
+  
+  // Also remove from backwards-compatible raw pointer list
+  if (itemStore_) {
+    QGraphicsItem *item = itemStore_->item(id);
+    if (item) {
+      items_.removeOne(item);
+    }
+  }
+  
+  return removed;
 }
 
 bool PdfPageOverlay::containsItem(QGraphicsItem *item) const {
   return items_.contains(item);
 }
 
-void PdfPageOverlay::clear() { items_.clear(); }
+bool PdfPageOverlay::containsItem(const ItemId &id) const {
+  return itemIds_.contains(id);
+}
+
+void PdfPageOverlay::clear() {
+  items_.clear();
+  itemIds_.clear();
+}
 
 void PdfPageOverlay::setVisible(bool visible) {
   visible_ = visible;

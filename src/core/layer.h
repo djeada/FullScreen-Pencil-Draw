@@ -19,6 +19,10 @@
 #include <memory>
 #include <vector>
 
+#include "item_id.h"
+
+class ItemStore;
+
 /**
  * @brief Represents a single layer in the canvas.
  *
@@ -120,6 +124,13 @@ public:
   void addItem(QGraphicsItem *item);
 
   /**
+   * @brief Add an item to this layer by ItemId
+   * @param id The ItemId of the item to add
+   * @param store The ItemStore to resolve the item from
+   */
+  void addItem(const ItemId &id, ItemStore *store);
+
+  /**
    * @brief Remove an item from this layer
    * @param item The item to remove
    * @return true if the item was found and removed
@@ -127,10 +138,24 @@ public:
   bool removeItem(QGraphicsItem *item);
 
   /**
+   * @brief Remove an item from this layer by ItemId
+   * @param id The ItemId of the item to remove
+   * @return true if the item was found and removed
+   */
+  bool removeItem(const ItemId &id);
+
+  /**
    * @brief Get all items in this layer
    * @return List of graphics items
+   * @deprecated Use itemIds() instead for safer access
    */
   const QList<QGraphicsItem *> &items() const { return items_; }
+
+  /**
+   * @brief Get all ItemIds in this layer
+   * @return List of ItemIds
+   */
+  const QList<ItemId> &itemIds() const { return itemIds_; }
 
   /**
    * @brief Check if an item belongs to this layer
@@ -138,6 +163,13 @@ public:
    * @return true if the item is in this layer
    */
   bool containsItem(QGraphicsItem *item) const;
+
+  /**
+   * @brief Check if an item belongs to this layer by ItemId
+   * @param id The ItemId to check
+   * @return true if the item is in this layer
+   */
+  bool containsItem(const ItemId &id) const;
 
   /**
    * @brief Clear all items from the layer
@@ -149,7 +181,13 @@ public:
    * @brief Get the number of items in this layer
    * @return Item count
    */
-  int itemCount() const { return items_.size(); }
+  int itemCount() const { return itemIds_.size(); }
+
+  /**
+   * @brief Set the ItemStore for this layer (for ID-based operations)
+   * @param store The ItemStore to use
+   */
+  void setItemStore(ItemStore *store) { itemStore_ = store; }
 
 private:
   QUuid id_;
@@ -158,7 +196,9 @@ private:
   bool visible_;
   bool locked_;
   qreal opacity_;
-  QList<QGraphicsItem *> items_;
+  QList<QGraphicsItem *> items_;  // Deprecated: kept for backwards compatibility
+  QList<ItemId> itemIds_;         // Primary storage: stable ItemIds
+  ItemStore *itemStore_;          // For resolving ItemIds to items
 
   void updateItemsVisibility();
   void updateItemsOpacity();

@@ -13,7 +13,10 @@
 #include <QPointF>
 #include <QString>
 
+#include "../core/item_id.h"
+
 class SceneRenderer;
+class ItemStore;
 
 /**
  * @brief Abstract base class for all drawing tools.
