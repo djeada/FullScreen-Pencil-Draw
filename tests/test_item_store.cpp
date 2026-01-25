@@ -8,6 +8,9 @@
  * - Deferred deletion
  * - ItemRef resolution
  * - Undo/redo with item restoration
+ * - Pointer safety mechanisms (itemAboutToBeDeleted signal, subscriber notification)
+ * - Code path tolerance for missing items
+ * - SceneController graceful handling of deleted items
  */
 #include <QtTest/QtTest>
 #include <QGraphicsScene>
@@ -334,6 +337,228 @@ private slots:
     
     // Final cleanup
     store.flushDeletions();
+  }
+
+  // ========== Pointer Safety Tests ==========
+  // These tests verify the mechanisms that prevent use-after-free
+
+  void testItemAboutToBeDeletedSignal() {
+    QGraphicsScene scene;
+    ItemStore store(&scene);
+    
+    auto *rect = new QGraphicsRectItem(0, 0, 100, 100);
+    ItemId id = store.registerItem(rect);
+    
+    // Track if signal was emitted
+    ItemId deletedId;
+    bool signalEmitted = false;
+    QObject::connect(&store, &ItemStore::itemAboutToBeDeleted, [&](const ItemId &id) {
+      deletedId = id;
+      signalEmitted = true;
+    });
+    
+    // Schedule deletion
+    store.scheduleDelete(id);
+    
+    // Verify signal was emitted with correct ID
+    QVERIFY(signalEmitted);
+    QCOMPARE(deletedId, id);
+    
+    // Clean up
+    store.flushDeletions();
+  }
+
+  void testItemRefInvalidAfterDeletion() {
+    QGraphicsScene scene;
+    ItemStore store(&scene);
+    
+    auto *rect = new QGraphicsRectItem(0, 0, 100, 100);
+    ItemId id = store.registerItem(rect);
+    
+    // Create an ItemRef to track the item
+    ItemRef ref(&store, id);
+    QVERIFY(ref.isValid());
+    QCOMPARE(ref.get(), rect);
+    
+    // Delete the item
+    store.scheduleDelete(id);
+    
+    // Ref should now be invalid (returns nullptr)
+    QVERIFY(!ref.isValid());
+    QCOMPARE(ref.get(), nullptr);
+    
+    // Clean up
+    store.flushDeletions();
+  }
+
+  void testSubscriberClearsStoredIdOnDeletion() {
+    QGraphicsScene scene;
+    ItemStore store(&scene);
+    
+    auto *rect = new QGraphicsRectItem(0, 0, 100, 100);
+    ItemId id = store.registerItem(rect);
+    
+    // Simulate a subscriber that caches an ItemId
+    ItemId cachedId = id;
+    bool cleared = false;
+    
+    // Subscribe to deletion signal and clear cached ID
+    QObject::connect(&store, &ItemStore::itemAboutToBeDeleted, [&](const ItemId &deletedId) {
+      if (cachedId == deletedId) {
+        cachedId = ItemId();  // Clear the cached ID
+        cleared = true;
+      }
+    });
+    
+    // Delete the item
+    store.scheduleDelete(id);
+    
+    // Verify subscriber cleared its cached ID
+    QVERIFY(cleared);
+    QVERIFY(!cachedId.isValid());
+    
+    // Clean up
+    store.flushDeletions();
+  }
+
+  void testCodePathToleratesMissingItem() {
+    QGraphicsScene scene;
+    ItemStore store(&scene);
+    
+    auto *rect = new QGraphicsRectItem(0, 0, 100, 100);
+    ItemId id = store.registerItem(rect);
+    
+    // Delete the item
+    store.scheduleDelete(id);
+    store.flushDeletions();
+    
+    // Attempt to access the item - should return nullptr, not crash
+    QGraphicsItem *item = store.item(id);
+    QCOMPARE(item, nullptr);
+    
+    // Verify store operations handle missing items gracefully
+    QVERIFY(!store.contains(id));
+    
+    // ItemRef should also handle this gracefully
+    ItemRef ref(&store, id);
+    QVERIFY(!ref.isValid());
+    QCOMPARE(ref.get(), nullptr);
+  }
+
+  void testItemRefTypedAccessWithDeletedItem() {
+    QGraphicsScene scene;
+    ItemStore store(&scene);
+    
+    auto *rect = new QGraphicsRectItem(0, 0, 100, 100);
+    ItemId id = store.registerItem(rect);
+    
+    ItemRef ref(&store, id);
+    
+    // Delete the item
+    store.scheduleDelete(id);
+    store.flushDeletions();
+    
+    // Typed access should return nullptr, not crash
+    auto *asRect = ref.getAs<QGraphicsRectItem>();
+    QCOMPARE(asRect, nullptr);
+  }
+
+  void testMultipleSubscribersNotified() {
+    QGraphicsScene scene;
+    ItemStore store(&scene);
+    
+    auto *rect = new QGraphicsRectItem(0, 0, 100, 100);
+    ItemId id = store.registerItem(rect);
+    
+    // Multiple subscribers tracking the same item
+    int notificationCount = 0;
+    ItemId subscriber1Id = id;
+    ItemId subscriber2Id = id;
+    
+    QObject::connect(&store, &ItemStore::itemAboutToBeDeleted, [&](const ItemId &deletedId) {
+      if (subscriber1Id == deletedId) {
+        subscriber1Id = ItemId();
+        notificationCount++;
+      }
+    });
+    
+    QObject::connect(&store, &ItemStore::itemAboutToBeDeleted, [&](const ItemId &deletedId) {
+      if (subscriber2Id == deletedId) {
+        subscriber2Id = ItemId();
+        notificationCount++;
+      }
+    });
+    
+    // Delete the item
+    store.scheduleDelete(id);
+    
+    // Both subscribers should have been notified
+    QCOMPARE(notificationCount, 2);
+    QVERIFY(!subscriber1Id.isValid());
+    QVERIFY(!subscriber2Id.isValid());
+    
+    // Clean up
+    store.flushDeletions();
+  }
+
+  void testSceneControllerRemoveItemGracefully() {
+    QGraphicsScene scene;
+    SceneController controller(&scene);
+    
+    auto *rect = new QGraphicsRectItem(0, 0, 100, 100);
+    ItemId id = controller.addItem(rect);
+    
+    // Remove the item
+    bool removed = controller.removeItem(id);
+    QVERIFY(removed);
+    
+    // Attempting to remove again should return false, not crash
+    controller.flushDeletions();
+    bool removedAgain = controller.removeItem(id);
+    QVERIFY(!removedAgain);
+    
+    // Verify item accessor returns nullptr
+    QCOMPARE(controller.item(id), nullptr);
+  }
+
+  void testSceneControllerMoveItemWithMissingItem() {
+    QGraphicsScene scene;
+    SceneController controller(&scene);
+    
+    auto *rect = new QGraphicsRectItem(0, 0, 100, 100);
+    ItemId id = controller.addItem(rect);
+    
+    // Remove the item
+    controller.removeItem(id);
+    controller.flushDeletions();
+    
+    // Attempting to move a deleted item should return false, not crash
+    bool moved = controller.moveItem(id, QPointF(50, 50));
+    QVERIFY(!moved);
+  }
+
+  void testItemRefResolutionAfterRestore() {
+    QGraphicsScene scene;
+    ItemStore store(&scene);
+    
+    auto *rect = new QGraphicsRectItem(0, 0, 100, 100);
+    ItemId id = store.registerItem(rect);
+    
+    // Create ref before deletion
+    ItemRef ref(&store, id);
+    QVERIFY(ref.isValid());
+    
+    // Delete with keepSnapshot for undo
+    store.scheduleDelete(id, true);
+    QVERIFY(!ref.isValid());
+    
+    // Restore the item (undo operation)
+    bool restored = store.restoreItem(id);
+    QVERIFY(restored);
+    
+    // Ref should be valid again after restore
+    QVERIFY(ref.isValid());
+    QCOMPARE(ref.get(), rect);
   }
 };
 
