@@ -25,6 +25,7 @@
 
 #ifdef HAVE_QT_PDF
 #include "../widgets/pdf_viewer.h"
+#include "../widgets/page_thumbnail_panel.h"
 #endif
 
 // Helper function for Qt5/Qt6 compatibility: create action with shortcut
@@ -43,8 +44,9 @@ MainWindow::MainWindow(QWidget *parent)
       _snapToGridAction(nullptr), _autoSaveAction(nullptr),
       _rulerAction(nullptr), _measurementAction(nullptr)
 #ifdef HAVE_QT_PDF
-      , _pdfViewer(nullptr), _centralSplitter(nullptr), _pdfPanel(nullptr),
-      _pdfToolBar(nullptr), _pdfPageLabel(nullptr), _pdfDarkModeAction(nullptr),
+      , _pdfViewer(nullptr), _thumbnailPanel(nullptr), _centralSplitter(nullptr), _pdfPanel(nullptr),
+      _pdfToolBar(nullptr), _pdfPageLabel(nullptr), _pdfPageSpinBox(nullptr),
+      _pdfZoomCombo(nullptr), _pdfDarkModeAction(nullptr), _thumbnailToggleAction(nullptr),
       _pdfPanelOnLeft(false)  // PDF panel starts on the right by default
 #endif
 {
@@ -68,7 +70,7 @@ MainWindow::MainWindow(QWidget *parent)
   setCentralWidget(centralWidget);
 #endif
 
-  this->addToolBar(Qt::LeftToolBarArea, _toolPanel);
+  this->addDockWidget(Qt::LeftDockWidgetArea, _toolPanel);
   this->setWindowTitle("FullScreen Pencil Draw - Professional Edition");
   this->resize(1400, 900);
 
@@ -80,6 +82,12 @@ MainWindow::MainWindow(QWidget *parent)
 
 #ifdef HAVE_QT_PDF
   setupPdfToolBar();
+  
+  // Connect thumbnail panel visibility to toggle action (must be after toolbar setup)
+  if (_thumbnailPanel && _thumbnailToggleAction) {
+    connect(_thumbnailPanel, &PageThumbnailPanel::visibilityChanged, 
+            _thumbnailToggleAction, &QAction::setChecked);
+  }
 #endif
 
   _toolPanel->updateBrushSizeDisplay(_canvas->getCurrentBrushSize());
@@ -387,6 +395,29 @@ void MainWindow::setupLayerPanel() {
   if (_canvas && _canvas->layerManager()) {
     _layerPanel = new LayerPanel(_canvas->layerManager(), this);
     addDockWidget(Qt::RightDockWidgetArea, _layerPanel);
+    
+    // Add panel visibility actions to View menu now that both panels exist
+    QMenuBar *menuBar = this->menuBar();
+    QMenu *viewMenu = nullptr;
+    for (QAction *action : menuBar->actions()) {
+      if (action->text().contains("View")) {
+        viewMenu = action->menu();
+        break;
+      }
+    }
+    if (viewMenu) {
+      viewMenu->addSeparator();
+      
+      QAction *showToolsAction = _toolPanel->toggleViewAction();
+      showToolsAction->setText("Show &Tools Panel");
+      showToolsAction->setShortcut(QKeySequence(Qt::Key_F5));
+      viewMenu->addAction(showToolsAction);
+      
+      QAction *showLayersAction = _layerPanel->toggleViewAction();
+      showLayersAction->setText("Show &Layers Panel");
+      showLayersAction->setShortcut(QKeySequence(Qt::Key_F6));
+      viewMenu->addAction(showLayersAction);
+    }
   }
 }
 
@@ -509,28 +540,45 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
 
 #ifdef HAVE_QT_PDF
 void MainWindow::setupPdfViewer() {
-  // Create PDF panel with its own layout
+  // Create PDF panel with its own layout (includes thumbnail rail + viewer)
   _pdfPanel = new QFrame(this);
   _pdfPanel->setFrameStyle(QFrame::StyledPanel | QFrame::Raised);
   _pdfPanel->setMinimumWidth(200);
   
-  QVBoxLayout *pdfLayout = new QVBoxLayout(_pdfPanel);
-  pdfLayout->setContentsMargins(0, 0, 0, 0);
-  pdfLayout->setSpacing(0);
+  QHBoxLayout *pdfHLayout = new QHBoxLayout(_pdfPanel);
+  pdfHLayout->setContentsMargins(0, 0, 0, 0);
+  pdfHLayout->setSpacing(0);
+  
+  // Create PDF viewer widget first (needed for thumbnail panel)
+  _pdfViewer = new PdfViewer(_pdfPanel);
+  
+  // Create thumbnail panel (collapsible, on the left of PDF viewer)
+  _thumbnailPanel = new PageThumbnailPanel(_pdfViewer, _pdfPanel);
+  _thumbnailPanel->hide(); // Initially hidden, shown when PDF loads
+  pdfHLayout->addWidget(_thumbnailPanel);
+  
+  // Create viewer container with header
+  QWidget *viewerContainer = new QWidget(_pdfPanel);
+  QVBoxLayout *viewerLayout = new QVBoxLayout(viewerContainer);
+  viewerLayout->setContentsMargins(0, 0, 0, 0);
+  viewerLayout->setSpacing(0);
   
   // Create header label for PDF panel
-  QLabel *pdfHeader = new QLabel("PDF Viewer", _pdfPanel);
+  QLabel *pdfHeader = new QLabel("PDF Viewer", viewerContainer);
   pdfHeader->setAlignment(Qt::AlignCenter);
-  pdfHeader->setStyleSheet("QLabel { background-color: #3a3a40; color: white; padding: 8px; font-weight: bold; }");
-  pdfLayout->addWidget(pdfHeader);
+  pdfHeader->setStyleSheet("QLabel { background-color: #2a2a30; color: white; padding: 8px; font-weight: bold; }");
+  viewerLayout->addWidget(pdfHeader);
   
-  // Create PDF viewer widget
-  _pdfViewer = new PdfViewer(_pdfPanel);
-  pdfLayout->addWidget(_pdfViewer, 1);
+  viewerLayout->addWidget(_pdfViewer, 1);
+  pdfHLayout->addWidget(viewerContainer, 1);
   
   // Add PDF panel to splitter (initially hidden)
   _centralSplitter->addWidget(_pdfPanel);
   _pdfPanel->hide();
+
+  // Connect thumbnail panel page selection
+  connect(_thumbnailPanel, &PageThumbnailPanel::pageSelected, 
+          this, &MainWindow::onThumbnailPageSelected);
 
   // Connect PDF viewer signals
   connect(_pdfViewer, &PdfViewer::pageChanged, this, &MainWindow::onPdfPageChanged);
@@ -561,54 +609,282 @@ void MainWindow::setupPdfViewer() {
 void MainWindow::setupPdfToolBar() {
   _pdfToolBar = new QToolBar("PDF Navigation", this);
   _pdfToolBar->setObjectName("pdfToolBar");
+  _pdfToolBar->setIconSize(QSize(24, 24));
+  _pdfToolBar->setToolButtonStyle(Qt::ToolButtonIconOnly);
   addToolBar(Qt::TopToolBarArea, _pdfToolBar);
   _pdfToolBar->hide(); // Hidden until PDF is loaded
 
-  // Navigation buttons
-  _pdfToolBar->addAction("⏮ First", _pdfViewer, &PdfViewer::firstPage);
-  _pdfToolBar->addAction("◀ Previous", _pdfViewer, &PdfViewer::previousPage);
-  
-  // Page indicator
-  _pdfPageLabel = new QLabel("Page 0 / 0", this);
-  _pdfPageLabel->setMinimumWidth(100);
-  _pdfPageLabel->setAlignment(Qt::AlignCenter);
-  _pdfToolBar->addWidget(_pdfPageLabel);
-  
-  _pdfToolBar->addAction("Next ▶", _pdfViewer, &PdfViewer::nextPage);
-  _pdfToolBar->addAction("Last ⏭", _pdfViewer, &PdfViewer::lastPage);
+  // === CLUSTER 1: Document Operations ===
+  // Thumbnail panel toggle
+  _thumbnailToggleAction = _pdfToolBar->addAction("☰", [this]() {
+    if (_thumbnailPanel) {
+      _thumbnailPanel->toggleVisibility();
+    }
+  });
+  _thumbnailToggleAction->setToolTip("Toggle Page Thumbnails");
+  _thumbnailToggleAction->setCheckable(true);
+  _thumbnailToggleAction->setChecked(true);
   
   _pdfToolBar->addSeparator();
   
-  // Zoom controls
-  _pdfToolBar->addAction("Zoom In", _pdfViewer, &PdfViewer::zoomIn);
-  _pdfToolBar->addAction("Zoom Out", _pdfViewer, &PdfViewer::zoomOut);
-  _pdfToolBar->addAction("Reset Zoom", _pdfViewer, &PdfViewer::zoomReset);
+  QAction *openPdfAction = _pdfToolBar->addAction("📂", this, &MainWindow::onOpenPdf);
+  openPdfAction->setToolTip("Open PDF (Ctrl+Shift+O)");
+  
+  QAction *exportAction = _pdfToolBar->addAction("💾", this, &MainWindow::onExportAnnotatedPdf);
+  exportAction->setToolTip("Export Annotated PDF");
+  
+  QAction *closeAction = _pdfToolBar->addAction("✕", this, &MainWindow::onClosePdf);
+  closeAction->setToolTip("Close PDF");
+  
+  _pdfToolBar->addSeparator();
+
+  // === CLUSTER 2: Navigation ===
+  QAction *firstAction = _pdfToolBar->addAction("⏮", _pdfViewer, &PdfViewer::firstPage);
+  firstAction->setToolTip("First Page (Home)");
+  
+  QAction *prevAction = _pdfToolBar->addAction("◀", _pdfViewer, &PdfViewer::previousPage);
+  prevAction->setToolTip("Previous Page (Page Up)");
+  
+  // Editable page number spinbox
+  _pdfPageSpinBox = new QSpinBox(this);
+  _pdfPageSpinBox->setMinimum(1);
+  _pdfPageSpinBox->setMaximum(1);
+  _pdfPageSpinBox->setValue(1);
+  _pdfPageSpinBox->setToolTip("Go to page (type number and press Enter)");
+  _pdfPageSpinBox->setFixedWidth(60);
+  _pdfPageSpinBox->setAlignment(Qt::AlignCenter);
+  _pdfPageSpinBox->setStyleSheet(R"(
+    QSpinBox {
+      background-color: #2a2a30;
+      color: #f8f8fc;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+      padding: 4px 8px;
+      min-height: 28px;
+    }
+    QSpinBox::up-button, QSpinBox::down-button {
+      width: 0px;
+    }
+  )");
+  connect(_pdfPageSpinBox, QOverload<int>::of(&QSpinBox::valueChanged), 
+          this, &MainWindow::onPdfPageSpinBoxChanged);
+  _pdfToolBar->addWidget(_pdfPageSpinBox);
+  
+  // Page count label
+  _pdfPageLabel = new QLabel(" / 0", this);
+  _pdfPageLabel->setStyleSheet("QLabel { color: #a0a0a8; padding: 0 8px; }");
+  _pdfToolBar->addWidget(_pdfPageLabel);
+  
+  QAction *nextAction = _pdfToolBar->addAction("▶", _pdfViewer, &PdfViewer::nextPage);
+  nextAction->setToolTip("Next Page (Page Down)");
+  
+  QAction *lastAction = _pdfToolBar->addAction("⏭", _pdfViewer, &PdfViewer::lastPage);
+  lastAction->setToolTip("Last Page (End)");
+  
+  _pdfToolBar->addSeparator();
+
+  // === CLUSTER 3: View/Edit Controls ===
+  // Zoom controls with dropdown
+  QAction *zoomOutAction = _pdfToolBar->addAction("−", _pdfViewer, &PdfViewer::zoomOut);
+  zoomOutAction->setToolTip("Zoom Out (-)");
+  
+  _pdfZoomCombo = new QComboBox(this);
+  _pdfZoomCombo->addItems({"50%", "75%", "100%", "125%", "150%", "200%", "300%"});
+  _pdfZoomCombo->setCurrentIndex(2); // 100%
+  _pdfZoomCombo->setEditable(true);
+  _pdfZoomCombo->setFixedWidth(75);
+  _pdfZoomCombo->setToolTip("Zoom level (select or type)");
+  _pdfZoomCombo->setStyleSheet(R"(
+    QComboBox {
+      background-color: #2a2a30;
+      color: #f8f8fc;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+      padding: 4px 8px;
+      min-height: 28px;
+    }
+    QComboBox::drop-down {
+      border: none;
+      width: 20px;
+    }
+    QComboBox::down-arrow {
+      image: none;
+      border-left: 4px solid transparent;
+      border-right: 4px solid transparent;
+      border-top: 5px solid #a0a0a8;
+      margin-right: 5px;
+    }
+    QComboBox QAbstractItemView {
+      background-color: #2a2a30;
+      color: #f8f8fc;
+      selection-background-color: #3b82f6;
+    }
+  )");
+  connect(_pdfZoomCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+          this, &MainWindow::onPdfZoomComboChanged);
+  connect(_pdfZoomCombo->lineEdit(), &QLineEdit::returnPressed, this, [this]() {
+    QString text = _pdfZoomCombo->currentText().remove('%');
+    bool ok;
+    int zoom = text.toInt(&ok);
+    if (ok && zoom >= 10 && zoom <= 500 && _pdfViewer) {
+      double currentZoom = _pdfViewer->zoomLevel();
+      double factor = zoom / currentZoom;
+      // Apply zoom by scaling
+      _pdfViewer->resetTransform();
+      _pdfViewer->scale(zoom / 100.0, zoom / 100.0);
+    }
+  });
+  _pdfToolBar->addWidget(_pdfZoomCombo);
+  
+  QAction *zoomInAction = _pdfToolBar->addAction("+", _pdfViewer, &PdfViewer::zoomIn);
+  zoomInAction->setToolTip("Zoom In (+)");
+  
+  _pdfToolBar->addSeparator();
+  
+  // Fit options
+  QAction *fitWidthAction = _pdfToolBar->addAction("↔", this, [this]() {
+    if (_pdfViewer && _pdfViewer->hasPdf()) {
+      _pdfViewer->fitToWidth();
+    }
+  });
+  fitWidthAction->setToolTip("Fit to Width");
+  
+  QAction *fitPageAction = _pdfToolBar->addAction("⬜", this, [this]() {
+    if (_pdfViewer && _pdfViewer->hasPdf()) {
+      _pdfViewer->fitToPage();
+    }
+  });
+  fitPageAction->setToolTip("Fit to Page");
+  
+  _pdfToolBar->addSeparator();
+  
+  // Rotation
+  QAction *rotateLeftAction = _pdfToolBar->addAction("↺", this, [this]() {
+    if (_pdfViewer && _pdfViewer->hasPdf()) {
+      _pdfViewer->rotatePageLeft();
+    }
+  });
+  rotateLeftAction->setToolTip("Rotate Left (90° CCW)");
+  
+  QAction *rotateRightAction = _pdfToolBar->addAction("↻", this, [this]() {
+    if (_pdfViewer && _pdfViewer->hasPdf()) {
+      _pdfViewer->rotatePageRight();
+    }
+  });
+  rotateRightAction->setToolTip("Rotate Right (90° CW)");
   
   _pdfToolBar->addSeparator();
   
   // Dark mode toggle
-  _pdfDarkModeAction = _pdfToolBar->addAction("Dark Mode", [this]() {
+  _pdfDarkModeAction = _pdfToolBar->addAction("🌙", [this]() {
     _pdfViewer->setDarkMode(!_pdfViewer->darkMode());
   });
+  _pdfDarkModeAction->setToolTip("Toggle Dark Mode");
   _pdfDarkModeAction->setCheckable(true);
   
   _pdfToolBar->addSeparator();
   
-  // Screenshot tool (PDF-specific - not in main toolbar)
-  _pdfToolBar->addAction("📷 Screenshot", [this]() {
-    _pdfViewer->setScreenshotSelectionMode(true);
+  // Mode toggle: View vs Annotate
+  QAction *modeAction = _pdfToolBar->addAction("✏️ Annotate", [this, modeAction]() {
+    if (_pdfViewer) {
+      if (_pdfViewer->isAnnotateMode()) {
+        _pdfViewer->setMode(PdfViewer::Mode::View);
+      } else {
+        _pdfViewer->setMode(PdfViewer::Mode::Annotate);
+      }
+    }
+  });
+  modeAction->setToolTip("Toggle View/Annotate mode");
+  modeAction->setCheckable(true);
+  modeAction->setChecked(true); // Start in Annotate mode
+  
+  // Connect mode change to update button
+  connect(_pdfViewer, &PdfViewer::modeChanged, this, [modeAction](PdfViewer::Mode mode) {
+    if (mode == PdfViewer::Mode::Annotate) {
+      modeAction->setText("✏️ Annotate");
+      modeAction->setChecked(true);
+    } else {
+      modeAction->setText("👁 View");
+      modeAction->setChecked(false);
+    }
   });
   
   _pdfToolBar->addSeparator();
   
-  // Undo/Redo
-  _pdfToolBar->addAction("Undo", _pdfViewer, &PdfViewer::undo);
-  _pdfToolBar->addAction("Redo", _pdfViewer, &PdfViewer::redo);
+  // Screenshot tool
+  QAction *screenshotAction = _pdfToolBar->addAction("📷", [this]() {
+    _pdfViewer->setScreenshotSelectionMode(true);
+  });
+  screenshotAction->setToolTip("Screenshot Selection");
   
   _pdfToolBar->addSeparator();
   
-  // Close PDF
-  _pdfToolBar->addAction("Close PDF", this, &MainWindow::onClosePdf);
+  // Undo/Redo
+  QAction *undoAction = _pdfToolBar->addAction("↶", _pdfViewer, &PdfViewer::undo);
+  undoAction->setToolTip("Undo (Ctrl+Z)");
+  
+  QAction *redoAction = _pdfToolBar->addAction("↷", _pdfViewer, &PdfViewer::redo);
+  redoAction->setToolTip("Redo (Ctrl+Y)");
+  
+  // Style the toolbar
+  _pdfToolBar->setStyleSheet(R"(
+    QToolBar {
+      background-color: #1e1e22;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      padding: 4px 8px;
+      spacing: 4px;
+    }
+    QToolButton {
+      background-color: transparent;
+      color: #e0e0e6;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 12px;
+      min-width: 32px;
+      min-height: 32px;
+      font-size: 16px;
+    }
+    QToolButton:hover {
+      background-color: rgba(255, 255, 255, 0.08);
+    }
+    QToolButton:pressed {
+      background-color: rgba(255, 255, 255, 0.12);
+    }
+    QToolButton:checked {
+      background-color: #3b82f6;
+      color: white;
+    }
+    QToolBar::separator {
+      background-color: rgba(255, 255, 255, 0.1);
+      width: 1px;
+      margin: 6px 8px;
+    }
+  )");
+}
+
+void MainWindow::onPdfPageSpinBoxChanged(int page) {
+  if (_pdfViewer && _pdfViewer->hasPdf()) {
+    _pdfViewer->goToPage(page - 1); // Convert 1-based to 0-based
+  }
+}
+
+void MainWindow::onPdfZoomComboChanged(int index) {
+  static const int zoomLevels[] = {50, 75, 100, 125, 150, 200, 300};
+  if (index >= 0 && index < 7 && _pdfViewer) {
+    int targetZoom = zoomLevels[index];
+    _pdfViewer->zoomReset();
+    if (targetZoom != 100) {
+      _pdfViewer->scale(targetZoom / 100.0, targetZoom / 100.0);
+    }
+  }
+}
+
+void MainWindow::updatePdfZoomCombo(double zoomPercent) {
+  if (_pdfZoomCombo) {
+    _pdfZoomCombo->blockSignals(true);
+    _pdfZoomCombo->setCurrentText(QString("%1%").arg(qRound(zoomPercent)));
+    _pdfZoomCombo->blockSignals(false);
+  }
 }
 
 void MainWindow::showPdfPanel() {
@@ -666,8 +942,14 @@ void MainWindow::onClosePdf() {
 }
 
 void MainWindow::onPdfPageChanged(int pageIndex, int pageCount) {
+  if (_pdfPageSpinBox) {
+    _pdfPageSpinBox->blockSignals(true);
+    _pdfPageSpinBox->setMaximum(pageCount);
+    _pdfPageSpinBox->setValue(pageIndex + 1);
+    _pdfPageSpinBox->blockSignals(false);
+  }
   if (_pdfPageLabel) {
-    _pdfPageLabel->setText(QString("Page %1 / %2").arg(pageIndex + 1).arg(pageCount));
+    _pdfPageLabel->setText(QString(" / %1").arg(pageCount));
   }
 }
 
@@ -675,6 +957,7 @@ void MainWindow::onPdfZoomChanged(double zoom) {
   if (_toolPanel) {
     _toolPanel->updateZoomDisplay(zoom);
   }
+  updatePdfZoomCombo(zoom);
 }
 
 void MainWindow::onPdfDarkModeChanged(bool enabled) {
@@ -741,5 +1024,11 @@ void MainWindow::swapPanelOrder() {
   
   QString position = _pdfPanelOnLeft ? "left" : "right";
   statusBar()->showMessage(QString("PDF panel moved to %1").arg(position), 2000);
+}
+
+void MainWindow::onThumbnailPageSelected(int pageIndex) {
+  if (_pdfViewer && _pdfViewer->hasPdf()) {
+    _pdfViewer->goToPage(pageIndex);
+  }
 }
 #endif

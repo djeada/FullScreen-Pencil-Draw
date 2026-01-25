@@ -465,14 +465,22 @@ void Canvas::clearCanvas() {
   }
   
   clearTransformHandles();
-  if (layerManager_) {
-    layerManager_->clear();
-  }
+  
+  // Clear undo/redo stacks first (they may hold references to items)
   undoStack_.clear();
   redoStack_.clear();
+  
+  // Clear via sceneController if available (handles both store and scene)
+  // Don't clear layerManager separately as it would double-delete items
   if (sceneController_) {
     sceneController_->clearAll();
   }
+  
+  // Reset layer manager state (recreate default layer)
+  if (layerManager_) {
+    layerManager_->clear();
+  }
+  
   if (backgroundImage_) {
     scene_->removeItem(backgroundImage_);
     delete backgroundImage_;
