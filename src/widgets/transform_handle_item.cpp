@@ -299,8 +299,13 @@ void TransformHandleItem::hoverMoveEvent(QGraphicsSceneHoverEvent *event) {
 
 bool TransformHandleItem::sceneEventFilter(QGraphicsItem *watched, QEvent *event) {
   QGraphicsItem *target = resolveTargetItem();
-  if (watched == target && event->type() == QEvent::GraphicsSceneMove) {
-    updateHandles();
+  if (watched == target) {
+    QEvent::Type eventType = event->type();
+    if (eventType == QEvent::GraphicsSceneMove ||
+        eventType == QEvent::GraphicsSceneMouseMove ||
+        eventType == QEvent::GraphicsSceneMouseRelease) {
+      updateHandles();
+    }
   }
   return QGraphicsObject::sceneEventFilter(watched, event);
 }
