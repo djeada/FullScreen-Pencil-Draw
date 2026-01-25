@@ -300,9 +300,10 @@ void TransformHandleItem::hoverMoveEvent(QGraphicsSceneHoverEvent *event) {
 bool TransformHandleItem::sceneEventFilter(QGraphicsItem *watched, QEvent *event) {
   QGraphicsItem *target = resolveTargetItem();
   if (watched == target) {
-    if (event->type() == QEvent::GraphicsSceneMove ||
-        event->type() == QEvent::GraphicsSceneMouseMove ||
-        event->type() == QEvent::GraphicsSceneMouseRelease) {
+    QEvent::Type eventType = event->type();
+    if (eventType == QEvent::GraphicsSceneMove ||
+        eventType == QEvent::GraphicsSceneMouseMove ||
+        eventType == QEvent::GraphicsSceneMouseRelease) {
       updateHandles();
     }
   }
