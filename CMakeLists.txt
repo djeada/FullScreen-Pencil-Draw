@@ -35,6 +35,16 @@ else()
     message(STATUS "Qt PDF module not found - PDF viewing disabled")
 endif()
 
+# Find Qt WebEngineWidgets module (optional, for KaTeX LaTeX rendering)
+set(HAVE_QT_WEBENGINE FALSE)
+find_package(Qt${QT_VERSION_MAJOR} COMPONENTS WebEngineWidgets QUIET)
+if(Qt${QT_VERSION_MAJOR}WebEngineWidgets_FOUND)
+    set(HAVE_QT_WEBENGINE TRUE)
+    message(STATUS "Qt WebEngineWidgets found - KaTeX LaTeX rendering enabled")
+else()
+    message(STATUS "Qt WebEngineWidgets not found - using Unicode fallback for LaTeX")
+endif()
+
 # Explicitly specify source and header files
 file(GLOB_RECURSE PROJECT_SOURCES
     src/*.cpp
@@ -50,20 +60,28 @@ set(PROJECT_FILES
     ${PROJECT_HEADERS}
 )
 
+# Add Qt resources if WebEngine is available (KaTeX assets)
+if(HAVE_QT_WEBENGINE)
+    set(KATEX_RESOURCES resources/resources.qrc)
+endif()
+
 # Set up executable or library depending on platform and Qt version
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
     qt_add_executable(${PROJECT_NAME}
         MANUAL_FINALIZATION
         ${PROJECT_FILES}
+        ${KATEX_RESOURCES}
     )
 else()
     if(ANDROID)
         add_library(${PROJECT_NAME} SHARED
             ${PROJECT_FILES}
+            ${KATEX_RESOURCES}
         )
     else()
         add_executable(${PROJECT_NAME}
             ${PROJECT_FILES}
+            ${KATEX_RESOURCES}
         )
     endif()
 endif()
@@ -88,6 +106,12 @@ endif()
 # Link Qt PDF if available
 if(Qt${QT_VERSION_MAJOR}Pdf_FOUND)
     target_link_libraries(${PROJECT_NAME} PRIVATE Qt${QT_VERSION_MAJOR}::Pdf)
+endif()
+
+# Link Qt WebEngineWidgets if available
+if(HAVE_QT_WEBENGINE)
+    target_link_libraries(${PROJECT_NAME} PRIVATE Qt${QT_VERSION_MAJOR}::WebEngineWidgets)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE HAVE_QT_WEBENGINE)
 endif()
 
 # Set properties for macOS, if needed

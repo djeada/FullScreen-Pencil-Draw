@@ -11,12 +11,18 @@ A vector and raster graphics editor built with C++ and Qt6. This application pro
 ### Drawing Tools
 - **Pen Tool**: Freehand drawing with Catmull-Rom spline interpolation
 - **Eraser Tool**: Remove items with preview cursor
-- **Text Tool**: Add text annotations with customizable font size
+- **Text Tool**: Add text annotations with LaTeX math support (`$...$` syntax)
 - **Fill Tool**: Fill closed shapes with current color
 - **Line Tool**: Draw straight lines
 - **Arrow Tool**: Draw arrows for diagrams and annotations
 - **Rectangle Tool**: Draw rectangles and squares
 - **Circle Tool**: Draw circles and ellipses
+
+### LaTeX Math Rendering
+- **Inline Math**: Use `$...$` delimiters for mathematical expressions
+- **KaTeX Rendering**: High-quality math rendering via bundled KaTeX library (requires Qt WebEngine)
+- **Unicode Fallback**: Basic math symbol support when WebEngine is unavailable
+- **Examples**: `$\frac{a}{b}$`, `$x^2 + y^2 = r^2$`, `$\sum_{i=1}^n i$`, `$\int_0^\infty e^{-x} dx$`
 
 ### PDF Viewing & Annotation
 - **Open PDF Files**: Load multi-page PDF documents for viewing and annotation
@@ -185,6 +191,11 @@ On Ubuntu/Debian:
 ```bash
 sudo apt-get update
 sudo apt-get install -y build-essential cmake qt6-base-dev qt6-tools-dev qt6-tools-dev-tools libgl1-mesa-dev xvfb
+```
+
+**Optional: For high-quality LaTeX math rendering, install Qt WebEngine:**
+```bash
+sudo apt-get install -y qt6-webengine-dev
 ```
 
 Refer to the official Qt documentation for installation instructions on other operating systems.

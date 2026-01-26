@@ -17,6 +17,10 @@
 #include <cmath>
 #include <functional>
 
+#ifdef HAVE_QT_WEBENGINE
+#include "../core/katex_renderer.h"
+#endif
+
 // Unicode math symbols for LaTeX rendering
 namespace LatexSymbols {
 // Greek letters (lowercase and uppercase)
@@ -310,8 +314,12 @@ static QFont selectMathFont(int pointSize) {
 // LatexTextItem implementation
 LatexTextItem::LatexTextItem(QGraphicsItem *parent)
     : QGraphicsObject(parent), textColor_(Qt::white), font_(selectMathFont(14)),
-      isEditing_(false), proxyWidget_(nullptr), textEdit_(nullptr) {
-  setFlags(ItemIsSelectable | ItemIsMovable | ItemIsFocusable);
+      isEditing_(false), lastScale_(1.0), proxyWidget_(nullptr), textEdit_(nullptr)
+#ifdef HAVE_QT_WEBENGINE
+      , pendingRenderId_(0), katexConnected_(false)
+#endif
+{
+  setFlags(ItemIsSelectable | ItemIsMovable | ItemIsFocusable | ItemSendsGeometryChanges);
   setAcceptHoverEvents(true);
 
   // Initialize with empty content rectangle
@@ -348,20 +356,6 @@ void LatexTextItem::paint(QPainter *painter,
     return;
   }
 
-  // Draw subtle background for LaTeX content to make it stand out
-  if (hasLatex() && !renderedContent_.isNull()) {
-    QRectF bgRect = boundingRect().adjusted(2, 2, -2, -2);
-    // Subtle gradient-like background
-    painter->setPen(Qt::NoPen);
-    painter->setBrush(QColor(40, 44, 52, 60)); // Very subtle dark background
-    painter->drawRoundedRect(bgRect, 4, 4);
-    
-    // Subtle left accent bar for mathematical content
-    QRectF accentBar(bgRect.left(), bgRect.top() + 4, 2, bgRect.height() - 8);
-    painter->setBrush(QColor(86, 156, 214, 120)); // Subtle blue accent
-    painter->drawRoundedRect(accentBar, 1, 1);
-  }
-
   // Draw the rendered content
   if (!renderedContent_.isNull()) {
     painter->drawPixmap(PADDING, PADDING, renderedContent_);
@@ -374,11 +368,6 @@ void LatexTextItem::paint(QPainter *painter,
 
   // Draw selection highlight with refined styling
   if (option->state & QStyle::State_Selected) {
-    // Outer glow effect
-    painter->setPen(Qt::NoPen);
-    painter->setBrush(QColor(0, 122, 204, 30));
-    painter->drawRoundedRect(boundingRect().adjusted(-2, -2, 2, 2), 6, 6);
-    
     // Main selection border
     painter->setPen(QPen(QColor(0, 122, 204, 200), 1.5, Qt::SolidLine));
     painter->setBrush(Qt::NoBrush);
@@ -393,38 +382,6 @@ void LatexTextItem::paint(QPainter *painter,
     painter->drawEllipse(QPointF(br.right(), br.top()), handleSize/2, handleSize/2);
     painter->drawEllipse(QPointF(br.left(), br.bottom()), handleSize/2, handleSize/2);
     painter->drawEllipse(QPointF(br.right(), br.bottom()), handleSize/2, handleSize/2);
-  }
-
-  // Draw refined LaTeX indicator badge
-  if (hasLatex() && !isEditing_) {
-    QRectF indicatorRect = boundingRect();
-    
-    // Elegant font for the badge
-    QFont indicatorFont("Arial", 6);
-    indicatorFont.setWeight(QFont::Medium);
-    indicatorFont.setLetterSpacing(QFont::PercentageSpacing, 105);
-    
-    QString indicator = "LaTeX";
-    QFontMetrics fm(indicatorFont);
-    int textWidth = fm.horizontalAdvance(indicator);
-    int textHeight = fm.height();
-    
-    // Position badge in top-right corner with proper padding
-    qreal badgePadX = 5;
-    qreal badgePadY = 2;
-    QRectF badgeRect(indicatorRect.right() - textWidth - badgePadX * 2 - 4,
-                     indicatorRect.top() + 2,
-                     textWidth + badgePadX * 2, textHeight + badgePadY);
-    
-    // Draw badge with gradient-like appearance
-    painter->setPen(QPen(QColor(86, 156, 214, 100), 0.5));
-    painter->setBrush(QColor(45, 50, 60, 180));
-    painter->drawRoundedRect(badgeRect, 3, 3);
-    
-    // Draw the text with subtle styling
-    painter->setFont(indicatorFont);
-    painter->setPen(QColor(156, 220, 254, 200)); // Light cyan color
-    painter->drawText(badgeRect, Qt::AlignCenter, indicator);
   }
 }
 
@@ -511,6 +468,31 @@ void LatexTextItem::mouseDoubleClickEvent(QGraphicsSceneMouseEvent *event) {
   }
 }
 
+QVariant LatexTextItem::itemChange(GraphicsItemChange change, const QVariant &value) {
+  if (change == ItemTransformChange || change == ItemTransformHasChanged) {
+    // Get the current scale from the transform
+    QTransform t = transform();
+    qreal currentScale = qSqrt(t.m11() * t.m11() + t.m12() * t.m12());
+    
+    // If scale changed significantly, update font size and re-render
+    if (qAbs(currentScale - lastScale_) > 0.1 && currentScale > 0.1) {
+      // Adjust font size based on scale
+      int newFontSize = qRound(14 * currentScale);
+      newFontSize = qBound(8, newFontSize, 72);  // Clamp to reasonable range
+      
+      if (font_.pointSize() != newFontSize) {
+        font_.setPointSize(newFontSize);
+        lastScale_ = currentScale;
+        
+        // Reset transform and re-render at new size
+        setTransform(QTransform());
+        renderContent();
+      }
+    }
+  }
+  return QGraphicsObject::itemChange(change, value);
+}
+
 void LatexTextItem::onEditingFinished() {
   finishEditing();
 }
@@ -525,6 +507,31 @@ void LatexTextItem::onEditingCancelled() {
   prepareGeometryChange();
   update();
 }
+
+#ifdef HAVE_QT_WEBENGINE
+void LatexTextItem::onKatexRenderComplete(quintptr requestId, const QPixmap &pixmap, bool success) {
+  // Check if this is our request
+  if (requestId != pendingRenderId_) {
+    return;
+  }
+  
+  pendingRenderId_ = 0;
+  
+  if (success && !pixmap.isNull()) {
+    prepareGeometryChange();
+    renderedContent_ = pixmap;
+    contentRect_ = QRectF(0, 0, pixmap.width() / pixmap.devicePixelRatio(),
+                          pixmap.height() / pixmap.devicePixelRatio());
+    update();
+  } else {
+    // Fallback to Unicode rendering on failure
+    prepareGeometryChange();
+    renderedContent_ = renderLatex(text_);
+    contentRect_ = QRectF(0, 0, renderedContent_.width(), renderedContent_.height());
+    update();
+  }
+}
+#endif
 
 void LatexTextItem::finishEditing() {
   if (!isEditing_)
@@ -558,6 +565,45 @@ void LatexTextItem::renderContent() {
     return;
   }
 
+#ifdef HAVE_QT_WEBENGINE
+  // Use KaTeX for rendering if available and text contains LaTeX
+  if (hasLatex()) {
+    // Connect to renderer if not already connected
+    if (!katexConnected_) {
+      connect(&KatexRenderer::instance(), &KatexRenderer::renderComplete,
+              this, &LatexTextItem::onKatexRenderComplete);
+      katexConnected_ = true;
+    }
+    
+    // Extract just the LaTeX content (first match for now)
+    static QRegularExpression latexPattern("\\$([^$]+)\\$");
+    QRegularExpressionMatch match = latexPattern.match(text_);
+    if (match.hasMatch()) {
+      QString latex = match.captured(1);
+      
+      // Check cache first
+      QPixmap cached = KatexRenderer::instance().getCached(
+          latex, textColor_, font_.pointSize(), false);
+      if (!cached.isNull()) {
+        renderedContent_ = cached;
+        contentRect_ = QRectF(0, 0, renderedContent_.width() / renderedContent_.devicePixelRatio(),
+                              renderedContent_.height() / renderedContent_.devicePixelRatio());
+        return;
+      }
+      
+      // Request async render
+      pendingRenderId_ = reinterpret_cast<quintptr>(this);
+      KatexRenderer::instance().render(latex, textColor_, font_.pointSize(), 
+                                        false, pendingRenderId_);
+      
+      // Show placeholder while rendering
+      contentRect_ = QRectF(0, 0, MIN_WIDTH, MIN_HEIGHT);
+      return;
+    }
+  }
+#endif
+
+  // Fallback to Unicode rendering
   renderedContent_ = renderLatex(text_);
   // contentRect_ represents the content area
   contentRect_ =
