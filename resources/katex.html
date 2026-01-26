@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="qrc:/katex/katex.min.css">
+    <script src="qrc:/katex/katex.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        html, body {
+            background: transparent !important;
+        }
+        body {
+            display: inline-block;
+        }
+        #math {
+            display: inline-block;
+            padding: 8px;
+            white-space: nowrap;
+            font-size: 18px;
+        }
+        /* Override all KaTeX colors to inherit from parent */
+        .katex, .katex * {
+            color: inherit !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="math"></div>
+    <script>
+        // Render function called from Qt
+        function renderLatex(latex, color, displayMode) {
+            try {
+                const container = document.getElementById('math');
+                
+                // Use passed color
+                container.style.setProperty('color', color, 'important');
+                
+                // Render the LaTeX
+                katex.render(latex, container, {
+                    throwOnError: false,
+                    displayMode: displayMode,
+                    output: 'html',
+                    strict: false,
+                    trust: true
+                });
+                
+                console.log('Rendered:', latex, 'with color:', color);
+                return true;
+            } catch (e) {
+                console.error('KaTeX error:', e);
+                const container = document.getElementById('math');
+                container.textContent = 'Error: ' + latex;
+                container.style.setProperty('color', color, 'important');
+                return false;
+            }
+        }
+
+        // Get rendered size
+        function getSize() {
+            const el = document.getElementById('math');
+            const rect = el.getBoundingClientRect();
+            return JSON.stringify({
+                width: Math.ceil(rect.width),
+                height: Math.ceil(rect.height)
+            });
+        }
+        
+        // Debug: show that page loaded
+        console.log('KaTeX page loaded, katex available:', typeof katex !== 'undefined');
+    </script>
+</body>
+</html>
