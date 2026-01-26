@@ -13,7 +13,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            qt_arch: gcc_64
+          - os: macos-latest
+            qt_arch: clang_arm64
+          - os: windows-latest
+            qt_arch: win64_msvc2019_64
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository
@@ -24,6 +30,8 @@ jobs:
         with:
           cached: true
           modules: qttools
+          version: 6.5.3
+          arch: ${{ matrix.qt_arch }}
 
       - name: Configure CMake
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
