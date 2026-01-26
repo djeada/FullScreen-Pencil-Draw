@@ -14,7 +14,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: ubuntu-22.04
             qt_arch: gcc_64
           - os: macos-latest
             qt_arch: clang_64
@@ -25,14 +25,71 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Qt
+      - name: Install Qt (Linux/macOS)
+        if: runner.os != 'Windows'
         uses: jurplel/install-qt-action@v4
         with:
           cache: true
           version: 6.6.3
           arch: ${{ matrix.qt_arch }}
 
-      - name: Configure CMake
+      - name: Setup Python (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Setup MSVC (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install Qt (Windows fast path)
+        if: runner.os == 'Windows'
+        id: fastqt
+        continue-on-error: true
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.6.3
+          host: windows
+          arch: ${{ matrix.qt_arch }}
+          cache: true
+          tools-only: false
+
+      - name: Install Qt (Windows fallback via aqt)
+        if: runner.os == 'Windows' && steps.fastqt.outcome != 'success'
+        shell: pwsh
+        run: |
+          $qtRoot = Join-Path $env:GITHUB_WORKSPACE "Qt"
+          $qtDir = Join-Path $qtRoot "6.6.3\${{ matrix.qt_arch }}"
+          python -m pip install --upgrade pip
+          python -m pip install "aqtinstall==3.3.0" "py7zr==1.0.*"
+          New-Item -ItemType Directory -Force -Path $qtDir | Out-Null
+          try {
+            python -m aqt install-qt windows desktop 6.6.3 ${{ matrix.qt_arch }} `
+              --outputdir "$qtRoot" `
+              -m qtdeclarative
+          } catch {
+            Write-Warning "Explicit module install failed. Falling back to '-m all'. Error: $($_.Exception.Message)"
+            python -m aqt install-qt windows desktop 6.6.3 ${{ matrix.qt_arch }} `
+              --outputdir "$qtRoot" -m all
+          }
+          if (!(Test-Path "$qtDir\lib\cmake\Qt6\Qt6Config.cmake")) {
+            Write-Error "Qt6Config.cmake not found in $qtDir after fallback install."
+            exit 1
+          }
+          echo "Qt6_DIR=$qtDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "$qtDir\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Configure CMake (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $qtPrefix = $env:Qt6_DIR
+          if (-not $qtPrefix) { $qtPrefix = $env:QT_ROOT_DIR }
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$qtPrefix"
+
+      - name: Configure CMake (non-Windows)
+        if: runner.os != 'Windows'
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
         shell: bash
 
