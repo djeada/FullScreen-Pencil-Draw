@@ -68,7 +68,8 @@ PdfViewer::PdfViewer(QWidget *parent)
       overlayManager_(std::make_unique<PdfOverlayManager>()),
       pageItem_(nullptr), scene_(new QGraphicsScene(this)),
       sceneController_(nullptr), toolManager_(nullptr), specialTool_(SpecialTool::None),
-      currentPage_(0), renderDpi_(DEFAULT_DPI), darkMode_(false), 
+      currentPage_(0), renderDpi_(DEFAULT_DPI), pageRotation_(0), 
+      mode_(Mode::Annotate), darkMode_(false), 
       showGrid_(false), fillShapes_(false), currentZoom_(1.0),
       currentPen_(Qt::white, 3), eraserPen_(Qt::black, 10),
       screenshotSelectionRect_(nullptr) {
@@ -204,6 +205,13 @@ void PdfViewer::renderCurrentPage() {
     return;
   }
 
+  // Apply rotation if needed
+  if (pageRotation_ != 0) {
+    QTransform rotationTransform;
+    rotationTransform.rotate(pageRotation_);
+    pageImage = pageImage.transformed(rotationTransform, Qt::SmoothTransformation);
+  }
+
   // Create or update page item
   if (!pageItem_) {
     pageItem_ = new PdfPageItem();
@@ -299,6 +307,80 @@ void PdfViewer::zoomReset() {
   resetTransform();
   currentZoom_ = 1.0;
   emit zoomChanged(100.0);
+}
+
+void PdfViewer::fitToWidth() {
+  if (!hasPdf() || !pageItem_) {
+    return;
+  }
+  
+  QRectF pageRect = pageItem_->boundingRect();
+  if (pageRect.isEmpty()) {
+    return;
+  }
+  
+  // Calculate scale to fit width
+  double viewWidth = viewport()->width() - 20; // Margin
+  double scale = viewWidth / pageRect.width();
+  
+  resetTransform();
+  this->scale(scale, scale);
+  currentZoom_ = scale;
+  emit zoomChanged(currentZoom_ * 100.0);
+}
+
+void PdfViewer::fitToPage() {
+  if (!hasPdf() || !pageItem_) {
+    return;
+  }
+  
+  QRectF pageRect = pageItem_->boundingRect();
+  if (pageRect.isEmpty()) {
+    return;
+  }
+  
+  // Calculate scale to fit entire page
+  double viewWidth = viewport()->width() - 20;
+  double viewHeight = viewport()->height() - 20;
+  double scaleX = viewWidth / pageRect.width();
+  double scaleY = viewHeight / pageRect.height();
+  double scale = qMin(scaleX, scaleY);
+  
+  resetTransform();
+  this->scale(scale, scale);
+  currentZoom_ = scale;
+  emit zoomChanged(currentZoom_ * 100.0);
+}
+
+void PdfViewer::rotatePageLeft() {
+  pageRotation_ = (pageRotation_ - 90 + 360) % 360;
+  renderCurrentPage();
+}
+
+void PdfViewer::rotatePageRight() {
+  pageRotation_ = (pageRotation_ + 90) % 360;
+  renderCurrentPage();
+}
+
+void PdfViewer::setMode(Mode mode) {
+  if (mode_ != mode) {
+    mode_ = mode;
+    
+    if (mode_ == Mode::View) {
+      // View mode: disable drawing, set cursor to arrow
+      setDragMode(QGraphicsView::ScrollHandDrag);
+      QGraphicsView::setCursor(Qt::ArrowCursor);
+    } else {
+      // Annotate mode: restore tool cursor
+      setDragMode(QGraphicsView::NoDrag);
+      Tool *tool = toolManager_->activeTool();
+      if (tool) {
+        QGraphicsView::setCursor(tool->cursor());
+      }
+    }
+    
+    emit modeChanged(mode_);
+  }
 }
 
 void PdfViewer::applyZoom(double factor) {
@@ -553,6 +635,32 @@ bool PdfViewer::exportAnnotatedPdf(const QString &filePath) {
 void PdfViewer::drawBackground(QPainter *painter, const QRectF &rect) {
   QGraphicsView::drawBackground(painter, rect);
 
+  // Draw subtle shadow around the PDF page for visual hierarchy
+  if (pageItem_ && !pageItem_->pixmap().isNull()) {
+    QRectF pageRect = pageItem_->boundingRect();
+    
+    // Draw shadow layers for depth effect
+    painter->save();
+    painter->setPen(Qt::NoPen);
+    
+    // Outer shadow
+    QRectF shadowRect1 = pageRect.adjusted(-8, -8, 8, 8);
+    painter->setBrush(QColor(0, 0, 0, 20));
+    painter->drawRoundedRect(shadowRect1, 4, 4);
+    
+    // Middle shadow
+    QRectF shadowRect2 = pageRect.adjusted(-4, -4, 4, 4);
+    painter->setBrush(QColor(0, 0, 0, 35));
+    painter->drawRoundedRect(shadowRect2, 2, 2);
+    
+    // Inner shadow
+    QRectF shadowRect3 = pageRect.adjusted(-2, -2, 2, 2);
+    painter->setBrush(QColor(0, 0, 0, 50));
+    painter->drawRoundedRect(shadowRect3, 1, 1);
+    
+    painter->restore();
+  }
+
   if (showGrid_) {
     painter->setPen(QPen(QColor(80, 80, 80), 0.5));
     qreal left = int(rect.left()) - (int(rect.left()) % GRID_SIZE);
@@ -576,6 +684,12 @@ void PdfViewer::mousePressEvent(QMouseEvent *event) {
 
   QPointF sp = mapToScene(event->pos());
   emit cursorPositionChanged(sp);
+
+  // In View mode, only allow panning (handled by ScrollHandDrag)
+  if (mode_ == Mode::View) {
+    QGraphicsView::mousePressEvent(event);
+    return;
+  }
 
   // Handle screenshot selection mode (PDF-specific tool)
   if (specialTool_ == SpecialTool::ScreenshotSelection) {
@@ -611,6 +725,12 @@ void PdfViewer::mouseMoveEvent(QMouseEvent *event) {
   QPointF cp = mapToScene(event->pos());
   emit cursorPositionChanged(cp);
 
+  // In View mode, only allow panning
+  if (mode_ == Mode::View) {
+    QGraphicsView::mouseMoveEvent(event);
+    return;
+  }
+
   // Handle screenshot selection mode
   if (specialTool_ == SpecialTool::ScreenshotSelection) {
     if (screenshotSelectionRect_ && (event->buttons() & Qt::LeftButton)) {
@@ -639,6 +759,12 @@ void PdfViewer::mouseReleaseEvent(QMouseEvent *event) {
   }
 
   QPointF ep = mapToScene(event->pos());
+
+  // In View mode, only allow panning
+  if (mode_ == Mode::View) {
+    QGraphicsView::mouseReleaseEvent(event);
+    return;
+  }
 
   // Handle screenshot selection mode
   if (specialTool_ == SpecialTool::ScreenshotSelection && screenshotSelectionRect_) {

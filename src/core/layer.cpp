@@ -443,30 +443,17 @@ Layer *LayerManager::duplicateLayer(int index) {
 }
 
 void LayerManager::clear() {
-  for (auto &layer : layers_) {
-    emit layerRemoved(layer.get());
-    const QList<ItemId> ids = layer->itemIds();
-    if (sceneController_) {
-      for (const ItemId &id : ids) {
-        sceneController_->removeItem(id, false);
-      }
-    } else if (itemStore_) {
-      for (const ItemId &id : ids) {
-        itemStore_->scheduleDelete(id);
-      }
-      itemStore_->flushDeletions();
-    } else {
-      for (auto *item : layer->items()) {
-        if (item && item->scene() == scene_) {
-          scene_->removeItem(item);
-        }
-      }
-    }
-  }
+  // Block signals during clear to avoid re-entrancy issues
+  bool wasBlocked = blockSignals(true);
+  
+  // Just clear the layer tracking - items should already be cleared by sceneController
+  // or will be cleared separately. Don't try to remove items here to avoid double-delete.
   layers_.clear();
   activeLayerIndex_ = -1;
   
-  // Recreate default layer
+  blockSignals(wasBlocked);
+  
+  // Recreate default layer (this will emit layerAdded)
   createLayer("Background", Layer::Type::Vector);
 }
 

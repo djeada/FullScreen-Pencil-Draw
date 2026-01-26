@@ -257,10 +257,65 @@ public:
   void zoomReset();
 
   /**
+   * @brief Fit page width to view
+   */
+  void fitToWidth();
+
+  /**
+   * @brief Fit entire page to view
+   */
+  void fitToPage();
+
+  /**
    * @brief Get the current zoom level
    * @return Zoom as percentage (100.0 = 100%)
    */
   double zoomLevel() const { return currentZoom_ * 100.0; }
+
+  // Rotation
+  /**
+   * @brief Rotate page 90° counterclockwise
+   */
+  void rotatePageLeft();
+
+  /**
+   * @brief Rotate page 90° clockwise
+   */
+  void rotatePageRight();
+
+  /**
+   * @brief Get current page rotation in degrees
+   * @return Rotation angle (0, 90, 180, or 270)
+   */
+  int pageRotation() const { return pageRotation_; }
+
+  // Mode
+  /**
+   * @brief Annotation mode enum
+   */
+  enum class Mode {
+    View,     // View mode: scroll/zoom only, no drawing
+    Annotate  // Annotate mode: tools active, drawing enabled
+  };
+  Q_ENUM(Mode)
+
+  /**
+   * @brief Set the current mode
+   * @param mode View or Annotate mode
+   */
+  void setMode(Mode mode);
+
+  /**
+   * @brief Get the current mode
+   * @return Current mode
+   */
+  Mode mode() const { return mode_; }
+
+  /**
+   * @brief Check if in annotate mode
+   * @return true if annotate mode is active
+   */
+  bool isAnnotateMode() const { return mode_ == Mode::Annotate; }
 
   // Grid
   /**
@@ -450,6 +505,12 @@ signals:
    */
   void screenshotCaptured(const QImage &image);
 
+  /**
+   * @brief Emitted when the mode changes
+   * @param mode The new mode (View or Annotate)
+   */
+  void modeChanged(Mode mode);
+
 protected:
   void mousePressEvent(QMouseEvent *event) override;
   void mouseMoveEvent(QMouseEvent *event) override;
@@ -476,6 +537,8 @@ private:
   // Current state
   int currentPage_;
   int renderDpi_;
+  int pageRotation_;  // Page rotation in degrees (0, 90, 180, 270)
+  Mode mode_;         // View or Annotate mode
   bool darkMode_;
   bool showGrid_;
   bool fillShapes_;

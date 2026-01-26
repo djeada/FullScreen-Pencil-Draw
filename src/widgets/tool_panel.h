@@ -3,13 +3,14 @@
 
 #include <QAction>
 #include <QColor>
+#include <QDockWidget>
 #include <QLabel>
 #include <QSlider>
-#include <QToolBar>
+#include <QToolButton>
 
 class BrushPreview;
 
-class ToolPanel : public QToolBar {
+class ToolPanel : public QDockWidget {
   Q_OBJECT
 
 public:
@@ -67,7 +68,6 @@ private:
   QAction *actionFill;
   QAction *actionArrow;
   QAction *actionPan;
-  QAction *actionColor;
   QAction *actionIncreaseBrush;
   QAction *actionDecreaseBrush;
   QAction *actionClear;
@@ -92,6 +92,7 @@ private:
   BrushPreview *brushPreview_;
 
   void clearActiveToolStyles();
+  bool eventFilter(QObject *obj, QEvent *event) override;
 
 private slots:
   void onActionColor();

@@ -5,6 +5,8 @@
 #include <QMainWindow>
 #include <QMenu>
 #include <QSplitter>
+#include <QSpinBox>
+#include <QComboBox>
 
 class Canvas;
 class ToolPanel;
@@ -16,6 +18,7 @@ class QToolBar;
 
 #ifdef HAVE_QT_PDF
 class PdfViewer;
+class PageThumbnailPanel;
 class QFrame;
 #endif
 
@@ -73,17 +76,25 @@ private:
 
 #ifdef HAVE_QT_PDF
   PdfViewer *_pdfViewer;
+  PageThumbnailPanel *_thumbnailPanel;
   QSplitter *_centralSplitter;
   QFrame *_pdfPanel;
   QToolBar *_pdfToolBar;
   QLabel *_pdfPageLabel;
+  QSpinBox *_pdfPageSpinBox;
+  QComboBox *_pdfZoomCombo;
   QAction *_pdfDarkModeAction;
+  QAction *_thumbnailToggleAction;
   bool _pdfPanelOnLeft;  // Track if PDF panel is on the left side
 
   void setupPdfViewer();
   void setupPdfToolBar();
   void showPdfPanel();
   void hidePdfPanel();
+  void onPdfPageSpinBoxChanged(int page);
+  void onPdfZoomComboChanged(int index);
+  void updatePdfZoomCombo(double zoomPercent);
+  void onThumbnailPageSelected(int pageIndex);
 #endif
 
   void setupConnections();

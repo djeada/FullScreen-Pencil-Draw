@@ -32,8 +32,8 @@ LayerPanel::~LayerPanel() = default;
 void LayerPanel::setupUI() {
   QWidget *container = new QWidget(this);
   QVBoxLayout *mainLayout = new QVBoxLayout(container);
-  mainLayout->setContentsMargins(4, 4, 4, 4);
-  mainLayout->setSpacing(4);
+  mainLayout->setContentsMargins(8, 8, 8, 8);
+  mainLayout->setSpacing(8);
 
   // Layer list
   layerList_ = new QListWidget(container);
@@ -44,63 +44,63 @@ void LayerPanel::setupUI() {
           &LayerPanel::onLayerSelectionChanged);
   mainLayout->addWidget(layerList_);
 
-  // Layer controls row 1
+  // Layer controls row 1 - Add/Delete/Duplicate/Merge
   QHBoxLayout *controlsRow1 = new QHBoxLayout();
-  controlsRow1->setSpacing(2);
+  controlsRow1->setSpacing(4);
 
-  addButton_ = new QPushButton("+", container);
+  addButton_ = new QPushButton("＋", container);
   addButton_->setToolTip("Add new layer");
-  addButton_->setMaximumWidth(30);
+  addButton_->setMinimumSize(40, 40);
   connect(addButton_, &QPushButton::clicked, this, &LayerPanel::onAddLayer);
   controlsRow1->addWidget(addButton_);
 
-  deleteButton_ = new QPushButton("-", container);
+  deleteButton_ = new QPushButton("−", container);
   deleteButton_->setToolTip("Delete layer");
-  deleteButton_->setMaximumWidth(30);
+  deleteButton_->setMinimumSize(40, 40);
   connect(deleteButton_, &QPushButton::clicked, this, &LayerPanel::onDeleteLayer);
   controlsRow1->addWidget(deleteButton_);
 
-  duplicateButton_ = new QPushButton("D", container);
+  duplicateButton_ = new QPushButton("⧉", container);
   duplicateButton_->setToolTip("Duplicate layer");
-  duplicateButton_->setMaximumWidth(30);
+  duplicateButton_->setMinimumSize(40, 40);
   connect(duplicateButton_, &QPushButton::clicked, this, &LayerPanel::onDuplicateLayer);
   controlsRow1->addWidget(duplicateButton_);
 
-  mergeButton_ = new QPushButton("M", container);
-  mergeButton_->setToolTip("Merge down");
-  mergeButton_->setMaximumWidth(30);
+  mergeButton_ = new QPushButton("⊕", container);
+  mergeButton_->setToolTip("Merge with layer below");
+  mergeButton_->setMinimumSize(40, 40);
   connect(mergeButton_, &QPushButton::clicked, this, &LayerPanel::onMergeDown);
   controlsRow1->addWidget(mergeButton_);
 
   controlsRow1->addStretch();
   mainLayout->addLayout(controlsRow1);
 
-  // Layer controls row 2
+  // Layer controls row 2 - Move/Visibility/Lock
   QHBoxLayout *controlsRow2 = new QHBoxLayout();
-  controlsRow2->setSpacing(2);
+  controlsRow2->setSpacing(4);
 
-  moveUpButton_ = new QPushButton("^", container);
+  moveUpButton_ = new QPushButton("▲", container);
   moveUpButton_->setToolTip("Move layer up");
-  moveUpButton_->setMaximumWidth(30);
+  moveUpButton_->setMinimumSize(40, 40);
   connect(moveUpButton_, &QPushButton::clicked, this, &LayerPanel::onMoveLayerUp);
   controlsRow2->addWidget(moveUpButton_);
 
-  moveDownButton_ = new QPushButton("v", container);
+  moveDownButton_ = new QPushButton("▼", container);
   moveDownButton_->setToolTip("Move layer down");
-  moveDownButton_->setMaximumWidth(30);
+  moveDownButton_->setMinimumSize(40, 40);
   connect(moveDownButton_, &QPushButton::clicked, this, &LayerPanel::onMoveLayerDown);
   controlsRow2->addWidget(moveDownButton_);
 
-  visibilityButton_ = new QPushButton("V", container);
+  visibilityButton_ = new QPushButton("👁", container);
   visibilityButton_->setToolTip("Toggle visibility");
-  visibilityButton_->setMaximumWidth(30);
+  visibilityButton_->setMinimumSize(40, 40);
   visibilityButton_->setCheckable(true);
   connect(visibilityButton_, &QPushButton::clicked, this, &LayerPanel::onVisibilityToggled);
   controlsRow2->addWidget(visibilityButton_);
 
-  lockButton_ = new QPushButton("L", container);
+  lockButton_ = new QPushButton("🔒", container);
   lockButton_->setToolTip("Toggle lock");
-  lockButton_->setMaximumWidth(30);
+  lockButton_->setMinimumSize(40, 40);
   lockButton_->setCheckable(true);
   connect(lockButton_, &QPushButton::clicked, this, &LayerPanel::onLockToggled);
   controlsRow2->addWidget(lockButton_);
@@ -109,18 +109,19 @@ void LayerPanel::setupUI() {
   mainLayout->addLayout(controlsRow2);
 
   // Opacity control
-  QGroupBox *opacityGroup = new QGroupBox("Opacity", container);
+  QGroupBox *opacityGroup = new QGroupBox("Layer Opacity", container);
   QHBoxLayout *opacityLayout = new QHBoxLayout(opacityGroup);
-  opacityLayout->setContentsMargins(4, 4, 4, 4);
+  opacityLayout->setContentsMargins(8, 12, 8, 8);
 
   opacitySlider_ = new QSlider(Qt::Horizontal, opacityGroup);
   opacitySlider_->setRange(0, 100);
   opacitySlider_->setValue(100);
+  opacitySlider_->setMinimumHeight(24);
   connect(opacitySlider_, &QSlider::valueChanged, this, &LayerPanel::onOpacityChanged);
   opacityLayout->addWidget(opacitySlider_);
 
   opacityLabel_ = new QLabel("100%", opacityGroup);
-  opacityLabel_->setMinimumWidth(35);
+  opacityLabel_->setMinimumWidth(45);
   opacityLayout->addWidget(opacityLabel_);
 
   mainLayout->addWidget(opacityGroup);
@@ -129,8 +130,8 @@ void LayerPanel::setupUI() {
   
   container->setLayout(mainLayout);
   setWidget(container);
-  setMinimumWidth(190);
-  setMaximumWidth(260);
+  setMinimumWidth(200);
+  setMaximumWidth(280);
 
   // Modern flat style with enhanced polish
   setStyleSheet(R"(
@@ -238,6 +239,10 @@ void LayerPanel::setupUI() {
 void LayerPanel::refreshLayerList() {
   if (!layerManager_) return;
 
+  // Block signals to prevent infinite recursion:
+  // setCurrentRow -> currentRowChanged -> onLayerSelectionChanged -> activeLayerChanged -> refreshLayerList
+  layerList_->blockSignals(true);
+
   int currentRow = layerList_->currentRow();
   layerList_->clear();
 
@@ -245,9 +250,9 @@ void LayerPanel::refreshLayerList() {
   for (int i = layerManager_->layerCount() - 1; i >= 0; --i) {
     Layer *layer = layerManager_->layer(i);
     if (layer) {
-      QString prefix = layer->isVisible() ? "[V] " : "[ ] ";
+      QString prefix = layer->isVisible() ? "👁 " : "   ";
       if (layer->isLocked()) {
-        prefix += "[L] ";
+        prefix += "🔒 ";
       }
       layerList_->addItem(prefix + layer->name());
     }
@@ -262,6 +267,8 @@ void LayerPanel::refreshLayerList() {
   } else if (currentRow >= 0 && currentRow < layerList_->count()) {
     layerList_->setCurrentRow(currentRow);
   }
+
+  layerList_->blockSignals(false);
 
   updateButtonStates();
   updatePropertyControls();
