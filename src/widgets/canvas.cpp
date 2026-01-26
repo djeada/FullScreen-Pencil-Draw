@@ -12,6 +12,7 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QColorDialog>
+#include <QDebug>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QGraphicsEllipseItem>
@@ -26,6 +27,7 @@
 #include <QMessageBox>
 #include <QMimeData>
 #include <QMouseEvent>
+#include <QPageSize>
 #include <QPdfWriter>
 #include <QPointer>
 #include <QScrollBar>
@@ -1015,7 +1017,7 @@ void Canvas::exportToPDFWithFilename(const QString &fileName) {
   QPdfWriter pdfWriter(fileName);
   
   // Use A4 page size for reasonable dimensions
-  pdfWriter.setPageSize(QPageSize::A4);
+  pdfWriter.setPageSize(QPageSize(QPageSize::A4));
   pdfWriter.setPageMargins(QMarginsF(10, 10, 10, 10), QPageLayout::Millimeter);
   pdfWriter.setTitle("FullScreen Pencil Draw Export");
   pdfWriter.setCreator("FullScreen Pencil Draw");
