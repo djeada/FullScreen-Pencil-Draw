@@ -29,9 +29,10 @@ jobs:
         uses: jurplel/install-qt-action@v3
         with:
           cached: true
-          archives: qttools
           version: 5.15.2
           arch: ${{ matrix.qt_arch }}
+          dir: ${{ github.workspace }}
+          modules: qttools
 
       - name: Configure CMake
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
