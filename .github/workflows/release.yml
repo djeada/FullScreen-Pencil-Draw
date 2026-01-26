@@ -30,7 +30,7 @@ jobs:
         with:
           cached: true
           modules: qttools
-          version: 6.5.3
+          version: 5.15.2
           arch: ${{ matrix.qt_arch }}
 
       - name: Configure CMake
