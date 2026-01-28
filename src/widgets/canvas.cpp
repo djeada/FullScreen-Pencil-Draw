@@ -1800,6 +1800,14 @@ void Canvas::updateTransformHandles() {
         if (handle) handle->updateHandles();
         emit canvasModified();
       });
+      
+      // Connect to apply resize/rotation to other selected items
+      connect(handle, &TransformHandleItem::resizeApplied, this, [this, handle](qreal scaleX, qreal scaleY, const QPointF &anchor) {
+        applyResizeToOtherItems(handle->targetItem(), scaleX, scaleY, anchor);
+      });
+      connect(handle, &TransformHandleItem::rotationApplied, this, [this, handle](qreal angleDelta, const QPointF &center) {
+        applyRotationToOtherItems(handle->targetItem(), angleDelta, center);
+      });
     }
   }
 }
@@ -1814,4 +1822,70 @@ void Canvas::clearTransformHandles() {
     }
   }
   transformHandles_.clear();
+}
+
+void Canvas::applyResizeToOtherItems(QGraphicsItem *sourceItem, qreal scaleX, qreal scaleY, const QPointF &anchor) {
+  if (!scene_) return;
+  
+  QList<QGraphicsItem*> selectedItems = scene_->selectedItems();
+  for (QGraphicsItem *item : selectedItems) {
+    if (!item || item == sourceItem) continue;
+    if (item == eraserPreview_ || item == backgroundImage_) continue;
+    if (item->type() == TransformHandleItem::Type) continue;
+    
+    // Apply the same scale transformation relative to each item's own center
+    QRectF itemBounds = item->mapToScene(item->boundingRect()).boundingRect();
+    QPointF itemCenter = itemBounds.center();
+    QPointF localCenter = item->mapFromScene(itemCenter);
+    
+    QTransform scaleTransform;
+    scaleTransform.translate(localCenter.x(), localCenter.y());
+    scaleTransform.scale(scaleX, scaleY);
+    scaleTransform.translate(-localCenter.x(), -localCenter.y());
+    
+    item->setTransform(item->transform() * scaleTransform);
+    
+    // Keep center fixed
+    QPointF newCenterPos = item->mapToScene(localCenter);
+    QPointF posAdjust = itemCenter - newCenterPos;
+    item->setPos(item->pos() + posAdjust);
+  }
+  
+  // Update all transform handles
+  for (TransformHandleItem *handle : transformHandles_) {
+    if (handle) handle->updateHandles();
+  }
+}
+
+void Canvas::applyRotationToOtherItems(QGraphicsItem *sourceItem, qreal angleDelta, const QPointF &center) {
+  if (!scene_) return;
+  
+  QList<QGraphicsItem*> selectedItems = scene_->selectedItems();
+  for (QGraphicsItem *item : selectedItems) {
+    if (!item || item == sourceItem) continue;
+    if (item == eraserPreview_ || item == backgroundImage_) continue;
+    if (item->type() == TransformHandleItem::Type) continue;
+    
+    // Apply the same rotation relative to each item's own center
+    QRectF itemBounds = item->mapToScene(item->boundingRect()).boundingRect();
+    QPointF itemCenter = itemBounds.center();
+    QPointF localCenter = item->mapFromScene(itemCenter);
+    
+    QTransform rotateTransform;
+    rotateTransform.translate(localCenter.x(), localCenter.y());
+    rotateTransform.rotate(angleDelta);
+    rotateTransform.translate(-localCenter.x(), -localCenter.y());
+    
+    item->setTransform(item->transform() * rotateTransform);
+    
+    // Keep center fixed
+    QPointF newCenterPos = item->mapToScene(localCenter);
+    QPointF posAdjust = itemCenter - newCenterPos;
+    item->setPos(item->pos() + posAdjust);
+  }
+  
+  // Update all transform handles
+  for (TransformHandleItem *handle : transformHandles_) {
+    if (handle) handle->updateHandles();
+  }
 }

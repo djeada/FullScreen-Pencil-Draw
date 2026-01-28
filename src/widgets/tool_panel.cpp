@@ -44,7 +44,7 @@ ToolPanel::ToolPanel(QWidget *parent) : QDockWidget("Tools", parent), brushPrevi
   QVBoxLayout *mainLayout = new QVBoxLayout(container);
   mainLayout->setContentsMargins(8, 8, 8, 8);
   mainLayout->setSpacing(6);
-  mainLayout->setAlignment(Qt::AlignTop | Qt::AlignHCenter);
+  mainLayout->setAlignment(Qt::AlignTop);
 
   // === DRAWING TOOLS ===
   actionPen = new QAction("✎ Pen", this);
@@ -68,14 +68,17 @@ ToolPanel::ToolPanel(QWidget *parent) : QDockWidget("Tools", parent), brushPrevi
   actionFill->setCheckable(true);
   connect(actionFill, &QAction::triggered, this, &ToolPanel::onActionFill);
 
-  // Drawing tools grid (2x2)
-  QGridLayout *drawGrid = new QGridLayout();
+  // Drawing tools grid (2x2) - wrapped for centering
+  QWidget *drawGridWidget = new QWidget(container);
+  QGridLayout *drawGrid = new QGridLayout(drawGridWidget);
   drawGrid->setSpacing(4);
-  drawGrid->addWidget(createToolButton(actionPen, container), 0, 0);
-  drawGrid->addWidget(createToolButton(actionEraser, container), 0, 1);
-  drawGrid->addWidget(createToolButton(actionText, container), 1, 0);
-  drawGrid->addWidget(createToolButton(actionFill, container), 1, 1);
-  mainLayout->addLayout(drawGrid);
+  drawGrid->setContentsMargins(0, 0, 0, 0);
+  drawGrid->addWidget(createToolButton(actionPen, drawGridWidget), 0, 0);
+  drawGrid->addWidget(createToolButton(actionEraser, drawGridWidget), 0, 1);
+  drawGrid->addWidget(createToolButton(actionText, drawGridWidget), 1, 0);
+  drawGrid->addWidget(createToolButton(actionFill, drawGridWidget), 1, 1);
+  drawGridWidget->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+  mainLayout->addWidget(drawGridWidget, 0, Qt::AlignHCenter);
 
   mainLayout->addWidget(createSeparator(container));
 
@@ -100,14 +103,17 @@ ToolPanel::ToolPanel(QWidget *parent) : QDockWidget("Tools", parent), brushPrevi
   actionCircle->setCheckable(true);
   connect(actionCircle, &QAction::triggered, this, &ToolPanel::onActionCircle);
 
-  // Shape tools grid (2x2)
-  QGridLayout *shapeGrid = new QGridLayout();
+  // Shape tools grid (2x2) - wrapped for centering
+  QWidget *shapeGridWidget = new QWidget(container);
+  QGridLayout *shapeGrid = new QGridLayout(shapeGridWidget);
   shapeGrid->setSpacing(4);
-  shapeGrid->addWidget(createToolButton(actionLine, container), 0, 0);
-  shapeGrid->addWidget(createToolButton(actionArrow, container), 0, 1);
-  shapeGrid->addWidget(createToolButton(actionRectangle, container), 1, 0);
-  shapeGrid->addWidget(createToolButton(actionCircle, container), 1, 1);
-  mainLayout->addLayout(shapeGrid);
+  shapeGrid->setContentsMargins(0, 0, 0, 0);
+  shapeGrid->addWidget(createToolButton(actionLine, shapeGridWidget), 0, 0);
+  shapeGrid->addWidget(createToolButton(actionArrow, shapeGridWidget), 0, 1);
+  shapeGrid->addWidget(createToolButton(actionRectangle, shapeGridWidget), 1, 0);
+  shapeGrid->addWidget(createToolButton(actionCircle, shapeGridWidget), 1, 1);
+  shapeGridWidget->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+  mainLayout->addWidget(shapeGridWidget, 0, Qt::AlignHCenter);
 
   mainLayout->addWidget(createSeparator(container));
 
@@ -122,11 +128,14 @@ ToolPanel::ToolPanel(QWidget *parent) : QDockWidget("Tools", parent), brushPrevi
   actionPan->setCheckable(true);
   connect(actionPan, &QAction::triggered, this, &ToolPanel::onActionPan);
 
-  QHBoxLayout *navLayout = new QHBoxLayout();
+  QWidget *navWidget = new QWidget(container);
+  QHBoxLayout *navLayout = new QHBoxLayout(navWidget);
   navLayout->setSpacing(4);
-  navLayout->addWidget(createToolButton(actionSelection, container));
-  navLayout->addWidget(createToolButton(actionPan, container));
-  mainLayout->addLayout(navLayout);
+  navLayout->setContentsMargins(0, 0, 0, 0);
+  navLayout->addWidget(createToolButton(actionSelection, navWidget));
+  navLayout->addWidget(createToolButton(actionPan, navWidget));
+  navWidget->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+  mainLayout->addWidget(navWidget, 0, Qt::AlignHCenter);
 
   mainLayout->addWidget(createSeparator(container));
 
@@ -139,19 +148,20 @@ ToolPanel::ToolPanel(QWidget *parent) : QDockWidget("Tools", parent), brushPrevi
   actionIncreaseBrush->setToolTip("Increase size (])");
   connect(actionIncreaseBrush, &QAction::triggered, this, &ToolPanel::onActionIncreaseBrush);
 
-  QHBoxLayout *brushSizeLayout = new QHBoxLayout();
+  QWidget *brushSizeWidget = new QWidget(container);
+  QHBoxLayout *brushSizeLayout = new QHBoxLayout(brushSizeWidget);
   brushSizeLayout->setSpacing(4);
-  brushSizeLayout->setAlignment(Qt::AlignCenter);
+  brushSizeLayout->setContentsMargins(0, 0, 0, 0);
   
-  QToolButton *decBtn = new QToolButton(container);
+  QToolButton *decBtn = new QToolButton(brushSizeWidget);
   decBtn->setDefaultAction(actionDecreaseBrush);
-  decBtn->setFixedSize(56, 56);
+  decBtn->setFixedSize(40, 40);
   brushSizeLayout->addWidget(decBtn);
 
-  brushSizeLabel = new QLabel("Size: 3", container);
+  brushSizeLabel = new QLabel("Size: 3", brushSizeWidget);
   brushSizeLabel->setStyleSheet(R"(
     QLabel { 
-      padding: 6px 10px; 
+      padding: 4px 6px; 
       background-color: rgba(255, 255, 255, 0.06); 
       color: #f8f8fc; 
       border-radius: 6px; 
@@ -160,18 +170,20 @@ ToolPanel::ToolPanel(QWidget *parent) : QDockWidget("Tools", parent), brushPrevi
     }
   )");
   brushSizeLabel->setAlignment(Qt::AlignCenter);
-  brushSizeLabel->setMinimumWidth(60);
+  brushSizeLabel->setFixedWidth(52);
   brushSizeLayout->addWidget(brushSizeLabel);
 
-  QToolButton *incBtn = new QToolButton(container);
+  QToolButton *incBtn = new QToolButton(brushSizeWidget);
   incBtn->setDefaultAction(actionIncreaseBrush);
-  incBtn->setFixedSize(56, 56);
+  incBtn->setFixedSize(40, 40);
   brushSizeLayout->addWidget(incBtn);
 
-  mainLayout->addLayout(brushSizeLayout);
+  brushSizeWidget->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+  mainLayout->addWidget(brushSizeWidget, 0, Qt::AlignHCenter);
 
   // Brush preview - centered
   QHBoxLayout *brushPreviewLayout = new QHBoxLayout();
+  brushPreviewLayout->setContentsMargins(0, 0, 0, 0);
   brushPreviewLayout->setAlignment(Qt::AlignCenter);
   brushPreview_ = new BrushPreview(container);
   brushPreviewLayout->addWidget(brushPreview_);
@@ -181,6 +193,7 @@ ToolPanel::ToolPanel(QWidget *parent) : QDockWidget("Tools", parent), brushPrevi
 
   // === COLOR & OPACITY ===
   QHBoxLayout *colorLayout = new QHBoxLayout();
+  colorLayout->setContentsMargins(0, 0, 0, 0);
   colorLayout->setAlignment(Qt::AlignCenter);
 
   colorPreview = new QLabel(container);
@@ -209,6 +222,7 @@ ToolPanel::ToolPanel(QWidget *parent) : QDockWidget("Tools", parent), brushPrevi
   mainLayout->addWidget(opacityLabel);
 
   QHBoxLayout *opacityLayout = new QHBoxLayout();
+  opacityLayout->setContentsMargins(0, 0, 0, 0);
   opacityLayout->setAlignment(Qt::AlignCenter);
   opacitySlider = new QSlider(Qt::Horizontal, container);
   opacitySlider->setRange(0, 255);
@@ -235,19 +249,20 @@ ToolPanel::ToolPanel(QWidget *parent) : QDockWidget("Tools", parent), brushPrevi
   actionZoomReset->setToolTip("Reset zoom (0)");
   connect(actionZoomReset, &QAction::triggered, this, &ToolPanel::onActionZoomReset);
 
-  QHBoxLayout *zoomLayout = new QHBoxLayout();
+  QWidget *zoomWidget = new QWidget(container);
+  QHBoxLayout *zoomLayout = new QHBoxLayout(zoomWidget);
   zoomLayout->setSpacing(4);
-  zoomLayout->setAlignment(Qt::AlignCenter);
+  zoomLayout->setContentsMargins(0, 0, 0, 0);
 
-  QToolButton *zoomOutBtn = new QToolButton(container);
+  QToolButton *zoomOutBtn = new QToolButton(zoomWidget);
   zoomOutBtn->setDefaultAction(actionZoomOut);
-  zoomOutBtn->setFixedSize(56, 56);
+  zoomOutBtn->setFixedSize(40, 40);
   zoomLayout->addWidget(zoomOutBtn);
 
-  zoomLabel = new QLabel("100%", container);
+  zoomLabel = new QLabel("100%", zoomWidget);
   zoomLabel->setStyleSheet(R"(
     QLabel { 
-      padding: 6px 10px; 
+      padding: 4px 6px; 
       background-color: rgba(255, 255, 255, 0.06); 
       color: #f8f8fc; 
       border-radius: 6px; 
@@ -256,20 +271,18 @@ ToolPanel::ToolPanel(QWidget *parent) : QDockWidget("Tools", parent), brushPrevi
     }
   )");
   zoomLabel->setAlignment(Qt::AlignCenter);
-  zoomLabel->setMinimumWidth(55);
+  zoomLabel->setFixedWidth(52);
   zoomLayout->addWidget(zoomLabel);
 
-  QToolButton *zoomInBtn = new QToolButton(container);
+  QToolButton *zoomInBtn = new QToolButton(zoomWidget);
   zoomInBtn->setDefaultAction(actionZoomIn);
-  zoomInBtn->setFixedSize(56, 56);
+  zoomInBtn->setFixedSize(40, 40);
   zoomLayout->addWidget(zoomInBtn);
 
-  mainLayout->addLayout(zoomLayout);
+  zoomWidget->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+  mainLayout->addWidget(zoomWidget, 0, Qt::AlignHCenter);
 
-  QHBoxLayout *zoomResetLayout = new QHBoxLayout();
-  zoomResetLayout->setAlignment(Qt::AlignCenter);
-  zoomResetLayout->addWidget(createToolButton(actionZoomReset, container));
-  mainLayout->addLayout(zoomResetLayout);
+  mainLayout->addWidget(createToolButton(actionZoomReset, container), 0, Qt::AlignHCenter);
 
   // Grid and Filled toggles
   actionGrid = new QAction("⊞ Grid", this);
@@ -282,11 +295,14 @@ ToolPanel::ToolPanel(QWidget *parent) : QDockWidget("Tools", parent), brushPrevi
   actionFilledShapes->setCheckable(true);
   connect(actionFilledShapes, &QAction::triggered, this, &ToolPanel::onActionFilledShapes);
 
-  QHBoxLayout *toggleLayout = new QHBoxLayout();
+  QWidget *toggleWidget = new QWidget(container);
+  QHBoxLayout *toggleLayout = new QHBoxLayout(toggleWidget);
   toggleLayout->setSpacing(4);
-  toggleLayout->addWidget(createToolButton(actionGrid, container));
-  toggleLayout->addWidget(createToolButton(actionFilledShapes, container));
-  mainLayout->addLayout(toggleLayout);
+  toggleLayout->setContentsMargins(0, 0, 0, 0);
+  toggleLayout->addWidget(createToolButton(actionGrid, toggleWidget));
+  toggleLayout->addWidget(createToolButton(actionFilledShapes, toggleWidget));
+  toggleWidget->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+  mainLayout->addWidget(toggleWidget, 0, Qt::AlignHCenter);
 
   mainLayout->addWidget(createSeparator(container));
 
@@ -299,11 +315,14 @@ ToolPanel::ToolPanel(QWidget *parent) : QDockWidget("Tools", parent), brushPrevi
   actionRedo->setToolTip("Redo (Ctrl+Y)");
   connect(actionRedo, &QAction::triggered, this, &ToolPanel::onActionRedo);
 
-  QHBoxLayout *undoRedoLayout = new QHBoxLayout();
+  QWidget *undoRedoWidget = new QWidget(container);
+  QHBoxLayout *undoRedoLayout = new QHBoxLayout(undoRedoWidget);
   undoRedoLayout->setSpacing(4);
-  undoRedoLayout->addWidget(createToolButton(actionUndo, container));
-  undoRedoLayout->addWidget(createToolButton(actionRedo, container));
-  mainLayout->addLayout(undoRedoLayout);
+  undoRedoLayout->setContentsMargins(0, 0, 0, 0);
+  undoRedoLayout->addWidget(createToolButton(actionUndo, undoRedoWidget));
+  undoRedoLayout->addWidget(createToolButton(actionRedo, undoRedoWidget));
+  undoRedoWidget->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+  mainLayout->addWidget(undoRedoWidget, 0, Qt::AlignHCenter);
 
   // Copy/Cut/Paste/Dup/Del
   QAction *actionCopy = new QAction("⧉ Copy", this);
@@ -326,18 +345,18 @@ ToolPanel::ToolPanel(QWidget *parent) : QDockWidget("Tools", parent), brushPrevi
   actionDelete->setToolTip("Delete (Del)");
   connect(actionDelete, &QAction::triggered, this, &ToolPanel::deleteAction);
 
-  QGridLayout *editGrid = new QGridLayout();
+  QWidget *editGridWidget = new QWidget(container);
+  QGridLayout *editGrid = new QGridLayout(editGridWidget);
   editGrid->setSpacing(4);
-  editGrid->addWidget(createToolButton(actionCopy, container), 0, 0);
-  editGrid->addWidget(createToolButton(actionCut, container), 0, 1);
-  editGrid->addWidget(createToolButton(actionPaste, container), 1, 0);
-  editGrid->addWidget(createToolButton(actionDuplicate, container), 1, 1);
-  mainLayout->addLayout(editGrid);
+  editGrid->setContentsMargins(0, 0, 0, 0);
+  editGrid->addWidget(createToolButton(actionCopy, editGridWidget), 0, 0);
+  editGrid->addWidget(createToolButton(actionCut, editGridWidget), 0, 1);
+  editGrid->addWidget(createToolButton(actionPaste, editGridWidget), 1, 0);
+  editGrid->addWidget(createToolButton(actionDuplicate, editGridWidget), 1, 1);
+  editGridWidget->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+  mainLayout->addWidget(editGridWidget, 0, Qt::AlignHCenter);
 
-  QHBoxLayout *deleteLayout = new QHBoxLayout();
-  deleteLayout->setAlignment(Qt::AlignCenter);
-  deleteLayout->addWidget(createToolButton(actionDelete, container));
-  mainLayout->addLayout(deleteLayout);
+  mainLayout->addWidget(createToolButton(actionDelete, container), 0, Qt::AlignHCenter);
 
   mainLayout->addWidget(createSeparator(container));
 
@@ -358,13 +377,16 @@ ToolPanel::ToolPanel(QWidget *parent) : QDockWidget("Tools", parent), brushPrevi
   actionClear->setToolTip("Clear canvas");
   connect(actionClear, &QAction::triggered, this, &ToolPanel::onActionClear);
 
-  QGridLayout *fileGrid = new QGridLayout();
+  QWidget *fileGridWidget = new QWidget(container);
+  QGridLayout *fileGrid = new QGridLayout(fileGridWidget);
   fileGrid->setSpacing(4);
-  fileGrid->addWidget(createToolButton(actionNew, container), 0, 0);
-  fileGrid->addWidget(createToolButton(actionOpen, container), 0, 1);
-  fileGrid->addWidget(createToolButton(actionSave, container), 1, 0);
-  fileGrid->addWidget(createToolButton(actionClear, container), 1, 1);
-  mainLayout->addLayout(fileGrid);
+  fileGrid->setContentsMargins(0, 0, 0, 0);
+  fileGrid->addWidget(createToolButton(actionNew, fileGridWidget), 0, 0);
+  fileGrid->addWidget(createToolButton(actionOpen, fileGridWidget), 0, 1);
+  fileGrid->addWidget(createToolButton(actionSave, fileGridWidget), 1, 0);
+  fileGrid->addWidget(createToolButton(actionClear, fileGridWidget), 1, 1);
+  fileGridWidget->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+  mainLayout->addWidget(fileGridWidget, 0, Qt::AlignHCenter);
 
   mainLayout->addWidget(createSeparator(container));
 
@@ -404,8 +426,9 @@ ToolPanel::ToolPanel(QWidget *parent) : QDockWidget("Tools", parent), brushPrevi
   scrollArea->setWidget(container);
   setWidget(scrollArea);
   
-  setMinimumWidth(145);
-  setMaximumWidth(200);
+  // 2-column: 56+4+56 = 116, plus 8+8 margins = 132
+  // 3-column: 40+4+52+4+40 = 140, plus 8+8 margins = 156
+  setFixedWidth(224);
 
   // Styling
   setStyleSheet(R"(

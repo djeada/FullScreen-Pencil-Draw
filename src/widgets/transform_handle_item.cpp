@@ -492,6 +492,9 @@ void TransformHandleItem::applyResize(const QPointF &mousePos) {
   QPointF newAnchorPos = target->mapToScene(localAnchor);
   QPointF posAdjust = anchor - newAnchorPos;
   target->setPos(target->pos() + posAdjust);
+
+  // Emit signal for other selected items to follow
+  emit resizeApplied(scaleX, scaleY, anchor);
 }
 
 void TransformHandleItem::applyRotation(const QPointF &mousePos) {
@@ -526,4 +529,7 @@ void TransformHandleItem::applyRotation(const QPointF &mousePos) {
   QPointF newCenterPos = target->mapToScene(localCenter);
   QPointF posAdjust = center - newCenterPos;
   target->setPos(target->pos() + posAdjust);
+
+  // Emit signal for other selected items to follow
+  emit rotationApplied(-angleDelta, center);
 }

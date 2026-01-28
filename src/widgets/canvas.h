@@ -239,6 +239,8 @@ private:
   QString calculateDistance(const QPointF &p1, const QPointF &p2) const;
   void updateTransformHandles();
   void clearTransformHandles();
+  void applyResizeToOtherItems(QGraphicsItem *sourceItem, qreal scaleX, qreal scaleY, const QPointF &anchor);
+  void applyRotationToOtherItems(QGraphicsItem *sourceItem, qreal angleDelta, const QPointF &center);
 };
 
 #endif // CANVAS_H

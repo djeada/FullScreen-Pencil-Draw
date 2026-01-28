@@ -109,6 +109,21 @@ signals:
    */
   void transformCompleted();
 
+  /**
+   * @brief Emitted during resize to allow syncing other selected items
+   * @param scaleX Horizontal scale factor
+   * @param scaleY Vertical scale factor
+   * @param anchor Anchor point in scene coordinates
+   */
+  void resizeApplied(qreal scaleX, qreal scaleY, const QPointF &anchor);
+
+  /**
+   * @brief Emitted during rotation to allow syncing other selected items
+   * @param angleDelta Rotation angle in degrees
+   * @param center Center of rotation in scene coordinates
+   */
+  void rotationApplied(qreal angleDelta, const QPointF &center);
+
 protected:
   QVariant itemChange(GraphicsItemChange change,
                       const QVariant &value) override;
