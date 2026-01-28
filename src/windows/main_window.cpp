@@ -17,6 +17,7 @@
 #include <QKeyEvent>
 #include <QLabel>
 #include <QMenuBar>
+#include <QShortcut>
 #include <QSpinBox>
 #include <QSplitter>
 #include <QStatusBar>
@@ -94,6 +95,12 @@ MainWindow::MainWindow(QWidget *parent)
   _toolPanel->updateColorDisplay(_canvas->getCurrentColor());
   _toolPanel->updateZoomDisplay(_canvas->getCurrentZoom());
   _toolPanel->updateOpacityDisplay(_canvas->getCurrentOpacity());
+
+  // Add global shortcuts for delete (works regardless of focus)
+  QShortcut *deleteShortcut = new QShortcut(QKeySequence(Qt::Key_Delete), this);
+  connect(deleteShortcut, &QShortcut::activated, _canvas, &Canvas::deleteSelectedItems);
+  QShortcut *backspaceShortcut = new QShortcut(QKeySequence(Qt::Key_Backspace), this);
+  connect(backspaceShortcut, &QShortcut::activated, _canvas, &Canvas::deleteSelectedItems);
 }
 
 MainWindow::~MainWindow() {}
@@ -503,7 +510,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
   else if (event->matches(QKeySequence::New)) { onNewCanvas(); }
   else if (event->matches(QKeySequence::SelectAll)) { _canvas->selectAll(); }
   else if (event->key() == Qt::Key_Escape) { this->close(); }
-  else if (event->key() == Qt::Key_Delete) { _canvas->deleteSelectedItems(); }
+  else if (event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace) { _canvas->deleteSelectedItems(); }
   // Group/Ungroup shortcuts
   else if (event->key() == Qt::Key_G && (event->modifiers() & Qt::ControlModifier)) { _canvas->groupSelectedItems(); }
   else if (event->key() == Qt::Key_U && (event->modifiers() & Qt::ControlModifier) && (event->modifiers() & Qt::ShiftModifier)) { _canvas->ungroupSelectedItems(); }
