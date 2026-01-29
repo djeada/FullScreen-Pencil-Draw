@@ -1833,6 +1833,18 @@ void Canvas::applyResizeToOtherItems(QGraphicsItem *sourceItem, qreal scaleX, qr
     if (item == eraserPreview_ || item == backgroundImage_) continue;
     if (item->type() == TransformHandleItem::Type) continue;
     
+    // Handle text items specially - adjust font size instead of transform scaling
+    if (LatexTextItem *textItem = dynamic_cast<LatexTextItem *>(item)) {
+      qreal uniformScale = (scaleX + scaleY) / 2.0;
+      QFont currentFont = textItem->font();
+      int newSize = qMax(8, qRound(currentFont.pointSize() * uniformScale));
+      if (newSize != currentFont.pointSize()) {
+        currentFont.setPointSize(newSize);
+        textItem->setFont(currentFont);
+      }
+      continue;
+    }
+    
     // Apply the same scale transformation relative to each item's own center
     QRectF itemBounds = item->mapToScene(item->boundingRect()).boundingRect();
     QPointF itemCenter = itemBounds.center();

@@ -5,6 +5,7 @@
  * Items are tracked by ItemId only - never by raw pointer.
  */
 #include "transform_handle_item.h"
+#include "latex_text_item.h"
 #include "../core/item_store.h"
 #include "../core/scene_renderer.h"
 #include "../core/transform_action.h"
@@ -476,7 +477,22 @@ void TransformHandleItem::applyResize(const QPointF &mousePos) {
     break;
   }
 
-  // Apply scale transformation
+  // Handle text items specially - adjust font size instead of transform scaling
+  if (LatexTextItem *textItem = dynamic_cast<LatexTextItem *>(target)) {
+    // Use uniform scale based on the average of scaleX and scaleY
+    qreal uniformScale = (scaleX + scaleY) / 2.0;
+    QFont currentFont = textItem->font();
+    int newSize = qMax(8, qRound(currentFont.pointSize() * uniformScale));
+    if (newSize != currentFont.pointSize()) {
+      currentFont.setPointSize(newSize);
+      textItem->setFont(currentFont);
+    }
+    // Emit signal for other selected items
+    emit resizeApplied(scaleX, scaleY, anchor);
+    return;
+  }
+
+  // Apply scale transformation for non-text items
   QTransform t = target->transform();
   QPointF localAnchor = target->mapFromScene(anchor);
 
