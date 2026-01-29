@@ -1383,6 +1383,8 @@ void Canvas::pasteItems() {
     emit canvasModified();
     return;
   }
+  
+  // Unsupported clipboard content - silently ignore
 }
 
 void Canvas::addPoint(const QPointF &point) {
