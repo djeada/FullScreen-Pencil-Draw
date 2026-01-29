@@ -5,6 +5,7 @@
 #include "canvas.h"
 #include "image_size_dialog.h"
 #include "latex_text_item.h"
+#include "mermaid_text_item.h"
 #include "transform_handle_item.h"
 #include "../core/scene_controller.h"
 #include "../core/item_store.h"
@@ -384,6 +385,13 @@ void Canvas::setTextTool() {
   this->setDragMode(QGraphicsView::NoDrag);
   hideEraserPreview(); if (scene_) scene_->clearSelection();
   setCursor(Qt::IBeamCursor); isPanning_ = false;
+}
+
+void Canvas::setMermaidTool() {
+  currentShape_ = Mermaid; tempShapeItem_ = nullptr;
+  this->setDragMode(QGraphicsView::NoDrag);
+  hideEraserPreview(); if (scene_) scene_->clearSelection();
+  setCursor(Qt::CrossCursor); isPanning_ = false;
 }
 
 void Canvas::setFillTool() {
@@ -1103,6 +1111,42 @@ void Canvas::createTextItem(const QPointF &pos) {
   textItem->startEditing();
 }
 
+void Canvas::createMermaidItem(const QPointF &pos) {
+  // Create mermaid item with inline editing
+  auto *mermaidItem = new MermaidTextItem();
+  mermaidItem->setPos(pos);
+
+  if (sceneController_) {
+    sceneController_->addItem(mermaidItem);
+  } else {
+    scene_->addItem(mermaidItem);
+  }
+
+  // Connect to handle when editing is finished
+  connect(mermaidItem, &MermaidTextItem::editingFinished, this, [this, mermaidItem = QPointer<MermaidTextItem>(mermaidItem)]() {
+    // Check if mermaidItem is still valid (not deleted)
+    if (!mermaidItem) {
+      return;
+    }
+    // If the code is empty after editing, remove the item
+    if (mermaidItem->mermaidCode().trimmed().isEmpty()) {
+      if (sceneController_) {
+        sceneController_->removeItem(mermaidItem, false);
+      } else {
+        scene_->removeItem(mermaidItem);
+        onItemRemoved(mermaidItem);
+        mermaidItem->deleteLater();
+      }
+    } else {
+      // Add to undo stack only when there's actual content
+      addDrawAction(mermaidItem);
+    }
+  });
+
+  // Start inline editing immediately
+  mermaidItem->startEditing();
+}
+
 void Canvas::fillAt(const QPointF &point) {
   if (!scene_) return;
   QBrush newBrush(currentPen_.color());
@@ -1232,6 +1276,7 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
   startPoint_ = sp;
   switch (currentShape_) {
   case Text: createTextItem(snapToGrid_ ? snapToGridPoint(sp) : sp); break;
+  case Mermaid: createMermaidItem(snapToGrid_ ? snapToGridPoint(sp) : sp); break;
   case Fill: fillAt(sp); break;
   case Eraser: eraseAt(sp); break;
   case Pen: {

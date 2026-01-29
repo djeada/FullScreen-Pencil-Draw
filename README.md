@@ -24,6 +24,20 @@ A vector and raster graphics editor built with C++ and Qt6. This application pro
 - **Unicode Fallback**: Basic math symbol support when WebEngine is unavailable
 - **Examples**: `$\frac{a}{b}$`, `$x^2 + y^2 = r^2$`, `$\sum_{i=1}^n i$`, `$\int_0^\infty e^{-x} dx$`
 
+### Mermaid Diagram Rendering
+- **Diagram Tool**: Add Mermaid diagrams to the canvas using the Mermaid tool (M key)
+- **Mermaid Rendering**: High-quality diagram rendering via bundled Mermaid library (requires Qt WebEngine)
+- **Inline Editing**: Click to create a diagram, enter Mermaid code, press Ctrl+Enter to render
+- **Theme Support**: Supports default, dark, forest, and neutral themes
+- **Supported Diagrams**: Flowcharts, sequence diagrams, class diagrams, state diagrams, ER diagrams, Gantt charts, pie charts, and more
+- **Examples**:
+  ```
+  graph TD
+      A[Start] --> B{Decision}
+      B -->|Yes| C[OK]
+      B -->|No| D[End]
+  ```
+
 ### PDF Viewing & Annotation
 - **Open PDF Files**: Load multi-page PDF documents for viewing and annotation
 - **Multi-Page Navigation**: Navigate between pages with toolbar buttons or keyboard shortcuts
@@ -89,6 +103,7 @@ A vector and raster graphics editor built with C++ and Qt6. This application pro
 | **Tools** | `P` | Pen tool |
 | | `E` | Eraser tool |
 | | `T` | Text tool |
+| | `M` | Mermaid diagram tool |
 | | `F` | Fill tool |
 | | `L` | Line tool |
 | | `A` | Arrow tool |

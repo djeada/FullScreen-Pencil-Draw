@@ -133,6 +133,7 @@ void MainWindow::setupConnections() {
   connect(_toolPanel, &ToolPanel::penSelected, _canvas, &Canvas::setPenTool);
   connect(_toolPanel, &ToolPanel::eraserSelected, _canvas, &Canvas::setEraserTool);
   connect(_toolPanel, &ToolPanel::textSelected, _canvas, &Canvas::setTextTool);
+  connect(_toolPanel, &ToolPanel::mermaidSelected, _canvas, &Canvas::setMermaidTool);
   connect(_toolPanel, &ToolPanel::fillSelected, _canvas, &Canvas::setFillTool);
   connect(_toolPanel, &ToolPanel::arrowSelected, _canvas, &Canvas::setArrowTool);
   connect(_toolPanel, &ToolPanel::curvedArrowSelected, _canvas, &Canvas::setCurvedArrowTool);
@@ -153,6 +154,9 @@ void MainWindow::setupConnections() {
     });
     connect(_toolPanel, &ToolPanel::textSelected, this, [this]() {
       _pdfViewer->setToolType(ToolManager::ToolType::Text);
+    });
+    connect(_toolPanel, &ToolPanel::mermaidSelected, this, [this]() {
+      _pdfViewer->setToolType(ToolManager::ToolType::Mermaid);
     });
     connect(_toolPanel, &ToolPanel::fillSelected, this, [this]() {
       _pdfViewer->setToolType(ToolManager::ToolType::Fill);
@@ -519,6 +523,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
   else if (event->key() == Qt::Key_P) { _toolPanel->onActionPen(); }
   else if (event->key() == Qt::Key_E) { _toolPanel->onActionEraser(); }
   else if (event->key() == Qt::Key_T) { _toolPanel->onActionText(); }
+  else if (event->key() == Qt::Key_M) { _toolPanel->onActionMermaid(); }
   else if (event->key() == Qt::Key_F) { _toolPanel->onActionFill(); }
   else if (event->key() == Qt::Key_L) { _toolPanel->onActionLine(); }
   else if (event->key() == Qt::Key_A && !(event->modifiers() & Qt::ControlModifier)) { _toolPanel->onActionArrow(); }

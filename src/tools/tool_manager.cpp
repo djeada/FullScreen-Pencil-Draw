@@ -8,6 +8,7 @@
 #include "eraser_tool.h"
 #include "fill_tool.h"
 #include "line_tool.h"
+#include "mermaid_tool.h"
 #include "pan_tool.h"
 #include "pen_tool.h"
 #include "rectangle_tool.h"
@@ -35,6 +36,7 @@ void ToolManager::initializeTools() {
   registerTool(ToolType::Circle, std::make_unique<CircleTool>(renderer_));
   registerTool(ToolType::Selection, std::make_unique<SelectionTool>(renderer_));
   registerTool(ToolType::Pan, std::make_unique<PanTool>(renderer_));
+  registerTool(ToolType::Mermaid, std::make_unique<MermaidTool>(renderer_));
 }
 
 void ToolManager::registerTool(ToolType type, std::unique_ptr<Tool> tool) {

@@ -26,4 +26,8 @@
         <file alias="fonts/KaTeX_Size4-Regular.woff2">katex/fonts/KaTeX_Size4-Regular.woff2</file>
         <file alias="fonts/KaTeX_Typewriter-Regular.woff2">katex/fonts/KaTeX_Typewriter-Regular.woff2</file>
     </qresource>
+    <qresource prefix="/mermaid">
+        <file alias="mermaid.min.js">mermaid/mermaid.min.js</file>
+        <file alias="mermaid.html">mermaid.html</file>
+    </qresource>
 </RCC>

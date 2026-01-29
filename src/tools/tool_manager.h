@@ -37,7 +37,8 @@ public:
     Rectangle,
     Circle,
     Selection,
-    Pan
+    Pan,
+    Mermaid
   };
   Q_ENUM(ToolType)
 
