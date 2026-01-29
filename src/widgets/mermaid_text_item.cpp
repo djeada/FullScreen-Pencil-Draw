@@ -12,6 +12,7 @@
 #include <QPainter>
 #include <QStyleOptionGraphicsItem>
 #include <QTextDocument>
+#include <atomic>
 
 #ifdef HAVE_QT_WEBENGINE
 #include "../core/mermaid_renderer.h"
@@ -241,8 +242,9 @@ void MermaidTextItem::renderContent() {
     mermaidConnected_ = true;
   }
 
-  // Generate unique request ID
-  pendingRenderId_ = reinterpret_cast<quintptr>(this) + QDateTime::currentMSecsSinceEpoch();
+  // Generate unique request ID using static counter for thread safety
+  static std::atomic<quintptr> requestCounter{0};
+  pendingRenderId_ = ++requestCounter;
 
   // Request async rendering
   MermaidRenderer::instance().render(mermaidCode_, theme_, pendingRenderId_);

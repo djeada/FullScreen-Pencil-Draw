@@ -26,6 +26,7 @@ static QString escapeJsString(const QString &str) {
   escaped.replace('\n', "\\n");
   escaped.replace('\r', "\\r");
   escaped.replace('\t', "\\t");
+  escaped.replace('`', "\\`");  // Escape backticks to prevent template literal injection
   return "\"" + escaped + "\"";
 }
 
@@ -90,14 +91,14 @@ void MermaidRenderer::initializeWebEngine() {
     qWarning() << "Failed to load Mermaid HTML template";
   }
 
-  // Wait for page to load
+  // Wait for page to load (use Qt::UniqueConnection to prevent duplicates)
   connect(webView_, &QWebEngineView::loadFinished, this, [this](bool ok) {
     qDebug() << "Mermaid page load finished:" << ok;
     initialized_ = ok;
     if (ok && !pendingRequests_.isEmpty()) {
       processNextRequest();
     }
-  });
+  }, Qt::UniqueConnection);
 }
 
 void MermaidRenderer::processNextRequest() {
