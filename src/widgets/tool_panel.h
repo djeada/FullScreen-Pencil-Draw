@@ -34,6 +34,7 @@ signals:
   void textSelected();
   void fillSelected();
   void arrowSelected();
+  void curvedArrowSelected();
   void panSelected();
   void colorSelected(const QColor &color);
   void opacitySelected(int opacity);
@@ -67,6 +68,7 @@ private:
   QAction *actionText;
   QAction *actionFill;
   QAction *actionArrow;
+  QAction *actionCurvedArrow;
   QAction *actionPan;
   QAction *actionIncreaseBrush;
   QAction *actionDecreaseBrush;
@@ -121,6 +123,7 @@ public slots:
   void onActionText();
   void onActionFill();
   void onActionArrow();
+  void onActionCurvedArrow();
   void onActionPan();
 };
 

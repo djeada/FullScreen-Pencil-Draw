@@ -400,6 +400,13 @@ void Canvas::setArrowTool() {
   setCursor(Qt::CrossCursor); isPanning_ = false;
 }
 
+void Canvas::setCurvedArrowTool() {
+  currentShape_ = CurvedArrow; tempShapeItem_ = nullptr;
+  this->setDragMode(QGraphicsView::NoDrag);
+  hideEraserPreview(); if (scene_) scene_->clearSelection();
+  setCursor(Qt::CrossCursor); isPanning_ = false;
+}
+
 void Canvas::setPanTool() {
   currentShape_ = Pan; tempShapeItem_ = nullptr;
   this->setDragMode(QGraphicsView::NoDrag);
@@ -1159,6 +1166,48 @@ void Canvas::drawArrow(const QPointF &start, const QPointF &end) {
   addDrawAction(ahi);
 }
 
+void Canvas::drawCurvedArrow(const QPointF &start, const QPointF &end) {
+  if (!scene_) return;
+  
+  // Calculate control point for bezier curve (perpendicular offset)
+  QPointF mid = (start + end) / 2.0;
+  QPointF diff = end - start;
+  double len = std::sqrt(diff.x() * diff.x() + diff.y() * diff.y());
+  // Perpendicular offset proportional to distance
+  double offset = len * 0.3;
+  QPointF perp(-diff.y() / len * offset, diff.x() / len * offset);
+  QPointF ctrl = mid + perp;
+  
+  // Create curved path
+  QPainterPath path;
+  path.moveTo(start);
+  path.quadTo(ctrl, end);
+  
+  auto pathItem = new QGraphicsPathItem(path);
+  pathItem->setPen(currentPen_);
+  pathItem->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
+  scene_->addItem(pathItem);
+  
+  // Calculate arrow head angle at the end of the curve
+  // Use the tangent at t=1 for quadratic bezier: tangent = 2*(1-t)*(ctrl-start) + 2*t*(end-ctrl) at t=1 = 2*(end-ctrl)
+  QPointF tangent = end - ctrl;
+  double angle = std::atan2(-tangent.y(), tangent.x());
+  double sz = currentPen_.width() * 4;
+  QPolygonF ah;
+  ah << end 
+     << end + QPointF(std::sin(angle + M_PI/3)*sz, std::cos(angle + M_PI/3)*sz)
+     << end + QPointF(std::sin(angle + M_PI - M_PI/3)*sz, std::cos(angle + M_PI - M_PI/3)*sz);
+  
+  auto ahi = new QGraphicsPolygonItem(ah);
+  ahi->setPen(currentPen_); 
+  ahi->setBrush(currentPen_.color());
+  ahi->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
+  scene_->addItem(ahi);
+  
+  addDrawAction(pathItem);
+  addDrawAction(ahi);
+}
+
 void Canvas::mousePressEvent(QMouseEvent *event) {
   if (!event) return;
   if (!scene_) { QGraphicsView::mousePressEvent(event); return; }
@@ -1192,10 +1241,10 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
     pointBuffer_.clear(); pointBuffer_.append(sp);
     addDrawAction(currentPath_);
   } break;
-  case Arrow: case Rectangle: {
+  case Arrow: case Rectangle: case CurvedArrow: {
     auto ri = new QGraphicsRectItem(QRectF(startPoint_, startPoint_));
     ri->setPen(currentPen_);
-    // Only fill rectangles, not the preview rect used for Arrow tool
+    // Only fill rectangles, not the preview rect used for Arrow tools
     if (fillShapes_ && currentShape_ == Rectangle) ri->setBrush(currentPen_.color());
     ri->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
     scene_->addItem(ri); tempShapeItem_ = ri;
@@ -1225,7 +1274,7 @@ void Canvas::mouseMoveEvent(QMouseEvent *event) {
   QPointF cp = mapToScene(event->pos());
   // Apply snap-to-grid for shape tools during drawing
   if (snapToGrid_ && (currentShape_ == Rectangle || currentShape_ == Circle || 
-                       currentShape_ == Line || currentShape_ == Arrow)) {
+                       currentShape_ == Line || currentShape_ == Arrow || currentShape_ == CurvedArrow)) {
     cp = snapToGridPoint(cp);
   }
   emit cursorPositionChanged(cp);
@@ -1233,7 +1282,7 @@ void Canvas::mouseMoveEvent(QMouseEvent *event) {
   // Emit measurement when drawing shapes (only when we have a valid start point)
   if (measurementToolEnabled_ && (event->buttons() & Qt::LeftButton) && tempShapeItem_) {
     if (currentShape_ == Rectangle || currentShape_ == Circle || 
-        currentShape_ == Line || currentShape_ == Arrow) {
+        currentShape_ == Line || currentShape_ == Arrow || currentShape_ == CurvedArrow) {
       emit measurementUpdated(calculateDistance(startPoint_, cp));
     }
   }
@@ -1248,7 +1297,7 @@ void Canvas::mouseMoveEvent(QMouseEvent *event) {
   switch (currentShape_) {
   case Pen: if (event->buttons() & Qt::LeftButton) addPoint(cp); break;
   case Eraser: if (event->buttons() & Qt::LeftButton) eraseAt(cp); updateEraserPreview(cp); break;
-  case Arrow: case Rectangle: if (tempShapeItem_) static_cast<QGraphicsRectItem*>(tempShapeItem_)->setRect(QRectF(startPoint_, cp).normalized()); break;
+  case Arrow: case Rectangle: case CurvedArrow: if (tempShapeItem_) static_cast<QGraphicsRectItem*>(tempShapeItem_)->setRect(QRectF(startPoint_, cp).normalized()); break;
   case Circle: if (tempShapeItem_) static_cast<QGraphicsEllipseItem*>(tempShapeItem_)->setRect(QRectF(startPoint_, cp).normalized()); break;
   case Line: if (tempShapeItem_) static_cast<QGraphicsLineItem*>(tempShapeItem_)->setLine(QLineF(startPoint_, cp)); break;
   default: QGraphicsView::mouseMoveEvent(event); break;
@@ -1261,7 +1310,7 @@ void Canvas::mouseReleaseEvent(QMouseEvent *event) {
   QPointF ep = mapToScene(event->pos());
   // Apply snap-to-grid for shape tools
   if (snapToGrid_ && (currentShape_ == Rectangle || currentShape_ == Circle || 
-                       currentShape_ == Line || currentShape_ == Arrow)) {
+                       currentShape_ == Line || currentShape_ == Arrow || currentShape_ == CurvedArrow)) {
     ep = snapToGridPoint(ep);
   }
   if (currentShape_ == Selection) { QGraphicsView::mouseReleaseEvent(event); return; }
@@ -1272,6 +1321,12 @@ void Canvas::mouseReleaseEvent(QMouseEvent *event) {
     delete tempShapeItem_; 
     tempShapeItem_ = nullptr;
     drawArrow(startPoint_, ep); return;
+  }
+  if (currentShape_ == CurvedArrow && tempShapeItem_) {
+    scene_->removeItem(tempShapeItem_); 
+    delete tempShapeItem_; 
+    tempShapeItem_ = nullptr;
+    drawCurvedArrow(startPoint_, ep); return;
   }
   if (currentShape_ != Pen && currentShape_ != Eraser && tempShapeItem_) tempShapeItem_ = nullptr;
   else if (currentShape_ == Pen) { currentPath_ = nullptr; pointBuffer_.clear(); }

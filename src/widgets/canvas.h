@@ -119,6 +119,7 @@ public slots:
   void setTextTool();
   void setFillTool();
   void setArrowTool();
+  void setCurvedArrowTool();
   void setPanTool();
   void setPenColor(const QColor &color);
   void setOpacity(int opacity);
@@ -170,7 +171,7 @@ protected:
 
 private:
   // Enums
-  enum ShapeType { Line, Rectangle, Circle, Pen, Eraser, Selection, Text, Fill, Arrow, Pan };
+  enum ShapeType { Line, Rectangle, Circle, Pen, Eraser, Selection, Text, Fill, Arrow, Pan, CurvedArrow };
 
   // Member variables
   QGraphicsScene *scene_;
@@ -229,6 +230,7 @@ private:
   void applyZoom(double factor);
   void fillAt(const QPointF &point);
   void drawArrow(const QPointF &start, const QPointF &end);
+  void drawCurvedArrow(const QPointF &start, const QPointF &end);
   void createTextItem(const QPointF &position);
   void loadDroppedImage(const QString &filePath, const QPointF &dropPosition);
   void exportToPDFWithFilename(const QString &fileName);

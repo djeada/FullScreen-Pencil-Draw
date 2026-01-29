@@ -89,9 +89,14 @@ ToolPanel::ToolPanel(QWidget *parent) : QDockWidget("Tools", parent), brushPrevi
   connect(actionLine, &QAction::triggered, this, &ToolPanel::onActionLine);
 
   actionArrow = new QAction("➤ Arrow", this);
-  actionArrow->setToolTip("Draw arrow (A)");
+  actionArrow->setToolTip("Draw straight arrow (A)");
   actionArrow->setCheckable(true);
   connect(actionArrow, &QAction::triggered, this, &ToolPanel::onActionArrow);
+
+  actionCurvedArrow = new QAction("↪ Curve", this);
+  actionCurvedArrow->setToolTip("Draw curved arrow (Shift+A)");
+  actionCurvedArrow->setCheckable(true);
+  connect(actionCurvedArrow, &QAction::triggered, this, &ToolPanel::onActionCurvedArrow);
 
   actionRectangle = new QAction("▢ Rect", this);
   actionRectangle->setToolTip("Draw rectangle (R)");
@@ -103,15 +108,16 @@ ToolPanel::ToolPanel(QWidget *parent) : QDockWidget("Tools", parent), brushPrevi
   actionCircle->setCheckable(true);
   connect(actionCircle, &QAction::triggered, this, &ToolPanel::onActionCircle);
 
-  // Shape tools grid (2x2) - wrapped for centering
+  // Shape tools grid (3x2) - wrapped for centering
   QWidget *shapeGridWidget = new QWidget(container);
   QGridLayout *shapeGrid = new QGridLayout(shapeGridWidget);
   shapeGrid->setSpacing(4);
   shapeGrid->setContentsMargins(0, 0, 0, 0);
   shapeGrid->addWidget(createToolButton(actionLine, shapeGridWidget), 0, 0);
   shapeGrid->addWidget(createToolButton(actionArrow, shapeGridWidget), 0, 1);
-  shapeGrid->addWidget(createToolButton(actionRectangle, shapeGridWidget), 1, 0);
-  shapeGrid->addWidget(createToolButton(actionCircle, shapeGridWidget), 1, 1);
+  shapeGrid->addWidget(createToolButton(actionCurvedArrow, shapeGridWidget), 1, 0);
+  shapeGrid->addWidget(createToolButton(actionRectangle, shapeGridWidget), 1, 1);
+  shapeGrid->addWidget(createToolButton(actionCircle, shapeGridWidget), 2, 0, 1, 2, Qt::AlignCenter);
   shapeGridWidget->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
   mainLayout->addWidget(shapeGridWidget, 0, Qt::AlignHCenter);
 
@@ -499,6 +505,7 @@ void ToolPanel::clearActiveToolStyles() {
   actionFill->setChecked(false);
   actionLine->setChecked(false);
   actionArrow->setChecked(false);
+  actionCurvedArrow->setChecked(false);
   actionRectangle->setChecked(false);
   actionCircle->setChecked(false);
   actionSelection->setChecked(false);
@@ -508,7 +515,7 @@ void ToolPanel::clearActiveToolStyles() {
 void ToolPanel::setActiveTool(const QString &toolName) { 
   static const QHash<QString, QString> toolIcons = {
     {"Pen", "✎"}, {"Eraser", "⌫"}, {"Text", "T"}, {"Fill", "◉"},
-    {"Line", "╱"}, {"Arrow", "➤"}, {"Rectangle", "▢"}, {"Circle", "◯"},
+    {"Line", "╱"}, {"Arrow", "➤"}, {"CurvedArrow", "↪"}, {"Rectangle", "▢"}, {"Circle", "◯"},
     {"Select", "⬚"}, {"Pan", "☰"}
   };
   QString icon = toolIcons.value(toolName, "•");
@@ -546,6 +553,7 @@ void ToolPanel::onActionText() { clearActiveToolStyles(); actionText->setChecked
 void ToolPanel::onActionFill() { clearActiveToolStyles(); actionFill->setChecked(true); setActiveTool("Fill"); emit fillSelected(); }
 void ToolPanel::onActionLine() { clearActiveToolStyles(); actionLine->setChecked(true); setActiveTool("Line"); emit shapeSelected("Line"); emit lineSelected(); }
 void ToolPanel::onActionArrow() { clearActiveToolStyles(); actionArrow->setChecked(true); setActiveTool("Arrow"); emit arrowSelected(); }
+void ToolPanel::onActionCurvedArrow() { clearActiveToolStyles(); actionCurvedArrow->setChecked(true); setActiveTool("CurvedArrow"); emit curvedArrowSelected(); }
 void ToolPanel::onActionRectangle() { clearActiveToolStyles(); actionRectangle->setChecked(true); setActiveTool("Rectangle"); emit shapeSelected("Rectangle"); emit rectangleSelected(); }
 void ToolPanel::onActionCircle() { clearActiveToolStyles(); actionCircle->setChecked(true); setActiveTool("Circle"); emit shapeSelected("Circle"); emit circleSelected(); }
 void ToolPanel::onActionSelection() { clearActiveToolStyles(); actionSelection->setChecked(true); setActiveTool("Select"); emit shapeSelected("Selection"); emit selectionSelected(); }

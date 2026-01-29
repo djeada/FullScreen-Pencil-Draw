@@ -135,6 +135,7 @@ void MainWindow::setupConnections() {
   connect(_toolPanel, &ToolPanel::textSelected, _canvas, &Canvas::setTextTool);
   connect(_toolPanel, &ToolPanel::fillSelected, _canvas, &Canvas::setFillTool);
   connect(_toolPanel, &ToolPanel::arrowSelected, _canvas, &Canvas::setArrowTool);
+  connect(_toolPanel, &ToolPanel::curvedArrowSelected, _canvas, &Canvas::setCurvedArrowTool);
   connect(_toolPanel, &ToolPanel::panSelected, _canvas, &Canvas::setPanTool);
   connect(_toolPanel, &ToolPanel::colorSelected, _canvas, &Canvas::setPenColor);
   connect(_toolPanel, &ToolPanel::opacitySelected, _canvas, &Canvas::setOpacity);
