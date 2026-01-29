@@ -1154,10 +1154,12 @@ void Canvas::drawArrow(const QPointF &start, const QPointF &end) {
   li->setPen(currentPen_);
   li->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
   scene_->addItem(li);
-  double angle = std::atan2(-(end.y() - start.y()), end.x() - start.x());
+  double angle = std::atan2(end.y() - start.y(), end.x() - start.x());
   double sz = currentPen_.width() * 4;
-  QPolygonF ah; ah << end << end + QPointF(std::sin(angle + M_PI/3)*sz, std::cos(angle + M_PI/3)*sz)
-                    << end + QPointF(std::sin(angle + M_PI - M_PI/3)*sz, std::cos(angle + M_PI - M_PI/3)*sz);
+  QPolygonF ah; 
+  ah << end 
+     << end - QPointF(std::cos(angle - M_PI/6)*sz, std::sin(angle - M_PI/6)*sz)
+     << end - QPointF(std::cos(angle + M_PI/6)*sz, std::sin(angle + M_PI/6)*sz);
   auto ahi = new QGraphicsPolygonItem(ah);
   ahi->setPen(currentPen_); ahi->setBrush(currentPen_.color());
   ahi->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
@@ -1189,14 +1191,14 @@ void Canvas::drawCurvedArrow(const QPointF &start, const QPointF &end) {
   scene_->addItem(pathItem);
   
   // Calculate arrow head angle at the end of the curve
-  // Use the tangent at t=1 for quadratic bezier: tangent = 2*(1-t)*(ctrl-start) + 2*t*(end-ctrl) at t=1 = 2*(end-ctrl)
+  // Use the tangent at t=1 for quadratic bezier: tangent = end - ctrl
   QPointF tangent = end - ctrl;
-  double angle = std::atan2(-tangent.y(), tangent.x());
+  double angle = std::atan2(tangent.y(), tangent.x());
   double sz = currentPen_.width() * 4;
   QPolygonF ah;
   ah << end 
-     << end + QPointF(std::sin(angle + M_PI/3)*sz, std::cos(angle + M_PI/3)*sz)
-     << end + QPointF(std::sin(angle + M_PI - M_PI/3)*sz, std::cos(angle + M_PI - M_PI/3)*sz);
+     << end - QPointF(std::cos(angle - M_PI/6)*sz, std::sin(angle - M_PI/6)*sz)
+     << end - QPointF(std::cos(angle + M_PI/6)*sz, std::sin(angle + M_PI/6)*sz);
   
   auto ahi = new QGraphicsPolygonItem(ah);
   ahi->setPen(currentPen_); 
@@ -1241,14 +1243,19 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
     pointBuffer_.clear(); pointBuffer_.append(sp);
     addDrawAction(currentPath_);
   } break;
-  case Arrow: case Rectangle: case CurvedArrow: {
+  case Rectangle: {
     auto ri = new QGraphicsRectItem(QRectF(startPoint_, startPoint_));
     ri->setPen(currentPen_);
-    // Only fill rectangles, not the preview rect used for Arrow tools
-    if (fillShapes_ && currentShape_ == Rectangle) ri->setBrush(currentPen_.color());
+    if (fillShapes_) ri->setBrush(currentPen_.color());
     ri->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
     scene_->addItem(ri); tempShapeItem_ = ri;
-    if (currentShape_ == Rectangle) { addDrawAction(ri); }
+    addDrawAction(ri);
+  } break;
+  case Arrow: case CurvedArrow: {
+    auto li = new QGraphicsLineItem(QLineF(startPoint_, startPoint_));
+    li->setPen(currentPen_);
+    li->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
+    scene_->addItem(li); tempShapeItem_ = li;
   } break;
   case Circle: {
     auto ei = new QGraphicsEllipseItem(QRectF(startPoint_, startPoint_));
@@ -1297,7 +1304,8 @@ void Canvas::mouseMoveEvent(QMouseEvent *event) {
   switch (currentShape_) {
   case Pen: if (event->buttons() & Qt::LeftButton) addPoint(cp); break;
   case Eraser: if (event->buttons() & Qt::LeftButton) eraseAt(cp); updateEraserPreview(cp); break;
-  case Arrow: case Rectangle: case CurvedArrow: if (tempShapeItem_) static_cast<QGraphicsRectItem*>(tempShapeItem_)->setRect(QRectF(startPoint_, cp).normalized()); break;
+  case Rectangle: if (tempShapeItem_) static_cast<QGraphicsRectItem*>(tempShapeItem_)->setRect(QRectF(startPoint_, cp).normalized()); break;
+  case Arrow: case CurvedArrow: if (tempShapeItem_) static_cast<QGraphicsLineItem*>(tempShapeItem_)->setLine(QLineF(startPoint_, cp)); break;
   case Circle: if (tempShapeItem_) static_cast<QGraphicsEllipseItem*>(tempShapeItem_)->setRect(QRectF(startPoint_, cp).normalized()); break;
   case Line: if (tempShapeItem_) static_cast<QGraphicsLineItem*>(tempShapeItem_)->setLine(QLineF(startPoint_, cp)); break;
   default: QGraphicsView::mouseMoveEvent(event); break;
