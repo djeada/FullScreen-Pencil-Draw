@@ -1321,22 +1321,49 @@ void Canvas::cutSelectedItems() {
 void Canvas::pasteItems() {
   if (!scene_) return;
   auto md = QApplication::clipboard()->mimeData();
-  if (!md || !md->hasFormat("application/x-canvas-items")) return;
-  QByteArray ba = md->data("application/x-canvas-items");
-  QDataStream ds(&ba, QIODevice::ReadOnly);
-  QList<QGraphicsItem*> pi;
-  while (!ds.atEnd()) {
-    QString t; ds >> t;
-    if (t == "Rectangle") { QRectF r; QPointF p; QPen pn; QBrush b; ds >> r >> p >> pn >> b; auto n = new QGraphicsRectItem(r); n->setPen(pn); n->setBrush(b); n->setPos(p + QPointF(20,20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable); scene_->addItem(n); pi.append(n); addDrawAction(n); }
-    else if (t == "Ellipse") { QRectF r; QPointF p; QPen pn; QBrush b; ds >> r >> p >> pn >> b; auto n = new QGraphicsEllipseItem(r); n->setPen(pn); n->setBrush(b); n->setPos(p + QPointF(20,20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable); scene_->addItem(n); pi.append(n); addDrawAction(n); }
-    else if (t == "Line") { QLineF l; QPointF p; QPen pn; ds >> l >> p >> pn; auto n = new QGraphicsLineItem(l); n->setPen(pn); n->setPos(p + QPointF(20,20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable); scene_->addItem(n); pi.append(n); addDrawAction(n); }
-    else if (t == "Path") { QPainterPath pp; QPointF p; QPen pn; ds >> pp >> p >> pn; auto n = new QGraphicsPathItem(pp); n->setPen(pn); n->setPos(p + QPointF(20,20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable); scene_->addItem(n); pi.append(n); addDrawAction(n); }
-    else if (t == "LatexText") { QString tx; QPointF p; QFont f; QColor c; ds >> tx >> p >> f >> c; auto n = new LatexTextItem(); n->setText(tx); n->setFont(f); n->setTextColor(c); n->setPos(p + QPointF(20,20)); scene_->addItem(n); pi.append(n); addDrawAction(n); }
-    else if (t == "Text") { QString tx; QPointF p; QFont f; QColor c; ds >> tx >> p >> f >> c; auto n = new QGraphicsTextItem(tx); n->setFont(f); n->setDefaultTextColor(c); n->setPos(p + QPointF(20,20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable); scene_->addItem(n); pi.append(n); addDrawAction(n); }
-    else if (t == "Polygon") { QPolygonF pg; QPointF p; QPen pn; QBrush b; ds >> pg >> p >> pn >> b; auto n = new QGraphicsPolygonItem(pg); n->setPen(pn); n->setBrush(b); n->setPos(p + QPointF(20,20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable); scene_->addItem(n); pi.append(n); addDrawAction(n); }
+  if (!md) return;
+  
+  // Handle canvas items format (internal copy/paste)
+  if (md->hasFormat("application/x-canvas-items")) {
+    QByteArray ba = md->data("application/x-canvas-items");
+    QDataStream ds(&ba, QIODevice::ReadOnly);
+    QList<QGraphicsItem*> pi;
+    while (!ds.atEnd()) {
+      QString t; ds >> t;
+      if (t == "Rectangle") { QRectF r; QPointF p; QPen pn; QBrush b; ds >> r >> p >> pn >> b; auto n = new QGraphicsRectItem(r); n->setPen(pn); n->setBrush(b); n->setPos(p + QPointF(20,20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable); scene_->addItem(n); pi.append(n); addDrawAction(n); }
+      else if (t == "Ellipse") { QRectF r; QPointF p; QPen pn; QBrush b; ds >> r >> p >> pn >> b; auto n = new QGraphicsEllipseItem(r); n->setPen(pn); n->setBrush(b); n->setPos(p + QPointF(20,20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable); scene_->addItem(n); pi.append(n); addDrawAction(n); }
+      else if (t == "Line") { QLineF l; QPointF p; QPen pn; ds >> l >> p >> pn; auto n = new QGraphicsLineItem(l); n->setPen(pn); n->setPos(p + QPointF(20,20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable); scene_->addItem(n); pi.append(n); addDrawAction(n); }
+      else if (t == "Path") { QPainterPath pp; QPointF p; QPen pn; ds >> pp >> p >> pn; auto n = new QGraphicsPathItem(pp); n->setPen(pn); n->setPos(p + QPointF(20,20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable); scene_->addItem(n); pi.append(n); addDrawAction(n); }
+      else if (t == "LatexText") { QString tx; QPointF p; QFont f; QColor c; ds >> tx >> p >> f >> c; auto n = new LatexTextItem(); n->setText(tx); n->setFont(f); n->setTextColor(c); n->setPos(p + QPointF(20,20)); scene_->addItem(n); pi.append(n); addDrawAction(n); }
+      else if (t == "Text") { QString tx; QPointF p; QFont f; QColor c; ds >> tx >> p >> f >> c; auto n = new QGraphicsTextItem(tx); n->setFont(f); n->setDefaultTextColor(c); n->setPos(p + QPointF(20,20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable); scene_->addItem(n); pi.append(n); addDrawAction(n); }
+      else if (t == "Polygon") { QPolygonF pg; QPointF p; QPen pn; QBrush b; ds >> pg >> p >> pn >> b; auto n = new QGraphicsPolygonItem(pg); n->setPen(pn); n->setBrush(b); n->setPos(p + QPointF(20,20)); n->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable); scene_->addItem(n); pi.append(n); addDrawAction(n); }
+    }
+    scene_->clearSelection();
+    for (auto i : pi) if (i) i->setSelected(true);
+    return;
   }
-  scene_->clearSelection();
-  for (auto i : pi) if (i) i->setSelected(true);
+  
+  // Handle plain text from clipboard (external paste)
+  if (md->hasText()) {
+    QString text = md->text().trimmed();
+    if (text.isEmpty()) return;
+    
+    // Create text item at center of visible area
+    QPointF centerPos = mapToScene(viewport()->rect().center());
+    
+    auto *textItem = new LatexTextItem();
+    textItem->setText(text);
+    textItem->setFont(QFont("Arial", qMax(12, currentPen_.width() * 3)));
+    textItem->setTextColor(currentPen_.color());
+    textItem->setPos(centerPos);
+    scene_->addItem(textItem);
+    addDrawAction(textItem);
+    
+    scene_->clearSelection();
+    textItem->setSelected(true);
+    emit canvasModified();
+    return;
+  }
 }
 
 void Canvas::addPoint(const QPointF &point) {
@@ -1550,25 +1577,57 @@ void Canvas::addImageFromScreenshot(const QImage &image) {
 }
 
 void Canvas::contextMenuEvent(QContextMenuEvent *event) {
-  // Only show context menu if there are selected items
-  if (!scene_ || scene_->selectedItems().isEmpty()) {
+  if (!scene_) {
     QGraphicsView::contextMenuEvent(event);
     return;
   }
 
   QMenu contextMenu(this);
-  QAction *exportSVGAction = contextMenu.addAction("Export Selection as SVG");
-  QAction *exportPNGAction = contextMenu.addAction("Export Selection as PNG");
-  QAction *exportJPGAction = contextMenu.addAction("Export Selection as JPG");
+  
+  // Clipboard actions - always available
+  auto md = QApplication::clipboard()->mimeData();
+  bool canPaste = md && (md->hasFormat("application/x-canvas-items") || md->hasText());
+  
+  QAction *pasteAction = contextMenu.addAction("Paste");
+  pasteAction->setShortcut(QKeySequence::Paste);
+  pasteAction->setEnabled(canPaste);
+  connect(pasteAction, &QAction::triggered, this, &Canvas::pasteItems);
+  
+  // Selection-specific actions
+  if (!scene_->selectedItems().isEmpty()) {
+    contextMenu.addSeparator();
+    
+    QAction *copyAction = contextMenu.addAction("Copy");
+    copyAction->setShortcut(QKeySequence::Copy);
+    connect(copyAction, &QAction::triggered, this, &Canvas::copySelectedItems);
+    
+    QAction *cutAction = contextMenu.addAction("Cut");
+    cutAction->setShortcut(QKeySequence::Cut);
+    connect(cutAction, &QAction::triggered, this, &Canvas::cutSelectedItems);
+    
+    QAction *deleteAction = contextMenu.addAction("Delete");
+    deleteAction->setShortcut(QKeySequence::Delete);
+    connect(deleteAction, &QAction::triggered, this, &Canvas::deleteSelectedItems);
+    
+    QAction *duplicateAction = contextMenu.addAction("Duplicate");
+    duplicateAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_D));
+    connect(duplicateAction, &QAction::triggered, this, &Canvas::duplicateSelectedItems);
+    
+    contextMenu.addSeparator();
+    
+    QAction *exportSVGAction = contextMenu.addAction("Export Selection as SVG");
+    QAction *exportPNGAction = contextMenu.addAction("Export Selection as PNG");
+    QAction *exportJPGAction = contextMenu.addAction("Export Selection as JPG");
 
 #ifdef HAVE_QT_SVG
-  connect(exportSVGAction, &QAction::triggered, this, &Canvas::exportSelectionToSVG);
+    connect(exportSVGAction, &QAction::triggered, this, &Canvas::exportSelectionToSVG);
 #else
-  exportSVGAction->setEnabled(false);
-  exportSVGAction->setText("Export Selection as SVG (requires Qt SVG)");
+    exportSVGAction->setEnabled(false);
+    exportSVGAction->setText("Export Selection as SVG (requires Qt SVG)");
 #endif
-  connect(exportPNGAction, &QAction::triggered, this, &Canvas::exportSelectionToPNG);
-  connect(exportJPGAction, &QAction::triggered, this, &Canvas::exportSelectionToJPG);
+    connect(exportPNGAction, &QAction::triggered, this, &Canvas::exportSelectionToPNG);
+    connect(exportJPGAction, &QAction::triggered, this, &Canvas::exportSelectionToJPG);
+  }
 
   contextMenu.exec(event->globalPos());
 }
