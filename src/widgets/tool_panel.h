@@ -36,6 +36,7 @@ signals:
   void arrowSelected();
   void curvedArrowSelected();
   void panSelected();
+  void mermaidSelected();
   void colorSelected(const QColor &color);
   void opacitySelected(int opacity);
   void increaseBrushSize();
@@ -66,6 +67,7 @@ private:
   QAction *actionPen;
   QAction *actionEraser;
   QAction *actionText;
+  QAction *actionMermaid;
   QAction *actionFill;
   QAction *actionArrow;
   QAction *actionCurvedArrow;
@@ -121,6 +123,7 @@ public slots:
   void onActionPen();
   void onActionEraser();
   void onActionText();
+  void onActionMermaid();
   void onActionFill();
   void onActionArrow();
   void onActionCurvedArrow();

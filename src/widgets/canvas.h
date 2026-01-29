@@ -117,6 +117,7 @@ public slots:
   void setPenTool();
   void setEraserTool();
   void setTextTool();
+  void setMermaidTool();
   void setFillTool();
   void setArrowTool();
   void setCurvedArrowTool();
@@ -171,7 +172,7 @@ protected:
 
 private:
   // Enums
-  enum ShapeType { Line, Rectangle, Circle, Pen, Eraser, Selection, Text, Fill, Arrow, Pan, CurvedArrow };
+  enum ShapeType { Line, Rectangle, Circle, Pen, Eraser, Selection, Text, Mermaid, Fill, Arrow, Pan, CurvedArrow };
 
   // Member variables
   QGraphicsScene *scene_;
@@ -232,6 +233,7 @@ private:
   void drawArrow(const QPointF &start, const QPointF &end);
   void drawCurvedArrow(const QPointF &start, const QPointF &end);
   void createTextItem(const QPointF &position);
+  void createMermaidItem(const QPointF &position);
   void loadDroppedImage(const QString &filePath, const QPointF &dropPosition);
   void exportToPDFWithFilename(const QString &fileName);
   QRectF getSelectionBoundingRect() const;

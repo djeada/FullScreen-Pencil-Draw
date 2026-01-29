@@ -63,12 +63,17 @@ ToolPanel::ToolPanel(QWidget *parent) : QDockWidget("Tools", parent), brushPrevi
   actionText->setCheckable(true);
   connect(actionText, &QAction::triggered, this, &ToolPanel::onActionText);
 
+  actionMermaid = new QAction("⬡ Mermaid", this);
+  actionMermaid->setToolTip("Add Mermaid diagram (M)");
+  actionMermaid->setCheckable(true);
+  connect(actionMermaid, &QAction::triggered, this, &ToolPanel::onActionMermaid);
+
   actionFill = new QAction("◉ Fill", this);
   actionFill->setToolTip("Fill existing shapes with color (F)");
   actionFill->setCheckable(true);
   connect(actionFill, &QAction::triggered, this, &ToolPanel::onActionFill);
 
-  // Drawing tools grid (2x2) - wrapped for centering
+  // Drawing tools grid (3x2) - wrapped for centering
   QWidget *drawGridWidget = new QWidget(container);
   QGridLayout *drawGrid = new QGridLayout(drawGridWidget);
   drawGrid->setSpacing(4);
@@ -77,6 +82,7 @@ ToolPanel::ToolPanel(QWidget *parent) : QDockWidget("Tools", parent), brushPrevi
   drawGrid->addWidget(createToolButton(actionEraser, drawGridWidget), 0, 1);
   drawGrid->addWidget(createToolButton(actionText, drawGridWidget), 1, 0);
   drawGrid->addWidget(createToolButton(actionFill, drawGridWidget), 1, 1);
+  drawGrid->addWidget(createToolButton(actionMermaid, drawGridWidget), 2, 0, 1, 2, Qt::AlignCenter);
   drawGridWidget->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
   mainLayout->addWidget(drawGridWidget, 0, Qt::AlignHCenter);
 
@@ -502,6 +508,7 @@ void ToolPanel::clearActiveToolStyles() {
   actionPen->setChecked(false);
   actionEraser->setChecked(false);
   actionText->setChecked(false);
+  actionMermaid->setChecked(false);
   actionFill->setChecked(false);
   actionLine->setChecked(false);
   actionArrow->setChecked(false);
@@ -514,7 +521,7 @@ void ToolPanel::clearActiveToolStyles() {
 
 void ToolPanel::setActiveTool(const QString &toolName) { 
   static const QHash<QString, QString> toolIcons = {
-    {"Pen", "✎"}, {"Eraser", "⌫"}, {"Text", "T"}, {"Fill", "◉"},
+    {"Pen", "✎"}, {"Eraser", "⌫"}, {"Text", "T"}, {"Mermaid", "⬡"}, {"Fill", "◉"},
     {"Line", "╱"}, {"Arrow", "➤"}, {"CurvedArrow", "↪"}, {"Rectangle", "▢"}, {"Circle", "◯"},
     {"Select", "⬚"}, {"Pan", "☰"}
   };
@@ -550,6 +557,7 @@ void ToolPanel::updateFilledShapesDisplay(bool filled) { actionFilledShapes->set
 void ToolPanel::onActionPen() { clearActiveToolStyles(); actionPen->setChecked(true); setActiveTool("Pen"); emit penSelected(); }
 void ToolPanel::onActionEraser() { clearActiveToolStyles(); actionEraser->setChecked(true); setActiveTool("Eraser"); emit eraserSelected(); }
 void ToolPanel::onActionText() { clearActiveToolStyles(); actionText->setChecked(true); setActiveTool("Text"); emit textSelected(); }
+void ToolPanel::onActionMermaid() { clearActiveToolStyles(); actionMermaid->setChecked(true); setActiveTool("Mermaid"); emit mermaidSelected(); }
 void ToolPanel::onActionFill() { clearActiveToolStyles(); actionFill->setChecked(true); setActiveTool("Fill"); emit fillSelected(); }
 void ToolPanel::onActionLine() { clearActiveToolStyles(); actionLine->setChecked(true); setActiveTool("Line"); emit shapeSelected("Line"); emit lineSelected(); }
 void ToolPanel::onActionArrow() { clearActiveToolStyles(); actionArrow->setChecked(true); setActiveTool("Arrow"); emit arrowSelected(); }

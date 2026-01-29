@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="qrc:/mermaid/mermaid.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        html, body {
+            background: white;
+        }
+        body {
+            display: inline-block;
+        }
+        #diagram {
+            display: inline-block;
+            padding: 16px;
+        }
+        #diagram svg {
+            max-width: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="diagram"></div>
+    <script>
+        // Initialize mermaid
+        mermaid.initialize({
+            startOnLoad: false,
+            theme: 'default',
+            securityLevel: 'loose',
+            flowchart: {
+                useMaxWidth: false,
+                htmlLabels: true
+            },
+            sequence: {
+                useMaxWidth: false
+            },
+            gantt: {
+                useMaxWidth: false
+            }
+        });
+
+        // Render function called from Qt
+        async function renderMermaid(code, theme) {
+            try {
+                const container = document.getElementById('diagram');
+                container.innerHTML = '';
+
+                // Update theme
+                mermaid.initialize({
+                    startOnLoad: false,
+                    theme: theme || 'default',
+                    securityLevel: 'loose',
+                    flowchart: {
+                        useMaxWidth: false,
+                        htmlLabels: true
+                    },
+                    sequence: {
+                        useMaxWidth: false
+                    },
+                    gantt: {
+                        useMaxWidth: false
+                    }
+                });
+
+                // Generate unique ID for this render
+                const id = 'mermaid-' + Date.now();
+
+                // Render the diagram
+                const { svg } = await mermaid.render(id, code);
+                container.innerHTML = svg;
+
+                console.log('Rendered mermaid diagram with theme:', theme);
+                return true;
+            } catch (e) {
+                console.error('Mermaid error:', e);
+                const container = document.getElementById('diagram');
+                container.innerHTML = '<pre style="color: red;">Error: ' + e.message + '</pre>';
+                return false;
+            }
+        }
+
+        // Get rendered size
+        function getSize() {
+            const el = document.getElementById('diagram');
+            const svg = el.querySelector('svg');
+            if (svg) {
+                const rect = svg.getBoundingClientRect();
+                return JSON.stringify({
+                    width: Math.ceil(rect.width),
+                    height: Math.ceil(rect.height)
+                });
+            }
+            const rect = el.getBoundingClientRect();
+            return JSON.stringify({
+                width: Math.ceil(rect.width),
+                height: Math.ceil(rect.height)
+            });
+        }
+
+        // Debug: show that page loaded
+        console.log('Mermaid page loaded, mermaid available:', typeof mermaid !== 'undefined');
+    </script>
+</body>
+</html>
