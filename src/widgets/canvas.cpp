@@ -1177,7 +1177,7 @@ void Canvas::drawCurvedArrow(const QPointF &start, const QPointF &end) {
   double len = std::sqrt(diff.x() * diff.x() + diff.y() * diff.y());
   // Perpendicular offset proportional to distance
   double offset = len * 0.3;
-  QPointF perp(-diff.y() / len * offset, diff.x() / len * offset);
+  QPointF perp(diff.y() / len * offset, -diff.x() / len * offset);
   QPointF ctrl = mid + perp;
   
   // Create curved path
