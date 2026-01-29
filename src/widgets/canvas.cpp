@@ -1162,6 +1162,13 @@ void Canvas::drawArrow(const QPointF &start, const QPointF &end) {
 void Canvas::mousePressEvent(QMouseEvent *event) {
   if (!event) return;
   if (!scene_) { QGraphicsView::mousePressEvent(event); return; }
+  
+  // Only handle left-click for tool actions; right-click is for context menu
+  if (event->button() != Qt::LeftButton) {
+    QGraphicsView::mousePressEvent(event);
+    return;
+  }
+  
   QPointF sp = mapToScene(event->pos());
   // Apply snap-to-grid for shape tools
   if (snapToGrid_ && (currentShape_ == Rectangle || currentShape_ == Circle || 
