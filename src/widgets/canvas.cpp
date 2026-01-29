@@ -1323,7 +1323,7 @@ void Canvas::pasteItems() {
   auto md = QApplication::clipboard()->mimeData();
   if (!md) return;
   
-  // Handle canvas items format (internal copy/paste)
+  // Handle canvas items format (internal copy/paste) - highest priority
   if (md->hasFormat("application/x-canvas-items")) {
     QByteArray ba = md->data("application/x-canvas-items");
     QDataStream ds(&ba, QIODevice::ReadOnly);
@@ -1343,7 +1343,26 @@ void Canvas::pasteItems() {
     return;
   }
   
-  // Handle plain text from clipboard (external paste)
+  // Handle image from clipboard (screenshots, copied images)
+  if (md->hasImage()) {
+    QImage image = qvariant_cast<QImage>(md->imageData());
+    if (!image.isNull()) {
+      QPointF centerPos = mapToScene(viewport()->rect().center());
+      QPixmap pixmap = QPixmap::fromImage(image);
+      auto *pixmapItem = new QGraphicsPixmapItem(pixmap);
+      pixmapItem->setPos(centerPos - QPointF(pixmap.width() / 2.0, pixmap.height() / 2.0));
+      pixmapItem->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
+      scene_->addItem(pixmapItem);
+      addDrawAction(pixmapItem);
+      
+      scene_->clearSelection();
+      pixmapItem->setSelected(true);
+      emit canvasModified();
+      return;
+    }
+  }
+  
+  // Handle plain text from clipboard (external paste) - lowest priority
   if (md->hasText()) {
     QString text = md->text().trimmed();
     if (text.isEmpty()) return;
@@ -1586,7 +1605,7 @@ void Canvas::contextMenuEvent(QContextMenuEvent *event) {
   
   // Clipboard actions - always available
   auto md = QApplication::clipboard()->mimeData();
-  bool canPaste = md && (md->hasFormat("application/x-canvas-items") || md->hasText());
+  bool canPaste = md && (md->hasFormat("application/x-canvas-items") || md->hasImage() || md->hasText());
   
   QAction *pasteAction = contextMenu.addAction("Paste");
   pasteAction->setShortcut(QKeySequence::Paste);
