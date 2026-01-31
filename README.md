@@ -4,7 +4,7 @@ A vector and raster graphics editor built with C++ and Qt6. This application pro
 
 ## Screenshots
 
-![Application Screenshot](https://github.com/user-attachments/assets/0e311731-69f6-458a-bcc9-fb2a4d46b32b)
+![untitled-ezgif com-video-to-gif-converter](https://github.com/user-attachments/assets/5ee8d036-4d4d-4d24-8deb-3845e48eedf4)
 
 ## Features
 
