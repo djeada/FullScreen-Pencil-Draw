@@ -154,6 +154,8 @@ jobs:
             EXE_PATH="build/FullScreen-Pencil-Draw.exe"
           fi
           cp "$EXE_PATH" dist/FullScreen-Pencil-Draw.exe
+          cp LICENSE dist/
+          cp THIRD_PARTY_LICENSES.md dist/
           windeployqt --release --compiler-runtime dist/FullScreen-Pencil-Draw.exe
           powershell -Command "Compress-Archive -Path dist\\* -DestinationPath FullScreen-Pencil-Draw-${{ runner.os }}.zip"
           echo "ASSET=FullScreen-Pencil-Draw-${RUNNER_OS}.zip" >> $GITHUB_ENV
@@ -168,6 +170,9 @@ jobs:
             APP_PATH="build/Release/FullScreen-Pencil-Draw.app"
           fi
           macdeployqt "$APP_PATH" -verbose=1 -always-overwrite
+          # Include license files in the app bundle
+          cp LICENSE "$APP_PATH/Contents/Resources/"
+          cp THIRD_PARTY_LICENSES.md "$APP_PATH/Contents/Resources/"
           ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "FullScreen-Pencil-Draw-${RUNNER_OS}.zip"
           echo "ASSET=FullScreen-Pencil-Draw-${RUNNER_OS}.zip" >> $GITHUB_ENV
         shell: bash
@@ -176,8 +181,9 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           set -euo pipefail
-          mkdir -p dist/AppDir/usr/bin
+          mkdir -p dist/AppDir/usr/bin dist/AppDir/usr/share/doc/fullscreen-pencil-draw
           cp build/FullScreen-Pencil-Draw dist/AppDir/usr/bin/
+          cp LICENSE THIRD_PARTY_LICENSES.md dist/AppDir/usr/share/doc/fullscreen-pencil-draw/
           cat > dist/AppDir/FullScreen-Pencil-Draw.desktop <<'EOF'
           [Desktop Entry]
           Type=Application

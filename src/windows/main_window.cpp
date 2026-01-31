@@ -17,6 +17,7 @@
 #include <QKeyEvent>
 #include <QLabel>
 #include <QMenuBar>
+#include <QMessageBox>
 #include <QShortcut>
 #include <QSpinBox>
 #include <QSplitter>
@@ -356,6 +357,28 @@ void MainWindow::setupMenuBar() {
   });
   _autoSaveAction->setCheckable(true);
   _autoSaveAction->setChecked(true);  // Enabled by default
+  
+  // Help menu
+  QMenu *helpMenu = menuBar->addMenu("&Help");
+  
+  helpMenu->addAction("&About", this, [this]() {
+    QMessageBox::about(this, "About FullScreen Pencil Draw",
+      QString("<h3>FullScreen Pencil Draw</h3>"
+              "<p>Version 0.1</p>"
+              "<p>A vector and raster graphics editor.</p>"
+              "<p>Copyright © 2020 Adam Djellouli</p>"
+              "<p>Licensed under the MIT License.</p>"
+              "<hr>"
+              "<p><b>Third-Party Libraries:</b></p>"
+              "<p>This application uses the <a href='https://www.qt.io/'>Qt framework</a> "
+              "version %1 under the "
+              "<a href='https://www.gnu.org/licenses/lgpl-3.0.html'>GNU LGPL v3</a>.</p>"
+              "<p>Qt source code is available at "
+              "<a href='https://code.qt.io/'>code.qt.io</a>.</p>")
+              .arg(qVersion()));
+  });
+  
+  helpMenu->addAction("About &Qt", qApp, &QApplication::aboutQt);
 }
 
 void MainWindow::updateRecentFilesMenu() {

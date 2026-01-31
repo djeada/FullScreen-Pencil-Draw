@@ -270,6 +270,16 @@ Contributions are welcome. If you have suggestions, improvements, or bug fixes, 
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
+### Third-Party Licenses
+
+This application uses the [Qt framework](https://www.qt.io/) under the [GNU Lesser General Public License (LGPL) v3](https://www.gnu.org/licenses/lgpl-3.0.html).
+
+- **Qt Source Code**: Available at [https://code.qt.io/](https://code.qt.io/) or [https://download.qt.io/](https://download.qt.io/)
+- **Qt License**: [LGPL v3](https://www.gnu.org/licenses/lgpl-3.0.html)
+- Qt is dynamically linked, allowing you to replace the Qt libraries with your own modified versions as permitted by the LGPL.
+
+The bundled KaTeX library is licensed under the MIT License. The bundled Mermaid library is licensed under the MIT License.
+
 ## Contact
 
 For questions or feedback, use [GitHub Issues](https://github.com/djeada/FullScreen-Pencil-Draw/issues).
