@@ -10,6 +10,7 @@
 #include <QBuffer>
 #include <QDebug>
 #include <QFile>
+#include <QPointer>
 #include <QRegularExpression>
 #include <QScreen>
 #include <QTimer>
@@ -37,12 +38,19 @@ MermaidRenderer &MermaidRenderer::instance() {
 
 MermaidRenderer::MermaidRenderer(QObject *parent)
     : QObject(parent), webView_(nullptr), initialized_(false),
-      rendering_(false), cache_(CACHE_SIZE) {}
+      rendering_(false), shuttingDown_(false), cache_(CACHE_SIZE) {}
 
 MermaidRenderer::~MermaidRenderer() {
+  shuttingDown_ = true;
+  pendingRequests_.clear();
+  rendering_ = false;
+
   if (webView_) {
+    disconnect(webView_, nullptr, this, nullptr);
     webView_->close();
-    delete webView_;
+    if (QCoreApplication::instance() && !QCoreApplication::closingDown()) {
+      delete webView_;
+    }
     webView_ = nullptr;
   }
 }
@@ -50,7 +58,7 @@ MermaidRenderer::~MermaidRenderer() {
 bool MermaidRenderer::isAvailable() const { return initialized_; }
 
 void MermaidRenderer::initializeWebEngine() {
-  if (webView_) {
+  if (webView_ || shuttingDown_) {
     return;
   }
 
@@ -102,7 +110,7 @@ void MermaidRenderer::initializeWebEngine() {
 }
 
 void MermaidRenderer::processNextRequest() {
-  if (pendingRequests_.isEmpty() || rendering_) {
+  if (pendingRequests_.isEmpty() || rendering_ || shuttingDown_) {
     return;
   }
 
@@ -117,11 +125,20 @@ void MermaidRenderer::processNextRequest() {
                    .arg(escapeJsString(currentRequest_.mermaidCode))
                    .arg(escapeJsString(currentRequest_.theme));
 
-  webView_->page()->runJavaScript(js, [this](const QVariant &result) {
+  QPointer<MermaidRenderer> self(this);
+  webView_->page()->runJavaScript(js, [self](const QVariant &result) {
+    if (!self || self->shuttingDown_) {
+      return;
+    }
     qDebug() << "JavaScript result:" << result;
+    const quintptr requestId = self->currentRequest_.requestId;
     // Give Mermaid time to render, then capture
-    QTimer::singleShot(500, this,
-                       [this]() { captureResult(currentRequest_.requestId); });
+    QTimer::singleShot(500, self, [self, requestId]() {
+      if (!self || self->shuttingDown_) {
+        return;
+      }
+      self->captureResult(requestId);
+    });
   });
 }
 
@@ -143,6 +160,11 @@ void MermaidRenderer::clearCache() { cache_.clear(); }
 
 void MermaidRenderer::render(const QString &mermaidCode, const QString &theme,
                               quintptr requestId) {
+  if (shuttingDown_) {
+    emit renderComplete(requestId, QPixmap(), false);
+    return;
+  }
+
   // Check cache first
   QString key = cacheKey(mermaidCode, theme);
   if (QPixmap *cached = cache_.object(key)) {
@@ -164,7 +186,7 @@ void MermaidRenderer::render(const QString &mermaidCode, const QString &theme,
 }
 
 void MermaidRenderer::captureResult(quintptr requestId) {
-  if (!webView_ || !webView_->page()) {
+  if (shuttingDown_ || !webView_ || !webView_->page()) {
     qDebug() << "captureResult: no webView or page";
     emit renderComplete(requestId, QPixmap(), false);
     rendering_ = false;
@@ -173,8 +195,13 @@ void MermaidRenderer::captureResult(quintptr requestId) {
   }
 
   // Get the size of the rendered diagram
+  QPointer<MermaidRenderer> self(this);
   webView_->page()->runJavaScript(
-      "getSize();", [this, requestId](const QVariant &result) {
+      "getSize();", [self, requestId](const QVariant &result) {
+        if (!self || self->shuttingDown_ || !self->webView_) {
+          return;
+        }
+
         QString sizeJson = result.toString();
         qDebug() << "getSize result:" << sizeJson;
 
@@ -200,31 +227,35 @@ void MermaidRenderer::captureResult(quintptr requestId) {
         qDebug() << "Resizing webView to:" << width << "x" << height;
 
         // Resize view to match content, keep off-screen
-        webView_->setFixedSize(width, height);
-        webView_->move(-2000, -2000);
+        self->webView_->setFixedSize(width, height);
+        self->webView_->move(-2000, -2000);
 
         // Grab after a short delay for content to render
-        QTimer::singleShot(100, this, [this, requestId, width, height]() {
-          QPixmap pixmap = webView_->grab();
+        QTimer::singleShot(100, self, [self, requestId]() {
+          if (!self || self->shuttingDown_ || !self->webView_) {
+            return;
+          }
+
+          QPixmap pixmap = self->webView_->grab();
 
           qDebug() << "Grabbed pixmap:" << pixmap.size()
                    << "isNull:" << pixmap.isNull();
 
           if (pixmap.isNull() || pixmap.size().isEmpty()) {
             qDebug() << "Pixmap capture failed";
-            emit renderComplete(requestId, QPixmap(), false);
+            emit self->renderComplete(requestId, QPixmap(), false);
           } else {
             // Cache the result
             QString key =
-                cacheKey(currentRequest_.mermaidCode, currentRequest_.theme);
-            cache_.insert(key, new QPixmap(pixmap));
+                self->cacheKey(self->currentRequest_.mermaidCode, self->currentRequest_.theme);
+            self->cache_.insert(key, new QPixmap(pixmap));
 
             qDebug() << "Emitting renderComplete with pixmap";
-            emit renderComplete(requestId, pixmap, true);
+            emit self->renderComplete(requestId, pixmap, true);
           }
 
-          rendering_ = false;
-          processNextRequest();
+          self->rendering_ = false;
+          self->processNextRequest();
         });
       });
 }

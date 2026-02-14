@@ -15,6 +15,34 @@
 #include <QPainterPath>
 #include <QtMath>
 
+namespace {
+qreal textScaleForHandle(HandleType handle, qreal scaleX, qreal scaleY) {
+  switch (handle) {
+  case HandleType::MiddleLeft:
+  case HandleType::MiddleRight:
+    return scaleX;
+  case HandleType::TopCenter:
+  case HandleType::BottomCenter:
+    return scaleY;
+  case HandleType::TopLeft:
+  case HandleType::TopRight:
+  case HandleType::BottomLeft:
+  case HandleType::BottomRight:
+    return (scaleX + scaleY) / 2.0;
+  default:
+    return 1.0;
+  }
+}
+
+qreal effectivePointSize(const QFont &font) {
+  qreal size = font.pointSizeF();
+  if (size <= 0.0) {
+    size = static_cast<qreal>(font.pointSize());
+  }
+  return (size > 0.0) ? size : 14.0;
+}
+} // namespace
+
 TransformHandleItem::TransformHandleItem(const ItemId &targetId,
                                          ItemStore *store,
                                          SceneRenderer *renderer,
@@ -479,12 +507,13 @@ void TransformHandleItem::applyResize(const QPointF &mousePos) {
 
   // Handle text items specially - adjust font size instead of transform scaling
   if (LatexTextItem *textItem = dynamic_cast<LatexTextItem *>(target)) {
-    // Use uniform scale based on the average of scaleX and scaleY
-    qreal uniformScale = (scaleX + scaleY) / 2.0;
+    // Use axis-aware scale so side handles feel as responsive as corner handles.
+    qreal uniformScale = textScaleForHandle(activeHandle_, scaleX, scaleY);
     QFont currentFont = textItem->font();
-    int newSize = qMax(8, qRound(currentFont.pointSize() * uniformScale));
-    if (newSize != currentFont.pointSize()) {
-      currentFont.setPointSize(newSize);
+    qreal currentSize = effectivePointSize(currentFont);
+    qreal newSize = qBound(8.0, currentSize * uniformScale, 256.0);
+    if (qAbs(newSize - currentSize) > 0.01) {
+      currentFont.setPointSizeF(newSize);
       textItem->setFont(currentFont);
     }
     // Emit signal for other selected items

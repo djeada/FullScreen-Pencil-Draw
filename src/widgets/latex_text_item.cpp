@@ -195,6 +195,16 @@ const QMap<QChar, QString> mathItalic = {
     {'z', "𝑧"}};
 } // namespace LatexSymbols
 
+// Convert plain text to HTML while preserving user-authored line breaks.
+static QString plainTextToHtmlPreservingNewlines(QString text) {
+  text.replace("\r\n", "\n");
+  text.replace('\r', '\n');
+
+  QString html = text.toHtmlEscaped();
+  html.replace('\n', "<br/>");
+  return html;
+}
+
 // LatexTextEdit implementation
 LatexTextEdit::LatexTextEdit(QWidget *parent) : QTextEdit(parent) {
   setFrameStyle(QFrame::Box);
@@ -386,9 +396,14 @@ void LatexTextItem::paint(QPainter *painter,
 }
 
 void LatexTextItem::setText(const QString &text) {
+  if (text_ == text) {
+    return;
+  }
+
+  // contentRect_ can change during renderContent(), notify scene first.
+  prepareGeometryChange();
   text_ = text;
   renderContent();
-  prepareGeometryChange();
   update();
   emit textChanged();
 }
@@ -400,6 +415,12 @@ void LatexTextItem::setTextColor(const QColor &color) {
 }
 
 void LatexTextItem::setFont(const QFont &font) {
+  if (font_ == font) {
+    return;
+  }
+
+  // Font changes can alter boundingRect via renderContent().
+  prepareGeometryChange();
   font_ = font;
   if (textEdit_) {
     textEdit_->setFont(font_);
@@ -622,7 +643,7 @@ QPixmap LatexTextItem::renderLatex(const QString &text) {
     // Add plain text before the match
     if (match.capturedStart() > lastEnd) {
       QString plainPart = text.mid(lastEnd, match.capturedStart() - lastEnd);
-      htmlContent += plainPart.toHtmlEscaped();
+      htmlContent += plainTextToHtmlPreservingNewlines(plainPart);
     }
     // Convert LaTeX to HTML with enhanced styling for math expressions
     QString latex = match.captured(1);
@@ -635,12 +656,12 @@ QPixmap LatexTextItem::renderLatex(const QString &text) {
 
   // Add remaining plain text after the last match
   if (lastEnd < text.length()) {
-    htmlContent += text.mid(lastEnd).toHtmlEscaped();
+    htmlContent += plainTextToHtmlPreservingNewlines(text.mid(lastEnd));
   }
 
   // If no matches were found (no LaTeX), htmlContent will be empty, so use plain text
   if (htmlContent.isEmpty()) {
-    htmlContent = text.toHtmlEscaped();
+    htmlContent = plainTextToHtmlPreservingNewlines(text);
   }
 
   // Render the HTML content using QTextDocument with improved settings

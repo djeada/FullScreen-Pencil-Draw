@@ -821,7 +821,7 @@ void MainWindow::setupPdfToolBar() {
   _pdfToolBar->addSeparator();
   
   // Mode toggle: View vs Annotate
-  QAction *modeAction = _pdfToolBar->addAction("✏️ Annotate", [this, modeAction]() {
+  QAction *modeAction = _pdfToolBar->addAction("✏️ Annotate", [this]() {
     if (_pdfViewer) {
       if (_pdfViewer->isAnnotateMode()) {
         _pdfViewer->setMode(PdfViewer::Mode::View);
