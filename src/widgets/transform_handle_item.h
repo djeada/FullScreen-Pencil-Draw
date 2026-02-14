@@ -1,18 +1,18 @@
 /**
  * @file transform_handle_item.h
  * @brief Visual transform handles for resize and rotate operations.
- * 
+ *
  * Items are tracked by ItemId only - never by raw pointer.
  */
 #ifndef TRANSFORM_HANDLE_ITEM_H
 #define TRANSFORM_HANDLE_ITEM_H
 
+#include <QBrush>
 #include <QGraphicsItem>
 #include <QGraphicsRectItem>
 #include <QGraphicsSceneHoverEvent>
 #include <QGraphicsSceneMouseEvent>
 #include <QPen>
-#include <QBrush>
 
 #include "../core/item_id.h"
 
@@ -58,11 +58,9 @@ public:
    * @param renderer The SceneRenderer for undo/redo
    * @param parent Optional parent item
    */
-  TransformHandleItem(const ItemId &targetId,
-                      ItemStore *store,
-                      SceneRenderer *renderer,
-                      QGraphicsItem *parent = nullptr);
-  
+  TransformHandleItem(const ItemId &targetId, ItemStore *store,
+                      SceneRenderer *renderer, QGraphicsItem *parent = nullptr);
+
   ~TransformHandleItem() override;
 
   QRectF boundingRect() const override;
@@ -94,7 +92,8 @@ public:
   void setItemStore(ItemStore *store) { itemStore_ = store; }
 
   /**
-   * @brief Clear the target item reference (should be called before target is deleted)
+   * @brief Clear the target item reference (should be called before target is
+   * deleted)
    */
   void clearTargetItem();
 
@@ -163,14 +162,15 @@ private:
   QTransform originalTransform_;
   QPointF originalPos_;
   QRectF originalBounds_;
-  
+
   // Original item flags to restore after transform
   bool wasMovable_;
   bool wasSelectable_;
-  
+
   // Cached bounds for detecting target item movement
   mutable QRectF cachedTargetBounds_;
-  // Previous bounds to invalidate during repaint (ensures old anchor positions are cleared)
+  // Previous bounds to invalidate during repaint (ensures old anchor positions
+  // are cleared)
   mutable QRectF previousTargetBounds_;
 
   // Helper methods
@@ -181,7 +181,7 @@ private:
   void applyRotation(const QPointF &mousePos);
   QRectF targetBoundsInScene() const;
   void ensureSceneEventFilter();
-  
+
   /**
    * @brief Resolve targetItem_ from targetItemId_ if needed
    * @return The resolved item, or nullptr if not found

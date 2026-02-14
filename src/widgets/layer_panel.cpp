@@ -4,10 +4,10 @@
  */
 #include "layer_panel.h"
 #include "../core/layer.h"
-#include <QHBoxLayout>
-#include <QVBoxLayout>
 #include <QGroupBox>
+#include <QHBoxLayout>
 #include <QMessageBox>
+#include <QVBoxLayout>
 
 LayerPanel::LayerPanel(LayerManager *manager, QWidget *parent)
     : QDockWidget("Layers", parent), layerManager_(manager) {
@@ -57,13 +57,15 @@ void LayerPanel::setupUI() {
   deleteButton_ = new QPushButton("−", container);
   deleteButton_->setToolTip("Delete layer");
   deleteButton_->setMinimumSize(40, 40);
-  connect(deleteButton_, &QPushButton::clicked, this, &LayerPanel::onDeleteLayer);
+  connect(deleteButton_, &QPushButton::clicked, this,
+          &LayerPanel::onDeleteLayer);
   controlsRow1->addWidget(deleteButton_);
 
   duplicateButton_ = new QPushButton("⧉", container);
   duplicateButton_->setToolTip("Duplicate layer");
   duplicateButton_->setMinimumSize(40, 40);
-  connect(duplicateButton_, &QPushButton::clicked, this, &LayerPanel::onDuplicateLayer);
+  connect(duplicateButton_, &QPushButton::clicked, this,
+          &LayerPanel::onDuplicateLayer);
   controlsRow1->addWidget(duplicateButton_);
 
   mergeButton_ = new QPushButton("⊕", container);
@@ -82,20 +84,23 @@ void LayerPanel::setupUI() {
   moveUpButton_ = new QPushButton("▲", container);
   moveUpButton_->setToolTip("Move layer up");
   moveUpButton_->setMinimumSize(40, 40);
-  connect(moveUpButton_, &QPushButton::clicked, this, &LayerPanel::onMoveLayerUp);
+  connect(moveUpButton_, &QPushButton::clicked, this,
+          &LayerPanel::onMoveLayerUp);
   controlsRow2->addWidget(moveUpButton_);
 
   moveDownButton_ = new QPushButton("▼", container);
   moveDownButton_->setToolTip("Move layer down");
   moveDownButton_->setMinimumSize(40, 40);
-  connect(moveDownButton_, &QPushButton::clicked, this, &LayerPanel::onMoveLayerDown);
+  connect(moveDownButton_, &QPushButton::clicked, this,
+          &LayerPanel::onMoveLayerDown);
   controlsRow2->addWidget(moveDownButton_);
 
   visibilityButton_ = new QPushButton("👁", container);
   visibilityButton_->setToolTip("Toggle visibility");
   visibilityButton_->setMinimumSize(40, 40);
   visibilityButton_->setCheckable(true);
-  connect(visibilityButton_, &QPushButton::clicked, this, &LayerPanel::onVisibilityToggled);
+  connect(visibilityButton_, &QPushButton::clicked, this,
+          &LayerPanel::onVisibilityToggled);
   controlsRow2->addWidget(visibilityButton_);
 
   lockButton_ = new QPushButton("🔒", container);
@@ -117,7 +122,8 @@ void LayerPanel::setupUI() {
   opacitySlider_->setRange(0, 100);
   opacitySlider_->setValue(100);
   opacitySlider_->setMinimumHeight(24);
-  connect(opacitySlider_, &QSlider::valueChanged, this, &LayerPanel::onOpacityChanged);
+  connect(opacitySlider_, &QSlider::valueChanged, this,
+          &LayerPanel::onOpacityChanged);
   opacityLayout->addWidget(opacitySlider_);
 
   opacityLabel_ = new QLabel("100%", opacityGroup);
@@ -127,7 +133,7 @@ void LayerPanel::setupUI() {
   mainLayout->addWidget(opacityGroup);
 
   mainLayout->addStretch();
-  
+
   container->setLayout(mainLayout);
   setWidget(container);
   setMinimumWidth(200);
@@ -237,10 +243,12 @@ void LayerPanel::setupUI() {
 }
 
 void LayerPanel::refreshLayerList() {
-  if (!layerManager_) return;
+  if (!layerManager_)
+    return;
 
   // Block signals to prevent infinite recursion:
-  // setCurrentRow -> currentRowChanged -> onLayerSelectionChanged -> activeLayerChanged -> refreshLayerList
+  // setCurrentRow -> currentRowChanged -> onLayerSelectionChanged ->
+  // activeLayerChanged -> refreshLayerList
   layerList_->blockSignals(true);
 
   int currentRow = layerList_->currentRow();
@@ -275,7 +283,8 @@ void LayerPanel::refreshLayerList() {
 }
 
 void LayerPanel::updateButtonStates() {
-  if (!layerManager_) return;
+  if (!layerManager_)
+    return;
 
   int layerCount = layerManager_->layerCount();
   int activeIndex = layerManager_->activeLayerIndex();
@@ -288,15 +297,17 @@ void LayerPanel::updateButtonStates() {
 }
 
 void LayerPanel::updatePropertyControls() {
-  if (!layerManager_) return;
+  if (!layerManager_)
+    return;
 
   Layer *layer = layerManager_->activeLayer();
   if (layer) {
     opacitySlider_->blockSignals(true);
     opacitySlider_->setValue(static_cast<int>(layer->opacity() * 100));
     opacitySlider_->blockSignals(false);
-    opacityLabel_->setText(QString("%1%").arg(static_cast<int>(layer->opacity() * 100)));
-    
+    opacityLabel_->setText(
+        QString("%1%").arg(static_cast<int>(layer->opacity() * 100)));
+
     visibilityButton_->setChecked(layer->isVisible());
     lockButton_->setChecked(layer->isLocked());
   }
@@ -311,8 +322,9 @@ void LayerPanel::onAddLayer() {
 }
 
 void LayerPanel::onDeleteLayer() {
-  if (!layerManager_) return;
-  
+  if (!layerManager_)
+    return;
+
   if (layerManager_->layerCount() <= 1) {
     QMessageBox::warning(this, "Cannot Delete",
                          "Cannot delete the last remaining layer.");
@@ -367,7 +379,8 @@ void LayerPanel::onMergeDown() {
 }
 
 void LayerPanel::onLayerSelectionChanged() {
-  if (!layerManager_) return;
+  if (!layerManager_)
+    return;
 
   int listIndex = layerList_->currentRow();
   if (listIndex >= 0) {

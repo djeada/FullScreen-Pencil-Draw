@@ -5,8 +5,8 @@
 #ifndef SHAPE_TOOL_H
 #define SHAPE_TOOL_H
 
-#include "tool.h"
 #include "../core/item_id.h"
+#include "tool.h"
 
 /**
  * @brief Abstract base class for shape drawing tools.
@@ -24,7 +24,7 @@ public:
   void mousePressEvent(QMouseEvent *event, const QPointF &scenePos) override;
   void mouseMoveEvent(QMouseEvent *event, const QPointF &scenePos) override;
   void mouseReleaseEvent(QMouseEvent *event, const QPointF &scenePos) override;
-  
+
   void deactivate() override;
 
 protected:
@@ -56,8 +56,8 @@ protected:
    */
   QGraphicsItem *tempShape() const;
 
-  QGraphicsItem *tempShape_;     // Cached pointer (for backwards compatibility)
-  ItemId tempShapeId_;           // Stable ID for safe reference
+  QGraphicsItem *tempShape_; // Cached pointer (for backwards compatibility)
+  ItemId tempShapeId_;       // Stable ID for safe reference
   QPointF startPoint_;
 };
 

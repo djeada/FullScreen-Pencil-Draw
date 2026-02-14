@@ -46,8 +46,7 @@ public:
    * @param name Display name for the layer
    * @param type The type of layer
    */
-  explicit Layer(const QString &name = "Layer",
-                 Type type = Type::Vector);
+  explicit Layer(const QString &name = "Layer", Type type = Type::Vector);
   ~Layer();
 
   // Non-copyable
@@ -197,8 +196,8 @@ private:
   bool visible_;
   bool locked_;
   qreal opacity_;
-  QList<ItemId> itemIds_;         // Primary storage: stable ItemIds
-  ItemStore *itemStore_;          // For resolving ItemIds to items
+  QList<ItemId> itemIds_; // Primary storage: stable ItemIds
+  ItemStore *itemStore_;  // For resolving ItemIds to items
 
   void updateItemsVisibility();
   void updateItemsOpacity();
@@ -227,7 +226,9 @@ public:
    * @brief Set the SceneController for safe deletion operations
    * @param controller The SceneController to use
    */
-  void setSceneController(SceneController *controller) { sceneController_ = controller; }
+  void setSceneController(SceneController *controller) {
+    sceneController_ = controller;
+  }
 
   /**
    * @brief Create a new layer

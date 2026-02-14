@@ -1,14 +1,14 @@
 /**
  * @file transform_handle_item.cpp
  * @brief Implementation of visual transform handles.
- * 
+ *
  * Items are tracked by ItemId only - never by raw pointer.
  */
 #include "transform_handle_item.h"
-#include "latex_text_item.h"
 #include "../core/item_store.h"
 #include "../core/scene_renderer.h"
 #include "../core/transform_action.h"
+#include "latex_text_item.h"
 #include <QCursor>
 #include <QGraphicsScene>
 #include <QPainter>
@@ -47,11 +47,11 @@ TransformHandleItem::TransformHandleItem(const ItemId &targetId,
                                          ItemStore *store,
                                          SceneRenderer *renderer,
                                          QGraphicsItem *parent)
-    : QGraphicsObject(parent), targetItemId_(targetId),
-      itemStore_(store), renderer_(renderer),
-      sceneEventFilterInstalled_(false), isTransforming_(false),
-      activeHandle_(HandleType::None), wasMovable_(false),
-      wasSelectable_(false), cachedTargetBounds_(), previousTargetBounds_() {
+    : QGraphicsObject(parent), targetItemId_(targetId), itemStore_(store),
+      renderer_(renderer), sceneEventFilterInstalled_(false),
+      isTransforming_(false), activeHandle_(HandleType::None),
+      wasMovable_(false), wasSelectable_(false), cachedTargetBounds_(),
+      previousTargetBounds_() {
   setAcceptHoverEvents(true);
   setFlag(QGraphicsItem::ItemIsSelectable, false);
   setFlag(QGraphicsItem::ItemIsMovable, false);
@@ -62,12 +62,14 @@ TransformHandleItem::TransformHandleItem(const ItemId &targetId,
 }
 
 QGraphicsItem *TransformHandleItem::targetItem() const {
-  if (!itemStore_ || !targetItemId_.isValid()) return nullptr;
+  if (!itemStore_ || !targetItemId_.isValid())
+    return nullptr;
   return itemStore_->item(targetItemId_);
 }
 
 QGraphicsItem *TransformHandleItem::resolveTargetItem() const {
-  if (!itemStore_ || !targetItemId_.isValid()) return nullptr;
+  if (!itemStore_ || !targetItemId_.isValid())
+    return nullptr;
   return itemStore_->item(targetItemId_);
 }
 
@@ -101,43 +103,45 @@ QRectF TransformHandleItem::boundingRect() const {
     return QRectF();
 
   QRectF bounds = targetBoundsInScene();
-  
+
   // Helper to expand bounds to include handles and rotation handle
   auto expandForHandles = [](const QRectF &rect) {
     return rect.adjusted(-HANDLE_SIZE, -HANDLE_SIZE - ROTATION_HANDLE_OFFSET,
                          HANDLE_SIZE, HANDLE_SIZE);
   };
-  
+
   QRectF expandedBounds = expandForHandles(bounds);
-  
+
   // If we have previous bounds that differ from current, include them in the
   // bounding rect to ensure the old anchor positions get repainted (cleared).
   // This prevents the visual trail artifact when items are dragged.
-  // Note: previousTargetBounds_ is set in updateHandles() before prepareGeometryChange().
+  // Note: previousTargetBounds_ is set in updateHandles() before
+  // prepareGeometryChange().
   if (!previousTargetBounds_.isEmpty() && previousTargetBounds_ != bounds) {
     QRectF oldExpandedBounds = expandForHandles(previousTargetBounds_);
     return expandedBounds.united(oldExpandedBounds);
   }
-  
+
   return expandedBounds;
 }
 
 QPainterPath TransformHandleItem::shape() const {
   QPainterPath path;
-  
+
   // Add all handle rects to shape for hit testing
   for (int i = static_cast<int>(HandleType::TopLeft);
        i <= static_cast<int>(HandleType::BottomRight); ++i) {
     HandleType type = static_cast<HandleType>(i);
     path.addRect(handleRect(type));
   }
-  
+
   // Add rotation handle
   QRectF bounds = targetBoundsInScene();
   QPointF rotationCenter(bounds.center().x(),
                          bounds.top() - ROTATION_HANDLE_OFFSET);
-  path.addEllipse(rotationCenter, ROTATION_HANDLE_RADIUS + 2, ROTATION_HANDLE_RADIUS + 2);
-  
+  path.addEllipse(rotationCenter, ROTATION_HANDLE_RADIUS + 2,
+                  ROTATION_HANDLE_RADIUS + 2);
+
   return path;
 }
 
@@ -208,10 +212,10 @@ void TransformHandleItem::paint(QPainter *painter,
   // Draw rotation arrow icon inside the handle
   painter->setPen(QPen(ROTATION_HANDLE_COLOR, 1.5));
   qreal arrowSize = ROTATION_HANDLE_RADIUS * 0.6;
-  painter->drawArc(
-      QRectF(rotationCenter.x() - arrowSize, rotationCenter.y() - arrowSize,
-             arrowSize * 2, arrowSize * 2),
-      30 * 16, 120 * 16);
+  painter->drawArc(QRectF(rotationCenter.x() - arrowSize,
+                          rotationCenter.y() - arrowSize, arrowSize * 2,
+                          arrowSize * 2),
+                   30 * 16, 120 * 16);
 }
 
 void TransformHandleItem::updateHandles() {
@@ -219,19 +223,19 @@ void TransformHandleItem::updateHandles() {
   // This allows boundingRect() to include the old region for proper repainting,
   // which clears the old anchor positions when the item moves.
   previousTargetBounds_ = cachedTargetBounds_;
-  
+
   // Notify the scene that geometry is about to change.
   // At this point, boundingRect() will return a union of old and new bounds
   // because previousTargetBounds_ holds the old position.
   prepareGeometryChange();
-  
+
   // Update the cached bounds to the new position
   cachedTargetBounds_ = targetBoundsInScene();
-  
-  // Note: We don't clear previousTargetBounds_ here because prepareGeometryChange()
-  // has already captured the bounding rect. The previous bounds will be updated
-  // on the next call to updateHandles().
-  
+
+  // Note: We don't clear previousTargetBounds_ here because
+  // prepareGeometryChange() has already captured the bounding rect. The
+  // previous bounds will be updated on the next call to updateHandles().
+
   update();
 }
 
@@ -326,7 +330,8 @@ void TransformHandleItem::hoverMoveEvent(QGraphicsSceneHoverEvent *event) {
   QGraphicsObject::hoverMoveEvent(event);
 }
 
-bool TransformHandleItem::sceneEventFilter(QGraphicsItem *watched, QEvent *event) {
+bool TransformHandleItem::sceneEventFilter(QGraphicsItem *watched,
+                                           QEvent *event) {
   QGraphicsItem *target = resolveTargetItem();
   if (watched == target) {
     QEvent::Type eventType = event->type();
@@ -367,8 +372,9 @@ void TransformHandleItem::mousePressEvent(QGraphicsSceneMouseEvent *event) {
     originalPos_ = target->pos();
     originalBounds_ = targetBoundsInScene();
     transformOrigin_ = originalBounds_.center();
-    
-    // Temporarily disable item's movable/selectable flags to prevent interference
+
+    // Temporarily disable item's movable/selectable flags to prevent
+    // interference
     wasMovable_ = target->flags() & QGraphicsItem::ItemIsMovable;
     wasSelectable_ = target->flags() & QGraphicsItem::ItemIsSelectable;
     target->setFlag(QGraphicsItem::ItemIsMovable, false);
@@ -410,10 +416,11 @@ void TransformHandleItem::mouseReleaseEvent(QGraphicsSceneMouseEvent *event) {
     if (newTransform != originalTransform_ || newPos != originalPos_) {
       if (itemStore_ && targetItemId_.isValid()) {
         renderer_->addAction(std::make_unique<TransformAction>(
-            targetItemId_, itemStore_, originalTransform_, newTransform, originalPos_, newPos));
+            targetItemId_, itemStore_, originalTransform_, newTransform,
+            originalPos_, newPos));
       }
     }
-    
+
     // Restore the item's original flags
     target->setFlag(QGraphicsItem::ItemIsMovable, wasMovable_);
   }
@@ -507,7 +514,8 @@ void TransformHandleItem::applyResize(const QPointF &mousePos) {
 
   // Handle text items specially - adjust font size instead of transform scaling
   if (LatexTextItem *textItem = dynamic_cast<LatexTextItem *>(target)) {
-    // Use axis-aware scale so side handles feel as responsive as corner handles.
+    // Use axis-aware scale so side handles feel as responsive as corner
+    // handles.
     qreal uniformScale = textScaleForHandle(activeHandle_, scaleX, scaleY);
     QFont currentFont = textItem->font();
     qreal currentSize = effectivePointSize(currentFont);

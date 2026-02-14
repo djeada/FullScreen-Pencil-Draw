@@ -2,11 +2,11 @@
 #ifndef MAIN_WINDOW_H
 #define MAIN_WINDOW_H
 
+#include <QComboBox>
 #include <QMainWindow>
 #include <QMenu>
-#include <QSplitter>
 #include <QSpinBox>
-#include <QComboBox>
+#include <QSplitter>
 
 class Canvas;
 class ToolPanel;
@@ -58,7 +58,7 @@ private slots:
   void onPdfDarkModeChanged(bool enabled);
   void onExportAnnotatedPdf();
   void onPdfFileDropped(const QString &filePath);
-  void swapPanelOrder();  // Swap the order of canvas and PDF panel
+  void swapPanelOrder(); // Swap the order of canvas and PDF panel
 #endif
 
 private:
@@ -85,7 +85,7 @@ private:
   QComboBox *_pdfZoomCombo;
   QAction *_pdfDarkModeAction;
   QAction *_thumbnailToggleAction;
-  bool _pdfPanelOnLeft;  // Track if PDF panel is on the left side
+  bool _pdfPanelOnLeft; // Track if PDF panel is on the left side
 
   void setupPdfViewer();
   void setupPdfToolBar();

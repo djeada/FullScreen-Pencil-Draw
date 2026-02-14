@@ -125,14 +125,15 @@ signals:
 
 protected:
   void mouseDoubleClickEvent(QGraphicsSceneMouseEvent *event) override;
-  QVariant itemChange(GraphicsItemChange change, const QVariant &value) override;
+  QVariant itemChange(GraphicsItemChange change,
+                      const QVariant &value) override;
 
 private slots:
   void onEditingFinished();
   void onEditingCancelled();
 #ifdef HAVE_QT_WEBENGINE
   void onMermaidRenderComplete(quintptr requestId, const QPixmap &pixmap,
-                                bool success);
+                               bool success);
 #endif
 
 private:

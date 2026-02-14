@@ -43,16 +43,16 @@ void ThemeManager::applyDarkTheme() {
   QPalette darkPalette;
 
   // Base colors - Modern flat design palette with refined tones
-  QColor darkGray(32, 32, 36);       // Slightly darker for more depth
-  QColor gray(48, 48, 54);           // More refined gray
+  QColor darkGray(32, 32, 36); // Slightly darker for more depth
+  QColor gray(48, 48, 54);     // More refined gray
   QColor lightGray(128, 128, 134);
-  QColor white(248, 248, 252);       // Slightly warmer white
-  QColor accentBlue(59, 130, 246);   // More vibrant accent
+  QColor white(248, 248, 252);     // Slightly warmer white
+  QColor accentBlue(59, 130, 246); // More vibrant accent
   QColor accentBlueHover(96, 165, 250);
   QColor accentBluePressed(37, 99, 235);
   QColor darkBlue(22, 22, 26);
-  QColor surfaceColor(38, 38, 43);   // Card/surface color
-  QColor borderColor(55, 55, 62);    // Subtle borders
+  QColor surfaceColor(38, 38, 43); // Card/surface color
+  QColor borderColor(55, 55, 62);  // Subtle borders
 
   darkPalette.setColor(QPalette::Window, darkGray);
   darkPalette.setColor(QPalette::WindowText, white);
@@ -1068,12 +1068,14 @@ void ThemeManager::applyLightTheme() {
 }
 
 void ThemeManager::saveThemePreference() {
-  QSettings settings(AppConstants::OrganizationName, AppConstants::ApplicationName);
+  QSettings settings(AppConstants::OrganizationName,
+                     AppConstants::ApplicationName);
   settings.setValue("theme", currentTheme_ == Dark ? "dark" : "light");
 }
 
 void ThemeManager::loadThemePreference() {
-  QSettings settings(AppConstants::OrganizationName, AppConstants::ApplicationName);
+  QSettings settings(AppConstants::OrganizationName,
+                     AppConstants::ApplicationName);
   QString themeName = settings.value("theme", "dark").toString();
   currentTheme_ = (themeName == "light") ? Light : Dark;
 

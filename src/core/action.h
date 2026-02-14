@@ -42,8 +42,8 @@ class DrawAction : public Action {
 public:
   using ItemCallback = std::function<void(QGraphicsItem *)>;
 
-  DrawAction(const ItemId &id, ItemStore *store,
-             ItemCallback onAdd = {}, ItemCallback onRemove = {});
+  DrawAction(const ItemId &id, ItemStore *store, ItemCallback onAdd = {},
+             ItemCallback onRemove = {});
   ~DrawAction() override;
 
   void undo() override;
@@ -65,8 +65,8 @@ class DeleteAction : public Action {
 public:
   using ItemCallback = std::function<void(QGraphicsItem *)>;
 
-  DeleteAction(const ItemId &id, ItemStore *store,
-               ItemCallback onAdd = {}, ItemCallback onRemove = {});
+  DeleteAction(const ItemId &id, ItemStore *store, ItemCallback onAdd = {},
+               ItemCallback onRemove = {});
   ~DeleteAction() override;
 
   void undo() override;
@@ -86,8 +86,8 @@ private:
  */
 class MoveAction : public Action {
 public:
-  MoveAction(const ItemId &id, ItemStore *store,
-             const QPointF &oldPos, const QPointF &newPos);
+  MoveAction(const ItemId &id, ItemStore *store, const QPointF &oldPos,
+             const QPointF &newPos);
   ~MoveAction() override;
 
   void undo() override;
@@ -126,8 +126,8 @@ private:
  */
 class FillAction : public Action {
 public:
-  FillAction(const ItemId &id, ItemStore *store,
-             const QBrush &oldBrush, const QBrush &newBrush);
+  FillAction(const ItemId &id, ItemStore *store, const QBrush &oldBrush,
+             const QBrush &newBrush);
   ~FillAction() override;
 
   void undo() override;

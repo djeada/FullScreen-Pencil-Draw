@@ -7,10 +7,10 @@
 
 #ifdef HAVE_QT_PDF
 
-#include <QWidget>
 #include <QListWidget>
 #include <QPushButton>
 #include <QVBoxLayout>
+#include <QWidget>
 
 class PdfViewer;
 
@@ -72,10 +72,10 @@ private:
   PdfViewer *pdfViewer_;
   QListWidget *thumbnailList_;
   QVBoxLayout *layout_;
-  
+
   static constexpr int THUMBNAIL_WIDTH = 120;
   static constexpr int THUMBNAIL_HEIGHT = 160;
-  
+
   void setupUI();
   void generateThumbnails();
   QPixmap renderThumbnail(int pageIndex);

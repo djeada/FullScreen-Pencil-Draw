@@ -24,8 +24,8 @@
 #include "../core/action.h"
 #include "../core/pdf_document.h"
 #include "../core/pdf_overlay.h"
-#include "../core/scene_renderer.h"
 #include "../core/scene_controller.h"
+#include "../core/scene_renderer.h"
 #include "../tools/tool_manager.h"
 
 /**
@@ -83,7 +83,7 @@ public:
    */
   enum class SpecialTool {
     None,
-    ScreenshotSelection  // Tool for capturing a rectangle area of the PDF
+    ScreenshotSelection // Tool for capturing a rectangle area of the PDF
   };
   Q_ENUM(SpecialTool)
 
@@ -171,7 +171,9 @@ public:
    * @brief Check if screenshot selection mode is enabled
    * @return true if screenshot selection mode is active
    */
-  bool isScreenshotSelectionMode() const { return specialTool_ == SpecialTool::ScreenshotSelection; }
+  bool isScreenshotSelectionMode() const {
+    return specialTool_ == SpecialTool::ScreenshotSelection;
+  }
 
   /**
    * @brief Get the tool manager
@@ -294,8 +296,8 @@ public:
    * @brief Annotation mode enum
    */
   enum class Mode {
-    View,     // View mode: scroll/zoom only, no drawing
-    Annotate  // Annotate mode: tools active, drawing enabled
+    View,    // View mode: scroll/zoom only, no drawing
+    Annotate // Annotate mode: tools active, drawing enabled
   };
   Q_ENUM(Mode)
 
@@ -366,24 +368,26 @@ public:
    * @return Pointer to the scene
    */
   QGraphicsScene *scene() const override { return scene_; }
-  
+
   /**
    * @brief Get the current pen for drawing
    * @return Reference to the current pen
    */
   const QPen &currentPen() const override { return currentPen_; }
-  
+
   /**
    * @brief Get the eraser pen
    * @return Reference to the eraser pen
    */
   const QPen &eraserPen() const override { return eraserPen_; }
-  
+
   /**
    * @brief Get the background item (the PDF page)
    * @return Pointer to the page item as background
    */
-  QGraphicsPixmapItem *backgroundImageItem() const override { return pageItem_; }
+  QGraphicsPixmapItem *backgroundImageItem() const override {
+    return pageItem_;
+  }
 
   /**
    * @brief Get the scene controller for item lifecycle management
@@ -395,27 +399,31 @@ public:
    * @brief Get the item store for ItemId resolution
    * @return Pointer to the ItemStore
    */
-  ItemStore *itemStore() const override { return sceneController_ ? sceneController_->itemStore() : nullptr; }
+  ItemStore *itemStore() const override {
+    return sceneController_ ? sceneController_->itemStore() : nullptr;
+  }
 
   /**
    * @brief Register an item and get its ItemId
    * @param item The item to register
    * @return The assigned ItemId
    */
-  ItemId registerItem(QGraphicsItem *item) override { return sceneController_ ? sceneController_->addItem(item) : ItemId(); }
-  
+  ItemId registerItem(QGraphicsItem *item) override {
+    return sceneController_ ? sceneController_->addItem(item) : ItemId();
+  }
+
   /**
    * @brief Add a draw action to the undo stack
    * @param item The graphics item that was drawn
    */
   void addDrawAction(QGraphicsItem *item) override;
-  
+
   /**
    * @brief Add a delete action to the undo stack
    * @param item The graphics item that was deleted
    */
   void addDeleteAction(QGraphicsItem *item) override;
-  
+
   /**
    * @brief Add a custom action to the undo stack
    * @param action The action to add
@@ -427,24 +435,30 @@ public:
    * @param item The graphics item that was removed
    */
   void onItemRemoved(QGraphicsItem *item) override;
-  
+
   /**
    * @brief Set the cursor
    * @param cursor The cursor to set
    */
-  void setCursor(const QCursor &cursor) override { QGraphicsView::setCursor(cursor); }
-  
+  void setCursor(const QCursor &cursor) override {
+    QGraphicsView::setCursor(cursor);
+  }
+
   /**
    * @brief Get the horizontal scroll bar
    * @return Pointer to the horizontal scroll bar
    */
-  QScrollBar *horizontalScrollBar() const override { return QGraphicsView::horizontalScrollBar(); }
-  
+  QScrollBar *horizontalScrollBar() const override {
+    return QGraphicsView::horizontalScrollBar();
+  }
+
   /**
    * @brief Get the vertical scroll bar
    * @return Pointer to the vertical scroll bar
    */
-  QScrollBar *verticalScrollBar() const override { return QGraphicsView::verticalScrollBar(); }
+  QScrollBar *verticalScrollBar() const override {
+    return QGraphicsView::verticalScrollBar();
+  }
 
 signals:
   /**
@@ -537,8 +551,8 @@ private:
   // Current state
   int currentPage_;
   int renderDpi_;
-  int pageRotation_;  // Page rotation in degrees (0, 90, 180, 270)
-  Mode mode_;         // View or Annotate mode
+  int pageRotation_; // Page rotation in degrees (0, 90, 180, 270)
+  Mode mode_;        // View or Annotate mode
   bool darkMode_;
   bool showGrid_;
   bool fillShapes_;

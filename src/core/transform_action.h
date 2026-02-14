@@ -1,7 +1,7 @@
 /**
  * @file transform_action.h
  * @brief Undo/Redo action for transform operations (scale/rotate).
- * 
+ *
  * Items are tracked by ItemId only - never by raw pointer.
  */
 #ifndef TRANSFORM_ACTION_H
@@ -23,9 +23,10 @@ class ItemStore;
 class TransformAction : public Action {
 public:
   TransformAction(const ItemId &id, ItemStore *store,
-                  const QTransform &oldTransform, const QTransform &newTransform,
-                  const QPointF &oldPos, const QPointF &newPos);
-  
+                  const QTransform &oldTransform,
+                  const QTransform &newTransform, const QPointF &oldPos,
+                  const QPointF &newPos);
+
   ~TransformAction() override;
 
   void undo() override;

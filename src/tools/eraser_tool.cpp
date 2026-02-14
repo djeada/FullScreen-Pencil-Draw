@@ -18,9 +18,8 @@ EraserTool::~EraserTool() {
 void EraserTool::activate() {
   if (!eraserPreview_) {
     int size = renderer_->eraserPen().width();
-    eraserPreview_ = renderer_->scene()->addEllipse(0, 0, size, size,
-                                                   QPen(Qt::gray),
-                                                   QBrush(Qt::NoBrush));
+    eraserPreview_ = renderer_->scene()->addEllipse(
+        0, 0, size, size, QPen(Qt::gray), QBrush(Qt::NoBrush));
     eraserPreview_->setZValue(1000);
     // Do NOT register with ItemStore - this is a UI helper, not user content.
     // Registering would cause it to be deleted by SceneController::clearAll()
@@ -51,7 +50,7 @@ void EraserTool::mouseMoveEvent(QMouseEvent *event, const QPointF &scenePos) {
 }
 
 void EraserTool::mouseReleaseEvent(QMouseEvent * /*event*/,
-                                    const QPointF & /*scenePos*/) {
+                                   const QPointF & /*scenePos*/) {
   // Nothing to do on release
 }
 
@@ -65,10 +64,12 @@ void EraserTool::eraseAt(const QPointF &point) {
   SceneController *controller = renderer_->sceneController();
   QList<QGraphicsItem *> itemsToRemove;
 
-  // Use Qt::IntersectsItemBoundingRect for reliable detection of filled items like pixmaps
-  // The default Qt::IntersectsItemShape can fail for QGraphicsPixmapItem because its shape()
-  // returns a complex outline of non-transparent pixels, making hit-testing unreliable
-  for (QGraphicsItem *item : scene->items(eraseRect, Qt::IntersectsItemBoundingRect)) {
+  // Use Qt::IntersectsItemBoundingRect for reliable detection of filled items
+  // like pixmaps The default Qt::IntersectsItemShape can fail for
+  // QGraphicsPixmapItem because its shape() returns a complex outline of
+  // non-transparent pixels, making hit-testing unreliable
+  for (QGraphicsItem *item :
+       scene->items(eraseRect, Qt::IntersectsItemBoundingRect)) {
     // Skip the eraser preview and background image
     if (item == eraserPreview_ || item == renderer_->backgroundImageItem())
       continue;
@@ -79,19 +80,20 @@ void EraserTool::eraseAt(const QPointF &point) {
 
     // Get bounding rect in scene coordinates - this is always reliable
     QRectF itemSceneBounds = item->sceneBoundingRect();
-    
-    // Simple and reliable: if eraser point is inside item's scene bounding rect, erase it
-    // This works for filled items like pixmaps, rectangles, ellipses
+
+    // Simple and reliable: if eraser point is inside item's scene bounding
+    // rect, erase it This works for filled items like pixmaps, rectangles,
+    // ellipses
     if (itemSceneBounds.contains(point)) {
       itemsToRemove.append(item);
       continue;
     }
-    
+
     // For line-based items (paths), check if eraser touches the stroked shape
     // Transform click point to item-local coordinates for shape check
     QPointF localPoint = item->mapFromScene(point);
     QPainterPath itemShape = item->shape();
-    
+
     // Stroke the shape with eraser size to create a "hit area" around lines
     QPainterPathStroker stroker;
     stroker.setWidth(size);
@@ -104,10 +106,10 @@ void EraserTool::eraseAt(const QPointF &point) {
   for (QGraphicsItem *item : itemsToRemove) {
     // First add to undo stack
     renderer_->addDeleteAction(item);
-    
+
     // Then actually remove the item
     if (controller) {
-      controller->removeItem(item, true);  // Keep for undo
+      controller->removeItem(item, true); // Keep for undo
     } else {
       scene->removeItem(item);
       renderer_->onItemRemoved(item);

@@ -6,10 +6,10 @@
 #define LAYER_PANEL_H
 
 #include <QDockWidget>
+#include <QLabel>
 #include <QListWidget>
 #include <QPushButton>
 #include <QSlider>
-#include <QLabel>
 
 class LayerManager;
 class Layer;

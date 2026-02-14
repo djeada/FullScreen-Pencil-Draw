@@ -8,19 +8,20 @@
  * - Deferred deletion
  * - ItemRef resolution
  * - Undo/redo with item restoration
- * - Pointer safety mechanisms (itemAboutToBeDeleted signal, subscriber notification)
+ * - Pointer safety mechanisms (itemAboutToBeDeleted signal, subscriber
+ * notification)
  * - Code path tolerance for missing items
  * - SceneController graceful handling of deleted items
  */
-#include <QtTest/QtTest>
-#include <QGraphicsScene>
-#include <QGraphicsRectItem>
-#include <QGraphicsPathItem>
-#include <vector>
 #include "../src/core/item_id.h"
-#include "../src/core/item_store.h"
 #include "../src/core/item_ref.h"
+#include "../src/core/item_store.h"
 #include "../src/core/scene_controller.h"
+#include <QGraphicsPathItem>
+#include <QGraphicsRectItem>
+#include <QGraphicsScene>
+#include <QtTest/QtTest>
+#include <vector>
 
 class TestItemStore : public QObject {
   Q_OBJECT
@@ -29,7 +30,7 @@ private slots:
   void initTestCase() {
     // Initialize test case
   }
-  
+
   void cleanupTestCase() {
     // Clean up test case
   }
@@ -38,34 +39,34 @@ private slots:
   void testItemIdGeneration() {
     ItemId id1 = ItemId::generate();
     ItemId id2 = ItemId::generate();
-    
+
     QVERIFY(id1.isValid());
     QVERIFY(id2.isValid());
     QVERIFY(id1 != id2);
   }
-  
+
   void testItemIdNullByDefault() {
     ItemId id;
     QVERIFY(id.isNull());
     QVERIFY(!id.isValid());
   }
-  
+
   void testItemIdEquality() {
     ItemId id1 = ItemId::generate();
     ItemId id2 = id1;
-    
+
     QVERIFY(id1 == id2);
-    
+
     ItemId id3 = ItemId::generate();
     QVERIFY(id1 != id3);
   }
-  
+
   void testItemIdStringConversion() {
     ItemId id1 = ItemId::generate();
     QString str = id1.toString();
-    
+
     QVERIFY(!str.isEmpty());
-    
+
     ItemId id2 = ItemId::fromString(str);
     QVERIFY(id1 == id2);
   }
@@ -74,104 +75,104 @@ private slots:
   void testItemStoreRegistration() {
     QGraphicsScene scene;
     ItemStore store(&scene);
-    
+
     auto *rect = new QGraphicsRectItem(0, 0, 100, 100);
     ItemId id = store.registerItem(rect);
-    
+
     QVERIFY(id.isValid());
     QCOMPARE(store.itemCount(), 1);
     QVERIFY(store.contains(id));
     QCOMPARE(store.item(id), rect);
-    
+
     // Item should be in scene
     QCOMPARE(rect->scene(), &scene);
   }
-  
+
   void testItemStoreIdForItem() {
     QGraphicsScene scene;
     ItemStore store(&scene);
-    
+
     auto *rect = new QGraphicsRectItem(0, 0, 100, 100);
     ItemId id = store.registerItem(rect);
-    
+
     ItemId foundId = store.idForItem(rect);
     QVERIFY(foundId.isValid());
     QCOMPARE(foundId, id);
   }
-  
+
   void testItemStoreUnregister() {
     QGraphicsScene scene;
     ItemStore store(&scene);
-    
+
     auto *rect = new QGraphicsRectItem(0, 0, 100, 100);
     ItemId id = store.registerItem(rect);
-    
+
     QGraphicsItem *unregistered = store.unregisterItem(id);
     QCOMPARE(unregistered, rect);
     QCOMPARE(store.itemCount(), 0);
     QVERIFY(!store.contains(id));
-    
+
     // Clean up
     delete rect;
   }
-  
+
   void testItemStoreDeferredDeletion() {
     QGraphicsScene scene;
     ItemStore store(&scene);
-    
+
     auto *rect = new QGraphicsRectItem(0, 0, 100, 100);
     ItemId id = store.registerItem(rect);
-    
+
     // Schedule for deletion
     store.scheduleDelete(id);
-    
+
     // Item should be removed from tracking
     QVERIFY(!store.contains(id));
     QCOMPARE(store.item(id), nullptr);
-    
+
     // Item should be removed from scene
     QCOMPARE(rect->scene(), nullptr);
-    
+
     // Flush deletions to actually delete
     store.flushDeletions();
     // At this point, rect is deleted - don't access it
   }
-  
+
   void testItemStoreSnapshotForUndo() {
     QGraphicsScene scene;
     ItemStore store(&scene);
-    
+
     auto *rect = new QGraphicsRectItem(0, 0, 100, 100);
     ItemId id = store.registerItem(rect);
-    
+
     // Schedule deletion but keep for undo
     store.scheduleDelete(id, true);
-    
+
     // Item should not be in active tracking
     QVERIFY(!store.contains(id));
     QCOMPARE(store.item(id), nullptr);
-    
+
     // Restore the item
     bool restored = store.restoreItem(id);
     QVERIFY(restored);
     QVERIFY(store.contains(id));
     QCOMPARE(store.item(id), rect);
-    
+
     // Item should be back in scene
     QCOMPARE(rect->scene(), &scene);
   }
-  
+
   void testItemStoreClear() {
     QGraphicsScene scene;
     ItemStore store(&scene);
-    
+
     auto *rect1 = new QGraphicsRectItem(0, 0, 100, 100);
     auto *rect2 = new QGraphicsRectItem(50, 50, 100, 100);
-    
+
     store.registerItem(rect1);
     store.registerItem(rect2);
     QCOMPARE(store.itemCount(), 2);
-    
+
     store.clear();
     store.flushDeletions();
     QCOMPARE(store.itemCount(), 0);
@@ -181,49 +182,49 @@ private slots:
   void testItemRefResolution() {
     QGraphicsScene scene;
     ItemStore store(&scene);
-    
+
     auto *rect = new QGraphicsRectItem(0, 0, 100, 100);
     ItemId id = store.registerItem(rect);
-    
+
     ItemRef ref(&store, id);
     QVERIFY(ref.isValid());
     QCOMPARE(ref.get(), rect);
-    QVERIFY(ref);  // Boolean conversion
+    QVERIFY(ref); // Boolean conversion
   }
-  
+
   void testItemRefNullAfterDeletion() {
     QGraphicsScene scene;
     ItemStore store(&scene);
-    
+
     auto *rect = new QGraphicsRectItem(0, 0, 100, 100);
     ItemId id = store.registerItem(rect);
-    
+
     ItemRef ref(&store, id);
     QVERIFY(ref.isValid());
-    
+
     // Delete the item
     store.scheduleDelete(id);
     store.flushDeletions();
-    
+
     // Ref should now return nullptr
     QVERIFY(!ref.isValid());
     QCOMPARE(ref.get(), nullptr);
   }
-  
+
   void testItemRefTypedAccess() {
     QGraphicsScene scene;
     ItemStore store(&scene);
-    
+
     auto *rect = new QGraphicsRectItem(0, 0, 100, 100);
     ItemId id = store.registerItem(rect);
-    
+
     ItemRef ref(&store, id);
-    
+
     // Correct type cast
     auto *asRect = ref.getAs<QGraphicsRectItem>();
     QVERIFY(asRect != nullptr);
     QCOMPARE(asRect, rect);
-    
+
     // Wrong type cast
     auto *asPath = ref.getAs<QGraphicsPathItem>();
     QCOMPARE(asPath, nullptr);
@@ -233,52 +234,52 @@ private slots:
   void testSceneControllerAddItem() {
     QGraphicsScene scene;
     SceneController controller(&scene);
-    
+
     auto *rect = new QGraphicsRectItem(0, 0, 100, 100);
     ItemId id = controller.addItem(rect);
-    
+
     QVERIFY(id.isValid());
     QCOMPARE(controller.item(id), rect);
     QCOMPARE(rect->scene(), &scene);
   }
-  
+
   void testSceneControllerRemoveItem() {
     QGraphicsScene scene;
     SceneController controller(&scene);
-    
+
     auto *rect = new QGraphicsRectItem(0, 0, 100, 100);
     ItemId id = controller.addItem(rect);
-    
+
     bool removed = controller.removeItem(id);
     QVERIFY(removed);
     QCOMPARE(controller.item(id), nullptr);
   }
-  
+
   void testSceneControllerRestoreItem() {
     QGraphicsScene scene;
     SceneController controller(&scene);
-    
+
     auto *rect = new QGraphicsRectItem(0, 0, 100, 100);
     ItemId id = controller.addItem(rect);
-    
+
     // Remove with keepForUndo
     controller.removeItem(id, true);
     QCOMPARE(controller.item(id), nullptr);
-    
+
     // Restore
     bool restored = controller.restoreItem(id);
     QVERIFY(restored);
     QCOMPARE(controller.item(id), rect);
     QCOMPARE(rect->scene(), &scene);
   }
-  
+
   void testSceneControllerMoveItem() {
     QGraphicsScene scene;
     SceneController controller(&scene);
-    
+
     auto *rect = new QGraphicsRectItem(0, 0, 100, 100);
     ItemId id = controller.addItem(rect);
-    
+
     QPointF newPos(50, 75);
     bool moved = controller.moveItem(id, newPos);
     QVERIFY(moved);
@@ -289,25 +290,25 @@ private slots:
   void testRapidCreateDelete() {
     QGraphicsScene scene;
     ItemStore store(&scene);
-    
+
     // Create and delete many items rapidly
     for (int i = 0; i < 100; ++i) {
       auto *rect = new QGraphicsRectItem(0, 0, 10, 10);
       ItemId id = store.registerItem(rect);
       store.scheduleDelete(id);
     }
-    
+
     // All should be pending deletion
     QCOMPARE(store.itemCount(), 0);
-    
+
     // Flush and ensure no crashes
     store.flushDeletions();
   }
-  
+
   void testEraseUndoRedoCycle() {
     QGraphicsScene scene;
     ItemStore store(&scene);
-    
+
     // Create items
     std::vector<ItemId> ids;
     for (int i = 0; i < 5; ++i) {
@@ -315,26 +316,26 @@ private slots:
       ids.push_back(store.registerItem(rect));
     }
     QCOMPARE(store.itemCount(), 5);
-    
+
     // "Erase" items (keep for undo)
     for (const ItemId &id : ids) {
       store.scheduleDelete(id, true);
     }
     QCOMPARE(store.itemCount(), 0);
-    
+
     // Undo - restore items
     for (const ItemId &id : ids) {
       bool restored = store.restoreItem(id);
       QVERIFY(restored);
     }
     QCOMPARE(store.itemCount(), 5);
-    
+
     // Redo - delete again
     for (const ItemId &id : ids) {
       store.scheduleDelete(id, true);
     }
     QCOMPARE(store.itemCount(), 0);
-    
+
     // Final cleanup
     store.flushDeletions();
   }
@@ -345,25 +346,26 @@ private slots:
   void testItemAboutToBeDeletedSignal() {
     QGraphicsScene scene;
     ItemStore store(&scene);
-    
+
     auto *rect = new QGraphicsRectItem(0, 0, 100, 100);
     ItemId id = store.registerItem(rect);
-    
+
     // Track if signal was emitted
     ItemId deletedId;
     bool signalEmitted = false;
-    QObject::connect(&store, &ItemStore::itemAboutToBeDeleted, [&](const ItemId &id) {
-      deletedId = id;
-      signalEmitted = true;
-    });
-    
+    QObject::connect(&store, &ItemStore::itemAboutToBeDeleted,
+                     [&](const ItemId &id) {
+                       deletedId = id;
+                       signalEmitted = true;
+                     });
+
     // Schedule deletion
     store.scheduleDelete(id);
-    
+
     // Verify signal was emitted with correct ID
     QVERIFY(signalEmitted);
     QCOMPARE(deletedId, id);
-    
+
     // Clean up
     store.flushDeletions();
   }
@@ -371,22 +373,22 @@ private slots:
   void testItemRefInvalidAfterDeletion() {
     QGraphicsScene scene;
     ItemStore store(&scene);
-    
+
     auto *rect = new QGraphicsRectItem(0, 0, 100, 100);
     ItemId id = store.registerItem(rect);
-    
+
     // Create an ItemRef to track the item
     ItemRef ref(&store, id);
     QVERIFY(ref.isValid());
     QCOMPARE(ref.get(), rect);
-    
+
     // Delete the item
     store.scheduleDelete(id);
-    
+
     // Ref should now be invalid (returns nullptr)
     QVERIFY(!ref.isValid());
     QCOMPARE(ref.get(), nullptr);
-    
+
     // Clean up
     store.flushDeletions();
   }
@@ -394,29 +396,30 @@ private slots:
   void testSubscriberClearsStoredIdOnDeletion() {
     QGraphicsScene scene;
     ItemStore store(&scene);
-    
+
     auto *rect = new QGraphicsRectItem(0, 0, 100, 100);
     ItemId id = store.registerItem(rect);
-    
+
     // Simulate a subscriber that caches an ItemId
     ItemId cachedId = id;
     bool cleared = false;
-    
+
     // Subscribe to deletion signal and clear cached ID
-    QObject::connect(&store, &ItemStore::itemAboutToBeDeleted, [&](const ItemId &deletedId) {
-      if (cachedId == deletedId) {
-        cachedId = ItemId();  // Clear the cached ID
-        cleared = true;
-      }
-    });
-    
+    QObject::connect(&store, &ItemStore::itemAboutToBeDeleted,
+                     [&](const ItemId &deletedId) {
+                       if (cachedId == deletedId) {
+                         cachedId = ItemId(); // Clear the cached ID
+                         cleared = true;
+                       }
+                     });
+
     // Delete the item
     store.scheduleDelete(id);
-    
+
     // Verify subscriber cleared its cached ID
     QVERIFY(cleared);
     QVERIFY(!cachedId.isValid());
-    
+
     // Clean up
     store.flushDeletions();
   }
@@ -424,21 +427,21 @@ private slots:
   void testCodePathToleratesMissingItem() {
     QGraphicsScene scene;
     ItemStore store(&scene);
-    
+
     auto *rect = new QGraphicsRectItem(0, 0, 100, 100);
     ItemId id = store.registerItem(rect);
-    
+
     // Delete the item
     store.scheduleDelete(id);
     store.flushDeletions();
-    
+
     // Attempt to access the item - should return nullptr, not crash
     QGraphicsItem *item = store.item(id);
     QCOMPARE(item, nullptr);
-    
+
     // Verify store operations handle missing items gracefully
     QVERIFY(!store.contains(id));
-    
+
     // ItemRef should also handle this gracefully
     ItemRef ref(&store, id);
     QVERIFY(!ref.isValid());
@@ -448,16 +451,16 @@ private slots:
   void testItemRefTypedAccessWithDeletedItem() {
     QGraphicsScene scene;
     ItemStore store(&scene);
-    
+
     auto *rect = new QGraphicsRectItem(0, 0, 100, 100);
     ItemId id = store.registerItem(rect);
-    
+
     ItemRef ref(&store, id);
-    
+
     // Delete the item
     store.scheduleDelete(id);
     store.flushDeletions();
-    
+
     // Typed access should return nullptr, not crash
     auto *asRect = ref.getAs<QGraphicsRectItem>();
     QCOMPARE(asRect, nullptr);
@@ -466,37 +469,39 @@ private slots:
   void testMultipleSubscribersNotified() {
     QGraphicsScene scene;
     ItemStore store(&scene);
-    
+
     auto *rect = new QGraphicsRectItem(0, 0, 100, 100);
     ItemId id = store.registerItem(rect);
-    
+
     // Multiple subscribers tracking the same item
     int notificationCount = 0;
     ItemId subscriber1Id = id;
     ItemId subscriber2Id = id;
-    
-    QObject::connect(&store, &ItemStore::itemAboutToBeDeleted, [&](const ItemId &deletedId) {
-      if (subscriber1Id == deletedId) {
-        subscriber1Id = ItemId();
-        notificationCount++;
-      }
-    });
-    
-    QObject::connect(&store, &ItemStore::itemAboutToBeDeleted, [&](const ItemId &deletedId) {
-      if (subscriber2Id == deletedId) {
-        subscriber2Id = ItemId();
-        notificationCount++;
-      }
-    });
-    
+
+    QObject::connect(&store, &ItemStore::itemAboutToBeDeleted,
+                     [&](const ItemId &deletedId) {
+                       if (subscriber1Id == deletedId) {
+                         subscriber1Id = ItemId();
+                         notificationCount++;
+                       }
+                     });
+
+    QObject::connect(&store, &ItemStore::itemAboutToBeDeleted,
+                     [&](const ItemId &deletedId) {
+                       if (subscriber2Id == deletedId) {
+                         subscriber2Id = ItemId();
+                         notificationCount++;
+                       }
+                     });
+
     // Delete the item
     store.scheduleDelete(id);
-    
+
     // Both subscribers should have been notified
     QCOMPARE(notificationCount, 2);
     QVERIFY(!subscriber1Id.isValid());
     QVERIFY(!subscriber2Id.isValid());
-    
+
     // Clean up
     store.flushDeletions();
   }
@@ -504,19 +509,19 @@ private slots:
   void testSceneControllerRemoveItemGracefully() {
     QGraphicsScene scene;
     SceneController controller(&scene);
-    
+
     auto *rect = new QGraphicsRectItem(0, 0, 100, 100);
     ItemId id = controller.addItem(rect);
-    
+
     // Remove the item
     bool removed = controller.removeItem(id);
     QVERIFY(removed);
-    
+
     // Attempting to remove again should return false, not crash
     controller.flushDeletions();
     bool removedAgain = controller.removeItem(id);
     QVERIFY(!removedAgain);
-    
+
     // Verify item accessor returns nullptr
     QCOMPARE(controller.item(id), nullptr);
   }
@@ -524,14 +529,14 @@ private slots:
   void testSceneControllerMoveItemWithMissingItem() {
     QGraphicsScene scene;
     SceneController controller(&scene);
-    
+
     auto *rect = new QGraphicsRectItem(0, 0, 100, 100);
     ItemId id = controller.addItem(rect);
-    
+
     // Remove the item
     controller.removeItem(id);
     controller.flushDeletions();
-    
+
     // Attempting to move a deleted item should return false, not crash
     bool moved = controller.moveItem(id, QPointF(50, 50));
     QVERIFY(!moved);
@@ -540,22 +545,22 @@ private slots:
   void testItemRefResolutionAfterRestore() {
     QGraphicsScene scene;
     ItemStore store(&scene);
-    
+
     auto *rect = new QGraphicsRectItem(0, 0, 100, 100);
     ItemId id = store.registerItem(rect);
-    
+
     // Create ref before deletion
     ItemRef ref(&store, id);
     QVERIFY(ref.isValid());
-    
+
     // Delete with keepSnapshot for undo
     store.scheduleDelete(id, true);
     QVERIFY(!ref.isValid());
-    
+
     // Restore the item (undo operation)
     bool restored = store.restoreItem(id);
     QVERIFY(restored);
-    
+
     // Ref should be valid again after restore
     QVERIFY(ref.isValid());
     QCOMPARE(ref.get(), rect);

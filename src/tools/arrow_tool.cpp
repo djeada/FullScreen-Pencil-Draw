@@ -23,7 +23,7 @@ QGraphicsItem *ArrowTool::createShape(const QPointF &startPos) {
 }
 
 void ArrowTool::updateShape(const QPointF &startPos,
-                             const QPointF &currentPos) {
+                            const QPointF &currentPos) {
   if (auto *rect = dynamic_cast<QGraphicsRectItem *>(tempShape_)) {
     rect->setRect(QRectF(startPos, currentPos).normalized());
   }
@@ -34,7 +34,7 @@ void ArrowTool::finalizeShape(const QPointF &startPos, const QPointF &endPos) {
     // Remove the temporary preview rectangle using SceneController if available
     SceneController *controller = renderer_->sceneController();
     if (controller && tempShapeId_.isValid()) {
-      controller->removeItem(tempShapeId_, false);  // Don't keep for undo
+      controller->removeItem(tempShapeId_, false); // Don't keep for undo
     } else {
       renderer_->scene()->removeItem(tempShape_);
       delete tempShape_;
@@ -49,13 +49,13 @@ void ArrowTool::finalizeShape(const QPointF &startPos, const QPointF &endPos) {
 
 void ArrowTool::drawArrow(const QPointF &start, const QPointF &end) {
   SceneController *controller = renderer_->sceneController();
-  
+
   // Create line
   auto *line = new QGraphicsLineItem(QLineF(start, end));
   line->setPen(renderer_->currentPen());
   line->setFlags(QGraphicsItem::ItemIsSelectable |
                  QGraphicsItem::ItemIsMovable);
-  
+
   if (controller) {
     controller->addItem(line);
   } else {
@@ -78,7 +78,7 @@ void ArrowTool::drawArrow(const QPointF &start, const QPointF &end) {
   arrowHeadItem->setBrush(renderer_->currentPen().color());
   arrowHeadItem->setFlags(QGraphicsItem::ItemIsSelectable |
                           QGraphicsItem::ItemIsMovable);
-  
+
   if (controller) {
     controller->addItem(arrowHeadItem);
   } else {

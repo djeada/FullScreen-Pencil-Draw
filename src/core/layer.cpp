@@ -16,8 +16,9 @@ Layer::~Layer() = default;
 
 Layer::Layer(Layer &&other) noexcept
     : id_(other.id_), name_(std::move(other.name_)), type_(other.type_),
-      visible_(other.visible_), locked_(other.locked_), opacity_(other.opacity_),
-      itemIds_(std::move(other.itemIds_)), itemStore_(other.itemStore_) {}
+      visible_(other.visible_), locked_(other.locked_),
+      opacity_(other.opacity_), itemIds_(std::move(other.itemIds_)),
+      itemStore_(other.itemStore_) {}
 
 Layer &Layer::operator=(Layer &&other) noexcept {
   if (this != &other) {
@@ -49,12 +50,12 @@ void Layer::addItem(QGraphicsItem *item) {
   if (!item) {
     return;
   }
-  
+
   // Must have ItemStore to add items safely
   if (!itemStore_) {
     return;
   }
-  
+
   ItemId id = itemStore_->idForItem(item);
   if (id.isValid() && !itemIds_.contains(id)) {
     itemIds_.append(id);
@@ -67,11 +68,11 @@ void Layer::addItem(const ItemId &id, ItemStore *store) {
   if (!id.isValid()) {
     return;
   }
-  
+
   if (!itemIds_.contains(id)) {
     itemIds_.append(id);
   }
-  
+
   // Apply layer properties to item
   QGraphicsItem *item = store ? store->item(id) : nullptr;
   if (item) {
@@ -84,7 +85,7 @@ bool Layer::removeItem(QGraphicsItem *item) {
   if (!item || !itemStore_) {
     return false;
   }
-  
+
   ItemId id = itemStore_->idForItem(item);
   if (id.isValid()) {
     return itemIds_.removeOne(id);
@@ -92,16 +93,14 @@ bool Layer::removeItem(QGraphicsItem *item) {
   return false;
 }
 
-bool Layer::removeItem(const ItemId &id) {
-  return itemIds_.removeOne(id);
-}
+bool Layer::removeItem(const ItemId &id) { return itemIds_.removeOne(id); }
 
 QList<QGraphicsItem *> Layer::items() const {
   QList<QGraphicsItem *> result;
   if (!itemStore_) {
     return result;
   }
-  
+
   for (const ItemId &id : itemIds_) {
     if (QGraphicsItem *item = itemStore_->item(id)) {
       result.append(item);
@@ -114,7 +113,7 @@ bool Layer::containsItem(QGraphicsItem *item) const {
   if (!item || !itemStore_) {
     return false;
   }
-  
+
   ItemId id = itemStore_->idForItem(item);
   return id.isValid() && itemIds_.contains(id);
 }
@@ -123,15 +122,13 @@ bool Layer::containsItem(const ItemId &id) const {
   return itemIds_.contains(id);
 }
 
-void Layer::clear() {
-  itemIds_.clear();
-}
+void Layer::clear() { itemIds_.clear(); }
 
 void Layer::updateItemsVisibility() {
   if (!itemStore_) {
     return;
   }
-  
+
   for (int i = itemIds_.size() - 1; i >= 0; --i) {
     const ItemId &id = itemIds_[i];
     QGraphicsItem *item = itemStore_->item(id);
@@ -148,7 +145,7 @@ void Layer::updateItemsOpacity() {
   if (!itemStore_) {
     return;
   }
-  
+
   for (int i = itemIds_.size() - 1; i >= 0; --i) {
     const ItemId &id = itemIds_[i];
     QGraphicsItem *item = itemStore_->item(id);
@@ -163,8 +160,8 @@ void Layer::updateItemsOpacity() {
 
 // LayerManager implementation
 LayerManager::LayerManager(QGraphicsScene *scene, QObject *parent)
-    : QObject(parent), scene_(scene), itemStore_(nullptr), sceneController_(nullptr),
-      activeLayerIndex_(-1) {
+    : QObject(parent), scene_(scene), itemStore_(nullptr),
+      sceneController_(nullptr), activeLayerIndex_(-1) {
   // Create default layer
   createLayer("Background", Layer::Type::Vector);
 }
@@ -178,12 +175,12 @@ Layer *LayerManager::createLayer(const QString &name, Layer::Type type) {
   }
   Layer *ptr = layer.get();
   layers_.push_back(std::move(layer));
-  
+
   // Set as active if first layer
   if (activeLayerIndex_ < 0) {
     activeLayerIndex_ = 0;
   }
-  
+
   updateLayerZOrder();
   emit layerAdded(ptr);
   return ptr;
@@ -214,15 +211,15 @@ bool LayerManager::deleteLayer(int index) {
   if (index < 0 || index >= static_cast<int>(layers_.size())) {
     return false;
   }
-  
+
   // Don't delete the last layer
   if (layers_.size() <= 1) {
     return false;
   }
-  
+
   Layer *layer = layers_[index].get();
   emit layerRemoved(layer);
-  
+
   // Remove items from scene and delete them via controller/store
   const QList<ItemId> ids = layer->itemIds();
   if (sceneController_) {
@@ -242,14 +239,14 @@ bool LayerManager::deleteLayer(int index) {
       }
     }
   }
-  
+
   layers_.erase(layers_.begin() + index);
-  
+
   // Adjust active layer index
   if (activeLayerIndex_ >= static_cast<int>(layers_.size())) {
     activeLayerIndex_ = static_cast<int>(layers_.size()) - 1;
   }
-  
+
   updateLayerZOrder();
   emit activeLayerChanged(activeLayer());
   return true;
@@ -280,9 +277,7 @@ Layer *LayerManager::layer(const QUuid &id) const {
   return nullptr;
 }
 
-Layer *LayerManager::activeLayer() const {
-  return layer(activeLayerIndex_);
-}
+Layer *LayerManager::activeLayer() const { return layer(activeLayerIndex_); }
 
 void LayerManager::setActiveLayer(int index) {
   if (index >= 0 && index < static_cast<int>(layers_.size())) {
@@ -300,24 +295,22 @@ void LayerManager::setActiveLayer(const QUuid &id) {
   }
 }
 
-int LayerManager::activeLayerIndex() const {
-  return activeLayerIndex_;
-}
+int LayerManager::activeLayerIndex() const { return activeLayerIndex_; }
 
 bool LayerManager::moveLayerUp(int index) {
   if (index <= 0 || index >= static_cast<int>(layers_.size())) {
     return false;
   }
-  
+
   std::swap(layers_[index], layers_[index - 1]);
-  
+
   // Adjust active layer index if needed
   if (activeLayerIndex_ == index) {
     activeLayerIndex_ = index - 1;
   } else if (activeLayerIndex_ == index - 1) {
     activeLayerIndex_ = index;
   }
-  
+
   updateLayerZOrder();
   emit layerOrderChanged();
   return true;
@@ -327,16 +320,16 @@ bool LayerManager::moveLayerDown(int index) {
   if (index < 0 || index >= static_cast<int>(layers_.size()) - 1) {
     return false;
   }
-  
+
   std::swap(layers_[index], layers_[index + 1]);
-  
+
   // Adjust active layer index if needed
   if (activeLayerIndex_ == index) {
     activeLayerIndex_ = index + 1;
   } else if (activeLayerIndex_ == index + 1) {
     activeLayerIndex_ = index;
   }
-  
+
   updateLayerZOrder();
   emit layerOrderChanged();
   return true;
@@ -380,16 +373,16 @@ bool LayerManager::mergeDown(int index) {
   if (index <= 0 || index >= static_cast<int>(layers_.size())) {
     return false;
   }
-  
+
   Layer *source = layers_[index].get();
   Layer *target = layers_[index - 1].get();
-  
+
   // Move all items from source to target
   for (const ItemId &id : source->itemIds()) {
     target->addItem(id, itemStore_);
   }
   source->clear();
-  
+
   // Delete the source layer
   return deleteLayer(index);
 }
@@ -398,7 +391,7 @@ Layer *LayerManager::flattenAll() {
   if (layers_.empty()) {
     return nullptr;
   }
-  
+
   // Move all items to the first layer
   for (size_t i = 1; i < layers_.size(); ++i) {
     for (const ItemId &id : layers_[i]->itemIds()) {
@@ -406,20 +399,20 @@ Layer *LayerManager::flattenAll() {
     }
     layers_[i]->clear();
   }
-  
+
   // Remove all layers except the first
   while (layers_.size() > 1) {
     emit layerRemoved(layers_.back().get());
     layers_.pop_back();
   }
-  
+
   activeLayerIndex_ = 0;
   layers_[0]->setName("Flattened");
-  
+
   updateLayerZOrder();
   emit layerOrderChanged();
   emit activeLayerChanged(activeLayer());
-  
+
   return layers_[0].get();
 }
 
@@ -427,32 +420,33 @@ Layer *LayerManager::duplicateLayer(int index) {
   if (index < 0 || index >= static_cast<int>(layers_.size())) {
     return nullptr;
   }
-  
+
   Layer *source = layers_[index].get();
   QString newName = source->name() + " (Copy)";
   Layer *newLayer = createLayer(newName, source->type());
-  
+
   if (newLayer) {
     newLayer->setVisible(source->isVisible());
     newLayer->setLocked(source->isLocked());
     newLayer->setOpacity(source->opacity());
     // Note: Items are not duplicated, only the layer properties
   }
-  
+
   return newLayer;
 }
 
 void LayerManager::clear() {
   // Block signals during clear to avoid re-entrancy issues
   bool wasBlocked = blockSignals(true);
-  
-  // Just clear the layer tracking - items should already be cleared by sceneController
-  // or will be cleared separately. Don't try to remove items here to avoid double-delete.
+
+  // Just clear the layer tracking - items should already be cleared by
+  // sceneController or will be cleared separately. Don't try to remove items
+  // here to avoid double-delete.
   layers_.clear();
   activeLayerIndex_ = -1;
-  
+
   blockSignals(wasBlocked);
-  
+
   // Recreate default layer (this will emit layerAdded)
   createLayer("Background", Layer::Type::Vector);
 }

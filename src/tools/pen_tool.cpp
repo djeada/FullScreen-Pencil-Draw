@@ -24,7 +24,8 @@ void PenTool::mousePressEvent(QMouseEvent *event, const QPointF &scenePos) {
   path.moveTo(scenePos);
   currentPath_->setPath(path);
 
-  // Use SceneController if available, otherwise fall back to direct scene access
+  // Use SceneController if available, otherwise fall back to direct scene
+  // access
   SceneController *controller = renderer_->sceneController();
   if (controller) {
     currentPathId_ = controller->addItem(currentPath_);
@@ -46,7 +47,7 @@ void PenTool::mouseMoveEvent(QMouseEvent *event, const QPointF &scenePos) {
 }
 
 void PenTool::mouseReleaseEvent(QMouseEvent * /*event*/,
-                                 const QPointF & /*scenePos*/) {
+                                const QPointF & /*scenePos*/) {
   currentPath_ = nullptr;
   currentPathId_ = ItemId();
   pointBuffer_.clear();
@@ -57,7 +58,7 @@ void PenTool::deactivate() {
   if (currentPath_) {
     SceneController *controller = renderer_->sceneController();
     if (controller && currentPathId_.isValid()) {
-      controller->removeItem(currentPathId_, false);  // Don't keep for undo
+      controller->removeItem(currentPathId_, false); // Don't keep for undo
     } else if (currentPath_->scene()) {
       renderer_->scene()->removeItem(currentPath_);
       delete currentPath_;

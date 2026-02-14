@@ -83,8 +83,7 @@ private:
 
   struct CacheKeyHash {
     std::size_t operator()(const CacheKey &key) const {
-      return std::hash<int>()(key.pageIndex) ^
-             (std::hash<int>()(key.dpi) << 1);
+      return std::hash<int>()(key.pageIndex) ^ (std::hash<int>()(key.dpi) << 1);
     }
   };
 
@@ -113,12 +112,7 @@ public:
   /**
    * @brief Document load status
    */
-  enum class Status {
-    NotLoaded,
-    Loading,
-    Ready,
-    Error
-  };
+  enum class Status { NotLoaded, Loading, Ready, Error };
   Q_ENUM(Status)
 
   /**

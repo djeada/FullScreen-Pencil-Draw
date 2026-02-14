@@ -25,9 +25,9 @@ class QWebEnginePage;
  *
  * Uses a hidden QWebEngineView to render LaTeX via the bundled KaTeX library.
  * Rendered results are cached for performance.
- * 
- * When HAVE_QT_WEBENGINE is not defined, this class provides stub implementations
- * that always report unavailable.
+ *
+ * When HAVE_QT_WEBENGINE is not defined, this class provides stub
+ * implementations that always report unavailable.
  */
 class KatexRenderer : public QObject {
   Q_OBJECT

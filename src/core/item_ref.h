@@ -59,9 +59,7 @@ public:
    * @tparam T The expected item type
    * @return The typed item pointer, or nullptr if deleted/invalid/wrong type
    */
-  template <typename T> T *getAs() const {
-    return dynamic_cast<T *>(get());
-  }
+  template <typename T> T *getAs() const { return dynamic_cast<T *>(get()); }
 
   /**
    * @brief Check if the referenced item still exists

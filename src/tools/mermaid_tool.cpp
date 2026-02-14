@@ -26,8 +26,9 @@ void MermaidTool::mousePressEvent(QMouseEvent *event, const QPointF &scenePos) {
         ItemStore *store = renderer_->itemStore();
         if (store) {
           ItemId existingId = store->idForItem(mermaidItem);
-          currentEditingItemId_ =
-              existingId.isValid() ? existingId : renderer_->registerItem(mermaidItem);
+          currentEditingItemId_ = existingId.isValid()
+                                      ? existingId
+                                      : renderer_->registerItem(mermaidItem);
         }
       }
       return;
@@ -46,12 +47,12 @@ void MermaidTool::mousePressEvent(QMouseEvent *event, const QPointF &scenePos) {
 }
 
 void MermaidTool::mouseMoveEvent(QMouseEvent * /*event*/,
-                                  const QPointF & /*scenePos*/) {
+                                 const QPointF & /*scenePos*/) {
   // Nothing to do on move
 }
 
 void MermaidTool::mouseReleaseEvent(QMouseEvent * /*event*/,
-                                     const QPointF & /*scenePos*/) {
+                                    const QPointF & /*scenePos*/) {
   // Nothing to do on release
 }
 
@@ -81,32 +82,32 @@ void MermaidTool::createMermaidItem(const QPointF &position) {
   }
 
   // Connect to handle when editing is finished
-  QObject::connect(
-      mermaidItem, &MermaidTextItem::editingFinished,
-      [this, mermaidItem = QPointer<MermaidTextItem>(mermaidItem), mermaidItemId,
-       controller]() {
-        // Check if mermaidItem is still valid (not deleted)
-        if (!mermaidItem) {
-          return;
-        }
-        // If the code is empty after editing, remove the item
-        if (mermaidItem->mermaidCode().trimmed().isEmpty()) {
-          if (controller && mermaidItemId.isValid()) {
-            controller->removeItem(mermaidItemId, false); // Don't keep for undo
-          } else {
-            renderer_->onItemRemoved(mermaidItem);
-            renderer_->scene()->removeItem(mermaidItem);
-            mermaidItem->deleteLater();
-          }
-        } else {
-          // Add to undo stack only when there's actual content
-          renderer_->addDrawAction(mermaidItem);
-        }
-        if (currentEditingItem_ == mermaidItem) {
-          currentEditingItem_ = nullptr;
-          currentEditingItemId_ = ItemId();
-        }
-      });
+  QObject::connect(mermaidItem, &MermaidTextItem::editingFinished,
+                   [this, mermaidItem = QPointer<MermaidTextItem>(mermaidItem),
+                    mermaidItemId, controller]() {
+                     // Check if mermaidItem is still valid (not deleted)
+                     if (!mermaidItem) {
+                       return;
+                     }
+                     // If the code is empty after editing, remove the item
+                     if (mermaidItem->mermaidCode().trimmed().isEmpty()) {
+                       if (controller && mermaidItemId.isValid()) {
+                         controller->removeItem(mermaidItemId,
+                                                false); // Don't keep for undo
+                       } else {
+                         renderer_->onItemRemoved(mermaidItem);
+                         renderer_->scene()->removeItem(mermaidItem);
+                         mermaidItem->deleteLater();
+                       }
+                     } else {
+                       // Add to undo stack only when there's actual content
+                       renderer_->addDrawAction(mermaidItem);
+                     }
+                     if (currentEditingItem_ == mermaidItem) {
+                       currentEditingItem_ = nullptr;
+                       currentEditingItemId_ = ItemId();
+                     }
+                   });
 
   // Start inline editing immediately
   mermaidItem->startEditing();

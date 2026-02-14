@@ -19,7 +19,7 @@ QGraphicsItem *CircleTool::createShape(const QPointF &startPos) {
 }
 
 void CircleTool::updateShape(const QPointF &startPos,
-                              const QPointF &currentPos) {
+                             const QPointF &currentPos) {
   if (auto *ellipse = dynamic_cast<QGraphicsEllipseItem *>(tempShape_)) {
     ellipse->setRect(QRectF(startPos, currentPos).normalized());
   }

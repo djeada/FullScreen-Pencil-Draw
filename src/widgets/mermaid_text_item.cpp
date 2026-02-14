@@ -26,7 +26,9 @@ MermaidTextEdit::MermaidTextEdit(QWidget *parent) : QTextEdit(parent) {
   setAcceptRichText(false);
   setLineWrapMode(QTextEdit::NoWrap);
   setFont(QFont("Monospace", 10));
-  setPlaceholderText("Enter Mermaid diagram code...\nExample:\ngraph TD\n    A[Start] --> B{Decision}\n    B -->|Yes| C[OK]\n    B -->|No| D[End]");
+  setPlaceholderText(
+      "Enter Mermaid diagram code...\nExample:\ngraph TD\n    A[Start] --> "
+      "B{Decision}\n    B -->|Yes| C[OK]\n    B -->|No| D[End]");
 }
 
 void MermaidTextEdit::focusOutEvent(QFocusEvent *event) {
@@ -85,8 +87,8 @@ QRectF MermaidTextItem::boundingRect() const {
 }
 
 void MermaidTextItem::paint(QPainter *painter,
-                             const QStyleOptionGraphicsItem *option,
-                             QWidget * /*widget*/) {
+                            const QStyleOptionGraphicsItem *option,
+                            QWidget * /*widget*/) {
   if (isEditing_) {
     // The proxy widget handles painting during editing
     return;
@@ -104,7 +106,8 @@ void MermaidTextItem::paint(QPainter *painter,
     painter->setPen(Qt::darkGray);
     QFont font("Arial", 12);
     painter->setFont(font);
-    painter->drawText(contentRect_, Qt::AlignCenter, "Mermaid Diagram\n(double-click to edit)");
+    painter->drawText(contentRect_, Qt::AlignCenter,
+                      "Mermaid Diagram\n(double-click to edit)");
   }
 
   // Draw selection highlight
@@ -152,8 +155,9 @@ void MermaidTextItem::startEditing() {
   // Set up the editor
   textEdit_->setPlainText(mermaidCode_);
   textEdit_->setMinimumSize(EDIT_MIN_WIDTH, EDIT_MIN_HEIGHT);
-  textEdit_->resize(qMax(EDIT_MIN_WIDTH, static_cast<int>(contentRect_.width())),
-                    qMax(EDIT_MIN_HEIGHT, static_cast<int>(contentRect_.height())));
+  textEdit_->resize(
+      qMax(EDIT_MIN_WIDTH, static_cast<int>(contentRect_.width())),
+      qMax(EDIT_MIN_HEIGHT, static_cast<int>(contentRect_.height())));
 
   // Create proxy widget if needed
   if (!proxyWidget_) {
@@ -219,7 +223,7 @@ void MermaidTextItem::mouseDoubleClickEvent(QGraphicsSceneMouseEvent *event) {
 }
 
 QVariant MermaidTextItem::itemChange(GraphicsItemChange change,
-                                      const QVariant &value) {
+                                     const QVariant &value) {
   if (change == ItemPositionChange && scene()) {
     // Could add snapping or constraint logic here
   }
@@ -237,8 +241,8 @@ void MermaidTextItem::renderContent() {
 #ifdef HAVE_QT_WEBENGINE
   // Connect to the renderer if not already connected
   if (!mermaidConnected_) {
-    connect(&MermaidRenderer::instance(), &MermaidRenderer::renderComplete, this,
-            &MermaidTextItem::onMermaidRenderComplete);
+    connect(&MermaidRenderer::instance(), &MermaidRenderer::renderComplete,
+            this, &MermaidTextItem::onMermaidRenderComplete);
     mermaidConnected_ = true;
   }
 
@@ -252,15 +256,16 @@ void MermaidTextItem::renderContent() {
   // No WebEngine - use placeholder
   renderedContent_ = createPlaceholder();
   prepareGeometryChange();
-  contentRect_ = QRectF(0, 0, renderedContent_.width(), renderedContent_.height());
+  contentRect_ =
+      QRectF(0, 0, renderedContent_.width(), renderedContent_.height());
   update();
 #endif
 }
 
 #ifdef HAVE_QT_WEBENGINE
 void MermaidTextItem::onMermaidRenderComplete(quintptr requestId,
-                                               const QPixmap &pixmap,
-                                               bool success) {
+                                              const QPixmap &pixmap,
+                                              bool success) {
   if (requestId != pendingRenderId_) {
     return; // Not our request
   }
@@ -273,7 +278,8 @@ void MermaidTextItem::onMermaidRenderComplete(quintptr requestId,
   } else {
     // Render failed - use placeholder
     renderedContent_ = createPlaceholder();
-    contentRect_ = QRectF(0, 0, renderedContent_.width(), renderedContent_.height());
+    contentRect_ =
+        QRectF(0, 0, renderedContent_.width(), renderedContent_.height());
   }
 
   update();
@@ -301,9 +307,10 @@ QPixmap MermaidTextItem::createPlaceholder() const {
     displayText = displayText.left(100) + "...";
   }
 
-  painter.drawText(QRect(PADDING, PADDING, width - 2 * PADDING, height - 2 * PADDING),
-                   Qt::AlignLeft | Qt::AlignTop | Qt::TextWordWrap,
-                   "Mermaid Diagram:\n" + displayText);
+  painter.drawText(
+      QRect(PADDING, PADDING, width - 2 * PADDING, height - 2 * PADDING),
+      Qt::AlignLeft | Qt::AlignTop | Qt::TextWordWrap,
+      "Mermaid Diagram:\n" + displayText);
 
   return pixmap;
 }

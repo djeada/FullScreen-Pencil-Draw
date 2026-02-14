@@ -5,8 +5,8 @@
 #ifndef TEXT_TOOL_H
 #define TEXT_TOOL_H
 
-#include "tool.h"
 #include "../core/item_id.h"
+#include "tool.h"
 
 class LatexTextItem;
 
@@ -29,13 +29,13 @@ public:
   void mousePressEvent(QMouseEvent *event, const QPointF &scenePos) override;
   void mouseMoveEvent(QMouseEvent *event, const QPointF &scenePos) override;
   void mouseReleaseEvent(QMouseEvent *event, const QPointF &scenePos) override;
-  
+
   void deactivate() override;
 
 private:
   void createTextItem(const QPointF &position);
   LatexTextItem *currentEditingItem_;
-  ItemId currentEditingItemId_;   // Stable ID for safe reference
+  ItemId currentEditingItemId_; // Stable ID for safe reference
 };
 
 #endif // TEXT_TOOL_H

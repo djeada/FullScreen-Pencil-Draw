@@ -1,7 +1,7 @@
 /**
  * @file action.cpp
  * @brief Implementation of the undo/redo action system.
- * 
+ *
  * All actions use ItemId-based storage only. Item pointers are NEVER cached.
  */
 #include "action.h"
@@ -15,16 +15,17 @@
 Action::~Action() = default;
 
 // DrawAction implementation
-DrawAction::DrawAction(const ItemId &id, ItemStore *store,
-                       ItemCallback onAdd, ItemCallback onRemove)
-    : itemId_(id), itemStore_(store),
-      onAdd_(std::move(onAdd)), onRemove_(std::move(onRemove)) {}
+DrawAction::DrawAction(const ItemId &id, ItemStore *store, ItemCallback onAdd,
+                       ItemCallback onRemove)
+    : itemId_(id), itemStore_(store), onAdd_(std::move(onAdd)),
+      onRemove_(std::move(onRemove)) {}
 
 DrawAction::~DrawAction() = default;
 
 void DrawAction::undo() {
-  if (!itemStore_ || !itemId_.isValid()) return;
-  
+  if (!itemStore_ || !itemId_.isValid())
+    return;
+
   QGraphicsItem *item = itemStore_->item(itemId_);
   if (item && onRemove_) {
     onRemove_(item);
@@ -33,8 +34,9 @@ void DrawAction::undo() {
 }
 
 void DrawAction::redo() {
-  if (!itemStore_ || !itemId_.isValid()) return;
-  
+  if (!itemStore_ || !itemId_.isValid())
+    return;
+
   itemStore_->restoreItem(itemId_);
   QGraphicsItem *item = itemStore_->item(itemId_);
   if (item && onAdd_) {
@@ -45,14 +47,15 @@ void DrawAction::redo() {
 // DeleteAction implementation
 DeleteAction::DeleteAction(const ItemId &id, ItemStore *store,
                            ItemCallback onAdd, ItemCallback onRemove)
-    : itemId_(id), itemStore_(store),
-      onAdd_(std::move(onAdd)), onRemove_(std::move(onRemove)) {}
+    : itemId_(id), itemStore_(store), onAdd_(std::move(onAdd)),
+      onRemove_(std::move(onRemove)) {}
 
 DeleteAction::~DeleteAction() = default;
 
 void DeleteAction::undo() {
-  if (!itemStore_ || !itemId_.isValid()) return;
-  
+  if (!itemStore_ || !itemId_.isValid())
+    return;
+
   if (itemStore_->restoreItem(itemId_) || itemStore_->item(itemId_)) {
     QGraphicsItem *item = itemStore_->item(itemId_);
     if (item && onAdd_) {
@@ -62,8 +65,9 @@ void DeleteAction::undo() {
 }
 
 void DeleteAction::redo() {
-  if (!itemStore_ || !itemId_.isValid()) return;
-  
+  if (!itemStore_ || !itemId_.isValid())
+    return;
+
   QGraphicsItem *item = itemStore_->item(itemId_);
   if (item && onRemove_) {
     onRemove_(item);
@@ -79,8 +83,9 @@ MoveAction::MoveAction(const ItemId &id, ItemStore *store,
 MoveAction::~MoveAction() = default;
 
 void MoveAction::undo() {
-  if (!itemStore_ || !itemId_.isValid()) return;
-  
+  if (!itemStore_ || !itemId_.isValid())
+    return;
+
   QGraphicsItem *item = itemStore_->item(itemId_);
   if (item) {
     item->setPos(oldPos_);
@@ -88,8 +93,9 @@ void MoveAction::undo() {
 }
 
 void MoveAction::redo() {
-  if (!itemStore_ || !itemId_.isValid()) return;
-  
+  if (!itemStore_ || !itemId_.isValid())
+    return;
+
   QGraphicsItem *item = itemStore_->item(itemId_);
   if (item) {
     item->setPos(newPos_);
@@ -122,16 +128,19 @@ void CompositeAction::redo() {
 // FillAction implementation
 FillAction::FillAction(const ItemId &id, ItemStore *store,
                        const QBrush &oldBrush, const QBrush &newBrush)
-    : itemId_(id), itemStore_(store), oldBrush_(oldBrush), newBrush_(newBrush) {}
+    : itemId_(id), itemStore_(store), oldBrush_(oldBrush), newBrush_(newBrush) {
+}
 
 FillAction::~FillAction() = default;
 
 void FillAction::undo() {
-  if (!itemStore_ || !itemId_.isValid()) return;
-  
+  if (!itemStore_ || !itemId_.isValid())
+    return;
+
   QGraphicsItem *item = itemStore_->item(itemId_);
-  if (!item) return;
-  
+  if (!item)
+    return;
+
   if (auto *rect = dynamic_cast<QGraphicsRectItem *>(item)) {
     rect->setBrush(oldBrush_);
   } else if (auto *ellipse = dynamic_cast<QGraphicsEllipseItem *>(item)) {
@@ -142,11 +151,13 @@ void FillAction::undo() {
 }
 
 void FillAction::redo() {
-  if (!itemStore_ || !itemId_.isValid()) return;
-  
+  if (!itemStore_ || !itemId_.isValid())
+    return;
+
   QGraphicsItem *item = itemStore_->item(itemId_);
-  if (!item) return;
-  
+  if (!item)
+    return;
+
   if (auto *rect = dynamic_cast<QGraphicsRectItem *>(item)) {
     rect->setBrush(newBrush_);
   } else if (auto *ellipse = dynamic_cast<QGraphicsEllipseItem *>(item)) {
@@ -158,22 +169,26 @@ void FillAction::redo() {
 
 // GroupAction implementation
 GroupAction::GroupAction(const ItemId &groupId, const QList<ItemId> &itemIds,
-                         ItemStore *store, const QList<QPointF> &originalPositions,
+                         ItemStore *store,
+                         const QList<QPointF> &originalPositions,
                          ItemCallback onAdd, ItemCallback onRemove)
     : groupId_(groupId), itemIds_(itemIds), itemStore_(store),
-      originalPositions_(originalPositions),
-      onAdd_(std::move(onAdd)), onRemove_(std::move(onRemove)) {}
+      originalPositions_(originalPositions), onAdd_(std::move(onAdd)),
+      onRemove_(std::move(onRemove)) {}
 
 GroupAction::~GroupAction() = default;
 
 void GroupAction::undo() {
-  if (!itemStore_ || !groupId_.isValid()) return;
-  
+  if (!itemStore_ || !groupId_.isValid())
+    return;
+
   auto *group = dynamic_cast<QGraphicsItemGroup *>(itemStore_->item(groupId_));
-  if (!group) return;
-  
+  if (!group)
+    return;
+
   QGraphicsScene *scene = group->scene();
-  if (!scene) return;
+  if (!scene)
+    return;
 
   // Remove group from scene
   scene->removeItem(group);
@@ -203,10 +218,12 @@ void GroupAction::undo() {
 }
 
 void GroupAction::redo() {
-  if (!itemStore_ || !groupId_.isValid()) return;
-  
+  if (!itemStore_ || !groupId_.isValid())
+    return;
+
   auto *group = dynamic_cast<QGraphicsItemGroup *>(itemStore_->item(groupId_));
-  if (!group) return;
+  if (!group)
+    return;
 
   // Get scene from first available item
   QGraphicsScene *scene = nullptr;
@@ -217,7 +234,8 @@ void GroupAction::redo() {
       break;
     }
   }
-  if (!scene) return;
+  if (!scene)
+    return;
 
   // Remove individual items from scene and add to group
   for (const ItemId &id : itemIds_) {
@@ -248,20 +266,23 @@ void GroupAction::redo() {
 }
 
 // UngroupAction implementation
-UngroupAction::UngroupAction(const ItemId &groupId, const QList<ItemId> &itemIds,
-                             ItemStore *store, const QPointF &groupPosition,
-                             ItemCallback onAdd, ItemCallback onRemove)
+UngroupAction::UngroupAction(const ItemId &groupId,
+                             const QList<ItemId> &itemIds, ItemStore *store,
+                             const QPointF &groupPosition, ItemCallback onAdd,
+                             ItemCallback onRemove)
     : groupId_(groupId), itemIds_(itemIds), itemStore_(store),
-      groupPosition_(groupPosition),
-      onAdd_(std::move(onAdd)), onRemove_(std::move(onRemove)) {}
+      groupPosition_(groupPosition), onAdd_(std::move(onAdd)),
+      onRemove_(std::move(onRemove)) {}
 
 UngroupAction::~UngroupAction() = default;
 
 void UngroupAction::undo() {
-  if (!itemStore_ || !groupId_.isValid()) return;
-  
+  if (!itemStore_ || !groupId_.isValid())
+    return;
+
   auto *group = dynamic_cast<QGraphicsItemGroup *>(itemStore_->item(groupId_));
-  if (!group) return;
+  if (!group)
+    return;
 
   // Get scene from first available item
   QGraphicsScene *scene = nullptr;
@@ -272,7 +293,8 @@ void UngroupAction::undo() {
       break;
     }
   }
-  if (!scene) return;
+  if (!scene)
+    return;
 
   // Remove individual items from scene
   for (const ItemId &id : itemIds_) {
@@ -304,13 +326,16 @@ void UngroupAction::undo() {
 }
 
 void UngroupAction::redo() {
-  if (!itemStore_ || !groupId_.isValid()) return;
-  
+  if (!itemStore_ || !groupId_.isValid())
+    return;
+
   auto *group = dynamic_cast<QGraphicsItemGroup *>(itemStore_->item(groupId_));
-  if (!group) return;
-  
+  if (!group)
+    return;
+
   QGraphicsScene *scene = group->scene();
-  if (!scene) return;
+  if (!scene)
+    return;
 
   // Store positions relative to scene before ungrouping
   QList<QPointF> scenePositions;

@@ -37,7 +37,8 @@ protected:
 };
 
 /**
- * @brief A graphics item that supports inline text editing with LaTeX rendering.
+ * @brief A graphics item that supports inline text editing with LaTeX
+ * rendering.
  *
  * When the text contains expressions enclosed by $...$, they are rendered
  * as mathematical formulas using Unicode symbols. The item supports:
@@ -144,13 +145,15 @@ signals:
 
 protected:
   void mouseDoubleClickEvent(QGraphicsSceneMouseEvent *event) override;
-  QVariant itemChange(GraphicsItemChange change, const QVariant &value) override;
+  QVariant itemChange(GraphicsItemChange change,
+                      const QVariant &value) override;
 
 private slots:
   void onEditingFinished();
   void onEditingCancelled();
 #ifdef HAVE_QT_WEBENGINE
-  void onKatexRenderComplete(quintptr requestId, const QPixmap &pixmap, bool success);
+  void onKatexRenderComplete(quintptr requestId, const QPixmap &pixmap,
+                             bool success);
 #endif
 
 private:
@@ -186,7 +189,7 @@ private:
   QPixmap renderedContent_;
   QRectF contentRect_;
   bool isEditing_;
-  qreal lastScale_;  // Track scale for re-rendering
+  qreal lastScale_; // Track scale for re-rendering
 
   // Inline editing widgets
   QGraphicsProxyWidget *proxyWidget_;

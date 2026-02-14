@@ -27,7 +27,9 @@ void TextTool::mousePressEvent(QMouseEvent *event, const QPointF &scenePos) {
         ItemStore *store = renderer_->itemStore();
         if (store) {
           ItemId existingId = store->idForItem(latexItem);
-          currentEditingItemId_ = existingId.isValid() ? existingId : renderer_->registerItem(latexItem);
+          currentEditingItemId_ = existingId.isValid()
+                                      ? existingId
+                                      : renderer_->registerItem(latexItem);
         }
       }
       return;
@@ -46,12 +48,12 @@ void TextTool::mousePressEvent(QMouseEvent *event, const QPointF &scenePos) {
 }
 
 void TextTool::mouseMoveEvent(QMouseEvent * /*event*/,
-                               const QPointF & /*scenePos*/) {
+                              const QPointF & /*scenePos*/) {
   // Nothing to do on move
 }
 
 void TextTool::mouseReleaseEvent(QMouseEvent * /*event*/,
-                                  const QPointF & /*scenePos*/) {
+                                 const QPointF & /*scenePos*/) {
   // Nothing to do on release
 }
 
@@ -67,9 +69,10 @@ void TextTool::deactivate() {
 
 void TextTool::createTextItem(const QPointF &position) {
   SceneController *controller = renderer_->sceneController();
-  
+
   auto *textItem = new LatexTextItem();
-  textItem->setFont(QFont("Arial", qMax(12, renderer_->currentPen().width() * 3)));
+  textItem->setFont(
+      QFont("Arial", qMax(12, renderer_->currentPen().width() * 3)));
   textItem->setTextColor(renderer_->currentPen().color());
   textItem->setPos(position);
 
@@ -83,30 +86,34 @@ void TextTool::createTextItem(const QPointF &position) {
   }
 
   // Connect to handle when editing is finished
-  // Use QPointer to safely track the textItem in case it gets deleted before signal fires
-  QObject::connect(textItem, &LatexTextItem::editingFinished, [this, textItem = QPointer<LatexTextItem>(textItem), textItemId, controller]() {
-    // Check if textItem is still valid (not deleted)
-    if (!textItem) {
-      return;
-    }
-    // If the text is empty after editing, remove the item
-    if (textItem->text().trimmed().isEmpty()) {
-      if (controller && textItemId.isValid()) {
-        controller->removeItem(textItemId, false);  // Don't keep for undo
-      } else {
-        renderer_->onItemRemoved(textItem);
-        renderer_->scene()->removeItem(textItem);
-        textItem->deleteLater();
-      }
-    } else {
-      // Add to undo stack only when there's actual content
-      renderer_->addDrawAction(textItem);
-    }
-    if (currentEditingItem_ == textItem) {
-      currentEditingItem_ = nullptr;
-      currentEditingItemId_ = ItemId();
-    }
-  });
+  // Use QPointer to safely track the textItem in case it gets deleted before
+  // signal fires
+  QObject::connect(textItem, &LatexTextItem::editingFinished,
+                   [this, textItem = QPointer<LatexTextItem>(textItem),
+                    textItemId, controller]() {
+                     // Check if textItem is still valid (not deleted)
+                     if (!textItem) {
+                       return;
+                     }
+                     // If the text is empty after editing, remove the item
+                     if (textItem->text().trimmed().isEmpty()) {
+                       if (controller && textItemId.isValid()) {
+                         controller->removeItem(textItemId,
+                                                false); // Don't keep for undo
+                       } else {
+                         renderer_->onItemRemoved(textItem);
+                         renderer_->scene()->removeItem(textItem);
+                         textItem->deleteLater();
+                       }
+                     } else {
+                       // Add to undo stack only when there's actual content
+                       renderer_->addDrawAction(textItem);
+                     }
+                     if (currentEditingItem_ == textItem) {
+                       currentEditingItem_ = nullptr;
+                       currentEditingItemId_ = ItemId();
+                     }
+                   });
 
   // Start inline editing immediately
   textItem->startEditing();

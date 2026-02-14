@@ -119,7 +119,8 @@ bool SceneController::moveItem(const ItemId &id, const QPointF &newPos) {
   return true;
 }
 
-bool SceneController::transformItem(const ItemId &id, const QTransform &transform) {
+bool SceneController::transformItem(const ItemId &id,
+                                    const QTransform &transform) {
   QGraphicsItem *itemPtr = itemStore_->item(id);
   if (!itemPtr) {
     return false;
@@ -130,9 +131,7 @@ bool SceneController::transformItem(const ItemId &id, const QTransform &transfor
   return true;
 }
 
-void SceneController::flushDeletions() {
-  doFlushDeletions();
-}
+void SceneController::flushDeletions() { doFlushDeletions(); }
 
 void SceneController::scheduleDeletionFlush() {
   if (deletionFlushScheduled_) {
@@ -148,9 +147,7 @@ void SceneController::scheduleDeletionFlush() {
   });
 }
 
-void SceneController::doFlushDeletions() {
-  itemStore_->flushDeletions();
-}
+void SceneController::doFlushDeletions() { itemStore_->flushDeletions(); }
 
 void SceneController::clearAll() {
   itemStore_->clear();

@@ -126,8 +126,8 @@ public:
   void setItemStore(ItemStore *store);
 
 private:
-  QList<ItemId> itemIds_;         // Primary storage: stable ItemIds
-  ItemStore *itemStore_;          // For resolving ItemIds to items
+  QList<ItemId> itemIds_; // Primary storage: stable ItemIds
+  ItemStore *itemStore_;  // For resolving ItemIds to items
   bool visible_;
 };
 

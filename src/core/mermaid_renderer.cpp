@@ -27,7 +27,8 @@ static QString escapeJsString(const QString &str) {
   escaped.replace('\n', "\\n");
   escaped.replace('\r', "\\r");
   escaped.replace('\t', "\\t");
-  escaped.replace('`', "\\`");  // Escape backticks to prevent template literal injection
+  escaped.replace(
+      '`', "\\`"); // Escape backticks to prevent template literal injection
   return "\"" + escaped + "\"";
 }
 
@@ -71,7 +72,7 @@ void MermaidRenderer::initializeWebEngine() {
   webView_->setAttribute(Qt::WA_ShowWithoutActivating);
   webView_->setStyleSheet("background: transparent;");
   webView_->setFixedSize(800, 600);
-  webView_->move(-2000, -2000); // Off-screen but not too far for some WMs
+  webView_->move(-2000, -2000);    // Off-screen but not too far for some WMs
   webView_->setWindowOpacity(0.0); // Invisible even if somehow on screen
 
   // Show without activating - required for rendering to work
@@ -100,13 +101,16 @@ void MermaidRenderer::initializeWebEngine() {
   }
 
   // Wait for page to load (use Qt::UniqueConnection to prevent duplicates)
-  connect(webView_, &QWebEngineView::loadFinished, this, [this](bool ok) {
-    qDebug() << "Mermaid page load finished:" << ok;
-    initialized_ = ok;
-    if (ok && !pendingRequests_.isEmpty()) {
-      processNextRequest();
-    }
-  }, Qt::UniqueConnection);
+  connect(
+      webView_, &QWebEngineView::loadFinished, this,
+      [this](bool ok) {
+        qDebug() << "Mermaid page load finished:" << ok;
+        initialized_ = ok;
+        if (ok && !pendingRequests_.isEmpty()) {
+          processNextRequest();
+        }
+      },
+      Qt::UniqueConnection);
 }
 
 void MermaidRenderer::processNextRequest() {
@@ -117,7 +121,8 @@ void MermaidRenderer::processNextRequest() {
   currentRequest_ = pendingRequests_.takeFirst();
   rendering_ = true;
 
-  qDebug() << "Processing Mermaid diagram:" << currentRequest_.mermaidCode.left(50)
+  qDebug() << "Processing Mermaid diagram:"
+           << currentRequest_.mermaidCode.left(50)
            << "theme:" << currentRequest_.theme;
 
   // Render the diagram
@@ -143,12 +148,12 @@ void MermaidRenderer::processNextRequest() {
 }
 
 QString MermaidRenderer::cacheKey(const QString &mermaidCode,
-                                   const QString &theme) const {
+                                  const QString &theme) const {
   return QString("%1|%2").arg(mermaidCode).arg(theme);
 }
 
 QPixmap MermaidRenderer::getCached(const QString &mermaidCode,
-                                    const QString &theme) const {
+                                   const QString &theme) const {
   QString key = cacheKey(mermaidCode, theme);
   if (QPixmap *cached = cache_.object(key)) {
     return *cached;
@@ -159,7 +164,7 @@ QPixmap MermaidRenderer::getCached(const QString &mermaidCode,
 void MermaidRenderer::clearCache() { cache_.clear(); }
 
 void MermaidRenderer::render(const QString &mermaidCode, const QString &theme,
-                              quintptr requestId) {
+                             quintptr requestId) {
   if (shuttingDown_) {
     emit renderComplete(requestId, QPixmap(), false);
     return;
@@ -246,8 +251,8 @@ void MermaidRenderer::captureResult(quintptr requestId) {
             emit self->renderComplete(requestId, QPixmap(), false);
           } else {
             // Cache the result
-            QString key =
-                self->cacheKey(self->currentRequest_.mermaidCode, self->currentRequest_.theme);
+            QString key = self->cacheKey(self->currentRequest_.mermaidCode,
+                                         self->currentRequest_.theme);
             self->cache_.insert(key, new QPixmap(pixmap));
 
             qDebug() << "Emitting renderComplete with pixmap";
@@ -277,19 +282,19 @@ MermaidRenderer::~MermaidRenderer() = default;
 bool MermaidRenderer::isAvailable() const { return false; }
 
 QString MermaidRenderer::cacheKey(const QString &mermaidCode,
-                                   const QString &theme) const {
+                                  const QString &theme) const {
   return QString("%1|%2").arg(mermaidCode).arg(theme);
 }
 
 QPixmap MermaidRenderer::getCached(const QString & /*mermaidCode*/,
-                                    const QString & /*theme*/) const {
+                                   const QString & /*theme*/) const {
   return QPixmap(); // Always empty - no WebEngine
 }
 
 void MermaidRenderer::clearCache() { cache_.clear(); }
 
 void MermaidRenderer::render(const QString & /*mermaidCode*/,
-                              const QString & /*theme*/, quintptr requestId) {
+                             const QString & /*theme*/, quintptr requestId) {
   // Immediately signal failure - WebEngine not available
   emit renderComplete(requestId, QPixmap(), false);
 }

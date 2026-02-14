@@ -96,8 +96,9 @@ void BrushPreview::paintEvent(QPaintEvent * /*event*/) {
   QRadialGradient circleGradient(centerX, centerY, displaySize / 2);
   circleGradient.setColorAt(0, brushColor_);
   circleGradient.setColorAt(0.7, fillColor);
-  circleGradient.setColorAt(1, QColor(brushColor_.red(), brushColor_.green(), brushColor_.blue(), 100));
-  
+  circleGradient.setColorAt(1, QColor(brushColor_.red(), brushColor_.green(),
+                                      brushColor_.blue(), 100));
+
   painter.setPen(QPen(brushColor_.lighter(120), 2));
   painter.setBrush(circleGradient);
   int x = centerX - displaySize / 2;
@@ -112,6 +113,7 @@ void BrushPreview::paintEvent(QPaintEvent * /*event*/) {
     font.setWeight(QFont::Medium);
     painter.setFont(font);
     QString sizeText = QString("%1px").arg(brushSize_);
-    painter.drawText(rect().adjusted(0, 0, 0, -4), Qt::AlignBottom | Qt::AlignHCenter, sizeText);
+    painter.drawText(rect().adjusted(0, 0, 0, -4),
+                     Qt::AlignBottom | Qt::AlignHCenter, sizeText);
   }
 }

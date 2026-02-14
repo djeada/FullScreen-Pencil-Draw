@@ -122,7 +122,8 @@ public:
    * @brief Register an item and get its ItemId
    * @param item The item to register
    * @return The assigned ItemId
-   * @note If sceneController() is available, uses that; otherwise returns null ItemId
+   * @note If sceneController() is available, uses that; otherwise returns null
+   * ItemId
    */
   virtual ItemId registerItem(QGraphicsItem *item) {
     if (auto *controller = sceneController()) {

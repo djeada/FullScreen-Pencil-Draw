@@ -9,16 +9,16 @@ SelectionTool::SelectionTool(SceneRenderer *renderer) : Tool(renderer) {}
 SelectionTool::~SelectionTool() = default;
 
 void SelectionTool::mousePressEvent(QMouseEvent * /*event*/,
-                                     const QPointF & /*scenePos*/) {
+                                    const QPointF & /*scenePos*/) {
   // Let QGraphicsView handle the selection
 }
 
 void SelectionTool::mouseMoveEvent(QMouseEvent * /*event*/,
-                                    const QPointF & /*scenePos*/) {
+                                   const QPointF & /*scenePos*/) {
   // Let QGraphicsView handle the move
 }
 
 void SelectionTool::mouseReleaseEvent(QMouseEvent * /*event*/,
-                                       const QPointF & /*scenePos*/) {
+                                      const QPointF & /*scenePos*/) {
   // Let QGraphicsView handle the release
 }

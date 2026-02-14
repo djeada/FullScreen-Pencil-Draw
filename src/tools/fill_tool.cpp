@@ -22,12 +22,12 @@ void FillTool::mousePressEvent(QMouseEvent *event, const QPointF &scenePos) {
 }
 
 void FillTool::mouseMoveEvent(QMouseEvent * /*event*/,
-                               const QPointF & /*scenePos*/) {
+                              const QPointF & /*scenePos*/) {
   // Nothing to do on move
 }
 
 void FillTool::mouseReleaseEvent(QMouseEvent * /*event*/,
-                                  const QPointF & /*scenePos*/) {
+                                 const QPointF & /*scenePos*/) {
   // Nothing to do on release
 }
 
@@ -46,12 +46,13 @@ void FillTool::fillAt(const QPointF &point) {
     if (auto *rect = dynamic_cast<QGraphicsRectItem *>(item)) {
       QBrush oldBrush = rect->brush();
       rect->setBrush(newBrush);
-      
+
       // Use ItemId-based action if store is available
       if (store) {
         ItemId itemId = store->idForItem(item);
         if (itemId.isValid()) {
-          renderer_->addAction(std::make_unique<FillAction>(itemId, store, oldBrush, newBrush));
+          renderer_->addAction(
+              std::make_unique<FillAction>(itemId, store, oldBrush, newBrush));
         }
       }
       return;
@@ -61,11 +62,12 @@ void FillTool::fillAt(const QPointF &point) {
     if (auto *ellipse = dynamic_cast<QGraphicsEllipseItem *>(item)) {
       QBrush oldBrush = ellipse->brush();
       ellipse->setBrush(newBrush);
-      
+
       if (store) {
         ItemId itemId = store->idForItem(item);
         if (itemId.isValid()) {
-          renderer_->addAction(std::make_unique<FillAction>(itemId, store, oldBrush, newBrush));
+          renderer_->addAction(
+              std::make_unique<FillAction>(itemId, store, oldBrush, newBrush));
         }
       }
       return;
@@ -75,11 +77,12 @@ void FillTool::fillAt(const QPointF &point) {
     if (auto *polygon = dynamic_cast<QGraphicsPolygonItem *>(item)) {
       QBrush oldBrush = polygon->brush();
       polygon->setBrush(newBrush);
-      
+
       if (store) {
         ItemId itemId = store->idForItem(item);
         if (itemId.isValid()) {
-          renderer_->addAction(std::make_unique<FillAction>(itemId, store, oldBrush, newBrush));
+          renderer_->addAction(
+              std::make_unique<FillAction>(itemId, store, oldBrush, newBrush));
         }
       }
       return;

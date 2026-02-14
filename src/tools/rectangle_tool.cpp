@@ -19,7 +19,7 @@ QGraphicsItem *RectangleTool::createShape(const QPointF &startPos) {
 }
 
 void RectangleTool::updateShape(const QPointF &startPos,
-                                 const QPointF &currentPos) {
+                                const QPointF &currentPos) {
   if (auto *rect = dynamic_cast<QGraphicsRectItem *>(tempShape_)) {
     rect->setRect(QRectF(startPos, currentPos).normalized());
   }

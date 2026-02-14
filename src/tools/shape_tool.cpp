@@ -21,8 +21,9 @@ void ShapeTool::mousePressEvent(QMouseEvent *event, const QPointF &scenePos) {
   if (tempShape_) {
     tempShape_->setFlags(QGraphicsItem::ItemIsSelectable |
                          QGraphicsItem::ItemIsMovable);
-    
-    // Use SceneController if available, otherwise fall back to direct scene access
+
+    // Use SceneController if available, otherwise fall back to direct scene
+    // access
     SceneController *controller = renderer_->sceneController();
     if (controller) {
       tempShapeId_ = controller->addItem(tempShape_);
@@ -62,7 +63,7 @@ void ShapeTool::deactivate() {
   if (tempShape_) {
     SceneController *controller = renderer_->sceneController();
     if (controller && tempShapeId_.isValid()) {
-      controller->removeItem(tempShapeId_, false);  // Don't keep for undo
+      controller->removeItem(tempShapeId_, false); // Don't keep for undo
     } else if (tempShape_->scene()) {
       renderer_->scene()->removeItem(tempShape_);
       delete tempShape_;

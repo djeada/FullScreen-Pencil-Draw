@@ -51,7 +51,7 @@ class ItemStore;
  * Canvas is a QGraphicsView-based widget that provides the drawing surface.
  * It integrates with the ToolManager for tool-based drawing operations
  * and maintains undo/redo stacks for all actions.
- * 
+ *
  * Canvas implements the SceneRenderer interface, allowing drawing tools
  * to work with it through a common abstraction.
  */
@@ -77,12 +77,14 @@ public:
   QGraphicsScene *scene() const override { return scene_; }
   const QPen &currentPen() const override { return currentPen_; }
   const QPen &eraserPen() const override { return eraserPen_; }
-  QGraphicsPixmapItem *backgroundImageItem() const override { return backgroundImage_; }
+  QGraphicsPixmapItem *backgroundImageItem() const override {
+    return backgroundImage_;
+  }
   QColor backgroundColor() const { return backgroundColor_; }
   SceneController *sceneController() const override { return sceneController_; }
   ItemStore *itemStore() const override;
   ItemId registerItem(QGraphicsItem *item) override;
-  
+
   // Layer management
   LayerManager *layerManager() const { return layerManager_; }
 
@@ -91,11 +93,17 @@ public:
   void addDeleteAction(QGraphicsItem *item) override;
   void addAction(std::unique_ptr<Action> action) override;
   void onItemRemoved(QGraphicsItem *item) override;
-  
+
   // SceneRenderer interface methods using QGraphicsView
-  void setCursor(const QCursor &cursor) override { QGraphicsView::setCursor(cursor); }
-  QScrollBar *horizontalScrollBar() const override { return QGraphicsView::horizontalScrollBar(); }
-  QScrollBar *verticalScrollBar() const override { return QGraphicsView::verticalScrollBar(); }
+  void setCursor(const QCursor &cursor) override {
+    QGraphicsView::setCursor(cursor);
+  }
+  QScrollBar *horizontalScrollBar() const override {
+    return QGraphicsView::horizontalScrollBar();
+  }
+  QScrollBar *verticalScrollBar() const override {
+    return QGraphicsView::verticalScrollBar();
+  }
   void clearRedoStack();
 
 signals:
@@ -172,7 +180,20 @@ protected:
 
 private:
   // Enums
-  enum ShapeType { Line, Rectangle, Circle, Pen, Eraser, Selection, Text, Mermaid, Fill, Arrow, Pan, CurvedArrow };
+  enum ShapeType {
+    Line,
+    Rectangle,
+    Circle,
+    Pen,
+    Eraser,
+    Selection,
+    Text,
+    Mermaid,
+    Fill,
+    Arrow,
+    Pan,
+    CurvedArrow
+  };
 
   // Member variables
   QGraphicsScene *scene_;
@@ -188,9 +209,9 @@ private:
   QColor backgroundColor_;
   QGraphicsEllipseItem *eraserPreview_;
   QGraphicsPixmapItem *backgroundImage_;
-  
+
   // Transform handles for selected items
-  QList<TransformHandleItem*> transformHandles_;
+  QList<TransformHandleItem *> transformHandles_;
 
   // Constants
   static constexpr int MAX_BRUSH_SIZE = 150;
@@ -243,8 +264,10 @@ private:
   QString calculateDistance(const QPointF &p1, const QPointF &p2) const;
   void updateTransformHandles();
   void clearTransformHandles();
-  void applyResizeToOtherItems(QGraphicsItem *sourceItem, qreal scaleX, qreal scaleY, const QPointF &anchor);
-  void applyRotationToOtherItems(QGraphicsItem *sourceItem, qreal angleDelta, const QPointF &center);
+  void applyResizeToOtherItems(QGraphicsItem *sourceItem, qreal scaleX,
+                               qreal scaleY, const QPointF &anchor);
+  void applyRotationToOtherItems(QGraphicsItem *sourceItem, qreal angleDelta,
+                                 const QPointF &center);
 };
 
 #endif // CANVAS_H

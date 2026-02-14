@@ -43,7 +43,8 @@ void RecentFilesManager::clearRecentFiles() {
 int RecentFilesManager::maxRecentFiles() const { return MAX_RECENT_FILES; }
 
 void RecentFilesManager::loadRecentFiles() {
-  QSettings settings(AppConstants::OrganizationName, AppConstants::ApplicationName);
+  QSettings settings(AppConstants::OrganizationName,
+                     AppConstants::ApplicationName);
   recentFiles_ = settings.value("recentFiles").toStringList();
 
   // Remove any files that no longer exist
@@ -61,6 +62,7 @@ void RecentFilesManager::loadRecentFiles() {
 }
 
 void RecentFilesManager::saveRecentFiles() {
-  QSettings settings(AppConstants::OrganizationName, AppConstants::ApplicationName);
+  QSettings settings(AppConstants::OrganizationName,
+                     AppConstants::ApplicationName);
   settings.setValue("recentFiles", recentFiles_);
 }

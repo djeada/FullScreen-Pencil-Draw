@@ -3,8 +3,8 @@
 #define AUTO_SAVE_MANAGER_H
 
 #include <QObject>
-#include <QTimer>
 #include <QString>
+#include <QTimer>
 
 class Canvas;
 

@@ -67,9 +67,9 @@ PdfViewer::PdfViewer(QWidget *parent)
     : QGraphicsView(parent), document_(std::make_unique<PdfDocument>()),
       overlayManager_(std::make_unique<PdfOverlayManager>()),
       pageItem_(nullptr), scene_(new QGraphicsScene(this)),
-      sceneController_(nullptr), toolManager_(nullptr), specialTool_(SpecialTool::None),
-      currentPage_(0), renderDpi_(DEFAULT_DPI), pageRotation_(0), 
-      mode_(Mode::Annotate), darkMode_(false), 
+      sceneController_(nullptr), toolManager_(nullptr),
+      specialTool_(SpecialTool::None), currentPage_(0), renderDpi_(DEFAULT_DPI),
+      pageRotation_(0), mode_(Mode::Annotate), darkMode_(false),
       showGrid_(false), fillShapes_(false), currentZoom_(1.0),
       currentPen_(Qt::white, 3), eraserPen_(Qt::black, 10),
       screenshotSelectionRect_(nullptr) {
@@ -79,7 +79,7 @@ PdfViewer::PdfViewer(QWidget *parent)
   // Initialize scene controller (single source of truth)
   sceneController_ = new SceneController(scene_, this);
   overlayManager_->setItemStore(sceneController_->itemStore());
-  
+
   // Initialize tool manager
   toolManager_ = new ToolManager(this, this);
   toolManager_->setActiveTool(ToolManager::ToolType::Pen);
@@ -209,7 +209,8 @@ void PdfViewer::renderCurrentPage() {
   if (pageRotation_ != 0) {
     QTransform rotationTransform;
     rotationTransform.rotate(pageRotation_);
-    pageImage = pageImage.transformed(rotationTransform, Qt::SmoothTransformation);
+    pageImage =
+        pageImage.transformed(rotationTransform, Qt::SmoothTransformation);
   }
 
   // Create or update page item
@@ -227,24 +228,24 @@ void PdfViewer::renderCurrentPage() {
 
 void PdfViewer::setToolType(ToolManager::ToolType toolType) {
   specialTool_ = SpecialTool::None;
-  
+
   // Reset drag mode
   setDragMode(QGraphicsView::NoDrag);
-  
+
   // Set via tool manager
   toolManager_->setActiveTool(toolType);
-  
+
   // Set rubber band drag for selection tool
   if (toolType == ToolManager::ToolType::Selection) {
     setDragMode(QGraphicsView::RubberBandDrag);
   }
-  
+
   // Update cursor based on active tool
   Tool *tool = toolManager_->activeTool();
   if (tool) {
     QGraphicsView::setCursor(tool->cursor());
   }
-  
+
   scene_->clearSelection();
 }
 
@@ -263,7 +264,9 @@ void PdfViewer::setScreenshotSelectionMode(bool enabled) {
   }
 }
 
-void PdfViewer::setPenColor(const QColor &color) { currentPen_.setColor(color); }
+void PdfViewer::setPenColor(const QColor &color) {
+  currentPen_.setColor(color);
+}
 
 void PdfViewer::setPenWidth(int width) {
   currentPen_.setWidth(width);
@@ -282,7 +285,8 @@ void PdfViewer::setDarkMode(bool enabled) {
     if (darkMode_) {
       scene_->setBackgroundBrush(QColor(50, 50, 50)); // Dark gray background
     } else {
-      scene_->setBackgroundBrush(QColor(240, 240, 240)); // Light gray background
+      scene_->setBackgroundBrush(
+          QColor(240, 240, 240)); // Light gray background
     }
     viewport()->update();
     emit darkModeChanged(darkMode_);
@@ -313,16 +317,16 @@ void PdfViewer::fitToWidth() {
   if (!hasPdf() || !pageItem_) {
     return;
   }
-  
+
   QRectF pageRect = pageItem_->boundingRect();
   if (pageRect.isEmpty()) {
     return;
   }
-  
+
   // Calculate scale to fit width
   double viewWidth = viewport()->width() - 20; // Margin
   double scale = viewWidth / pageRect.width();
-  
+
   resetTransform();
   this->scale(scale, scale);
   currentZoom_ = scale;
@@ -333,19 +337,19 @@ void PdfViewer::fitToPage() {
   if (!hasPdf() || !pageItem_) {
     return;
   }
-  
+
   QRectF pageRect = pageItem_->boundingRect();
   if (pageRect.isEmpty()) {
     return;
   }
-  
+
   // Calculate scale to fit entire page
   double viewWidth = viewport()->width() - 20;
   double viewHeight = viewport()->height() - 20;
   double scaleX = viewWidth / pageRect.width();
   double scaleY = viewHeight / pageRect.height();
   double scale = qMin(scaleX, scaleY);
-  
+
   resetTransform();
   this->scale(scale, scale);
   currentZoom_ = scale;
@@ -365,7 +369,7 @@ void PdfViewer::rotatePageRight() {
 void PdfViewer::setMode(Mode mode) {
   if (mode_ != mode) {
     mode_ = mode;
-    
+
     if (mode_ == Mode::View) {
       // View mode: disable drawing, set cursor to arrow
       setDragMode(QGraphicsView::ScrollHandDrag);
@@ -378,7 +382,7 @@ void PdfViewer::setMode(Mode mode) {
         QGraphicsView::setCursor(tool->cursor());
       }
     }
-    
+
     emit modeChanged(mode_);
   }
 }
@@ -638,26 +642,26 @@ void PdfViewer::drawBackground(QPainter *painter, const QRectF &rect) {
   // Draw subtle shadow around the PDF page for visual hierarchy
   if (pageItem_ && !pageItem_->pixmap().isNull()) {
     QRectF pageRect = pageItem_->boundingRect();
-    
+
     // Draw shadow layers for depth effect
     painter->save();
     painter->setPen(Qt::NoPen);
-    
+
     // Outer shadow
     QRectF shadowRect1 = pageRect.adjusted(-8, -8, 8, 8);
     painter->setBrush(QColor(0, 0, 0, 20));
     painter->drawRoundedRect(shadowRect1, 4, 4);
-    
+
     // Middle shadow
     QRectF shadowRect2 = pageRect.adjusted(-4, -4, 4, 4);
     painter->setBrush(QColor(0, 0, 0, 35));
     painter->drawRoundedRect(shadowRect2, 2, 2);
-    
+
     // Inner shadow
     QRectF shadowRect3 = pageRect.adjusted(-2, -2, 2, 2);
     painter->setBrush(QColor(0, 0, 0, 50));
     painter->drawRoundedRect(shadowRect3, 1, 1);
-    
+
     painter->restore();
   }
 
@@ -694,7 +698,8 @@ void PdfViewer::mousePressEvent(QMouseEvent *event) {
   // Handle screenshot selection mode (PDF-specific tool)
   if (specialTool_ == SpecialTool::ScreenshotSelection) {
     startPoint_ = sp;
-    screenshotSelectionRect_ = new QGraphicsRectItem(QRectF(startPoint_, startPoint_));
+    screenshotSelectionRect_ =
+        new QGraphicsRectItem(QRectF(startPoint_, startPoint_));
     QPen selectionPen(Qt::blue, 2, Qt::DashLine);
     screenshotSelectionRect_->setPen(selectionPen);
     screenshotSelectionRect_->setBrush(QBrush(QColor(100, 149, 237, 50)));
@@ -703,7 +708,8 @@ void PdfViewer::mousePressEvent(QMouseEvent *event) {
     return;
   }
 
-  // Check if current tool uses rubber band selection (let QGraphicsView handle it)
+  // Check if current tool uses rubber band selection (let QGraphicsView handle
+  // it)
   Tool *tool = toolManager_->activeTool();
   if (tool && tool->usesRubberBandSelection()) {
     QGraphicsView::mousePressEvent(event);
@@ -767,12 +773,13 @@ void PdfViewer::mouseReleaseEvent(QMouseEvent *event) {
   }
 
   // Handle screenshot selection mode
-  if (specialTool_ == SpecialTool::ScreenshotSelection && screenshotSelectionRect_) {
+  if (specialTool_ == SpecialTool::ScreenshotSelection &&
+      screenshotSelectionRect_) {
     QRectF selectionRect = screenshotSelectionRect_->rect();
     scene_->removeItem(screenshotSelectionRect_);
     delete screenshotSelectionRect_;
     screenshotSelectionRect_ = nullptr;
-    
+
     if (selectionRect.width() > 5 && selectionRect.height() > 5) {
       captureScreenshot(selectionRect);
     }
@@ -855,7 +862,7 @@ void PdfViewer::dragLeaveEvent(QDragLeaveEvent *event) {
 void PdfViewer::dropEvent(QDropEvent *event) {
   // Handle the dropped PDF files
   const QMimeData *mimeData = event->mimeData();
-  
+
   if (mimeData->hasUrls()) {
     dragAccepted_ = false;
     for (const QUrl &url : mimeData->urls()) {
@@ -866,7 +873,7 @@ void PdfViewer::dropEvent(QDropEvent *event) {
       }
     }
   }
-  
+
   QGraphicsView::dropEvent(event);
 }
 

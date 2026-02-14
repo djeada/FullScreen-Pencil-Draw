@@ -78,7 +78,8 @@ public:
    * @param event The mouse event
    * @param scenePos The position in scene coordinates
    */
-  virtual void mouseReleaseEvent(QMouseEvent *event, const QPointF &scenePos) = 0;
+  virtual void mouseReleaseEvent(QMouseEvent *event,
+                                 const QPointF &scenePos) = 0;
 
   /**
    * @brief Check if this tool uses rubber band selection

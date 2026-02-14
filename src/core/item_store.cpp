@@ -137,9 +137,7 @@ ItemId ItemStore::idForItem(QGraphicsItem *item) const {
   return ItemId();
 }
 
-void ItemStore::scheduleDelete(const ItemId &id) {
-  scheduleDelete(id, false);
-}
+void ItemStore::scheduleDelete(const ItemId &id) { scheduleDelete(id, false); }
 
 void ItemStore::scheduleDelete(const ItemId &id, bool keepSnapshot) {
   if (!id.isValid()) {
@@ -153,7 +151,8 @@ void ItemStore::scheduleDelete(const ItemId &id, bool keepSnapshot) {
 
   QGraphicsItem *item = it->second;
 
-  // Remove from scene FIRST, before any signal emissions that might trigger paint
+  // Remove from scene FIRST, before any signal emissions that might trigger
+  // paint
   if (item->scene()) {
     item->scene()->removeItem(item);
   }
@@ -285,9 +284,7 @@ bool ItemStore::isPendingDeletion(const ItemId &id) const {
   return false;
 }
 
-int ItemStore::itemCount() const {
-  return static_cast<int>(items_.size());
-}
+int ItemStore::itemCount() const { return static_cast<int>(items_.size()); }
 
 std::vector<ItemId> ItemStore::allItemIds() const {
   std::vector<ItemId> result;

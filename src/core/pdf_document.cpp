@@ -74,8 +74,7 @@ void PdfPageCache::evictIfNeeded() {
 
 PdfDocument::PdfDocument(QObject *parent)
     : QObject(parent), document_(std::make_unique<QPdfDocument>()),
-      cache_(std::make_unique<PdfPageCache>(20)),
-      status_(Status::NotLoaded) {
+      cache_(std::make_unique<PdfPageCache>(20)), status_(Status::NotLoaded) {
 
   connect(document_.get(), &QPdfDocument::statusChanged, this,
           &PdfDocument::onDocumentStatusChanged);
@@ -92,7 +91,7 @@ bool PdfDocument::load(const QString &filePath) {
   if (error != QPdfDocument::Error::None) {
     // Make sure document is closed on error
     document_->close();
-    
+
     switch (error) {
     case QPdfDocument::Error::FileNotFound:
       errorMessage_ = tr("File not found: %1").arg(filePath);

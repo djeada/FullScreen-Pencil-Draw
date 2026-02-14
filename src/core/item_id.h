@@ -9,8 +9,8 @@
 #ifndef ITEM_ID_H
 #define ITEM_ID_H
 
-#include <QUuid>
 #include <QHash>
+#include <QUuid>
 #include <functional>
 
 /**
@@ -98,9 +98,7 @@ namespace std {
  * @brief std::hash specialization for ItemId
  */
 template <> struct hash<ItemId> {
-  size_t operator()(const ItemId &id) const {
-    return qHash(id.uuid());
-  }
+  size_t operator()(const ItemId &id) const { return qHash(id.uuid()); }
 };
 } // namespace std
 

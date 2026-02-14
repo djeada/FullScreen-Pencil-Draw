@@ -61,24 +61,27 @@ void KatexRenderer::initializeWebEngine() {
   }
 
   webView_ = new QWebEngineView();
-  
+
   // Tool window, no taskbar, positioned off-screen
-  webView_->setWindowFlags(Qt::Tool | Qt::FramelessWindowHint | Qt::WindowDoesNotAcceptFocus);
+  webView_->setWindowFlags(Qt::Tool | Qt::FramelessWindowHint |
+                           Qt::WindowDoesNotAcceptFocus);
   webView_->setAttribute(Qt::WA_TranslucentBackground);
   webView_->setAttribute(Qt::WA_ShowWithoutActivating);
   webView_->setStyleSheet("background: transparent;");
   webView_->setFixedSize(400, 200);
-  webView_->move(-2000, -2000);  // Off-screen but not too far for some WMs
-  webView_->setWindowOpacity(0.0);  // Invisible even if somehow on screen
-  
+  webView_->move(-2000, -2000);    // Off-screen but not too far for some WMs
+  webView_->setWindowOpacity(0.0); // Invisible even if somehow on screen
+
   // Show without activating - required for rendering to work
   webView_->show();
 
   // Configure settings for optimal rendering
   auto *settings = webView_->settings();
   settings->setAttribute(QWebEngineSettings::JavascriptEnabled, true);
-  settings->setAttribute(QWebEngineSettings::LocalContentCanAccessFileUrls, true);
-  settings->setAttribute(QWebEngineSettings::LocalContentCanAccessRemoteUrls, false);
+  settings->setAttribute(QWebEngineSettings::LocalContentCanAccessFileUrls,
+                         true);
+  settings->setAttribute(QWebEngineSettings::LocalContentCanAccessRemoteUrls,
+                         false);
   settings->setAttribute(QWebEngineSettings::ShowScrollBars, false);
 
   // Transparent background so only the text is captured
@@ -95,34 +98,34 @@ void KatexRenderer::initializeWebEngine() {
   }
 
   // Wait for page to load
-  connect(webView_, &QWebEngineView::loadFinished, this,
-          [this](bool ok) {
-            qDebug() << "KaTeX page load finished:" << ok;
-            initialized_ = ok;
-            if (ok && !pendingRequests_.isEmpty()) {
-              processNextRequest();
-            }
-          });
+  connect(webView_, &QWebEngineView::loadFinished, this, [this](bool ok) {
+    qDebug() << "KaTeX page load finished:" << ok;
+    initialized_ = ok;
+    if (ok && !pendingRequests_.isEmpty()) {
+      processNextRequest();
+    }
+  });
 }
 
 void KatexRenderer::processNextRequest() {
   if (pendingRequests_.isEmpty() || rendering_ || shuttingDown_) {
     return;
   }
-  
+
   currentRequest_ = pendingRequests_.takeFirst();
   rendering_ = true;
-  
-  qDebug() << "Processing LaTeX:" << currentRequest_.latex << "color:" << currentRequest_.color.name();
-  
+
+  qDebug() << "Processing LaTeX:" << currentRequest_.latex
+           << "color:" << currentRequest_.color.name();
+
   // Apply font size via CSS and render
-  QString js = QString(
-      "document.getElementById('math').style.fontSize = '%1px';"
-      "renderLatex(%2, %3, %4);")
-      .arg(currentRequest_.fontSize)
-      .arg(escapeJsString(currentRequest_.latex))
-      .arg(escapeJsString(currentRequest_.color.name()))
-      .arg(currentRequest_.displayMode ? "true" : "false");
+  QString js =
+      QString("document.getElementById('math').style.fontSize = '%1px';"
+              "renderLatex(%2, %3, %4);")
+          .arg(currentRequest_.fontSize)
+          .arg(escapeJsString(currentRequest_.latex))
+          .arg(escapeJsString(currentRequest_.color.name()))
+          .arg(currentRequest_.displayMode ? "true" : "false");
 
   QPointer<KatexRenderer> self(this);
   webView_->page()->runJavaScript(js, [self](const QVariant &result) {
@@ -142,7 +145,7 @@ void KatexRenderer::processNextRequest() {
 }
 
 QString KatexRenderer::cacheKey(const QString &latex, const QColor &color,
-                                 int fontSize, bool displayMode) const {
+                                int fontSize, bool displayMode) const {
   return QString("%1|%2|%3|%4")
       .arg(latex)
       .arg(color.name())
@@ -151,7 +154,7 @@ QString KatexRenderer::cacheKey(const QString &latex, const QColor &color,
 }
 
 QPixmap KatexRenderer::getCached(const QString &latex, const QColor &color,
-                                  int fontSize, bool displayMode) const {
+                                 int fontSize, bool displayMode) const {
   QString key = cacheKey(latex, color, fontSize, displayMode);
   if (QPixmap *cached = cache_.object(key)) {
     return *cached;
@@ -162,7 +165,7 @@ QPixmap KatexRenderer::getCached(const QString &latex, const QColor &color,
 void KatexRenderer::clearCache() { cache_.clear(); }
 
 void KatexRenderer::render(const QString &latex, const QColor &color,
-                            int fontSize, bool displayMode, quintptr requestId) {
+                           int fontSize, bool displayMode, quintptr requestId) {
   if (shuttingDown_) {
     emit renderComplete(requestId, QPixmap(), false);
     return;
@@ -199,66 +202,70 @@ void KatexRenderer::captureResult(quintptr requestId) {
 
   // Get the size of the rendered math element
   QPointer<KatexRenderer> self(this);
-  webView_->page()->runJavaScript("getSize();", [self, requestId](const QVariant &result) {
-    if (!self || self->shuttingDown_ || !self->webView_) {
-      return;
-    }
+  webView_->page()->runJavaScript(
+      "getSize();", [self, requestId](const QVariant &result) {
+        if (!self || self->shuttingDown_ || !self->webView_) {
+          return;
+        }
 
-    QString sizeJson = result.toString();
-    qDebug() << "getSize result:" << sizeJson;
-    
-    // Parse size (simple JSON parsing)
-    int width = 100, height = 30;
-    QRegularExpression widthRe("\"width\"\\s*:\\s*(\\d+)");
-    QRegularExpression heightRe("\"height\"\\s*:\\s*(\\d+)");
-    
-    auto widthMatch = widthRe.match(sizeJson);
-    auto heightMatch = heightRe.match(sizeJson);
-    
-    if (widthMatch.hasMatch()) {
-      width = widthMatch.captured(1).toInt();
-    }
-    if (heightMatch.hasMatch()) {
-      height = heightMatch.captured(1).toInt();
-    }
-    
-    // Add padding and ensure minimum size
-    width = qMax(width + 16, 50);
-    height = qMax(height + 8, 20);
-    
-    qDebug() << "Resizing webView to:" << width << "x" << height;
-    
-    // Resize view to match content, keep off-screen
-    self->webView_->setFixedSize(width, height);
-    self->webView_->move(-2000, -2000);
-    
-    // Grab after a short delay for content to render
-    QTimer::singleShot(50, self, [self, requestId]() {
-      if (!self || self->shuttingDown_ || !self->webView_) {
-        return;
-      }
+        QString sizeJson = result.toString();
+        qDebug() << "getSize result:" << sizeJson;
 
-      QPixmap pixmap = self->webView_->grab();
-      
-      qDebug() << "Grabbed pixmap:" << pixmap.size() << "isNull:" << pixmap.isNull();
-      
-      if (pixmap.isNull() || pixmap.size().isEmpty()) {
-        qDebug() << "Pixmap capture failed";
-        emit self->renderComplete(requestId, QPixmap(), false);
-      } else {
-        // Cache the result
-        QString key = self->cacheKey(self->currentRequest_.latex, self->currentRequest_.color,
-                                     self->currentRequest_.fontSize, self->currentRequest_.displayMode);
-        self->cache_.insert(key, new QPixmap(pixmap));
-        
-        qDebug() << "Emitting renderComplete with pixmap";
-        emit self->renderComplete(requestId, pixmap, true);
-      }
-      
-      self->rendering_ = false;
-      self->processNextRequest();
-    });
-  });
+        // Parse size (simple JSON parsing)
+        int width = 100, height = 30;
+        QRegularExpression widthRe("\"width\"\\s*:\\s*(\\d+)");
+        QRegularExpression heightRe("\"height\"\\s*:\\s*(\\d+)");
+
+        auto widthMatch = widthRe.match(sizeJson);
+        auto heightMatch = heightRe.match(sizeJson);
+
+        if (widthMatch.hasMatch()) {
+          width = widthMatch.captured(1).toInt();
+        }
+        if (heightMatch.hasMatch()) {
+          height = heightMatch.captured(1).toInt();
+        }
+
+        // Add padding and ensure minimum size
+        width = qMax(width + 16, 50);
+        height = qMax(height + 8, 20);
+
+        qDebug() << "Resizing webView to:" << width << "x" << height;
+
+        // Resize view to match content, keep off-screen
+        self->webView_->setFixedSize(width, height);
+        self->webView_->move(-2000, -2000);
+
+        // Grab after a short delay for content to render
+        QTimer::singleShot(50, self, [self, requestId]() {
+          if (!self || self->shuttingDown_ || !self->webView_) {
+            return;
+          }
+
+          QPixmap pixmap = self->webView_->grab();
+
+          qDebug() << "Grabbed pixmap:" << pixmap.size()
+                   << "isNull:" << pixmap.isNull();
+
+          if (pixmap.isNull() || pixmap.size().isEmpty()) {
+            qDebug() << "Pixmap capture failed";
+            emit self->renderComplete(requestId, QPixmap(), false);
+          } else {
+            // Cache the result
+            QString key = self->cacheKey(self->currentRequest_.latex,
+                                         self->currentRequest_.color,
+                                         self->currentRequest_.fontSize,
+                                         self->currentRequest_.displayMode);
+            self->cache_.insert(key, new QPixmap(pixmap));
+
+            qDebug() << "Emitting renderComplete with pixmap";
+            emit self->renderComplete(requestId, pixmap, true);
+          }
+
+          self->rendering_ = false;
+          self->processNextRequest();
+        });
+      });
 }
 
 #else // !HAVE_QT_WEBENGINE
@@ -278,7 +285,7 @@ KatexRenderer::~KatexRenderer() = default;
 bool KatexRenderer::isAvailable() const { return false; }
 
 QString KatexRenderer::cacheKey(const QString &latex, const QColor &color,
-                                 int fontSize, bool displayMode) const {
+                                int fontSize, bool displayMode) const {
   return QString("%1|%2|%3|%4")
       .arg(latex)
       .arg(color.name())
@@ -286,15 +293,17 @@ QString KatexRenderer::cacheKey(const QString &latex, const QColor &color,
       .arg(displayMode ? "d" : "i");
 }
 
-QPixmap KatexRenderer::getCached(const QString & /*latex*/, const QColor & /*color*/,
-                                  int /*fontSize*/, bool /*displayMode*/) const {
+QPixmap KatexRenderer::getCached(const QString & /*latex*/,
+                                 const QColor & /*color*/, int /*fontSize*/,
+                                 bool /*displayMode*/) const {
   return QPixmap(); // Always empty - no WebEngine
 }
 
 void KatexRenderer::clearCache() { cache_.clear(); }
 
 void KatexRenderer::render(const QString & /*latex*/, const QColor & /*color*/,
-                            int /*fontSize*/, bool /*displayMode*/, quintptr requestId) {
+                           int /*fontSize*/, bool /*displayMode*/,
+                           quintptr requestId) {
   // Immediately signal failure - WebEngine not available
   emit renderComplete(requestId, QPixmap(), false);
 }

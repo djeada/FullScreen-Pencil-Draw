@@ -14,7 +14,8 @@ QCursor PanTool::cursor() const {
   return isPanning_ ? Qt::ClosedHandCursor : Qt::OpenHandCursor;
 }
 
-void PanTool::mousePressEvent(QMouseEvent *event, const QPointF & /*scenePos*/) {
+void PanTool::mousePressEvent(QMouseEvent *event,
+                              const QPointF & /*scenePos*/) {
   if (event->button() == Qt::LeftButton) {
     isPanning_ = true;
     lastPanPoint_ = event->pos();
@@ -35,7 +36,7 @@ void PanTool::mouseMoveEvent(QMouseEvent *event, const QPointF & /*scenePos*/) {
 }
 
 void PanTool::mouseReleaseEvent(QMouseEvent *event,
-                                 const QPointF & /*scenePos*/) {
+                                const QPointF & /*scenePos*/) {
   if (event->button() == Qt::LeftButton) {
     isPanning_ = false;
     renderer_->setCursor(Qt::OpenHandCursor);

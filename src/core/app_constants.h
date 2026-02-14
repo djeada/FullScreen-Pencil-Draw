@@ -5,8 +5,8 @@
 #include <QString>
 
 namespace AppConstants {
-  inline const QString OrganizationName = "FullScreenPencilDraw";
-  inline const QString ApplicationName = "FullScreenPencilDraw";
-}
+inline const QString OrganizationName = "FullScreenPencilDraw";
+inline const QString ApplicationName = "FullScreenPencilDraw";
+} // namespace AppConstants
 
 #endif // APP_CONSTANTS_H

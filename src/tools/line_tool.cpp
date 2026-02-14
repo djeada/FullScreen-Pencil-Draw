@@ -15,8 +15,7 @@ QGraphicsItem *LineTool::createShape(const QPointF &startPos) {
   return line;
 }
 
-void LineTool::updateShape(const QPointF &startPos,
-                            const QPointF &currentPos) {
+void LineTool::updateShape(const QPointF &startPos, const QPointF &currentPos) {
   if (auto *line = dynamic_cast<QGraphicsLineItem *>(tempShape_)) {
     line->setLine(QLineF(startPos, currentPos));
   }

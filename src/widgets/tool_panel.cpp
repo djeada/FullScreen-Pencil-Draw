@@ -3,15 +3,15 @@
 #include <QColorDialog>
 #include <QEvent>
 #include <QFrame>
-#include <QHBoxLayout>
-#include <QVBoxLayout>
 #include <QGridLayout>
+#include <QHBoxLayout>
 #include <QMouseEvent>
-#include <QToolButton>
 #include <QScrollArea>
+#include <QToolButton>
+#include <QVBoxLayout>
 
 // Helper to create a tool button from an action
-static QToolButton* createToolButton(QAction *action, QWidget *parent) {
+static QToolButton *createToolButton(QAction *action, QWidget *parent) {
   QToolButton *btn = new QToolButton(parent);
   btn->setDefaultAction(action);
   btn->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
@@ -21,25 +21,28 @@ static QToolButton* createToolButton(QAction *action, QWidget *parent) {
 }
 
 // Helper to create a horizontal separator
-static QFrame* createSeparator(QWidget *parent) {
+static QFrame *createSeparator(QWidget *parent) {
   QFrame *line = new QFrame(parent);
   line->setFrameShape(QFrame::HLine);
   line->setFrameShadow(QFrame::Sunken);
-  line->setStyleSheet("QFrame { background-color: rgba(255, 255, 255, 0.1); max-height: 1px; margin: 4px 8px; }");
+  line->setStyleSheet("QFrame { background-color: rgba(255, 255, 255, 0.1); "
+                      "max-height: 1px; margin: 4px 8px; }");
   return line;
 }
 
-ToolPanel::ToolPanel(QWidget *parent) : QDockWidget("Tools", parent), brushPreview_(nullptr) {
+ToolPanel::ToolPanel(QWidget *parent)
+    : QDockWidget("Tools", parent), brushPreview_(nullptr) {
   setObjectName("ToolPanel");
-  setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
+  setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable |
+              QDockWidget::DockWidgetFloatable);
   setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
-  
+
   // Create scroll area for content
   QScrollArea *scrollArea = new QScrollArea(this);
   scrollArea->setWidgetResizable(true);
   scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
   scrollArea->setFrameShape(QFrame::NoFrame);
-  
+
   QWidget *container = new QWidget(scrollArea);
   QVBoxLayout *mainLayout = new QVBoxLayout(container);
   mainLayout->setContentsMargins(8, 8, 8, 8);
@@ -66,7 +69,8 @@ ToolPanel::ToolPanel(QWidget *parent) : QDockWidget("Tools", parent), brushPrevi
   actionMermaid = new QAction("⬡ Mermaid", this);
   actionMermaid->setToolTip("Add Mermaid diagram (M)");
   actionMermaid->setCheckable(true);
-  connect(actionMermaid, &QAction::triggered, this, &ToolPanel::onActionMermaid);
+  connect(actionMermaid, &QAction::triggered, this,
+          &ToolPanel::onActionMermaid);
 
   actionFill = new QAction("◉ Fill", this);
   actionFill->setToolTip("Fill existing shapes with color (F)");
@@ -82,7 +86,8 @@ ToolPanel::ToolPanel(QWidget *parent) : QDockWidget("Tools", parent), brushPrevi
   drawGrid->addWidget(createToolButton(actionEraser, drawGridWidget), 0, 1);
   drawGrid->addWidget(createToolButton(actionText, drawGridWidget), 1, 0);
   drawGrid->addWidget(createToolButton(actionFill, drawGridWidget), 1, 1);
-  drawGrid->addWidget(createToolButton(actionMermaid, drawGridWidget), 2, 0, 1, 2, Qt::AlignCenter);
+  drawGrid->addWidget(createToolButton(actionMermaid, drawGridWidget), 2, 0, 1,
+                      2, Qt::AlignCenter);
   drawGridWidget->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
   mainLayout->addWidget(drawGridWidget, 0, Qt::AlignHCenter);
 
@@ -102,12 +107,14 @@ ToolPanel::ToolPanel(QWidget *parent) : QDockWidget("Tools", parent), brushPrevi
   actionCurvedArrow = new QAction("↪ Curve", this);
   actionCurvedArrow->setToolTip("Draw curved arrow (Shift+A)");
   actionCurvedArrow->setCheckable(true);
-  connect(actionCurvedArrow, &QAction::triggered, this, &ToolPanel::onActionCurvedArrow);
+  connect(actionCurvedArrow, &QAction::triggered, this,
+          &ToolPanel::onActionCurvedArrow);
 
   actionRectangle = new QAction("▢ Rect", this);
   actionRectangle->setToolTip("Draw rectangle (R)");
   actionRectangle->setCheckable(true);
-  connect(actionRectangle, &QAction::triggered, this, &ToolPanel::onActionRectangle);
+  connect(actionRectangle, &QAction::triggered, this,
+          &ToolPanel::onActionRectangle);
 
   actionCircle = new QAction("◯ Circle", this);
   actionCircle->setToolTip("Draw circle (C)");
@@ -121,9 +128,12 @@ ToolPanel::ToolPanel(QWidget *parent) : QDockWidget("Tools", parent), brushPrevi
   shapeGrid->setContentsMargins(0, 0, 0, 0);
   shapeGrid->addWidget(createToolButton(actionLine, shapeGridWidget), 0, 0);
   shapeGrid->addWidget(createToolButton(actionArrow, shapeGridWidget), 0, 1);
-  shapeGrid->addWidget(createToolButton(actionCurvedArrow, shapeGridWidget), 1, 0);
-  shapeGrid->addWidget(createToolButton(actionRectangle, shapeGridWidget), 1, 1);
-  shapeGrid->addWidget(createToolButton(actionCircle, shapeGridWidget), 2, 0, 1, 2, Qt::AlignCenter);
+  shapeGrid->addWidget(createToolButton(actionCurvedArrow, shapeGridWidget), 1,
+                       0);
+  shapeGrid->addWidget(createToolButton(actionRectangle, shapeGridWidget), 1,
+                       1);
+  shapeGrid->addWidget(createToolButton(actionCircle, shapeGridWidget), 2, 0, 1,
+                       2, Qt::AlignCenter);
   shapeGridWidget->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
   mainLayout->addWidget(shapeGridWidget, 0, Qt::AlignHCenter);
 
@@ -133,7 +143,8 @@ ToolPanel::ToolPanel(QWidget *parent) : QDockWidget("Tools", parent), brushPrevi
   actionSelection = new QAction("⬚ Select", this);
   actionSelection->setToolTip("Select items (V)");
   actionSelection->setCheckable(true);
-  connect(actionSelection, &QAction::triggered, this, &ToolPanel::onActionSelection);
+  connect(actionSelection, &QAction::triggered, this,
+          &ToolPanel::onActionSelection);
 
   actionPan = new QAction("☰ Pan", this);
   actionPan->setToolTip("Pan canvas (H)");
@@ -154,17 +165,19 @@ ToolPanel::ToolPanel(QWidget *parent) : QDockWidget("Tools", parent), brushPrevi
   // === BRUSH CONTROLS ===
   actionDecreaseBrush = new QAction("−", this);
   actionDecreaseBrush->setToolTip("Decrease size ([)");
-  connect(actionDecreaseBrush, &QAction::triggered, this, &ToolPanel::onActionDecreaseBrush);
+  connect(actionDecreaseBrush, &QAction::triggered, this,
+          &ToolPanel::onActionDecreaseBrush);
 
   actionIncreaseBrush = new QAction("+", this);
   actionIncreaseBrush->setToolTip("Increase size (])");
-  connect(actionIncreaseBrush, &QAction::triggered, this, &ToolPanel::onActionIncreaseBrush);
+  connect(actionIncreaseBrush, &QAction::triggered, this,
+          &ToolPanel::onActionIncreaseBrush);
 
   QWidget *brushSizeWidget = new QWidget(container);
   QHBoxLayout *brushSizeLayout = new QHBoxLayout(brushSizeWidget);
   brushSizeLayout->setSpacing(4);
   brushSizeLayout->setContentsMargins(0, 0, 0, 0);
-  
+
   QToolButton *decBtn = new QToolButton(brushSizeWidget);
   decBtn->setDefaultAction(actionDecreaseBrush);
   decBtn->setFixedSize(40, 40);
@@ -229,7 +242,8 @@ ToolPanel::ToolPanel(QWidget *parent) : QDockWidget("Tools", parent), brushPrevi
 
   // Opacity slider - centered
   opacityLabel = new QLabel("Opacity", container);
-  opacityLabel->setStyleSheet("QLabel { color: #a0a0a8; font-size: 11px; font-weight: 500; }");
+  opacityLabel->setStyleSheet(
+      "QLabel { color: #a0a0a8; font-size: 11px; font-weight: 500; }");
   opacityLabel->setAlignment(Qt::AlignCenter);
   mainLayout->addWidget(opacityLabel);
 
@@ -242,7 +256,8 @@ ToolPanel::ToolPanel(QWidget *parent) : QDockWidget("Tools", parent), brushPrevi
   opacitySlider->setMinimumWidth(80);
   opacitySlider->setMaximumWidth(100);
   opacitySlider->setToolTip("Brush opacity");
-  connect(opacitySlider, &QSlider::valueChanged, this, &ToolPanel::onOpacityChanged);
+  connect(opacitySlider, &QSlider::valueChanged, this,
+          &ToolPanel::onOpacityChanged);
   opacityLayout->addWidget(opacitySlider);
   mainLayout->addLayout(opacityLayout);
 
@@ -251,7 +266,8 @@ ToolPanel::ToolPanel(QWidget *parent) : QDockWidget("Tools", parent), brushPrevi
   // === ZOOM CONTROLS ===
   actionZoomOut = new QAction("−", this);
   actionZoomOut->setToolTip("Zoom out (−)");
-  connect(actionZoomOut, &QAction::triggered, this, &ToolPanel::onActionZoomOut);
+  connect(actionZoomOut, &QAction::triggered, this,
+          &ToolPanel::onActionZoomOut);
 
   actionZoomIn = new QAction("+", this);
   actionZoomIn->setToolTip("Zoom in (+)");
@@ -259,7 +275,8 @@ ToolPanel::ToolPanel(QWidget *parent) : QDockWidget("Tools", parent), brushPrevi
 
   actionZoomReset = new QAction("⟲ 1:1", this);
   actionZoomReset->setToolTip("Reset zoom (0)");
-  connect(actionZoomReset, &QAction::triggered, this, &ToolPanel::onActionZoomReset);
+  connect(actionZoomReset, &QAction::triggered, this,
+          &ToolPanel::onActionZoomReset);
 
   QWidget *zoomWidget = new QWidget(container);
   QHBoxLayout *zoomLayout = new QHBoxLayout(zoomWidget);
@@ -294,7 +311,8 @@ ToolPanel::ToolPanel(QWidget *parent) : QDockWidget("Tools", parent), brushPrevi
   zoomWidget->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
   mainLayout->addWidget(zoomWidget, 0, Qt::AlignHCenter);
 
-  mainLayout->addWidget(createToolButton(actionZoomReset, container), 0, Qt::AlignHCenter);
+  mainLayout->addWidget(createToolButton(actionZoomReset, container), 0,
+                        Qt::AlignHCenter);
 
   // Grid and Filled toggles
   actionGrid = new QAction("⊞ Grid", this);
@@ -305,7 +323,8 @@ ToolPanel::ToolPanel(QWidget *parent) : QDockWidget("Tools", parent), brushPrevi
   actionFilledShapes = new QAction("◼ Filled", this);
   actionFilledShapes->setToolTip("Toggle filled shapes (B)");
   actionFilledShapes->setCheckable(true);
-  connect(actionFilledShapes, &QAction::triggered, this, &ToolPanel::onActionFilledShapes);
+  connect(actionFilledShapes, &QAction::triggered, this,
+          &ToolPanel::onActionFilledShapes);
 
   QWidget *toggleWidget = new QWidget(container);
   QHBoxLayout *toggleLayout = new QHBoxLayout(toggleWidget);
@@ -351,7 +370,8 @@ ToolPanel::ToolPanel(QWidget *parent) : QDockWidget("Tools", parent), brushPrevi
 
   QAction *actionDuplicate = new QAction("⊕ Dup", this);
   actionDuplicate->setToolTip("Duplicate (Ctrl+D)");
-  connect(actionDuplicate, &QAction::triggered, this, &ToolPanel::duplicateAction);
+  connect(actionDuplicate, &QAction::triggered, this,
+          &ToolPanel::duplicateAction);
 
   QAction *actionDelete = new QAction("✕ Del", this);
   actionDelete->setToolTip("Delete (Del)");
@@ -368,7 +388,8 @@ ToolPanel::ToolPanel(QWidget *parent) : QDockWidget("Tools", parent), brushPrevi
   editGridWidget->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
   mainLayout->addWidget(editGridWidget, 0, Qt::AlignHCenter);
 
-  mainLayout->addWidget(createToolButton(actionDelete, container), 0, Qt::AlignHCenter);
+  mainLayout->addWidget(createToolButton(actionDelete, container), 0,
+                        Qt::AlignHCenter);
 
   mainLayout->addWidget(createSeparator(container));
 
@@ -434,10 +455,10 @@ ToolPanel::ToolPanel(QWidget *parent) : QDockWidget("Tools", parent), brushPrevi
   mainLayout->addWidget(positionLabel);
 
   mainLayout->addStretch();
-  
+
   scrollArea->setWidget(container);
   setWidget(scrollArea);
-  
+
   // 2-column: 56+4+56 = 116, plus 8+8 margins = 132
   // 3-column: 40+4+52+4+40 = 140, plus 8+8 margins = 156
   setFixedWidth(224);
@@ -519,14 +540,14 @@ void ToolPanel::clearActiveToolStyles() {
   actionPan->setChecked(false);
 }
 
-void ToolPanel::setActiveTool(const QString &toolName) { 
+void ToolPanel::setActiveTool(const QString &toolName) {
   static const QHash<QString, QString> toolIcons = {
-    {"Pen", "✎"}, {"Eraser", "⌫"}, {"Text", "T"}, {"Mermaid", "⬡"}, {"Fill", "◉"},
-    {"Line", "╱"}, {"Arrow", "➤"}, {"CurvedArrow", "↪"}, {"Rectangle", "▢"}, {"Circle", "◯"},
-    {"Select", "⬚"}, {"Pan", "☰"}
-  };
+      {"Pen", "✎"},     {"Eraser", "⌫"},      {"Text", "T"},
+      {"Mermaid", "⬡"}, {"Fill", "◉"},        {"Line", "╱"},
+      {"Arrow", "➤"},   {"CurvedArrow", "↪"}, {"Rectangle", "▢"},
+      {"Circle", "◯"},  {"Select", "⬚"},      {"Pan", "☰"}};
   QString icon = toolIcons.value(toolName, "•");
-  activeToolLabel->setText(icon + " " + toolName); 
+  activeToolLabel->setText(icon + " " + toolName);
 }
 
 void ToolPanel::updateBrushSizeDisplay(int size) {
@@ -543,38 +564,115 @@ void ToolPanel::updateColorDisplay(const QColor &color) {
       border: 2px solid rgba(255, 255, 255, 0.15); 
       border-radius: 6px; 
     }
-  )").arg(color.name()));
+  )")
+                                  .arg(color.name()));
   if (brushPreview_) {
     brushPreview_->setBrushColor(color);
   }
 }
 
-void ToolPanel::updateZoomDisplay(double zoom) { zoomLabel->setText(QString("%1%").arg(qRound(zoom))); }
-void ToolPanel::updateOpacityDisplay(int opacity) { opacitySlider->setValue(opacity); }
-void ToolPanel::updatePositionDisplay(const QPointF &pos) { positionLabel->setText(QString("X:%1 Y:%2").arg(qRound(pos.x())).arg(qRound(pos.y()))); }
-void ToolPanel::updateFilledShapesDisplay(bool filled) { actionFilledShapes->setChecked(filled); }
+void ToolPanel::updateZoomDisplay(double zoom) {
+  zoomLabel->setText(QString("%1%").arg(qRound(zoom)));
+}
+void ToolPanel::updateOpacityDisplay(int opacity) {
+  opacitySlider->setValue(opacity);
+}
+void ToolPanel::updatePositionDisplay(const QPointF &pos) {
+  positionLabel->setText(
+      QString("X:%1 Y:%2").arg(qRound(pos.x())).arg(qRound(pos.y())));
+}
+void ToolPanel::updateFilledShapesDisplay(bool filled) {
+  actionFilledShapes->setChecked(filled);
+}
 
-void ToolPanel::onActionPen() { clearActiveToolStyles(); actionPen->setChecked(true); setActiveTool("Pen"); emit penSelected(); }
-void ToolPanel::onActionEraser() { clearActiveToolStyles(); actionEraser->setChecked(true); setActiveTool("Eraser"); emit eraserSelected(); }
-void ToolPanel::onActionText() { clearActiveToolStyles(); actionText->setChecked(true); setActiveTool("Text"); emit textSelected(); }
-void ToolPanel::onActionMermaid() { clearActiveToolStyles(); actionMermaid->setChecked(true); setActiveTool("Mermaid"); emit mermaidSelected(); }
-void ToolPanel::onActionFill() { clearActiveToolStyles(); actionFill->setChecked(true); setActiveTool("Fill"); emit fillSelected(); }
-void ToolPanel::onActionLine() { clearActiveToolStyles(); actionLine->setChecked(true); setActiveTool("Line"); emit shapeSelected("Line"); emit lineSelected(); }
-void ToolPanel::onActionArrow() { clearActiveToolStyles(); actionArrow->setChecked(true); setActiveTool("Arrow"); emit arrowSelected(); }
-void ToolPanel::onActionCurvedArrow() { clearActiveToolStyles(); actionCurvedArrow->setChecked(true); setActiveTool("CurvedArrow"); emit curvedArrowSelected(); }
-void ToolPanel::onActionRectangle() { clearActiveToolStyles(); actionRectangle->setChecked(true); setActiveTool("Rectangle"); emit shapeSelected("Rectangle"); emit rectangleSelected(); }
-void ToolPanel::onActionCircle() { clearActiveToolStyles(); actionCircle->setChecked(true); setActiveTool("Circle"); emit shapeSelected("Circle"); emit circleSelected(); }
-void ToolPanel::onActionSelection() { clearActiveToolStyles(); actionSelection->setChecked(true); setActiveTool("Select"); emit shapeSelected("Selection"); emit selectionSelected(); }
-void ToolPanel::onActionPan() { clearActiveToolStyles(); actionPan->setChecked(true); setActiveTool("Pan"); emit panSelected(); }
+void ToolPanel::onActionPen() {
+  clearActiveToolStyles();
+  actionPen->setChecked(true);
+  setActiveTool("Pen");
+  emit penSelected();
+}
+void ToolPanel::onActionEraser() {
+  clearActiveToolStyles();
+  actionEraser->setChecked(true);
+  setActiveTool("Eraser");
+  emit eraserSelected();
+}
+void ToolPanel::onActionText() {
+  clearActiveToolStyles();
+  actionText->setChecked(true);
+  setActiveTool("Text");
+  emit textSelected();
+}
+void ToolPanel::onActionMermaid() {
+  clearActiveToolStyles();
+  actionMermaid->setChecked(true);
+  setActiveTool("Mermaid");
+  emit mermaidSelected();
+}
+void ToolPanel::onActionFill() {
+  clearActiveToolStyles();
+  actionFill->setChecked(true);
+  setActiveTool("Fill");
+  emit fillSelected();
+}
+void ToolPanel::onActionLine() {
+  clearActiveToolStyles();
+  actionLine->setChecked(true);
+  setActiveTool("Line");
+  emit shapeSelected("Line");
+  emit lineSelected();
+}
+void ToolPanel::onActionArrow() {
+  clearActiveToolStyles();
+  actionArrow->setChecked(true);
+  setActiveTool("Arrow");
+  emit arrowSelected();
+}
+void ToolPanel::onActionCurvedArrow() {
+  clearActiveToolStyles();
+  actionCurvedArrow->setChecked(true);
+  setActiveTool("CurvedArrow");
+  emit curvedArrowSelected();
+}
+void ToolPanel::onActionRectangle() {
+  clearActiveToolStyles();
+  actionRectangle->setChecked(true);
+  setActiveTool("Rectangle");
+  emit shapeSelected("Rectangle");
+  emit rectangleSelected();
+}
+void ToolPanel::onActionCircle() {
+  clearActiveToolStyles();
+  actionCircle->setChecked(true);
+  setActiveTool("Circle");
+  emit shapeSelected("Circle");
+  emit circleSelected();
+}
+void ToolPanel::onActionSelection() {
+  clearActiveToolStyles();
+  actionSelection->setChecked(true);
+  setActiveTool("Select");
+  emit shapeSelected("Selection");
+  emit selectionSelected();
+}
+void ToolPanel::onActionPan() {
+  clearActiveToolStyles();
+  actionPan->setChecked(true);
+  setActiveTool("Pan");
+  emit panSelected();
+}
 
 void ToolPanel::onActionColor() {
   QColor color = QColorDialog::getColor(Qt::white, this, "Select Color");
-  if (color.isValid()) { updateColorDisplay(color); emit colorSelected(color); }
+  if (color.isValid()) {
+    updateColorDisplay(color);
+    emit colorSelected(color);
+  }
 }
 
-void ToolPanel::onOpacityChanged(int value) { 
+void ToolPanel::onOpacityChanged(int value) {
   int boundedValue = qBound(0, value, 255);
-  emit opacitySelected(boundedValue); 
+  emit opacitySelected(boundedValue);
 }
 void ToolPanel::onActionIncreaseBrush() { emit increaseBrushSize(); }
 void ToolPanel::onActionDecreaseBrush() { emit decreaseBrushSize(); }
