@@ -10,6 +10,7 @@
 #include <QBuffer>
 #include <QDebug>
 #include <QFile>
+#include <QPointer>
 #include <QRegularExpression>
 #include <QScreen>
 #include <QTimer>
@@ -35,12 +36,19 @@ KatexRenderer &KatexRenderer::instance() {
 
 KatexRenderer::KatexRenderer(QObject *parent)
     : QObject(parent), webView_(nullptr), initialized_(false),
-      rendering_(false), cache_(CACHE_SIZE) {}
+      rendering_(false), shuttingDown_(false), cache_(CACHE_SIZE) {}
 
 KatexRenderer::~KatexRenderer() {
+  shuttingDown_ = true;
+  pendingRequests_.clear();
+  rendering_ = false;
+
   if (webView_) {
+    disconnect(webView_, nullptr, this, nullptr);
     webView_->close();
-    delete webView_;
+    if (QCoreApplication::instance() && !QCoreApplication::closingDown()) {
+      delete webView_;
+    }
     webView_ = nullptr;
   }
 }
@@ -48,7 +56,7 @@ KatexRenderer::~KatexRenderer() {
 bool KatexRenderer::isAvailable() const { return initialized_; }
 
 void KatexRenderer::initializeWebEngine() {
-  if (webView_) {
+  if (webView_ || shuttingDown_) {
     return;
   }
 
@@ -98,7 +106,7 @@ void KatexRenderer::initializeWebEngine() {
 }
 
 void KatexRenderer::processNextRequest() {
-  if (pendingRequests_.isEmpty() || rendering_) {
+  if (pendingRequests_.isEmpty() || rendering_ || shuttingDown_) {
     return;
   }
   
@@ -116,11 +124,19 @@ void KatexRenderer::processNextRequest() {
       .arg(escapeJsString(currentRequest_.color.name()))
       .arg(currentRequest_.displayMode ? "true" : "false");
 
-  webView_->page()->runJavaScript(js, [this](const QVariant &result) {
+  QPointer<KatexRenderer> self(this);
+  webView_->page()->runJavaScript(js, [self](const QVariant &result) {
+    if (!self || self->shuttingDown_) {
+      return;
+    }
     qDebug() << "JavaScript result:" << result;
+    const quintptr requestId = self->currentRequest_.requestId;
     // Give KaTeX time to render, then capture
-    QTimer::singleShot(200, this, [this]() {
-      captureResult(currentRequest_.requestId);
+    QTimer::singleShot(200, self, [self, requestId]() {
+      if (!self || self->shuttingDown_) {
+        return;
+      }
+      self->captureResult(requestId);
     });
   });
 }
@@ -147,6 +163,11 @@ void KatexRenderer::clearCache() { cache_.clear(); }
 
 void KatexRenderer::render(const QString &latex, const QColor &color,
                             int fontSize, bool displayMode, quintptr requestId) {
+  if (shuttingDown_) {
+    emit renderComplete(requestId, QPixmap(), false);
+    return;
+  }
+
   // Check cache first
   QString key = cacheKey(latex, color, fontSize, displayMode);
   if (QPixmap *cached = cache_.object(key)) {
@@ -168,7 +189,7 @@ void KatexRenderer::render(const QString &latex, const QColor &color,
 }
 
 void KatexRenderer::captureResult(quintptr requestId) {
-  if (!webView_ || !webView_->page()) {
+  if (shuttingDown_ || !webView_ || !webView_->page()) {
     qDebug() << "captureResult: no webView or page";
     emit renderComplete(requestId, QPixmap(), false);
     rendering_ = false;
@@ -177,7 +198,12 @@ void KatexRenderer::captureResult(quintptr requestId) {
   }
 
   // Get the size of the rendered math element
-  webView_->page()->runJavaScript("getSize();", [this, requestId](const QVariant &result) {
+  QPointer<KatexRenderer> self(this);
+  webView_->page()->runJavaScript("getSize();", [self, requestId](const QVariant &result) {
+    if (!self || self->shuttingDown_ || !self->webView_) {
+      return;
+    }
+
     QString sizeJson = result.toString();
     qDebug() << "getSize result:" << sizeJson;
     
@@ -203,30 +229,34 @@ void KatexRenderer::captureResult(quintptr requestId) {
     qDebug() << "Resizing webView to:" << width << "x" << height;
     
     // Resize view to match content, keep off-screen
-    webView_->setFixedSize(width, height);
-    webView_->move(-2000, -2000);
+    self->webView_->setFixedSize(width, height);
+    self->webView_->move(-2000, -2000);
     
     // Grab after a short delay for content to render
-    QTimer::singleShot(50, this, [this, requestId, width, height]() {
-      QPixmap pixmap = webView_->grab();
+    QTimer::singleShot(50, self, [self, requestId]() {
+      if (!self || self->shuttingDown_ || !self->webView_) {
+        return;
+      }
+
+      QPixmap pixmap = self->webView_->grab();
       
       qDebug() << "Grabbed pixmap:" << pixmap.size() << "isNull:" << pixmap.isNull();
       
       if (pixmap.isNull() || pixmap.size().isEmpty()) {
         qDebug() << "Pixmap capture failed";
-        emit renderComplete(requestId, QPixmap(), false);
+        emit self->renderComplete(requestId, QPixmap(), false);
       } else {
         // Cache the result
-        QString key = cacheKey(currentRequest_.latex, currentRequest_.color,
-                               currentRequest_.fontSize, currentRequest_.displayMode);
-        cache_.insert(key, new QPixmap(pixmap));
+        QString key = self->cacheKey(self->currentRequest_.latex, self->currentRequest_.color,
+                                     self->currentRequest_.fontSize, self->currentRequest_.displayMode);
+        self->cache_.insert(key, new QPixmap(pixmap));
         
         qDebug() << "Emitting renderComplete with pixmap";
-        emit renderComplete(requestId, pixmap, true);
+        emit self->renderComplete(requestId, pixmap, true);
       }
       
-      rendering_ = false;
-      processNextRequest();
+      self->rendering_ = false;
+      self->processNextRequest();
     });
   });
 }

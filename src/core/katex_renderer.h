@@ -116,6 +116,7 @@ private:
   QWebEngineView *webView_;
   bool initialized_;
   bool rendering_;
+  bool shuttingDown_;
 
   // Pending render request
   struct RenderRequest {

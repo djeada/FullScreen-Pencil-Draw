@@ -2030,11 +2030,30 @@ void Canvas::applyResizeToOtherItems(QGraphicsItem *sourceItem, qreal scaleX, qr
     
     // Handle text items specially - adjust font size instead of transform scaling
     if (LatexTextItem *textItem = dynamic_cast<LatexTextItem *>(item)) {
-      qreal uniformScale = (scaleX + scaleY) / 2.0;
+      // Prefer the axis that actually changed; use average for corner drags.
+      qreal dx = qAbs(scaleX - 1.0);
+      qreal dy = qAbs(scaleY - 1.0);
+      qreal uniformScale = 1.0;
+      if (dx > 0.0001 && dy > 0.0001) {
+        uniformScale = (scaleX + scaleY) / 2.0;
+      } else if (dx > 0.0001) {
+        uniformScale = scaleX;
+      } else if (dy > 0.0001) {
+        uniformScale = scaleY;
+      }
+
       QFont currentFont = textItem->font();
-      int newSize = qMax(8, qRound(currentFont.pointSize() * uniformScale));
-      if (newSize != currentFont.pointSize()) {
-        currentFont.setPointSize(newSize);
+      qreal currentSize = currentFont.pointSizeF();
+      if (currentSize <= 0.0) {
+        currentSize = static_cast<qreal>(currentFont.pointSize());
+      }
+      if (currentSize <= 0.0) {
+        currentSize = 14.0;
+      }
+
+      qreal newSize = qBound(8.0, currentSize * uniformScale, 256.0);
+      if (qAbs(newSize - currentSize) > 0.01) {
+        currentFont.setPointSizeF(newSize);
         textItem->setFont(currentFont);
       }
       continue;

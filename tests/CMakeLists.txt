@@ -11,6 +11,7 @@ find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Test REQUIRED)
 set(CORE_SOURCES
     ../src/core/item_store.cpp
     ../src/core/scene_controller.cpp
+    ../src/core/layer.cpp
 )
 
 set(CORE_HEADERS
@@ -18,6 +19,7 @@ set(CORE_HEADERS
     ../src/core/item_ref.h
     ../src/core/item_store.h
     ../src/core/scene_controller.h
+    ../src/core/layer.h
 )
 
 # ItemStore tests
