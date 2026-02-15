@@ -98,11 +98,12 @@ QVariant TransformHandleItem::itemChange(GraphicsItemChange change,
 }
 
 QRectF TransformHandleItem::boundingRect() const {
-  QGraphicsItem *target = resolveTargetItem();
-  if (!target)
+  QRectF bounds = cachedTargetBounds_;
+  if (bounds.isEmpty()) {
+    bounds = targetBoundsInScene();
+  }
+  if (bounds.isEmpty())
     return QRectF();
-
-  QRectF bounds = targetBoundsInScene();
 
   // Helper to expand bounds to include handles and rotation handle
   auto expandForHandles = [](const QRectF &rect) {
@@ -128,6 +129,13 @@ QRectF TransformHandleItem::boundingRect() const {
 QPainterPath TransformHandleItem::shape() const {
   QPainterPath path;
 
+  QRectF bounds = cachedTargetBounds_;
+  if (bounds.isEmpty()) {
+    bounds = targetBoundsInScene();
+  }
+  if (bounds.isEmpty())
+    return path;
+
   // Add all handle rects to shape for hit testing
   for (int i = static_cast<int>(HandleType::TopLeft);
        i <= static_cast<int>(HandleType::BottomRight); ++i) {
@@ -136,7 +144,6 @@ QPainterPath TransformHandleItem::shape() const {
   }
 
   // Add rotation handle
-  QRectF bounds = targetBoundsInScene();
   QPointF rotationCenter(bounds.center().x(),
                          bounds.top() - ROTATION_HANDLE_OFFSET);
   path.addEllipse(rotationCenter, ROTATION_HANDLE_RADIUS + 2,
@@ -165,13 +172,14 @@ void TransformHandleItem::ensureSceneEventFilter() {
 void TransformHandleItem::paint(QPainter *painter,
                                 const QStyleOptionGraphicsItem * /*option*/,
                                 QWidget * /*widget*/) {
-  QGraphicsItem *target = resolveTargetItem();
-  if (!target)
-    return;
-
   painter->setRenderHint(QPainter::Antialiasing);
 
-  QRectF bounds = targetBoundsInScene();
+  QRectF bounds = cachedTargetBounds_;
+  if (bounds.isEmpty()) {
+    bounds = targetBoundsInScene();
+  }
+  if (bounds.isEmpty())
+    return;
 
   // Draw selection rectangle with solid blue border
   QPen borderPen(SELECTION_BORDER_COLOR, SELECTION_BORDER_WIDTH);
@@ -219,10 +227,17 @@ void TransformHandleItem::paint(QPainter *painter,
 }
 
 void TransformHandleItem::updateHandles() {
+  QRectF newBounds = targetBoundsInScene();
+
   // Store the current cached bounds as previous bounds before updating.
   // This allows boundingRect() to include the old region for proper repainting,
   // which clears the old anchor positions when the item moves.
   previousTargetBounds_ = cachedTargetBounds_;
+
+  if (newBounds == cachedTargetBounds_) {
+    update();
+    return;
+  }
 
   // Notify the scene that geometry is about to change.
   // At this point, boundingRect() will return a union of old and new bounds
@@ -230,7 +245,7 @@ void TransformHandleItem::updateHandles() {
   prepareGeometryChange();
 
   // Update the cached bounds to the new position
-  cachedTargetBounds_ = targetBoundsInScene();
+  cachedTargetBounds_ = newBounds;
 
   // Note: We don't clear previousTargetBounds_ here because
   // prepareGeometryChange() has already captured the bounding rect. The
@@ -240,8 +255,14 @@ void TransformHandleItem::updateHandles() {
 }
 
 HandleType TransformHandleItem::handleAtPoint(const QPointF &pos) const {
+  QRectF bounds = cachedTargetBounds_;
+  if (bounds.isEmpty()) {
+    bounds = targetBoundsInScene();
+  }
+  if (bounds.isEmpty())
+    return HandleType::None;
+
   // Check rotation handle first
-  QRectF bounds = targetBoundsInScene();
   QPointF rotationCenter(bounds.center().x(),
                          bounds.top() - ROTATION_HANDLE_OFFSET);
   if (QLineF(pos, rotationCenter).length() <= ROTATION_HANDLE_RADIUS + 4)
@@ -259,11 +280,12 @@ HandleType TransformHandleItem::handleAtPoint(const QPointF &pos) const {
 }
 
 QRectF TransformHandleItem::handleRect(HandleType type) const {
-  QGraphicsItem *target = resolveTargetItem();
-  if (!target)
+  QRectF bounds = cachedTargetBounds_;
+  if (bounds.isEmpty()) {
+    bounds = targetBoundsInScene();
+  }
+  if (bounds.isEmpty())
     return QRectF();
-
-  QRectF bounds = targetBoundsInScene();
   QPointF center;
 
   switch (type) {

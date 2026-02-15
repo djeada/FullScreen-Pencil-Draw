@@ -43,7 +43,89 @@
 static const QSet<QString> SUPPORTED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg",
                                                          "bmp", "gif"};
 
+namespace {
+constexpr qreal CURVED_ARROW_BASE_FACTOR = 0.28;
+constexpr qreal CURVED_ARROW_MIN_OFFSET = 12.0;
+constexpr qreal CURVED_ARROW_MAX_OFFSET = 240.0;
+constexpr qreal CURVED_ARROW_MIN_LENGTH = 2.0;
+
+qreal curvedArrowMagnitudeForModifiers(Qt::KeyboardModifiers modifiers) {
+  qreal factor = CURVED_ARROW_BASE_FACTOR;
+  if (modifiers & Qt::AltModifier)
+    factor = 0.45;
+  if (modifiers & Qt::ControlModifier)
+    factor = 0.16;
+  return factor;
+}
+
+QPointF curvedArrowControlPoint(const QPointF &start, const QPointF &end,
+                                Qt::KeyboardModifiers modifiers) {
+  const QPointF diff = end - start;
+  const qreal len = std::hypot(diff.x(), diff.y());
+  const QPointF mid = (start + end) / 2.0;
+
+  if (len < CURVED_ARROW_MIN_LENGTH)
+    return mid;
+
+  qreal offset = qBound(CURVED_ARROW_MIN_OFFSET,
+                        len * curvedArrowMagnitudeForModifiers(modifiers),
+                        CURVED_ARROW_MAX_OFFSET);
+  QPointF normal(diff.y() / len, -diff.x() / len);
+  if (modifiers & Qt::ShiftModifier) {
+    normal = QPointF(-normal.x(), -normal.y());
+  }
+
+  return QPointF(mid.x() + normal.x() * offset, mid.y() + normal.y() * offset);
+}
+
+QPainterPath curvedArrowPath(const QPointF &start, const QPointF &end,
+                             Qt::KeyboardModifiers modifiers, qreal arrowSize) {
+  QPainterPath path;
+  path.moveTo(start);
+
+  QPointF ctrl = curvedArrowControlPoint(start, end, modifiers);
+  path.quadTo(ctrl, end);
+
+  QPointF tangent = end - ctrl;
+  if (std::hypot(tangent.x(), tangent.y()) < CURVED_ARROW_MIN_LENGTH) {
+    tangent = end - start;
+  }
+
+  const qreal angle = std::atan2(tangent.y(), tangent.x());
+  const QPointF wingA = end - QPointF(std::cos(angle - M_PI / 6.0) * arrowSize,
+                                      std::sin(angle - M_PI / 6.0) * arrowSize);
+  const QPointF wingB = end - QPointF(std::cos(angle + M_PI / 6.0) * arrowSize,
+                                      std::sin(angle + M_PI / 6.0) * arrowSize);
+  path.moveTo(end);
+  path.lineTo(wingA);
+  path.moveTo(end);
+  path.lineTo(wingB);
+
+  return path;
+}
+
+Qt::KeyboardModifiers
+effectiveCurvedArrowModifiers(Qt::KeyboardModifiers rawModifiers,
+                              bool autoBendEnabled, bool manualFlip) {
+  Qt::KeyboardModifiers modifiers = rawModifiers;
+  if (!autoBendEnabled) {
+    modifiers &= ~Qt::ShiftModifier;
+    if (manualFlip) {
+      modifiers |= Qt::ShiftModifier;
+    }
+  }
+  return modifiers;
+}
+} // namespace
+
 // Helper function to clone a QGraphicsItem (excluding groups and pixmap items)
+static void copyTransformState(QGraphicsItem *dst, const QGraphicsItem *src) {
+  if (!dst || !src)
+    return;
+  dst->setTransformOriginPoint(src->transformOriginPoint());
+  dst->setTransform(src->transform());
+}
+
 static QGraphicsItem *cloneItem(QGraphicsItem *item,
                                 QGraphicsEllipseItem *eraserPreview) {
   if (!item)
@@ -54,6 +136,7 @@ static QGraphicsItem *cloneItem(QGraphicsItem *item,
     n->setPen(r->pen());
     n->setBrush(r->brush());
     n->setPos(r->pos());
+    copyTransformState(n, r);
     return n;
   } else if (auto e = dynamic_cast<QGraphicsEllipseItem *>(item)) {
     if (item == eraserPreview)
@@ -62,16 +145,20 @@ static QGraphicsItem *cloneItem(QGraphicsItem *item,
     n->setPen(e->pen());
     n->setBrush(e->brush());
     n->setPos(e->pos());
+    copyTransformState(n, e);
     return n;
   } else if (auto l = dynamic_cast<QGraphicsLineItem *>(item)) {
     auto n = new QGraphicsLineItem(l->line());
     n->setPen(l->pen());
     n->setPos(l->pos());
+    copyTransformState(n, l);
     return n;
   } else if (auto p = dynamic_cast<QGraphicsPathItem *>(item)) {
     auto n = new QGraphicsPathItem(p->path());
     n->setPen(p->pen());
+    n->setBrush(p->brush());
     n->setPos(p->pos());
+    copyTransformState(n, p);
     return n;
   } else if (auto lt = dynamic_cast<LatexTextItem *>(item)) {
     auto n = new LatexTextItem();
@@ -79,12 +166,21 @@ static QGraphicsItem *cloneItem(QGraphicsItem *item,
     n->setFont(lt->font());
     n->setTextColor(lt->textColor());
     n->setPos(lt->pos());
+    copyTransformState(n, lt);
     return n;
   } else if (auto t = dynamic_cast<QGraphicsTextItem *>(item)) {
     auto n = new QGraphicsTextItem(t->toPlainText());
     n->setFont(t->font());
     n->setDefaultTextColor(t->defaultTextColor());
     n->setPos(t->pos());
+    copyTransformState(n, t);
+    return n;
+  } else if (auto pg = dynamic_cast<QGraphicsPolygonItem *>(item)) {
+    auto n = new QGraphicsPolygonItem(pg->polygon());
+    n->setPen(pg->pen());
+    n->setBrush(pg->brush());
+    n->setPos(pg->pos());
+    copyTransformState(n, pg);
     return n;
   }
   return nullptr;
@@ -1370,50 +1466,21 @@ void Canvas::drawArrow(const QPointF &start, const QPointF &end) {
   addDrawAction(ahi);
 }
 
-void Canvas::drawCurvedArrow(const QPointF &start, const QPointF &end) {
+void Canvas::drawCurvedArrow(const QPointF &start, const QPointF &end,
+                             Qt::KeyboardModifiers modifiers) {
   if (!scene_)
     return;
+  const qreal arrowSize = qMax<qreal>(8.0, currentPen_.widthF() * 4.0);
+  QPainterPath path = curvedArrowPath(start, end, modifiers, arrowSize);
 
-  // Calculate control point for bezier curve (perpendicular offset)
-  QPointF mid = (start + end) / 2.0;
-  QPointF diff = end - start;
-  double len = std::sqrt(diff.x() * diff.x() + diff.y() * diff.y());
-  // Perpendicular offset proportional to distance
-  double offset = len * 0.3;
-  QPointF perp(diff.y() / len * offset, -diff.x() / len * offset);
-  QPointF ctrl = mid + perp;
-
-  // Create curved path
-  QPainterPath path;
-  path.moveTo(start);
-  path.quadTo(ctrl, end);
-
-  auto pathItem = new QGraphicsPathItem(path);
+  auto *pathItem = new QGraphicsPathItem(path);
   pathItem->setPen(currentPen_);
+  pathItem->setBrush(Qt::NoBrush);
   pathItem->setFlags(QGraphicsItem::ItemIsSelectable |
                      QGraphicsItem::ItemIsMovable);
   scene_->addItem(pathItem);
 
-  // Calculate arrow head angle at the end of the curve
-  // Use the tangent at t=1 for quadratic bezier: tangent = end - ctrl
-  QPointF tangent = end - ctrl;
-  double angle = std::atan2(tangent.y(), tangent.x());
-  double sz = currentPen_.width() * 4;
-  QPolygonF ah;
-  ah << end
-     << end - QPointF(std::cos(angle - M_PI / 6) * sz,
-                      std::sin(angle - M_PI / 6) * sz)
-     << end - QPointF(std::cos(angle + M_PI / 6) * sz,
-                      std::sin(angle + M_PI / 6) * sz);
-
-  auto ahi = new QGraphicsPolygonItem(ah);
-  ahi->setPen(currentPen_);
-  ahi->setBrush(currentPen_.color());
-  ahi->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
-  scene_->addItem(ahi);
-
   addDrawAction(pathItem);
-  addDrawAction(ahi);
 }
 
 void Canvas::mousePressEvent(QMouseEvent *event) {
@@ -1433,12 +1500,48 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
   QPointF sp = mapToScene(event->pos());
   // Apply snap-to-grid for shape tools
   if (snapToGrid_ && (currentShape_ == Rectangle || currentShape_ == Circle ||
-                      currentShape_ == Line || currentShape_ == Arrow)) {
+                      currentShape_ == Line || currentShape_ == Arrow ||
+                      currentShape_ == CurvedArrow)) {
     sp = snapToGridPoint(sp);
   }
   emit cursorPositionChanged(sp);
   if (currentShape_ == Selection) {
+    trackingSelectionMove_ = false;
+    selectionMoveStartPositions_.clear();
     QGraphicsView::mousePressEvent(event);
+
+    QGraphicsItem *clickedItem = scene_->itemAt(sp, QTransform());
+    if (clickedItem && clickedItem->type() == TransformHandleItem::Type) {
+      return;
+    }
+
+    ItemStore *store = itemStore();
+    if (!store) {
+      return;
+    }
+
+    const QList<QGraphicsItem *> selectedItems = scene_->selectedItems();
+    for (QGraphicsItem *item : selectedItems) {
+      if (!item)
+        continue;
+      if (item == eraserPreview_ || item == backgroundImage_)
+        continue;
+      if (item->type() == TransformHandleItem::Type)
+        continue;
+      if (!(item->flags() & QGraphicsItem::ItemIsMovable))
+        continue;
+
+      ItemId id = store->idForItem(item);
+      if (!id.isValid()) {
+        id = registerItem(item);
+      }
+      if (!id.isValid())
+        continue;
+
+      selectionMoveStartPositions_.insert(id, item->pos());
+    }
+
+    trackingSelectionMove_ = !selectionMoveStartPositions_.isEmpty();
     return;
   }
   if (currentShape_ == Pan) {
@@ -1485,14 +1588,31 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
     tempShapeItem_ = ri;
     addDrawAction(ri);
   } break;
-  case Arrow:
-  case CurvedArrow: {
+  case Arrow: {
     auto li = new QGraphicsLineItem(QLineF(startPoint_, startPoint_));
     li->setPen(currentPen_);
     li->setFlags(QGraphicsItem::ItemIsSelectable |
                  QGraphicsItem::ItemIsMovable);
     scene_->addItem(li);
     tempShapeItem_ = li;
+  } break;
+  case CurvedArrow: {
+    curvedArrowManualFlip_ = (event->modifiers() & Qt::ShiftModifier);
+    curvedArrowAutoBendEnabled_ = !curvedArrowManualFlip_;
+    curvedArrowShiftWasDown_ = curvedArrowManualFlip_;
+    Qt::KeyboardModifiers modifiers = effectiveCurvedArrowModifiers(
+        event->modifiers(), curvedArrowAutoBendEnabled_,
+        curvedArrowManualFlip_);
+
+    auto *pi = new QGraphicsPathItem();
+    pi->setPen(currentPen_);
+    pi->setBrush(Qt::NoBrush);
+    pi->setFlags(QGraphicsItem::ItemIsSelectable |
+                 QGraphicsItem::ItemIsMovable);
+    pi->setPath(curvedArrowPath(startPoint_, startPoint_, modifiers,
+                                qMax<qreal>(8.0, currentPen_.widthF() * 4.0)));
+    scene_->addItem(pi);
+    tempShapeItem_ = pi;
   } break;
   case Circle: {
     auto ei = new QGraphicsEllipseItem(QRectF(startPoint_, startPoint_));
@@ -1549,6 +1669,12 @@ void Canvas::mouseMoveEvent(QMouseEvent *event) {
 
   if (currentShape_ == Selection) {
     QGraphicsView::mouseMoveEvent(event);
+    if ((event->buttons() & Qt::LeftButton) && !transformHandles_.isEmpty()) {
+      for (TransformHandleItem *handle : transformHandles_) {
+        if (handle)
+          handle->updateHandles();
+      }
+    }
     return;
   }
   if (currentShape_ == Pan && isPanning_) {
@@ -1574,10 +1700,29 @@ void Canvas::mouseMoveEvent(QMouseEvent *event) {
           ->setRect(QRectF(startPoint_, cp).normalized());
     break;
   case Arrow:
-  case CurvedArrow:
     if (tempShapeItem_)
       static_cast<QGraphicsLineItem *>(tempShapeItem_)
           ->setLine(QLineF(startPoint_, cp));
+    break;
+  case CurvedArrow:
+    if (tempShapeItem_) {
+      const bool shiftDown = (event->modifiers() & Qt::ShiftModifier);
+      if (shiftDown && !curvedArrowShiftWasDown_) {
+        curvedArrowManualFlip_ = !curvedArrowManualFlip_;
+        curvedArrowAutoBendEnabled_ = false;
+      }
+      curvedArrowShiftWasDown_ = shiftDown;
+
+      Qt::KeyboardModifiers modifiers = effectiveCurvedArrowModifiers(
+          event->modifiers(), curvedArrowAutoBendEnabled_,
+          curvedArrowManualFlip_);
+      auto *pathItem = dynamic_cast<QGraphicsPathItem *>(tempShapeItem_);
+      if (pathItem) {
+        pathItem->setPath(
+            curvedArrowPath(startPoint_, cp, modifiers,
+                            qMax<qreal>(8.0, currentPen_.widthF() * 4.0)));
+      }
+    }
     break;
   case Circle:
     if (tempShapeItem_)
@@ -1611,6 +1756,42 @@ void Canvas::mouseReleaseEvent(QMouseEvent *event) {
   }
   if (currentShape_ == Selection) {
     QGraphicsView::mouseReleaseEvent(event);
+    if (!transformHandles_.isEmpty()) {
+      for (TransformHandleItem *handle : transformHandles_) {
+        if (handle)
+          handle->updateHandles();
+      }
+    }
+
+    if (trackingSelectionMove_) {
+      ItemStore *store = itemStore();
+      if (store) {
+        auto moveAction = std::make_unique<CompositeAction>();
+
+        for (auto it = selectionMoveStartPositions_.cbegin();
+             it != selectionMoveStartPositions_.cend(); ++it) {
+          const ItemId id = it.key();
+          QGraphicsItem *item = store->item(id);
+          if (!item)
+            continue;
+
+          const QPointF oldPos = it.value();
+          const QPointF newPos = item->pos();
+          if (QLineF(oldPos, newPos).length() > 0.01) {
+            moveAction->addAction(
+                std::make_unique<MoveAction>(id, store, oldPos, newPos));
+          }
+        }
+
+        if (!moveAction->isEmpty()) {
+          addAction(std::move(moveAction));
+          emit canvasModified();
+        }
+      }
+    }
+
+    trackingSelectionMove_ = false;
+    selectionMoveStartPositions_.clear();
     return;
   }
   if (currentShape_ == Pan) {
@@ -1628,10 +1809,16 @@ void Canvas::mouseReleaseEvent(QMouseEvent *event) {
     return;
   }
   if (currentShape_ == CurvedArrow && tempShapeItem_) {
+    Qt::KeyboardModifiers modifiers = effectiveCurvedArrowModifiers(
+        event->modifiers(), curvedArrowAutoBendEnabled_,
+        curvedArrowManualFlip_);
     scene_->removeItem(tempShapeItem_);
     delete tempShapeItem_;
     tempShapeItem_ = nullptr;
-    drawCurvedArrow(startPoint_, ep);
+    drawCurvedArrow(startPoint_, ep, modifiers);
+    curvedArrowAutoBendEnabled_ = true;
+    curvedArrowManualFlip_ = false;
+    curvedArrowShiftWasDown_ = false;
     return;
   }
   if (currentShape_ != Pen && currentShape_ != Eraser && tempShapeItem_)
@@ -1670,26 +1857,28 @@ void Canvas::copySelectedItems() {
     if (!item)
       continue;
     if (auto r = dynamic_cast<QGraphicsRectItem *>(item)) {
-      ds << QString("Rectangle") << r->rect() << r->pos() << r->pen()
-         << r->brush();
+      ds << QString("RectangleT") << r->rect() << r->pos() << r->pen()
+         << r->brush() << r->transform();
     } else if (auto e = dynamic_cast<QGraphicsEllipseItem *>(item)) {
       if (item == eraserPreview_)
         continue;
-      ds << QString("Ellipse") << e->rect() << e->pos() << e->pen()
-         << e->brush();
+      ds << QString("EllipseT") << e->rect() << e->pos() << e->pen()
+         << e->brush() << e->transform();
     } else if (auto l = dynamic_cast<QGraphicsLineItem *>(item)) {
-      ds << QString("Line") << l->line() << l->pos() << l->pen();
+      ds << QString("LineT") << l->line() << l->pos() << l->pen()
+         << l->transform();
     } else if (auto p = dynamic_cast<QGraphicsPathItem *>(item)) {
-      ds << QString("Path") << p->path() << p->pos() << p->pen();
+      ds << QString("PathV3") << p->path() << p->pos() << p->pen() << p->brush()
+         << p->transform();
     } else if (auto lt = dynamic_cast<LatexTextItem *>(item)) {
-      ds << QString("LatexText") << lt->text() << lt->pos() << lt->font()
-         << lt->textColor();
+      ds << QString("LatexTextT") << lt->text() << lt->pos() << lt->font()
+         << lt->textColor() << lt->transform();
     } else if (auto t = dynamic_cast<QGraphicsTextItem *>(item)) {
-      ds << QString("Text") << t->toPlainText() << t->pos() << t->font()
-         << t->defaultTextColor();
+      ds << QString("TextT") << t->toPlainText() << t->pos() << t->font()
+         << t->defaultTextColor() << t->transform();
     } else if (auto pg = dynamic_cast<QGraphicsPolygonItem *>(item)) {
-      ds << QString("Polygon") << pg->polygon() << pg->pos() << pg->pen()
-         << pg->brush();
+      ds << QString("PolygonT") << pg->polygon() << pg->pos() << pg->pen()
+         << pg->brush() << pg->transform();
     }
   }
   md->setData("application/x-canvas-items", ba);
@@ -1733,7 +1922,24 @@ void Canvas::pasteItems() {
     while (!ds.atEnd()) {
       QString t;
       ds >> t;
-      if (t == "Rectangle") {
+      if (t == "RectangleT") {
+        QRectF r;
+        QPointF p;
+        QPen pn;
+        QBrush b;
+        QTransform tr;
+        ds >> r >> p >> pn >> b >> tr;
+        auto n = new QGraphicsRectItem(r);
+        n->setPen(pn);
+        n->setBrush(b);
+        n->setPos(p + QPointF(20, 20));
+        n->setTransform(tr);
+        n->setFlags(QGraphicsItem::ItemIsSelectable |
+                    QGraphicsItem::ItemIsMovable);
+        scene_->addItem(n);
+        pi.append(n);
+        addDrawAction(n);
+      } else if (t == "Rectangle") {
         QRectF r;
         QPointF p;
         QPen pn;
@@ -1743,6 +1949,23 @@ void Canvas::pasteItems() {
         n->setPen(pn);
         n->setBrush(b);
         n->setPos(p + QPointF(20, 20));
+        n->setFlags(QGraphicsItem::ItemIsSelectable |
+                    QGraphicsItem::ItemIsMovable);
+        scene_->addItem(n);
+        pi.append(n);
+        addDrawAction(n);
+      } else if (t == "EllipseT") {
+        QRectF r;
+        QPointF p;
+        QPen pn;
+        QBrush b;
+        QTransform tr;
+        ds >> r >> p >> pn >> b >> tr;
+        auto n = new QGraphicsEllipseItem(r);
+        n->setPen(pn);
+        n->setBrush(b);
+        n->setPos(p + QPointF(20, 20));
+        n->setTransform(tr);
         n->setFlags(QGraphicsItem::ItemIsSelectable |
                     QGraphicsItem::ItemIsMovable);
         scene_->addItem(n);
@@ -1763,6 +1986,21 @@ void Canvas::pasteItems() {
         scene_->addItem(n);
         pi.append(n);
         addDrawAction(n);
+      } else if (t == "LineT") {
+        QLineF l;
+        QPointF p;
+        QPen pn;
+        QTransform tr;
+        ds >> l >> p >> pn >> tr;
+        auto n = new QGraphicsLineItem(l);
+        n->setPen(pn);
+        n->setPos(p + QPointF(20, 20));
+        n->setTransform(tr);
+        n->setFlags(QGraphicsItem::ItemIsSelectable |
+                    QGraphicsItem::ItemIsMovable);
+        scene_->addItem(n);
+        pi.append(n);
+        addDrawAction(n);
       } else if (t == "Line") {
         QLineF l;
         QPointF p;
@@ -1776,7 +2014,40 @@ void Canvas::pasteItems() {
         scene_->addItem(n);
         pi.append(n);
         addDrawAction(n);
+      } else if (t == "PathV3") {
+        QPainterPath pp;
+        QPointF p;
+        QPen pn;
+        QBrush b;
+        QTransform tr;
+        ds >> pp >> p >> pn >> b >> tr;
+        auto n = new QGraphicsPathItem(pp);
+        n->setPen(pn);
+        n->setBrush(b);
+        n->setPos(p + QPointF(20, 20));
+        n->setTransform(tr);
+        n->setFlags(QGraphicsItem::ItemIsSelectable |
+                    QGraphicsItem::ItemIsMovable);
+        scene_->addItem(n);
+        pi.append(n);
+        addDrawAction(n);
+      } else if (t == "PathV2") {
+        QPainterPath pp;
+        QPointF p;
+        QPen pn;
+        QBrush b;
+        ds >> pp >> p >> pn >> b;
+        auto n = new QGraphicsPathItem(pp);
+        n->setPen(pn);
+        n->setBrush(b);
+        n->setPos(p + QPointF(20, 20));
+        n->setFlags(QGraphicsItem::ItemIsSelectable |
+                    QGraphicsItem::ItemIsMovable);
+        scene_->addItem(n);
+        pi.append(n);
+        addDrawAction(n);
       } else if (t == "Path") {
+        // Backward compatibility with clipboard data from older versions.
         QPainterPath pp;
         QPointF p;
         QPen pn;
@@ -1786,6 +2057,22 @@ void Canvas::pasteItems() {
         n->setPos(p + QPointF(20, 20));
         n->setFlags(QGraphicsItem::ItemIsSelectable |
                     QGraphicsItem::ItemIsMovable);
+        scene_->addItem(n);
+        pi.append(n);
+        addDrawAction(n);
+      } else if (t == "LatexTextT") {
+        QString tx;
+        QPointF p;
+        QFont f;
+        QColor c;
+        QTransform tr;
+        ds >> tx >> p >> f >> c >> tr;
+        auto n = new LatexTextItem();
+        n->setText(tx);
+        n->setFont(f);
+        n->setTextColor(c);
+        n->setPos(p + QPointF(20, 20));
+        n->setTransform(tr);
         scene_->addItem(n);
         pi.append(n);
         addDrawAction(n);
@@ -1803,6 +2090,23 @@ void Canvas::pasteItems() {
         scene_->addItem(n);
         pi.append(n);
         addDrawAction(n);
+      } else if (t == "TextT") {
+        QString tx;
+        QPointF p;
+        QFont f;
+        QColor c;
+        QTransform tr;
+        ds >> tx >> p >> f >> c >> tr;
+        auto n = new QGraphicsTextItem(tx);
+        n->setFont(f);
+        n->setDefaultTextColor(c);
+        n->setPos(p + QPointF(20, 20));
+        n->setTransform(tr);
+        n->setFlags(QGraphicsItem::ItemIsSelectable |
+                    QGraphicsItem::ItemIsMovable);
+        scene_->addItem(n);
+        pi.append(n);
+        addDrawAction(n);
       } else if (t == "Text") {
         QString tx;
         QPointF p;
@@ -1813,6 +2117,23 @@ void Canvas::pasteItems() {
         n->setFont(f);
         n->setDefaultTextColor(c);
         n->setPos(p + QPointF(20, 20));
+        n->setFlags(QGraphicsItem::ItemIsSelectable |
+                    QGraphicsItem::ItemIsMovable);
+        scene_->addItem(n);
+        pi.append(n);
+        addDrawAction(n);
+      } else if (t == "PolygonT") {
+        QPolygonF pg;
+        QPointF p;
+        QPen pn;
+        QBrush b;
+        QTransform tr;
+        ds >> pg >> p >> pn >> b >> tr;
+        auto n = new QGraphicsPolygonItem(pg);
+        n->setPen(pn);
+        n->setBrush(b);
+        n->setPos(p + QPointF(20, 20));
+        n->setTransform(tr);
         n->setFlags(QGraphicsItem::ItemIsSelectable |
                     QGraphicsItem::ItemIsMovable);
         scene_->addItem(n);

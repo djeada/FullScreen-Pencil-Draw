@@ -105,7 +105,9 @@ ToolPanel::ToolPanel(QWidget *parent)
   connect(actionArrow, &QAction::triggered, this, &ToolPanel::onActionArrow);
 
   actionCurvedArrow = new QAction("↪ Curve", this);
-  actionCurvedArrow->setToolTip("Draw curved arrow (Shift+A)");
+  actionCurvedArrow->setToolTip(
+      "Draw curved arrow (Shift+A). While dragging: press Shift once to flip "
+      "and lock bend side. Alt more bend, Ctrl less bend.");
   actionCurvedArrow->setCheckable(true);
   connect(actionCurvedArrow, &QAction::triggered, this,
           &ToolPanel::onActionCurvedArrow);

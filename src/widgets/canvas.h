@@ -25,6 +25,7 @@
 #include <QGraphicsScene>
 #include <QGraphicsTextItem>
 #include <QGraphicsView>
+#include <QHash>
 #include <QList>
 #include <QMenu>
 #include <QMimeData>
@@ -234,6 +235,11 @@ private:
   bool measurementToolEnabled_ = false;
   int duplicateOffset_ = 20;
   bool dragAccepted_ = false;
+  bool curvedArrowAutoBendEnabled_ = true;
+  bool curvedArrowManualFlip_ = false;
+  bool curvedArrowShiftWasDown_ = false;
+  bool trackingSelectionMove_ = false;
+  QHash<ItemId, QPointF> selectionMoveStartPositions_;
 
   // Drawing state
   QVector<QPointF> pointBuffer_;
@@ -252,7 +258,8 @@ private:
   void applyZoom(double factor);
   void fillAt(const QPointF &point);
   void drawArrow(const QPointF &start, const QPointF &end);
-  void drawCurvedArrow(const QPointF &start, const QPointF &end);
+  void drawCurvedArrow(const QPointF &start, const QPointF &end,
+                       Qt::KeyboardModifiers modifiers = Qt::NoModifier);
   void createTextItem(const QPointF &position);
   void createMermaidItem(const QPointF &position);
   void loadDroppedImage(const QString &filePath, const QPointF &dropPosition);
