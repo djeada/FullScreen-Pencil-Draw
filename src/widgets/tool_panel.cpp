@@ -77,6 +77,12 @@ ToolPanel::ToolPanel(QWidget *parent)
   actionFill->setCheckable(true);
   connect(actionFill, &QAction::triggered, this, &ToolPanel::onActionFill);
 
+  actionColorSelect = new QAction("◎ Select", this);
+  actionColorSelect->setToolTip("Select pixels by color (Q)");
+  actionColorSelect->setCheckable(true);
+  connect(actionColorSelect, &QAction::triggered, this,
+          &ToolPanel::onActionColorSelect);
+
   // Drawing tools grid (3x2) - wrapped for centering
   QWidget *drawGridWidget = new QWidget(container);
   QGridLayout *drawGrid = new QGridLayout(drawGridWidget);
@@ -86,8 +92,9 @@ ToolPanel::ToolPanel(QWidget *parent)
   drawGrid->addWidget(createToolButton(actionEraser, drawGridWidget), 0, 1);
   drawGrid->addWidget(createToolButton(actionText, drawGridWidget), 1, 0);
   drawGrid->addWidget(createToolButton(actionFill, drawGridWidget), 1, 1);
-  drawGrid->addWidget(createToolButton(actionMermaid, drawGridWidget), 2, 0, 1,
-                      2, Qt::AlignCenter);
+  drawGrid->addWidget(createToolButton(actionMermaid, drawGridWidget), 2, 0);
+  drawGrid->addWidget(createToolButton(actionColorSelect, drawGridWidget), 2,
+                      1);
   drawGridWidget->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
   mainLayout->addWidget(drawGridWidget, 0, Qt::AlignHCenter);
 
@@ -533,6 +540,7 @@ void ToolPanel::clearActiveToolStyles() {
   actionText->setChecked(false);
   actionMermaid->setChecked(false);
   actionFill->setChecked(false);
+  actionColorSelect->setChecked(false);
   actionLine->setChecked(false);
   actionArrow->setChecked(false);
   actionCurvedArrow->setChecked(false);
@@ -545,9 +553,10 @@ void ToolPanel::clearActiveToolStyles() {
 void ToolPanel::setActiveTool(const QString &toolName) {
   static const QHash<QString, QString> toolIcons = {
       {"Pen", "✎"},     {"Eraser", "⌫"},      {"Text", "T"},
-      {"Mermaid", "⬡"}, {"Fill", "◉"},        {"Line", "╱"},
-      {"Arrow", "➤"},   {"CurvedArrow", "↪"}, {"Rectangle", "▢"},
-      {"Circle", "◯"},  {"Select", "⬚"},      {"Pan", "☰"}};
+      {"Mermaid", "⬡"}, {"Fill", "◉"},        {"ColorSelect", "◎"},
+      {"Line", "╱"},    {"Arrow", "➤"},       {"CurvedArrow", "↪"},
+      {"Rectangle", "▢"}, {"Circle", "◯"},    {"Select", "⬚"},
+      {"Pan", "☰"}};
   QString icon = toolIcons.value(toolName, "•");
   activeToolLabel->setText(icon + " " + toolName);
 }
@@ -616,6 +625,12 @@ void ToolPanel::onActionFill() {
   actionFill->setChecked(true);
   setActiveTool("Fill");
   emit fillSelected();
+}
+void ToolPanel::onActionColorSelect() {
+  clearActiveToolStyles();
+  actionColorSelect->setChecked(true);
+  setActiveTool("ColorSelect");
+  emit colorSelectSelected();
 }
 void ToolPanel::onActionLine() {
   clearActiveToolStyles();

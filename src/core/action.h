@@ -9,10 +9,14 @@
 #define ACTION_H
 
 #include <QBrush>
+#include <QColor>
 #include <QGraphicsItem>
 #include <QGraphicsScene>
+#include <QImage>
+#include <QPen>
 #include <QPointF>
 #include <QPointer>
+#include <QString>
 #include <QUuid>
 #include <functional>
 #include <memory>
@@ -122,13 +126,28 @@ private:
 };
 
 /**
- * @brief Action for filling a shape with a color.
+ * @brief Action for applying fill/color style changes to an item.
  * Items are tracked by ItemId only - never by raw pointer.
  */
 class FillAction : public Action {
 public:
+  struct PixmapTintState {
+    bool enabled = false;
+    QColor color;
+    qreal strength = 0.0;
+  };
+
   FillAction(const ItemId &id, ItemStore *store, const QBrush &oldBrush,
              const QBrush &newBrush);
+  FillAction(const ItemId &id, ItemStore *store, const QPen &oldPen,
+             const QPen &newPen);
+  FillAction(const ItemId &id, ItemStore *store, const QColor &oldColor,
+             const QColor &newColor);
+  FillAction(const ItemId &id, ItemStore *store, const QString &oldTheme,
+             const QString &newTheme);
+  FillAction(const ItemId &id, ItemStore *store,
+             const PixmapTintState &oldTintState,
+             const PixmapTintState &newTintState);
   ~FillAction() override;
 
   void undo() override;
@@ -136,10 +155,54 @@ public:
   QString description() const override { return "Fill"; }
 
 private:
+  enum class Property {
+    Brush,
+    Pen,
+    TextColor,
+    MermaidTheme,
+    PixmapTint,
+  };
+
+  void applyBrush(const QBrush &brush);
+  void applyPen(const QPen &pen);
+  void applyTextColor(const QColor &color);
+  void applyMermaidTheme(const QString &theme);
+  void applyPixmapTint(const PixmapTintState &state);
+
   ItemId itemId_;
   ItemStore *itemStore_;
+  Property property_;
   QBrush oldBrush_;
   QBrush newBrush_;
+  QPen oldPen_;
+  QPen newPen_;
+  QColor oldColor_;
+  QColor newColor_;
+  QString oldTheme_;
+  QString newTheme_;
+  PixmapTintState oldTintState_;
+  PixmapTintState newTintState_;
+};
+
+/**
+ * @brief Action for changing a pixmap item's pixels.
+ * Stores full before/after image snapshots for undo/redo.
+ */
+class RasterPixmapAction : public Action {
+public:
+  RasterPixmapAction(const ItemId &id, ItemStore *store, const QImage &oldImage,
+                     const QImage &newImage);
+  ~RasterPixmapAction() override;
+
+  void undo() override;
+  void redo() override;
+  QString description() const override { return "Raster Edit"; }
+
+private:
+  ItemId itemId_;
+  ItemStore *itemStore_;
+  QImage oldImage_;
+  QImage newImage_;
 };
 
 class QGraphicsItemGroup;

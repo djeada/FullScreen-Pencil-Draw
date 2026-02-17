@@ -3,6 +3,7 @@
  * @brief Implementation of the main drawing canvas widget.
  */
 #include "canvas.h"
+#include "../core/fill_utils.h"
 #include "../core/item_store.h"
 #include "../core/recent_files_manager.h"
 #include "../core/scene_controller.h"
@@ -31,6 +32,7 @@
 #include <QPageSize>
 #include <QPdfWriter>
 #include <QPointer>
+#include <QQueue>
 #include <QScrollBar>
 #include <algorithm>
 #ifdef HAVE_QT_SVG
@@ -116,6 +118,16 @@ effectiveCurvedArrowModifiers(Qt::KeyboardModifiers rawModifiers,
     }
   }
   return modifiers;
+}
+
+constexpr int COLOR_SELECTION_MARK = 255;
+
+inline int colorDistanceSquared(QRgb a, QRgb b) {
+  const int dr = qRed(a) - qRed(b);
+  const int dg = qGreen(a) - qGreen(b);
+  const int db = qBlue(a) - qBlue(b);
+  const int da = qAlpha(a) - qAlpha(b);
+  return dr * dr + dg * dg + db * db + da * da;
 }
 } // namespace
 
@@ -263,6 +275,7 @@ Canvas::Canvas(QWidget *parent)
 }
 
 Canvas::~Canvas() {
+  resetColorSelection();
   clearTransformHandles();
   undoStack_.clear();
   redoStack_.clear();
@@ -278,6 +291,21 @@ bool Canvas::isSnapToGridEnabled() const { return snapToGrid_; }
 bool Canvas::isRulerVisible() const { return showRuler_; }
 bool Canvas::isMeasurementToolEnabled() const {
   return measurementToolEnabled_;
+}
+
+bool Canvas::hasActiveColorSelection() const {
+  if (!colorSelectionItemId_.isValid() || colorSelectionMask_.isNull() ||
+      !colorSelectionHasPixels_) {
+    return false;
+  }
+
+  ItemStore *store = itemStore();
+  if (!store) {
+    return false;
+  }
+
+  return dynamic_cast<QGraphicsPixmapItem *>(store->item(colorSelectionItemId_)) !=
+         nullptr;
 }
 
 ItemStore *Canvas::itemStore() const {
@@ -385,6 +413,13 @@ void Canvas::onItemRemoved(QGraphicsItem *item) {
   if (store) {
     removedId = store->idForItem(item);
   }
+  if (item == colorSelectionOverlay_) {
+    colorSelectionOverlay_ = nullptr;
+  }
+  if ((removedId.isValid() && removedId == colorSelectionItemId_) ||
+      item == backgroundImage_) {
+    resetColorSelection();
+  }
   if (layerManager_) {
     if (Layer *layer = layerManager_->findLayerForItem(item)) {
       layer->removeItem(item);
@@ -456,6 +491,9 @@ void Canvas::setShape(const QString &shapeType) {
     currentShape_ = Selection;
     setCursor(Qt::ArrowCursor);
     this->setDragMode(QGraphicsView::RubberBandDrag);
+  } else if (shapeType == "ColorSelect") {
+    currentShape_ = ColorSelect;
+    setCursor(Qt::PointingHandCursor);
   }
   tempShapeItem_ = nullptr;
   if (!scene_)
@@ -466,6 +504,7 @@ void Canvas::setShape(const QString &shapeType) {
       if (!item)
         continue;
       if (item != eraserPreview_ && item != backgroundImage_ &&
+          item != colorSelectionOverlay_ &&
           item->type() != TransformHandleItem::Type) {
         item->setFlag(QGraphicsItem::ItemIsSelectable, true);
         item->setFlag(QGraphicsItem::ItemIsMovable, true);
@@ -477,6 +516,13 @@ void Canvas::setShape(const QString &shapeType) {
     this->setDragMode(QGraphicsView::NoDrag);
     clearTransformHandles();
   }
+  if (currentShape_ == ColorSelect) {
+    if (colorSelectionOverlay_) {
+      colorSelectionOverlay_->show();
+    }
+  } else if (colorSelectionOverlay_) {
+    colorSelectionOverlay_->hide();
+  }
   isPanning_ = false;
 }
 
@@ -487,6 +533,8 @@ void Canvas::setPenTool() {
   hideEraserPreview();
   if (scene_)
     scene_->clearSelection();
+  if (colorSelectionOverlay_)
+    colorSelectionOverlay_->hide();
   setCursor(Qt::CrossCursor);
   isPanning_ = false;
 }
@@ -502,11 +550,14 @@ void Canvas::setEraserTool() {
   for (auto item : scene_->items()) {
     if (!item)
       continue;
-    if (item != eraserPreview_ && item != backgroundImage_) {
+    if (item != eraserPreview_ && item != backgroundImage_ &&
+        item != colorSelectionOverlay_) {
       item->setFlag(QGraphicsItem::ItemIsSelectable, false);
       item->setFlag(QGraphicsItem::ItemIsMovable, false);
     }
   }
+  if (colorSelectionOverlay_)
+    colorSelectionOverlay_->hide();
   setCursor(Qt::BlankCursor);
   isPanning_ = false;
 }
@@ -518,6 +569,8 @@ void Canvas::setTextTool() {
   hideEraserPreview();
   if (scene_)
     scene_->clearSelection();
+  if (colorSelectionOverlay_)
+    colorSelectionOverlay_->hide();
   setCursor(Qt::IBeamCursor);
   isPanning_ = false;
 }
@@ -529,6 +582,8 @@ void Canvas::setMermaidTool() {
   hideEraserPreview();
   if (scene_)
     scene_->clearSelection();
+  if (colorSelectionOverlay_)
+    colorSelectionOverlay_->hide();
   setCursor(Qt::CrossCursor);
   isPanning_ = false;
 }
@@ -540,6 +595,22 @@ void Canvas::setFillTool() {
   hideEraserPreview();
   if (scene_)
     scene_->clearSelection();
+  if (colorSelectionOverlay_)
+    colorSelectionOverlay_->hide();
+  setCursor(Qt::PointingHandCursor);
+  isPanning_ = false;
+}
+
+void Canvas::setColorSelectTool() {
+  currentShape_ = ColorSelect;
+  tempShapeItem_ = nullptr;
+  this->setDragMode(QGraphicsView::NoDrag);
+  hideEraserPreview();
+  if (scene_)
+    scene_->clearSelection();
+  if (colorSelectionOverlay_) {
+    colorSelectionOverlay_->show();
+  }
   setCursor(Qt::PointingHandCursor);
   isPanning_ = false;
 }
@@ -551,6 +622,8 @@ void Canvas::setArrowTool() {
   hideEraserPreview();
   if (scene_)
     scene_->clearSelection();
+  if (colorSelectionOverlay_)
+    colorSelectionOverlay_->hide();
   setCursor(Qt::CrossCursor);
   isPanning_ = false;
 }
@@ -562,6 +635,8 @@ void Canvas::setCurvedArrowTool() {
   hideEraserPreview();
   if (scene_)
     scene_->clearSelection();
+  if (colorSelectionOverlay_)
+    colorSelectionOverlay_->hide();
   setCursor(Qt::CrossCursor);
   isPanning_ = false;
 }
@@ -572,6 +647,8 @@ void Canvas::setPanTool() {
   this->setDragMode(QGraphicsView::NoDrag);
   hideEraserPreview();
   scene_->clearSelection();
+  if (colorSelectionOverlay_)
+    colorSelectionOverlay_->hide();
   setCursor(Qt::OpenHandCursor);
   isPanning_ = false;
 }
@@ -621,13 +698,15 @@ void Canvas::decreaseBrushSize() {
 void Canvas::clearCanvas() {
   if (!scene_)
     return;
+  resetColorSelection();
   // Ask for confirmation if there are drawable items on the canvas
   // (excluding system items like eraser preview and background image)
   int drawableItemCount = 0;
   for (auto item : scene_->items()) {
     if (!item)
       continue;
-    if (item != eraserPreview_ && item != backgroundImage_) {
+    if (item != eraserPreview_ && item != backgroundImage_ &&
+        item != colorSelectionOverlay_) {
       drawableItemCount++;
     }
   }
@@ -767,7 +846,8 @@ void Canvas::lockSelectedItems() {
   for (QGraphicsItem *item : selectedItems) {
     if (!item)
       continue;
-    if (item != eraserPreview_ && item != backgroundImage_) {
+    if (item != eraserPreview_ && item != backgroundImage_ &&
+        item != colorSelectionOverlay_) {
       item->setFlag(QGraphicsItem::ItemIsMovable, false);
       item->setFlag(QGraphicsItem::ItemIsSelectable, false);
       // Store lock state in data
@@ -784,7 +864,8 @@ void Canvas::unlockSelectedItems() {
   for (QGraphicsItem *item : scene_->items()) {
     if (!item)
       continue;
-    if (item != eraserPreview_ && item != backgroundImage_) {
+    if (item != eraserPreview_ && item != backgroundImage_ &&
+        item != colorSelectionOverlay_) {
       if (item->data(0).toString() == "locked") {
         item->setFlag(QGraphicsItem::ItemIsMovable, true);
         item->setFlag(QGraphicsItem::ItemIsSelectable, true);
@@ -808,7 +889,8 @@ void Canvas::groupSelectedItems() {
   for (QGraphicsItem *item : selectedItems) {
     if (!item)
       continue;
-    if (item == eraserPreview_ || item == backgroundImage_)
+    if (item == eraserPreview_ || item == backgroundImage_ ||
+        item == colorSelectionOverlay_)
       continue;
     // Skip transform handles
     if (dynamic_cast<TransformHandleItem *>(item))
@@ -1271,7 +1353,8 @@ QPointF Canvas::calculateSmartDuplicateOffset() const {
   for (QGraphicsItem *item : selected) {
     if (!item)
       continue;
-    if (item != eraserPreview_ && item != backgroundImage_) {
+    if (item != eraserPreview_ && item != backgroundImage_ &&
+        item != colorSelectionOverlay_) {
       if (boundingRect.isEmpty()) {
         boundingRect = item->sceneBoundingRect();
       } else {
@@ -1302,7 +1385,8 @@ void Canvas::selectAll() {
   if (!scene_)
     return;
   for (auto item : scene_->items())
-    if (item && item != eraserPreview_ && item != backgroundImage_)
+    if (item && item != eraserPreview_ && item != backgroundImage_ &&
+        item != colorSelectionOverlay_)
       item->setSelected(true);
 }
 
@@ -1315,7 +1399,8 @@ void Canvas::deleteSelectedItems() {
   for (QGraphicsItem *item : selectedItems) {
     if (!item)
       continue;
-    if (item != eraserPreview_ && item != backgroundImage_) {
+    if (item != eraserPreview_ && item != backgroundImage_ &&
+        item != colorSelectionOverlay_) {
       addDeleteAction(item);
       if (sceneController_) {
         sceneController_->removeItem(item, true);
@@ -1415,6 +1500,7 @@ void Canvas::saveToFile() {
 }
 
 void Canvas::openFile() {
+  resetColorSelection();
   QString fileName = QFileDialog::getOpenFileName(
       this, "Open Image", "",
       "Images (*.png *.jpg *.jpeg *.bmp *.gif);;All (*)");
@@ -1443,6 +1529,7 @@ void Canvas::openFile() {
 }
 
 void Canvas::openRecentFile(const QString &filePath) {
+  resetColorSelection();
   if (filePath.isEmpty())
     return;
   QPixmap pm(filePath);
@@ -1613,55 +1700,390 @@ void Canvas::createMermaidItem(const QPointF &pos) {
   mermaidItem->startEditing();
 }
 
+QGraphicsPixmapItem *Canvas::findPixmapItemAt(const QPointF &scenePoint) const {
+  if (!scene_) {
+    return nullptr;
+  }
+
+  const QList<QGraphicsItem *> itemsAtPoint = scene_->items(scenePoint);
+  for (QGraphicsItem *item : itemsAtPoint) {
+    if (!item || item == eraserPreview_ || item == colorSelectionOverlay_) {
+      continue;
+    }
+
+    auto *pixmapItem = dynamic_cast<QGraphicsPixmapItem *>(item);
+    if (!pixmapItem || pixmapItem->pixmap().isNull()) {
+      continue;
+    }
+
+    const QPointF localPoint = pixmapItem->mapFromScene(scenePoint);
+    const QSizeF pixmapSize =
+        pixmapItem->pixmap().size() / pixmapItem->pixmap().devicePixelRatio();
+    if (QRectF(QPointF(0, 0), pixmapSize).contains(localPoint)) {
+      return pixmapItem;
+    }
+  }
+
+  return nullptr;
+}
+
+QImage Canvas::createColorSelectionMask(const QImage &image, const QPoint &seed,
+                                        int tolerance, bool contiguous) const {
+  QImage src = image.convertToFormat(QImage::Format_ARGB32);
+  QImage mask(src.size(), QImage::Format_Grayscale8);
+  mask.fill(0);
+
+  if (src.isNull() || !src.rect().contains(seed)) {
+    return mask;
+  }
+
+  const QRgb seedPixel = src.pixel(seed);
+  if (qAlpha(seedPixel) == 0) {
+    return mask;
+  }
+
+  const int boundedTolerance = qBound(0, tolerance, 255);
+  const int toleranceSq = boundedTolerance * boundedTolerance * 4;
+
+  auto matchesSeed = [&](int x, int y) -> bool {
+    const QRgb pixel = src.pixel(x, y);
+    return qAlpha(pixel) > 0 &&
+           colorDistanceSquared(pixel, seedPixel) <= toleranceSq;
+  };
+
+  if (contiguous) {
+    QQueue<QPoint> queue;
+    queue.enqueue(seed);
+
+    while (!queue.isEmpty()) {
+      const QPoint p = queue.dequeue();
+      if (!src.rect().contains(p)) {
+        continue;
+      }
+
+      uchar *maskRow = mask.scanLine(p.y());
+      if (maskRow[p.x()] == COLOR_SELECTION_MARK) {
+        continue;
+      }
+      if (!matchesSeed(p.x(), p.y())) {
+        continue;
+      }
+
+      maskRow[p.x()] = COLOR_SELECTION_MARK;
+      queue.enqueue(QPoint(p.x() + 1, p.y()));
+      queue.enqueue(QPoint(p.x() - 1, p.y()));
+      queue.enqueue(QPoint(p.x(), p.y() + 1));
+      queue.enqueue(QPoint(p.x(), p.y() - 1));
+    }
+  } else {
+    for (int y = 0; y < src.height(); ++y) {
+      uchar *maskRow = mask.scanLine(y);
+      for (int x = 0; x < src.width(); ++x) {
+        if (matchesSeed(x, y)) {
+          maskRow[x] = COLOR_SELECTION_MARK;
+        }
+      }
+    }
+  }
+
+  return mask;
+}
+
+void Canvas::refreshColorSelectionOverlay() {
+  if (!scene_) {
+    return;
+  }
+
+  ItemStore *store = itemStore();
+  auto *sourceItem = store ? dynamic_cast<QGraphicsPixmapItem *>(
+                                 store->item(colorSelectionItemId_))
+                           : nullptr;
+  if (!sourceItem || colorSelectionMask_.isNull() || !colorSelectionHasPixels_) {
+    resetColorSelection();
+    return;
+  }
+
+  QImage sourceImage = sourceItem->pixmap().toImage().convertToFormat(
+      QImage::Format_ARGB32);
+  if (sourceImage.isNull() || sourceImage.size() != colorSelectionMask_.size()) {
+    resetColorSelection();
+    return;
+  }
+
+  QImage overlayImage(colorSelectionMask_.size(),
+                      QImage::Format_ARGB32_Premultiplied);
+  overlayImage.fill(Qt::transparent);
+
+  for (int y = 0; y < colorSelectionMask_.height(); ++y) {
+    const uchar *maskRow = colorSelectionMask_.constScanLine(y);
+    QRgb *overlayRow = reinterpret_cast<QRgb *>(overlayImage.scanLine(y));
+    for (int x = 0; x < colorSelectionMask_.width(); ++x) {
+      if (maskRow[x] == COLOR_SELECTION_MARK) {
+        overlayRow[x] = qRgba(70, 170, 255, 96);
+      }
+    }
+  }
+
+  if (!colorSelectionOverlay_) {
+    colorSelectionOverlay_ =
+        new QGraphicsPixmapItem(QPixmap::fromImage(overlayImage));
+    colorSelectionOverlay_->setAcceptedMouseButtons(Qt::NoButton);
+    colorSelectionOverlay_->setFlag(QGraphicsItem::ItemIsSelectable, false);
+    colorSelectionOverlay_->setFlag(QGraphicsItem::ItemIsMovable, false);
+    scene_->addItem(colorSelectionOverlay_);
+  } else {
+    colorSelectionOverlay_->setPixmap(QPixmap::fromImage(overlayImage));
+  }
+
+  colorSelectionOverlay_->setPos(sourceItem->pos());
+  colorSelectionOverlay_->setTransformOriginPoint(
+      sourceItem->transformOriginPoint());
+  colorSelectionOverlay_->setTransform(sourceItem->transform());
+  colorSelectionOverlay_->setOpacity(1.0);
+  colorSelectionOverlay_->setZValue(sourceItem->zValue() + 0.5);
+  colorSelectionOverlay_->setVisible(currentShape_ == ColorSelect);
+}
+
+void Canvas::resetColorSelection() {
+  colorSelectionItemId_ = ItemId();
+  colorSelectionMask_ = QImage();
+  colorSelectionHasPixels_ = false;
+
+  if (colorSelectionOverlay_) {
+    if (scene_) {
+      scene_->removeItem(colorSelectionOverlay_);
+    }
+    delete colorSelectionOverlay_;
+    colorSelectionOverlay_ = nullptr;
+  }
+}
+
+bool Canvas::selectByColorAt(const QPointF &scenePoint,
+                             Qt::KeyboardModifiers modifiers) {
+  if (!scene_) {
+    return false;
+  }
+
+  QGraphicsPixmapItem *pixmapItem = findPixmapItemAt(scenePoint);
+  if (!pixmapItem) {
+    resetColorSelection();
+    return false;
+  }
+
+  QImage image =
+      pixmapItem->pixmap().toImage().convertToFormat(QImage::Format_ARGB32);
+  if (image.isNull()) {
+    resetColorSelection();
+    return false;
+  }
+
+  const QPointF localPoint = pixmapItem->mapFromScene(scenePoint);
+  const QPoint seed(static_cast<int>(std::floor(localPoint.x())),
+                    static_cast<int>(std::floor(localPoint.y())));
+  if (!image.rect().contains(seed)) {
+    resetColorSelection();
+    return false;
+  }
+
+  bool contiguous = colorSelectContiguous_;
+  if (modifiers & Qt::ShiftModifier) {
+    contiguous = !contiguous;
+  }
+
+  QImage mask =
+      createColorSelectionMask(image, seed, colorSelectTolerance_, contiguous);
+
+  bool hasPixels = false;
+  for (int y = 0; y < mask.height() && !hasPixels; ++y) {
+    const uchar *row = mask.constScanLine(y);
+    for (int x = 0; x < mask.width(); ++x) {
+      if (row[x] == COLOR_SELECTION_MARK) {
+        hasPixels = true;
+        break;
+      }
+    }
+  }
+
+  if (!hasPixels) {
+    resetColorSelection();
+    return false;
+  }
+
+  ItemStore *store = itemStore();
+  if (!store) {
+    resetColorSelection();
+    return false;
+  }
+
+  ItemId itemId = store->idForItem(pixmapItem);
+  if (!itemId.isValid()) {
+    itemId = store->registerItem(pixmapItem);
+  }
+  if (!itemId.isValid()) {
+    resetColorSelection();
+    return false;
+  }
+
+  colorSelectionItemId_ = itemId;
+  colorSelectionMask_ = std::move(mask);
+  colorSelectionHasPixels_ = true;
+  refreshColorSelectionOverlay();
+  return true;
+}
+
+void Canvas::extractColorSelectionToNewLayer() {
+  if (!hasActiveColorSelection()) {
+    QMessageBox::information(
+        this, "No Color Selection",
+        "Use the Color Select tool on an image before extracting.");
+    return;
+  }
+
+  ItemStore *store = itemStore();
+  if (!store) {
+    return;
+  }
+
+  auto *sourceItem = dynamic_cast<QGraphicsPixmapItem *>(
+      store->item(colorSelectionItemId_));
+  if (!sourceItem) {
+    resetColorSelection();
+    return;
+  }
+
+  QImage originalImage = sourceItem->pixmap().toImage().convertToFormat(
+      QImage::Format_ARGB32);
+  if (originalImage.isNull() ||
+      originalImage.size() != colorSelectionMask_.size()) {
+    resetColorSelection();
+    return;
+  }
+
+  QImage extractedImage(originalImage.size(), QImage::Format_ARGB32);
+  extractedImage.fill(Qt::transparent);
+  QImage remainingImage = originalImage;
+
+  bool anyExtracted = false;
+  for (int y = 0; y < originalImage.height(); ++y) {
+    const uchar *maskRow = colorSelectionMask_.constScanLine(y);
+    const QRgb *sourceRow =
+        reinterpret_cast<const QRgb *>(originalImage.constScanLine(y));
+    QRgb *extractedRow = reinterpret_cast<QRgb *>(extractedImage.scanLine(y));
+    QRgb *remainingRow = reinterpret_cast<QRgb *>(remainingImage.scanLine(y));
+
+    for (int x = 0; x < originalImage.width(); ++x) {
+      if (maskRow[x] == COLOR_SELECTION_MARK) {
+        extractedRow[x] = sourceRow[x];
+        remainingRow[x] =
+            qRgba(qRed(sourceRow[x]), qGreen(sourceRow[x]), qBlue(sourceRow[x]), 0);
+        anyExtracted = true;
+      }
+    }
+  }
+
+  if (!anyExtracted) {
+    QMessageBox::information(this, "Empty Selection",
+                             "No pixels were selected for extraction.");
+    return;
+  }
+
+  auto *newItem = new QGraphicsPixmapItem(QPixmap::fromImage(extractedImage));
+  newItem->setPos(sourceItem->pos());
+  newItem->setTransformOriginPoint(sourceItem->transformOriginPoint());
+  newItem->setTransform(sourceItem->transform());
+  newItem->setOpacity(sourceItem->opacity());
+  newItem->setZValue(sourceItem->zValue() + 0.5);
+  newItem->setFlag(QGraphicsItem::ItemIsSelectable, true);
+  newItem->setFlag(QGraphicsItem::ItemIsMovable, true);
+
+  Layer *newLayer = nullptr;
+  QUuid newLayerId;
+  if (layerManager_) {
+    newLayer = layerManager_->createLayer(
+        QString("Color Selection %1").arg(layerManager_->layerCount() + 1),
+        Layer::Type::Raster);
+    if (newLayer) {
+      newLayerId = newLayer->id();
+      layerManager_->setActiveLayer(newLayerId);
+    }
+  }
+
+  ItemId newItemId;
+  if (sceneController_) {
+    newItemId = sceneController_->addItem(newItem, newLayer);
+  } else {
+    scene_->addItem(newItem);
+    newItemId = registerItem(newItem);
+    if (newLayer) {
+      newLayer->addItem(newItem);
+    }
+  }
+
+  if (!newItemId.isValid()) {
+    if (scene_) {
+      scene_->removeItem(newItem);
+    }
+    delete newItem;
+    return;
+  }
+
+  sourceItem->setPixmap(QPixmap::fromImage(remainingImage));
+
+  auto onAdd = [this, newLayerId](QGraphicsItem *added) {
+    if (!layerManager_ || !added) {
+      return;
+    }
+    if (!newLayerId.isNull()) {
+      if (Layer *layer = layerManager_->layer(newLayerId)) {
+        layer->addItem(added);
+        return;
+      }
+    }
+    layerManager_->addItemToActiveLayer(added);
+  };
+  auto onRemove = [this](QGraphicsItem *removed) { onItemRemoved(removed); };
+
+  auto action = std::make_unique<CompositeAction>();
+  action->addAction(std::make_unique<RasterPixmapAction>(
+      colorSelectionItemId_, store, originalImage, remainingImage));
+  action->addAction(
+      std::make_unique<DrawAction>(newItemId, store, onAdd, onRemove));
+  addAction(std::move(action));
+
+  scene_->clearSelection();
+  newItem->setSelected(true);
+  resetColorSelection();
+  emit canvasModified();
+}
+
+void Canvas::clearColorSelection() { resetColorSelection(); }
+
+void Canvas::setColorSelectTolerance() {
+  bool ok = false;
+  int value = QInputDialog::getInt(this, "Color Select Tolerance",
+                                   "Tolerance (0-255):", colorSelectTolerance_,
+                                   0, 255, 1, &ok);
+  if (!ok) {
+    return;
+  }
+  colorSelectTolerance_ = value;
+}
+
+void Canvas::toggleColorSelectContiguous() {
+  colorSelectContiguous_ = !colorSelectContiguous_;
+}
+
 void Canvas::fillAt(const QPointF &point) {
   if (!scene_)
     return;
-  QBrush newBrush(currentPen_.color());
-  // Copy the list to avoid issues with scene modification during iteration
-  QList<QGraphicsItem *> itemsAtPoint = scene_->items(point);
-  ItemStore *store = itemStore();
-  for (QGraphicsItem *item : itemsAtPoint) {
-    if (!item)
-      continue;
-    if (item == eraserPreview_ || item == backgroundImage_)
-      continue;
-    if (auto r = dynamic_cast<QGraphicsRectItem *>(item)) {
-      QBrush oldBrush = r->brush();
-      r->setBrush(newBrush);
-      if (store) {
-        ItemId id = store->idForItem(item);
-        if (id.isValid()) {
-          addAction(
-              std::make_unique<FillAction>(id, store, oldBrush, newBrush));
+
+  fillTopItemAtPoint(
+      scene_, point, currentPen_.color(), itemStore(), backgroundImage_,
+      eraserPreview_, [this](std::unique_ptr<Action> action) {
+        if (action) {
+          addAction(std::move(action));
         }
-      }
-      return;
-    }
-    if (auto e = dynamic_cast<QGraphicsEllipseItem *>(item)) {
-      QBrush oldBrush = e->brush();
-      e->setBrush(newBrush);
-      if (store) {
-        ItemId id = store->idForItem(item);
-        if (id.isValid()) {
-          addAction(
-              std::make_unique<FillAction>(id, store, oldBrush, newBrush));
-        }
-      }
-      return;
-    }
-    if (auto p = dynamic_cast<QGraphicsPolygonItem *>(item)) {
-      QBrush oldBrush = p->brush();
-      p->setBrush(newBrush);
-      if (store) {
-        ItemId id = store->idForItem(item);
-        if (id.isValid()) {
-          addAction(
-              std::make_unique<FillAction>(id, store, oldBrush, newBrush));
-        }
-      }
-      return;
-    }
-  }
+      });
 }
 
 void Canvas::drawArrow(const QPointF &start, const QPointF &end) {
@@ -1748,7 +2170,8 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
     for (QGraphicsItem *item : selectedItems) {
       if (!item)
         continue;
-      if (item == eraserPreview_ || item == backgroundImage_)
+      if (item == eraserPreview_ || item == backgroundImage_ ||
+          item == colorSelectionOverlay_)
         continue;
       if (item->type() == TransformHandleItem::Type)
         continue;
@@ -1784,6 +2207,9 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
     break;
   case Fill:
     fillAt(sp);
+    break;
+  case ColorSelect:
+    selectByColorAt(sp, event->modifiers());
     break;
   case Eraser:
     eraseAt(sp);
@@ -2119,7 +2545,8 @@ void Canvas::cutSelectedItems() {
   for (auto item : sel) {
     if (!item)
       continue;
-    if (item != eraserPreview_ && item != backgroundImage_) {
+    if (item != eraserPreview_ && item != backgroundImage_ &&
+        item != colorSelectionOverlay_) {
       addDeleteAction(item);
       if (sceneController_) {
         sceneController_->removeItem(item, true);
@@ -2466,7 +2893,8 @@ void Canvas::eraseAt(const QPointF &point) {
   for (QGraphicsItem *item : itemsToCheck) {
     if (!item)
       continue;
-    if (item == eraserPreview_ || item == backgroundImage_)
+    if (item == eraserPreview_ || item == backgroundImage_ ||
+        item == colorSelectionOverlay_)
       continue;
     if (item->type() == TransformHandleItem::Type)
       continue;
@@ -2747,6 +3175,18 @@ void Canvas::contextMenuEvent(QContextMenuEvent *event) {
             &Canvas::exportSelectionToJPG);
   }
 
+  if (hasActiveColorSelection()) {
+    contextMenu.addSeparator();
+    QAction *extractAction =
+        contextMenu.addAction("Extract Color Selection to New Layer");
+    connect(extractAction, &QAction::triggered, this,
+            &Canvas::extractColorSelectionToNewLayer);
+
+    QAction *clearSelectionAction = contextMenu.addAction("Clear Color Selection");
+    connect(clearSelectionAction, &QAction::triggered, this,
+            &Canvas::clearColorSelection);
+  }
+
   contextMenu.exec(event->globalPos());
 }
 
@@ -2762,7 +3202,8 @@ QRectF Canvas::getSelectionBoundingRect() const {
   for (QGraphicsItem *item : selectedItems) {
     if (!item)
       continue;
-    if (item != eraserPreview_ && item != backgroundImage_) {
+    if (item != eraserPreview_ && item != backgroundImage_ &&
+        item != colorSelectionOverlay_) {
       if (firstItem) {
         boundingRect = item->sceneBoundingRect();
         firstItem = false;
@@ -2815,7 +3256,8 @@ void Canvas::exportSelectionToSVG() {
   for (QGraphicsItem *item : selectedItems) {
     if (!item)
       continue;
-    if (item != eraserPreview_ && item != backgroundImage_) {
+    if (item != eraserPreview_ && item != backgroundImage_ &&
+        item != colorSelectionOverlay_) {
       painter.save();
       painter.setTransform(item->sceneTransform(), true);
       item->paint(&painter, nullptr, nullptr);
@@ -2853,7 +3295,8 @@ void Canvas::exportSelectionToPNG() {
   for (QGraphicsItem *item : selectedItems) {
     if (!item)
       continue;
-    if (item != eraserPreview_ && item != backgroundImage_) {
+    if (item != eraserPreview_ && item != backgroundImage_ &&
+        item != colorSelectionOverlay_) {
       painter.save();
       painter.setTransform(item->sceneTransform(), true);
       item->paint(&painter, nullptr, nullptr);
@@ -2891,7 +3334,8 @@ void Canvas::exportSelectionToJPG() {
   for (QGraphicsItem *item : selectedItems) {
     if (!item)
       continue;
-    if (item != eraserPreview_ && item != backgroundImage_) {
+    if (item != eraserPreview_ && item != backgroundImage_ &&
+        item != colorSelectionOverlay_) {
       painter.save();
       painter.setTransform(item->sceneTransform(), true);
       item->paint(&painter, nullptr, nullptr);
@@ -2955,7 +3399,8 @@ void Canvas::updateTransformHandles() {
     if (!item)
       continue;
     // Skip non-transformable items
-    if (item == eraserPreview_ || item == backgroundImage_)
+    if (item == eraserPreview_ || item == backgroundImage_ ||
+        item == colorSelectionOverlay_)
       continue;
 
     // Skip TransformHandleItems themselves (check by type)
@@ -3046,7 +3491,8 @@ void Canvas::applyResizeToOtherItems(QGraphicsItem *sourceItem, qreal scaleX,
   for (QGraphicsItem *item : selectedItems) {
     if (!item || item == sourceItem)
       continue;
-    if (item == eraserPreview_ || item == backgroundImage_)
+    if (item == eraserPreview_ || item == backgroundImage_ ||
+        item == colorSelectionOverlay_)
       continue;
     if (item->type() == TransformHandleItem::Type)
       continue;
@@ -3127,7 +3573,8 @@ void Canvas::applyRotationToOtherItems(QGraphicsItem *sourceItem,
   for (QGraphicsItem *item : selectedItems) {
     if (!item || item == sourceItem)
       continue;
-    if (item == eraserPreview_ || item == backgroundImage_)
+    if (item == eraserPreview_ || item == backgroundImage_ ||
+        item == colorSelectionOverlay_)
       continue;
     if (item->type() == TransformHandleItem::Type)
       continue;

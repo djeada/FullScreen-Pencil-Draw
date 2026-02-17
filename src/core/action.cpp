@@ -7,10 +7,14 @@
 #include "action.h"
 #include "item_store.h"
 #include "layer.h"
-#include <QGraphicsEllipseItem>
+#include "../widgets/latex_text_item.h"
+#include "../widgets/mermaid_text_item.h"
+#include <QAbstractGraphicsShapeItem>
+#include <QGraphicsColorizeEffect>
 #include <QGraphicsItemGroup>
-#include <QGraphicsPolygonItem>
-#include <QGraphicsRectItem>
+#include <QGraphicsLineItem>
+#include <QGraphicsPixmapItem>
+#include <QGraphicsTextItem>
 #include <utility>
 
 Action::~Action() = default;
@@ -129,12 +133,33 @@ void CompositeAction::redo() {
 // FillAction implementation
 FillAction::FillAction(const ItemId &id, ItemStore *store,
                        const QBrush &oldBrush, const QBrush &newBrush)
-    : itemId_(id), itemStore_(store), oldBrush_(oldBrush), newBrush_(newBrush) {
-}
+    : itemId_(id), itemStore_(store), property_(Property::Brush),
+      oldBrush_(oldBrush), newBrush_(newBrush) {}
+
+FillAction::FillAction(const ItemId &id, ItemStore *store, const QPen &oldPen,
+                       const QPen &newPen)
+    : itemId_(id), itemStore_(store), property_(Property::Pen),
+      oldPen_(oldPen), newPen_(newPen) {}
+
+FillAction::FillAction(const ItemId &id, ItemStore *store,
+                       const QColor &oldColor, const QColor &newColor)
+    : itemId_(id), itemStore_(store), property_(Property::TextColor),
+      oldColor_(oldColor), newColor_(newColor) {}
+
+FillAction::FillAction(const ItemId &id, ItemStore *store,
+                       const QString &oldTheme, const QString &newTheme)
+    : itemId_(id), itemStore_(store), property_(Property::MermaidTheme),
+      oldTheme_(oldTheme), newTheme_(newTheme) {}
+
+FillAction::FillAction(const ItemId &id, ItemStore *store,
+                       const PixmapTintState &oldTintState,
+                       const PixmapTintState &newTintState)
+    : itemId_(id), itemStore_(store), property_(Property::PixmapTint),
+      oldTintState_(oldTintState), newTintState_(newTintState) {}
 
 FillAction::~FillAction() = default;
 
-void FillAction::undo() {
+void FillAction::applyBrush(const QBrush &brush) {
   if (!itemStore_ || !itemId_.isValid())
     return;
 
@@ -142,30 +167,151 @@ void FillAction::undo() {
   if (!item)
     return;
 
-  if (auto *rect = dynamic_cast<QGraphicsRectItem *>(item)) {
-    rect->setBrush(oldBrush_);
-  } else if (auto *ellipse = dynamic_cast<QGraphicsEllipseItem *>(item)) {
-    ellipse->setBrush(oldBrush_);
-  } else if (auto *polygon = dynamic_cast<QGraphicsPolygonItem *>(item)) {
-    polygon->setBrush(oldBrush_);
+  if (auto *shape = dynamic_cast<QAbstractGraphicsShapeItem *>(item)) {
+    shape->setBrush(brush);
+  }
+}
+
+void FillAction::applyPen(const QPen &pen) {
+  if (!itemStore_ || !itemId_.isValid())
+    return;
+
+  QGraphicsItem *item = itemStore_->item(itemId_);
+  if (!item)
+    return;
+
+  if (auto *shape = dynamic_cast<QAbstractGraphicsShapeItem *>(item)) {
+    shape->setPen(pen);
+  } else if (auto *line = dynamic_cast<QGraphicsLineItem *>(item)) {
+    line->setPen(pen);
+  }
+}
+
+void FillAction::applyTextColor(const QColor &color) {
+  if (!itemStore_ || !itemId_.isValid())
+    return;
+
+  QGraphicsItem *item = itemStore_->item(itemId_);
+  if (!item)
+    return;
+
+  if (auto *text = dynamic_cast<QGraphicsTextItem *>(item)) {
+    text->setDefaultTextColor(color);
+  } else if (auto *latex = dynamic_cast<LatexTextItem *>(item)) {
+    latex->setTextColor(color);
+  }
+}
+
+void FillAction::applyMermaidTheme(const QString &theme) {
+  if (!itemStore_ || !itemId_.isValid())
+    return;
+
+  QGraphicsItem *item = itemStore_->item(itemId_);
+  if (!item)
+    return;
+
+  if (auto *mermaid = dynamic_cast<MermaidTextItem *>(item)) {
+    mermaid->setTheme(theme);
+  }
+}
+
+void FillAction::applyPixmapTint(const PixmapTintState &state) {
+  if (!itemStore_ || !itemId_.isValid())
+    return;
+
+  QGraphicsItem *item = itemStore_->item(itemId_);
+  if (!item)
+    return;
+
+  auto *pixmap = dynamic_cast<QGraphicsPixmapItem *>(item);
+  if (!pixmap)
+    return;
+
+  if (!state.enabled) {
+    pixmap->setGraphicsEffect(nullptr);
+    return;
+  }
+
+  auto *effect =
+      dynamic_cast<QGraphicsColorizeEffect *>(pixmap->graphicsEffect());
+  if (!effect) {
+    effect = new QGraphicsColorizeEffect();
+    pixmap->setGraphicsEffect(effect);
+  }
+  effect->setColor(state.color);
+  effect->setStrength(state.strength);
+}
+
+void FillAction::undo() {
+  switch (property_) {
+  case Property::Brush:
+    applyBrush(oldBrush_);
+    break;
+  case Property::Pen:
+    applyPen(oldPen_);
+    break;
+  case Property::TextColor:
+    applyTextColor(oldColor_);
+    break;
+  case Property::MermaidTheme:
+    applyMermaidTheme(oldTheme_);
+    break;
+  case Property::PixmapTint:
+    applyPixmapTint(oldTintState_);
+    break;
   }
 }
 
 void FillAction::redo() {
+  switch (property_) {
+  case Property::Brush:
+    applyBrush(newBrush_);
+    break;
+  case Property::Pen:
+    applyPen(newPen_);
+    break;
+  case Property::TextColor:
+    applyTextColor(newColor_);
+    break;
+  case Property::MermaidTheme:
+    applyMermaidTheme(newTheme_);
+    break;
+  case Property::PixmapTint:
+    applyPixmapTint(newTintState_);
+    break;
+  }
+}
+
+RasterPixmapAction::RasterPixmapAction(const ItemId &id, ItemStore *store,
+                                       const QImage &oldImage,
+                                       const QImage &newImage)
+    : itemId_(id), itemStore_(store), oldImage_(oldImage), newImage_(newImage) {
+}
+
+RasterPixmapAction::~RasterPixmapAction() = default;
+
+void RasterPixmapAction::undo() {
   if (!itemStore_ || !itemId_.isValid())
     return;
 
-  QGraphicsItem *item = itemStore_->item(itemId_);
-  if (!item)
+  auto *pixmapItem =
+      dynamic_cast<QGraphicsPixmapItem *>(itemStore_->item(itemId_));
+  if (!pixmapItem || oldImage_.isNull())
     return;
 
-  if (auto *rect = dynamic_cast<QGraphicsRectItem *>(item)) {
-    rect->setBrush(newBrush_);
-  } else if (auto *ellipse = dynamic_cast<QGraphicsEllipseItem *>(item)) {
-    ellipse->setBrush(newBrush_);
-  } else if (auto *polygon = dynamic_cast<QGraphicsPolygonItem *>(item)) {
-    polygon->setBrush(newBrush_);
-  }
+  pixmapItem->setPixmap(QPixmap::fromImage(oldImage_));
+}
+
+void RasterPixmapAction::redo() {
+  if (!itemStore_ || !itemId_.isValid())
+    return;
+
+  auto *pixmapItem =
+      dynamic_cast<QGraphicsPixmapItem *>(itemStore_->item(itemId_));
+  if (!pixmapItem || newImage_.isNull())
+    return;
+
+  pixmapItem->setPixmap(QPixmap::fromImage(newImage_));
 }
 
 // GroupAction implementation

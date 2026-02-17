@@ -21,9 +21,11 @@
 #include <QGraphicsItemGroup>
 #include <QGraphicsLineItem>
 #include <QGraphicsPathItem>
+#include <QGraphicsPixmapItem>
 #include <QGraphicsRectItem>
 #include <QGraphicsScene>
 #include <QGraphicsTextItem>
+#include <QImage>
 #include <QGraphicsView>
 #include <QHash>
 #include <QList>
@@ -73,6 +75,9 @@ public:
   bool isSnapToGridEnabled() const;
   bool isRulerVisible() const;
   bool isMeasurementToolEnabled() const;
+  int colorSelectTolerance() const { return colorSelectTolerance_; }
+  bool isColorSelectContiguous() const { return colorSelectContiguous_; }
+  bool hasActiveColorSelection() const;
 
   // Tool system accessors - implements SceneRenderer interface
   QGraphicsScene *scene() const override { return scene_; }
@@ -128,6 +133,7 @@ public slots:
   void setTextTool();
   void setMermaidTool();
   void setFillTool();
+  void setColorSelectTool();
   void setArrowTool();
   void setCurvedArrowTool();
   void setPanTool();
@@ -167,6 +173,10 @@ public slots:
   void exportSelectionToPNG();
   void exportSelectionToJPG();
   void exportToPDF();
+  void extractColorSelectionToNewLayer();
+  void clearColorSelection();
+  void setColorSelectTolerance();
+  void toggleColorSelectContiguous();
   void openRecentFile(const QString &filePath);
   void addImageFromScreenshot(const QImage &image);
 
@@ -195,6 +205,7 @@ private:
     Text,
     Mermaid,
     Fill,
+    ColorSelect,
     Arrow,
     Pan,
     CurvedArrow
@@ -243,6 +254,12 @@ private:
   bool curvedArrowManualFlip_ = false;
   bool curvedArrowShiftWasDown_ = false;
   bool trackingSelectionMove_ = false;
+  int colorSelectTolerance_ = 32;
+  bool colorSelectContiguous_ = true;
+  ItemId colorSelectionItemId_;
+  QImage colorSelectionMask_;
+  bool colorSelectionHasPixels_ = false;
+  QGraphicsPixmapItem *colorSelectionOverlay_ = nullptr;
   QHash<ItemId, QPointF> selectionMoveStartPositions_;
 
   // Drawing state
@@ -268,6 +285,13 @@ private:
   void createMermaidItem(const QPointF &position);
   void loadDroppedImage(const QString &filePath, const QPointF &dropPosition);
   void exportToPDFWithFilename(const QString &fileName);
+  bool selectByColorAt(const QPointF &scenePoint,
+                       Qt::KeyboardModifiers modifiers);
+  QGraphicsPixmapItem *findPixmapItemAt(const QPointF &scenePoint) const;
+  QImage createColorSelectionMask(const QImage &image, const QPoint &seed,
+                                  int tolerance, bool contiguous) const;
+  void refreshColorSelectionOverlay();
+  void resetColorSelection();
   QRectF getSelectionBoundingRect() const;
   QPointF snapToGridPoint(const QPointF &point) const;
   QPointF calculateSmartDuplicateOffset() const;

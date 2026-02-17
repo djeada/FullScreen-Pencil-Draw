@@ -13,6 +13,7 @@ A vector and raster graphics editor built with C++ and Qt6. This application pro
 - **Eraser Tool**: Remove items with preview cursor
 - **Text Tool**: Add text annotations with LaTeX math support (`$...$` syntax)
 - **Fill Tool**: Fill closed shapes with current color
+- **Color Select Tool**: Select pixels by sampled color with tolerance
 - **Line Tool**: Draw straight lines
 - **Arrow Tool**: Draw arrows for diagrams and annotations
 - **Rectangle Tool**: Draw rectangles and squares
@@ -59,6 +60,7 @@ A vector and raster graphics editor built with C++ and Qt6. This application pro
 
 ### Core Features
 - **Layer System**: Layer management with visibility, opacity, and lock controls
+- **Extract Selection to Layer**: Move selected image colors to a new raster layer
 - **Brush Preview**: Visual preview widget showing brush size and color
 - **Opacity Control**: Adjust brush transparency with slider
 - **Brush Size Control**: Visual display with +/- buttons and keyboard shortcuts
@@ -105,6 +107,7 @@ A vector and raster graphics editor built with C++ and Qt6. This application pro
 | | `T` | Text tool |
 | | `M` | Mermaid diagram tool |
 | | `F` | Fill tool |
+| | `Q` | Color select tool |
 | | `L` | Line tool |
 | | `A` | Arrow tool |
 | | `R` | Rectangle tool |
@@ -125,6 +128,7 @@ A vector and raster graphics editor built with C++ and Qt6. This application pro
 | | `Ctrl+X` | Cut |
 | | `Ctrl+V` | Paste |
 | | `Ctrl+D` | Duplicate |
+| | `Ctrl+Shift+J` | Extract color selection to new layer |
 | | `Ctrl+A` | Select all |
 | | `Delete` | Delete selected |
 | **File** | `Ctrl+N` | New canvas |
@@ -283,4 +287,3 @@ The bundled KaTeX library is licensed under the MIT License. The bundled Mermaid
 ## Contact
 
 For questions or feedback, use [GitHub Issues](https://github.com/djeada/FullScreen-Pencil-Draw/issues).
-

@@ -33,6 +33,7 @@ signals:
   void eraserSelected();
   void textSelected();
   void fillSelected();
+  void colorSelectSelected();
   void arrowSelected();
   void curvedArrowSelected();
   void panSelected();
@@ -69,6 +70,7 @@ private:
   QAction *actionText;
   QAction *actionMermaid;
   QAction *actionFill;
+  QAction *actionColorSelect;
   QAction *actionArrow;
   QAction *actionCurvedArrow;
   QAction *actionPan;
@@ -125,6 +127,7 @@ public slots:
   void onActionText();
   void onActionMermaid();
   void onActionFill();
+  void onActionColorSelect();
   void onActionArrow();
   void onActionCurvedArrow();
   void onActionPan();
