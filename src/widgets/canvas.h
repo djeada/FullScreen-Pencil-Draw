@@ -179,6 +179,8 @@ public slots:
   void toggleColorSelectContiguous();
   void openRecentFile(const QString &filePath);
   void addImageFromScreenshot(const QImage &image);
+  void scaleSelectedItems();
+  void scaleActiveLayer();
 
 protected:
   void mousePressEvent(QMouseEvent *event) override;

@@ -7,9 +7,11 @@
 #include "../core/item_store.h"
 #include "../core/recent_files_manager.h"
 #include "../core/scene_controller.h"
+#include "../core/transform_action.h"
 #include "image_size_dialog.h"
 #include "latex_text_item.h"
 #include "mermaid_text_item.h"
+#include "scale_dialog.h"
 #include "transform_handle_item.h"
 #include <QApplication>
 #include <QClipboard>
@@ -3059,33 +3061,45 @@ void Canvas::addImageFromScreenshot(const QImage &image) {
   // Convert QImage to QPixmap
   QPixmap pixmap = QPixmap::fromImage(image);
 
-  // Create a graphics pixmap item
-  QGraphicsPixmapItem *pixmapItem = new QGraphicsPixmapItem(pixmap);
+  // Show dialog to specify dimensions (same as loadDroppedImage)
+  ImageSizeDialog dialog(pixmap.width(), pixmap.height(), this);
 
-  // Position the item at the center of the visible area
-  QPointF centerPos = mapToScene(viewport()->rect().center());
-  pixmapItem->setPos(centerPos.x() - pixmap.width() / 2.0,
-                     centerPos.y() - pixmap.height() / 2.0);
+  if (dialog.exec() == QDialog::Accepted) {
+    int newWidth = dialog.getWidth();
+    int newHeight = dialog.getHeight();
 
-  // Make the item selectable and movable
-  pixmapItem->setFlag(QGraphicsItem::ItemIsSelectable, true);
-  pixmapItem->setFlag(QGraphicsItem::ItemIsMovable, true);
+    QPixmap scaledPixmap = pixmap.scaled(newWidth, newHeight,
+                                         Qt::IgnoreAspectRatio,
+                                         Qt::SmoothTransformation);
 
-  // Add to scene via SceneController if available
-  if (sceneController_) {
-    sceneController_->addItem(pixmapItem);
-  } else {
-    scene_->addItem(pixmapItem);
+    // Create a graphics pixmap item
+    QGraphicsPixmapItem *pixmapItem = new QGraphicsPixmapItem(scaledPixmap);
+
+    // Position the item at the center of the visible area
+    QPointF centerPos = mapToScene(viewport()->rect().center());
+    pixmapItem->setPos(centerPos.x() - newWidth / 2.0,
+                       centerPos.y() - newHeight / 2.0);
+
+    // Make the item selectable and movable
+    pixmapItem->setFlag(QGraphicsItem::ItemIsSelectable, true);
+    pixmapItem->setFlag(QGraphicsItem::ItemIsMovable, true);
+
+    // Add to scene via SceneController if available
+    if (sceneController_) {
+      sceneController_->addItem(pixmapItem);
+    } else {
+      scene_->addItem(pixmapItem);
+    }
+
+    // Select the newly added item
+    scene_->clearSelection();
+    pixmapItem->setSelected(true);
+
+    // Add to undo stack
+    addDrawAction(pixmapItem);
+
+    emit canvasModified();
   }
-
-  // Select the newly added item
-  scene_->clearSelection();
-  pixmapItem->setSelected(true);
-
-  // Add to undo stack
-  addDrawAction(pixmapItem);
-
-  emit canvasModified();
 }
 
 void Canvas::contextMenuEvent(QContextMenuEvent *event) {
@@ -3600,4 +3614,111 @@ void Canvas::applyRotationToOtherItems(QGraphicsItem *sourceItem,
     if (handle)
       handle->updateHandles();
   }
+}
+
+void Canvas::scaleSelectedItems() {
+  if (!scene_) {
+    return;
+  }
+
+  QList<QGraphicsItem *> selected = scene_->selectedItems();
+  if (selected.isEmpty()) {
+    return;
+  }
+
+  ScaleDialog dialog(this);
+  if (dialog.exec() != QDialog::Accepted) {
+    return;
+  }
+
+  double sx = dialog.scaleX();
+  double sy = dialog.scaleY();
+  if (qFuzzyCompare(sx, 1.0) && qFuzzyCompare(sy, 1.0)) {
+    return;
+  }
+
+  // Compute combined bounding center
+  QRectF bounds;
+  for (QGraphicsItem *item : selected) {
+    bounds =
+        bounds.united(item->mapToScene(item->boundingRect()).boundingRect());
+  }
+  QPointF center = bounds.center();
+
+  for (QGraphicsItem *item : selected) {
+    QTransform oldTransform = item->transform();
+    QPointF oldPos = item->pos();
+
+    QTransform newTransform = oldTransform;
+    newTransform.scale(sx, sy);
+    item->setTransform(newTransform);
+
+    QPointF offset = oldPos - center;
+    QPointF newPos = center + QPointF(offset.x() * sx, offset.y() * sy);
+    item->setPos(newPos);
+
+    // Record undo action
+    if (sceneController_) {
+      ItemId id = sceneController_->idForItem(item);
+      if (id.isValid()) {
+        addAction(std::make_unique<TransformAction>(
+            id, sceneController_->itemStore(), oldTransform, item->transform(),
+            oldPos, item->pos()));
+      }
+    }
+  }
+
+  updateTransformHandles();
+  emit canvasModified();
+}
+
+void Canvas::scaleActiveLayer() {
+  if (!layerManager_ || !sceneController_) {
+    return;
+  }
+
+  Layer *layer = layerManager_->activeLayer();
+  if (!layer || layer->itemCount() == 0) {
+    return;
+  }
+
+  ScaleDialog dialog(this);
+  if (dialog.exec() != QDialog::Accepted) {
+    return;
+  }
+
+  double sx = dialog.scaleX();
+  double sy = dialog.scaleY();
+  if (qFuzzyCompare(sx, 1.0) && qFuzzyCompare(sy, 1.0)) {
+    return;
+  }
+
+  // Save state for undo before scaling
+  struct ItemState {
+    ItemId id;
+    QTransform transform;
+    QPointF pos;
+  };
+  QList<ItemState> oldStates;
+  for (const ItemId &id : layer->itemIds()) {
+    QGraphicsItem *item = sceneController_->item(id);
+    if (item) {
+      oldStates.append({id, item->transform(), item->pos()});
+    }
+  }
+
+  sceneController_->scaleLayer(layer, sx, sy);
+
+  // Record undo actions
+  for (const ItemState &state : oldStates) {
+    QGraphicsItem *item = sceneController_->item(state.id);
+    if (item) {
+      addAction(std::make_unique<TransformAction>(
+          state.id, sceneController_->itemStore(), state.transform,
+          item->transform(), state.pos, item->pos()));
+    }
+  }
+
+  updateTransformHandles();
+  emit canvasModified();
 }
