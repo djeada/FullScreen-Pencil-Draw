@@ -7,11 +7,11 @@
 #include "../core/item_store.h"
 #include "../core/recent_files_manager.h"
 #include "../core/scene_controller.h"
-#include "image_size_dialog.h"
-#include "scale_dialog.h"
 #include "../core/transform_action.h"
+#include "image_size_dialog.h"
 #include "latex_text_item.h"
 #include "mermaid_text_item.h"
+#include "scale_dialog.h"
 #include "transform_handle_item.h"
 #include <QApplication>
 #include <QClipboard>
