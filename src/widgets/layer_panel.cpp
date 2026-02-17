@@ -41,16 +41,15 @@ void LayerTreeWidget::dropEvent(QDropEvent *event) {
   QTreeWidgetItem *draggedItem = draggedItems.first();
 
   // Only allow reordering child items (not layers)
-  bool isLayer =
-      draggedItem->data(0, LayerPanel::IsLayerRole).toBool();
+  bool isLayer = draggedItem->data(0, LayerPanel::IsLayerRole).toBool();
   if (isLayer) {
     event->ignore();
     return;
   }
 
   // Get the item being dragged
-  ItemId itemId =
-      ItemId::fromString(draggedItem->data(0, LayerPanel::ItemIdRole).toString());
+  ItemId itemId = ItemId::fromString(
+      draggedItem->data(0, LayerPanel::ItemIdRole).toString());
   QUuid layerId(draggedItem->data(0, LayerPanel::LayerIdRole).toString());
   int oldItemIndex = draggedItem->data(0, LayerPanel::ItemIndexRole).toInt();
 
@@ -63,8 +62,7 @@ void LayerTreeWidget::dropEvent(QDropEvent *event) {
 
   // Determine parent (must be same layer)
   QTreeWidgetItem *targetParent = dropTarget->parent();
-  bool droppingOnLayer =
-      dropTarget->data(0, LayerPanel::IsLayerRole).toBool();
+  bool droppingOnLayer = dropTarget->data(0, LayerPanel::IsLayerRole).toBool();
 
   if (droppingOnLayer) {
     targetParent = dropTarget;
@@ -76,7 +74,8 @@ void LayerTreeWidget::dropEvent(QDropEvent *event) {
   }
 
   // Verify same layer
-  QUuid targetLayerId(targetParent->data(0, LayerPanel::LayerIdRole).toString());
+  QUuid targetLayerId(
+      targetParent->data(0, LayerPanel::LayerIdRole).toString());
   if (targetLayerId != layerId) {
     event->ignore();
     return;
@@ -419,8 +418,7 @@ void LayerPanel::refreshLayerList() {
   for (int i = 0; i < layerTree_->topLevelItemCount(); ++i) {
     QTreeWidgetItem *item = layerTree_->topLevelItem(i);
     if (item->isExpanded()) {
-      expandedLayers.insert(
-          QUuid(item->data(0, LayerIdRole).toString()));
+      expandedLayers.insert(QUuid(item->data(0, LayerIdRole).toString()));
     }
   }
 

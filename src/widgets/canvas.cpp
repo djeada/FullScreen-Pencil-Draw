@@ -10,7 +10,6 @@
 #include "latex_text_item.h"
 #include "mermaid_text_item.h"
 #include "transform_handle_item.h"
-#include <algorithm>
 #include <QApplication>
 #include <QClipboard>
 #include <QColorDialog>
@@ -33,6 +32,7 @@
 #include <QPdfWriter>
 #include <QPointer>
 #include <QScrollBar>
+#include <algorithm>
 #ifdef HAVE_QT_SVG
 #include <QSvgGenerator>
 #endif
@@ -1051,8 +1051,7 @@ void Canvas::bringForward() {
       continue;
     layerManager_->moveItemUp(info.id);
     composite->addAction(std::make_unique<ReorderAction>(
-        info.id, info.layer->id(), currentIdx, currentIdx + 1,
-        layerManager_));
+        info.id, info.layer->id(), currentIdx, currentIdx + 1, layerManager_));
   }
   if (!composite->isEmpty()) {
     undoStack_.push_back(std::move(composite));
@@ -1106,8 +1105,7 @@ void Canvas::sendBackward() {
       continue;
     layerManager_->moveItemDown(info.id);
     composite->addAction(std::make_unique<ReorderAction>(
-        info.id, info.layer->id(), currentIdx, currentIdx - 1,
-        layerManager_));
+        info.id, info.layer->id(), currentIdx, currentIdx - 1, layerManager_));
   }
   if (!composite->isEmpty()) {
     undoStack_.push_back(std::move(composite));
@@ -3088,9 +3086,8 @@ void Canvas::applyResizeToOtherItems(QGraphicsItem *sourceItem, qreal scaleX,
       QRectF bounds =
           textItem->mapToScene(textItem->boundingRect()).boundingRect();
       QPointF center = bounds.center();
-      QPointF newCenter =
-          anchor + QPointF((center.x() - anchor.x()) * scaleX,
-                           (center.y() - anchor.y()) * scaleY);
+      QPointF newCenter = anchor + QPointF((center.x() - anchor.x()) * scaleX,
+                                           (center.y() - anchor.y()) * scaleY);
       QPointF localCenter = textItem->mapFromScene(center);
       QPointF newSceneCenter = textItem->mapToScene(localCenter);
       textItem->setPos(textItem->pos() + (newCenter - newSceneCenter));

@@ -152,8 +152,8 @@ class LayerManager;
  */
 class ReorderAction : public Action {
 public:
-  ReorderAction(const ItemId &itemId, const QUuid &layerId,
-                int oldIndex, int newIndex, LayerManager *layerManager);
+  ReorderAction(const ItemId &itemId, const QUuid &layerId, int oldIndex,
+                int newIndex, LayerManager *layerManager);
   ~ReorderAction() override;
 
   void undo() override;
