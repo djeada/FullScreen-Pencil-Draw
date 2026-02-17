@@ -418,6 +418,13 @@ public:
   bool mergeDown(int index);
 
   /**
+   * @brief Merge selected items within a layer into a QGraphicsItemGroup
+   * @param ids The ItemIds of items to merge (must all be in the same layer)
+   * @return The ItemId of the new group, or invalid ItemId if failed
+   */
+  ItemId mergeItems(const QList<ItemId> &ids);
+
+  /**
    * @brief Flatten all layers into one
    * @return Pointer to the resulting layer
    */

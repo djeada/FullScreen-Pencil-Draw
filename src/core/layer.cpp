@@ -5,6 +5,7 @@
 #include "layer.h"
 #include "item_store.h"
 #include "scene_controller.h"
+#include <QGraphicsItemGroup>
 #include <algorithm>
 
 // Layer implementation
@@ -495,6 +496,61 @@ bool LayerManager::mergeDown(int index) {
 
   // Delete the source layer
   return deleteLayer(index);
+}
+
+ItemId LayerManager::mergeItems(const QList<ItemId> &ids) {
+  if (ids.size() < 2 || !itemStore_ || !scene_) {
+    return ItemId();
+  }
+
+  // All items must be in the same layer
+  Layer *layer = findLayerForItem(ids.first());
+  if (!layer) {
+    return ItemId();
+  }
+
+  for (const ItemId &id : ids) {
+    if (findLayerForItem(id) != layer) {
+      return ItemId();
+    }
+  }
+
+  // Resolve to QGraphicsItems
+  QList<QGraphicsItem *> items;
+  for (const ItemId &id : ids) {
+    QGraphicsItem *item = itemStore_->item(id);
+    if (!item) {
+      return ItemId();
+    }
+    items.append(item);
+  }
+
+  // Create the group via scene
+  QGraphicsItemGroup *group = scene_->createItemGroup(items);
+  if (!group) {
+    return ItemId();
+  }
+
+  // Make the group interactive
+  group->setFlag(QGraphicsItem::ItemIsSelectable, true);
+  group->setFlag(QGraphicsItem::ItemIsMovable, true);
+
+  // Remove individual items from layer and unregister from ItemStore.
+  // The items are not deleted — they become children of the group
+  // via createItemGroup, which manages their lifetime.
+  for (const ItemId &id : ids) {
+    layer->removeItem(id);
+    itemStore_->unregisterItem(id);
+  }
+
+  // Register the group with ItemStore and add to layer
+  ItemId groupId = itemStore_->registerItem(group);
+  layer->addItem(groupId, itemStore_);
+
+  updateLayerZOrder();
+  emit itemOrderChanged();
+
+  return groupId;
 }
 
 Layer *LayerManager::flattenAll() {
