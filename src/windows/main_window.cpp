@@ -116,8 +116,9 @@ MainWindow::~MainWindow() {}
 
 void MainWindow::setupStatusBar() {
   _statusLabel =
-      new QLabel("✦ Ready | P:Pen E:Eraser T:Text F:Fill L:Line A:Arrow R:Rect "
-                 "C:Circle S:Select H:Pan | G:Grid B:Filled | Ctrl+Scroll:Zoom",
+      new QLabel("✦ Ready | P:Pen E:Eraser T:Text F:Fill Q:ColorSelect "
+                 "L:Line A:Arrow R:Rect C:Circle S:Select H:Pan | G:Grid "
+                 "B:Filled | Ctrl+Scroll:Zoom",
                  this);
   _measurementLabel = new QLabel("", this);
   statusBar()->addWidget(_statusLabel);
@@ -149,6 +150,8 @@ void MainWindow::setupConnections() {
   connect(_toolPanel, &ToolPanel::mermaidSelected, _canvas,
           &Canvas::setMermaidTool);
   connect(_toolPanel, &ToolPanel::fillSelected, _canvas, &Canvas::setFillTool);
+  connect(_toolPanel, &ToolPanel::colorSelectSelected, _canvas,
+          &Canvas::setColorSelectTool);
   connect(_toolPanel, &ToolPanel::arrowSelected, _canvas,
           &Canvas::setArrowTool);
   connect(_toolPanel, &ToolPanel::curvedArrowSelected, _canvas,
@@ -341,6 +344,9 @@ void MainWindow::setupMenuBar() {
                SLOT(deleteSelectedItems()));
   createAction(editMenu, "D&uplicate", QKeySequence(Qt::CTRL | Qt::Key_D),
                _canvas, SLOT(duplicateSelectedItems()));
+  createAction(editMenu, "Extract Color Selection to New Layer",
+               QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_J), _canvas,
+               SLOT(extractColorSelectionToNewLayer()));
 
   // View menu
   QMenu *viewMenu = menuBar->addMenu("&View");
@@ -430,6 +436,29 @@ void MainWindow::setupMenuBar() {
   });
   _autoSaveAction->setCheckable(true);
   _autoSaveAction->setChecked(true); // Enabled by default
+
+  toolsMenu->addSeparator();
+
+  QAction *colorToleranceAction =
+      toolsMenu->addAction("Color Select &Tolerance...");
+  connect(colorToleranceAction, &QAction::triggered, _canvas,
+          &Canvas::setColorSelectTolerance);
+
+  QAction *contiguousColorSelectAction =
+      toolsMenu->addAction("Color Select &Contiguous");
+  contiguousColorSelectAction->setCheckable(true);
+  contiguousColorSelectAction->setChecked(_canvas->isColorSelectContiguous());
+  connect(contiguousColorSelectAction, &QAction::triggered, this,
+          [this, contiguousColorSelectAction]() {
+            _canvas->toggleColorSelectContiguous();
+            contiguousColorSelectAction->setChecked(
+                _canvas->isColorSelectContiguous());
+          });
+
+  QAction *clearColorSelectionAction =
+      toolsMenu->addAction("Clear Color Selection");
+  connect(clearColorSelectionAction, &QAction::triggered, _canvas,
+          &Canvas::clearColorSelection);
 
   // Help menu
   QMenu *helpMenu = menuBar->addMenu("&Help");
@@ -638,6 +667,10 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
     onNewCanvas();
   } else if (event->matches(QKeySequence::SelectAll)) {
     _canvas->selectAll();
+  } else if (event->key() == Qt::Key_J &&
+             (event->modifiers() & Qt::ControlModifier) &&
+             (event->modifiers() & Qt::ShiftModifier)) {
+    _canvas->extractColorSelectionToNewLayer();
   } else if (event->key() == Qt::Key_Escape) {
     this->close();
   } else if (event->key() == Qt::Key_Delete ||
@@ -664,6 +697,9 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
     _toolPanel->onActionMermaid();
   } else if (event->key() == Qt::Key_F) {
     _toolPanel->onActionFill();
+  } else if (event->key() == Qt::Key_Q &&
+             !(event->modifiers() & Qt::ControlModifier)) {
+    _toolPanel->onActionColorSelect();
   } else if (event->key() == Qt::Key_L) {
     _toolPanel->onActionLine();
   } else if (event->key() == Qt::Key_A &&

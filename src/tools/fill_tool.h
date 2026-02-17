@@ -1,6 +1,6 @@
 /**
  * @file fill_tool.h
- * @brief Fill tool for coloring shapes.
+ * @brief Fill tool for recoloring supported scene items.
  */
 #ifndef FILL_TOOL_H
 #define FILL_TOOL_H
@@ -8,9 +8,10 @@
 #include "tool.h"
 
 /**
- * @brief Tool for filling closed shapes with color.
+ * @brief Tool for recoloring the clicked drawable item with current color.
  *
- * Clicking on a shape fills it with the current color.
+ * The tool supports shape fills, line/path stroke recolor, text recolor,
+ * grouped items, Mermaid theme updates, and pixmap tinting.
  */
 class FillTool : public Tool {
 public:
