@@ -98,6 +98,8 @@ private slots:
   void onMoveLayerDown();
   void onDuplicateLayer();
   void onMergeDown();
+  void onMergeSelectedItems();
+  void onFlattenAll();
   void onTreeSelectionChanged();
   void onOpacityChanged(int value);
   void onVisibilityToggled();
@@ -115,6 +117,8 @@ private:
   QPushButton *moveDownButton_;
   QPushButton *duplicateButton_;
   QPushButton *mergeButton_;
+  QPushButton *mergeItemsButton_;
+  QPushButton *flattenButton_;
   QPushButton *visibilityButton_;
   QPushButton *lockButton_;
   QSlider *opacitySlider_;

@@ -16,7 +16,9 @@
 #include "../src/core/item_id.h"
 #include "../src/core/item_ref.h"
 #include "../src/core/item_store.h"
+#include "../src/core/layer.h"
 #include "../src/core/scene_controller.h"
+#include <QGraphicsItemGroup>
 #include <QGraphicsPathItem>
 #include <QGraphicsRectItem>
 #include <QGraphicsScene>
@@ -564,6 +566,134 @@ private slots:
     // Ref should be valid again after restore
     QVERIFY(ref.isValid());
     QCOMPARE(ref.get(), rect);
+  }
+
+  // ========== Layer Merge Tests ==========
+
+  void testMergeItemsCreatesGroup() {
+    QGraphicsScene scene;
+    SceneController controller(&scene);
+    LayerManager manager(&scene);
+    controller.setLayerManager(&manager);
+
+    // Add items to active layer
+    auto *rect1 = new QGraphicsRectItem(0, 0, 50, 50);
+    auto *rect2 = new QGraphicsRectItem(60, 0, 50, 50);
+    ItemId id1 = controller.addItem(rect1);
+    ItemId id2 = controller.addItem(rect2);
+
+    Layer *layer = manager.activeLayer();
+    QVERIFY(layer);
+    QCOMPARE(layer->itemCount(), 2);
+
+    // Merge items
+    QList<ItemId> ids = {id1, id2};
+    ItemId groupId = manager.mergeItems(ids);
+
+    QVERIFY(groupId.isValid());
+    // Layer should now have 1 item (the group)
+    QCOMPARE(layer->itemCount(), 1);
+    QVERIFY(layer->containsItem(groupId));
+
+    // The group should be a QGraphicsItemGroup
+    QGraphicsItem *groupItem = controller.itemStore()->item(groupId);
+    QVERIFY(groupItem);
+    QVERIFY(dynamic_cast<QGraphicsItemGroup *>(groupItem) != nullptr);
+
+    // Original items should no longer be in ItemStore
+    QVERIFY(!controller.itemStore()->contains(id1));
+    QVERIFY(!controller.itemStore()->contains(id2));
+  }
+
+  void testMergeItemsRequiresAtLeastTwo() {
+    QGraphicsScene scene;
+    SceneController controller(&scene);
+    LayerManager manager(&scene);
+    controller.setLayerManager(&manager);
+
+    auto *rect = new QGraphicsRectItem(0, 0, 50, 50);
+    ItemId id = controller.addItem(rect);
+
+    // Merging a single item should fail
+    QList<ItemId> ids = {id};
+    ItemId groupId = manager.mergeItems(ids);
+    QVERIFY(!groupId.isValid());
+  }
+
+  void testMergeItemsFromDifferentLayersFails() {
+    QGraphicsScene scene;
+    SceneController controller(&scene);
+    LayerManager manager(&scene);
+    controller.setLayerManager(&manager);
+
+    // Add item to first layer
+    auto *rect1 = new QGraphicsRectItem(0, 0, 50, 50);
+    ItemId id1 = controller.addItem(rect1);
+
+    // Create second layer and add item to it
+    manager.createLayer("Layer 2");
+    manager.setActiveLayer(1);
+    auto *rect2 = new QGraphicsRectItem(60, 0, 50, 50);
+    ItemId id2 = controller.addItem(rect2);
+
+    // Merging items from different layers should fail
+    QList<ItemId> ids = {id1, id2};
+    ItemId groupId = manager.mergeItems(ids);
+    QVERIFY(!groupId.isValid());
+  }
+
+  void testFlattenAllMergesLayers() {
+    QGraphicsScene scene;
+    SceneController controller(&scene);
+    LayerManager manager(&scene);
+    controller.setLayerManager(&manager);
+
+    // Add items to first layer
+    auto *rect1 = new QGraphicsRectItem(0, 0, 50, 50);
+    controller.addItem(rect1);
+
+    // Create second layer and add item
+    manager.createLayer("Layer 2");
+    manager.setActiveLayer(1);
+    auto *rect2 = new QGraphicsRectItem(60, 0, 50, 50);
+    controller.addItem(rect2);
+
+    QCOMPARE(manager.layerCount(), 2);
+
+    // Flatten all
+    Layer *flattened = manager.flattenAll();
+    QVERIFY(flattened);
+    QCOMPARE(manager.layerCount(), 1);
+    QCOMPARE(flattened->itemCount(), 2);
+    QCOMPARE(flattened->name(), "Flattened");
+  }
+
+  void testMergeDownCombinesLayers() {
+    QGraphicsScene scene;
+    SceneController controller(&scene);
+    LayerManager manager(&scene);
+    controller.setLayerManager(&manager);
+
+    // Add item to first layer (index 0)
+    auto *rect1 = new QGraphicsRectItem(0, 0, 50, 50);
+    controller.addItem(rect1);
+
+    // Create second layer (index 1) and add item
+    manager.createLayer("Layer 2");
+    manager.setActiveLayer(1);
+    auto *rect2 = new QGraphicsRectItem(60, 0, 50, 50);
+    controller.addItem(rect2);
+
+    QCOMPARE(manager.layerCount(), 2);
+
+    // Merge layer 1 down into layer 0
+    bool merged = manager.mergeDown(1);
+    QVERIFY(merged);
+    QCOMPARE(manager.layerCount(), 1);
+
+    Layer *remaining = manager.layer(0);
+    QVERIFY(remaining);
+    QCOMPARE(remaining->itemCount(), 2);
   }
 };
 
