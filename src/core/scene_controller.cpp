@@ -131,6 +131,55 @@ bool SceneController::transformItem(const ItemId &id,
   return true;
 }
 
+int SceneController::scaleLayer(Layer *layer, qreal sx, qreal sy) {
+  if (!layer || !itemStore_) {
+    return 0;
+  }
+
+  // Collect valid items and compute bounding center
+  QList<QGraphicsItem *> validItems;
+  for (const ItemId &id : layer->itemIds()) {
+    QGraphicsItem *item = itemStore_->item(id);
+    if (item) {
+      validItems.append(item);
+    }
+  }
+
+  if (validItems.isEmpty()) {
+    return 0;
+  }
+
+  // Compute combined bounding rect of all items
+  QRectF bounds;
+  for (QGraphicsItem *item : validItems) {
+    bounds = bounds.united(item->mapToScene(item->boundingRect()).boundingRect());
+  }
+  QPointF center = bounds.center();
+
+  // Scale each item around the common center
+  for (QGraphicsItem *item : validItems) {
+    QTransform t = item->transform();
+    QPointF pos = item->pos();
+
+    // Apply scale to existing transform
+    QTransform newTransform = t;
+    newTransform.scale(sx, sy);
+    item->setTransform(newTransform);
+
+    // Adjust position relative to center
+    QPointF offset = pos - center;
+    QPointF newPos = center + QPointF(offset.x() * sx, offset.y() * sy);
+    item->setPos(newPos);
+
+    ItemId id = itemStore_->idForItem(item);
+    if (id.isValid()) {
+      emit itemModified(id);
+    }
+  }
+
+  return validItems.size();
+}
+
 void SceneController::flushDeletions() { doFlushDeletions(); }
 
 void SceneController::scheduleDeletionFlush() {

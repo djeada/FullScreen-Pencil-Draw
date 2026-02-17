@@ -16,6 +16,7 @@
 #include "../src/core/item_id.h"
 #include "../src/core/item_ref.h"
 #include "../src/core/item_store.h"
+#include "../src/core/layer.h"
 #include "../src/core/scene_controller.h"
 #include <QGraphicsPathItem>
 #include <QGraphicsRectItem>
@@ -564,6 +565,87 @@ private slots:
     // Ref should be valid again after restore
     QVERIFY(ref.isValid());
     QCOMPARE(ref.get(), rect);
+  }
+
+  // ========== ScaleLayer Tests ==========
+
+  void testScaleLayerScalesItems() {
+    QGraphicsScene scene;
+    SceneController controller(&scene);
+    LayerManager layerManager(&scene);
+    controller.setLayerManager(&layerManager);
+
+    Layer *layer = layerManager.activeLayer();
+    QVERIFY(layer);
+
+    // Add two items
+    auto *rect1 = new QGraphicsRectItem(0, 0, 50, 50);
+    rect1->setPos(0, 0);
+    controller.addItem(rect1);
+
+    auto *rect2 = new QGraphicsRectItem(0, 0, 50, 50);
+    rect2->setPos(100, 0);
+    controller.addItem(rect2);
+
+    QCOMPARE(layer->itemCount(), 2);
+
+    // Scale the layer by 2x
+    int scaled = controller.scaleLayer(layer, 2.0, 2.0);
+    QCOMPARE(scaled, 2);
+
+    // Items should have scale transforms applied
+    QTransform t1 = rect1->transform();
+    QTransform t2 = rect2->transform();
+
+    // Both items should have 2x scale transform
+    QVERIFY(qFuzzyCompare(t1.m11(), 2.0));
+    QVERIFY(qFuzzyCompare(t1.m22(), 2.0));
+    QVERIFY(qFuzzyCompare(t2.m11(), 2.0));
+    QVERIFY(qFuzzyCompare(t2.m22(), 2.0));
+  }
+
+  void testScaleLayerEmptyLayer() {
+    QGraphicsScene scene;
+    SceneController controller(&scene);
+    LayerManager layerManager(&scene);
+    controller.setLayerManager(&layerManager);
+
+    Layer *layer = layerManager.activeLayer();
+    QVERIFY(layer);
+    QCOMPARE(layer->itemCount(), 0);
+
+    int scaled = controller.scaleLayer(layer, 2.0, 2.0);
+    QCOMPARE(scaled, 0);
+  }
+
+  void testScaleLayerNullLayer() {
+    QGraphicsScene scene;
+    SceneController controller(&scene);
+
+    int scaled = controller.scaleLayer(nullptr, 2.0, 2.0);
+    QCOMPARE(scaled, 0);
+  }
+
+  void testScaleLayerNonUniform() {
+    QGraphicsScene scene;
+    SceneController controller(&scene);
+    LayerManager layerManager(&scene);
+    controller.setLayerManager(&layerManager);
+
+    Layer *layer = layerManager.activeLayer();
+    QVERIFY(layer);
+
+    auto *rect = new QGraphicsRectItem(0, 0, 50, 50);
+    rect->setPos(0, 0);
+    controller.addItem(rect);
+
+    // Scale non-uniformly (2x width, 3x height)
+    int scaled = controller.scaleLayer(layer, 2.0, 3.0);
+    QCOMPARE(scaled, 1);
+
+    QTransform t = rect->transform();
+    QVERIFY(qFuzzyCompare(t.m11(), 2.0));
+    QVERIFY(qFuzzyCompare(t.m22(), 3.0));
   }
 };
 

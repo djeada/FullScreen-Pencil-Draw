@@ -159,6 +159,15 @@ public:
    */
   bool transformItem(const ItemId &id, const QTransform &transform);
 
+  /**
+   * @brief Scale all items in a layer around its center
+   * @param layer The layer whose items should be scaled
+   * @param sx Horizontal scale factor
+   * @param sy Vertical scale factor
+   * @return The number of items that were scaled
+   */
+  int scaleLayer(Layer *layer, qreal sx, qreal sy);
+
   // ========== Deferred Deletion ==========
 
   /**

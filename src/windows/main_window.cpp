@@ -424,6 +424,15 @@ void MainWindow::setupMenuBar() {
                QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_U), _canvas,
                SLOT(ungroupSelectedItems()));
 
+  // Edit menu - scaling
+  editMenu->addSeparator();
+  createAction(editMenu, "Scale &Selected Items...",
+               QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_S), _canvas,
+               SLOT(scaleSelectedItems()));
+  createAction(editMenu, "Scale Active &Layer...",
+               QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_R), _canvas,
+               SLOT(scaleActiveLayer()));
+
   // Tools menu
   QMenu *toolsMenu = menuBar->addMenu("&Tools");
 
