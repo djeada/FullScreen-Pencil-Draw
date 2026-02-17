@@ -259,6 +259,29 @@ void LayerPanel::setupUI() {
   controlsRow2->addStretch();
   mainLayout->addLayout(controlsRow2);
 
+  // Layer controls row 3 - Merge Items/Flatten All
+  QHBoxLayout *controlsRow3 = new QHBoxLayout();
+  controlsRow3->setSpacing(4);
+
+  mergeItemsButton_ =
+      new QPushButton(QString::fromUtf8("\xe2\x8a\x9e"), container); // ⊞
+  mergeItemsButton_->setToolTip("Merge selected items into group");
+  mergeItemsButton_->setMinimumSize(40, 40);
+  connect(mergeItemsButton_, &QPushButton::clicked, this,
+          &LayerPanel::onMergeSelectedItems);
+  controlsRow3->addWidget(mergeItemsButton_);
+
+  flattenButton_ =
+      new QPushButton(QString::fromUtf8("\xe2\x8a\x9f"), container); // ⊟
+  flattenButton_->setToolTip("Flatten all layers into one");
+  flattenButton_->setMinimumSize(40, 40);
+  connect(flattenButton_, &QPushButton::clicked, this,
+          &LayerPanel::onFlattenAll);
+  controlsRow3->addWidget(flattenButton_);
+
+  controlsRow3->addStretch();
+  mainLayout->addLayout(controlsRow3);
+
   // Opacity control
   QGroupBox *opacityGroup = new QGroupBox("Layer Opacity", container);
   QHBoxLayout *opacityLayout = new QHBoxLayout(opacityGroup);
@@ -533,6 +556,17 @@ void LayerPanel::updateButtonStates() {
   moveDownButton_->setEnabled(activeIndex < layerCount - 1 && activeIndex >= 0);
   mergeButton_->setEnabled(activeIndex > 0);
   duplicateButton_->setEnabled(activeIndex >= 0);
+  flattenButton_->setEnabled(layerCount > 1);
+
+  // Enable merge items button when 2+ child items are selected in the tree
+  int selectedItemCount = 0;
+  QList<QTreeWidgetItem *> selected = layerTree_->selectedItems();
+  for (QTreeWidgetItem *sel : selected) {
+    if (!sel->data(0, IsLayerRole).toBool()) {
+      selectedItemCount++;
+    }
+  }
+  mergeItemsButton_->setEnabled(selectedItemCount >= 2);
 }
 
 void LayerPanel::updatePropertyControls() {
@@ -615,6 +649,55 @@ void LayerPanel::onMergeDown() {
     int activeIndex = layerManager_->activeLayerIndex();
     layerManager_->mergeDown(activeIndex);
   }
+}
+
+void LayerPanel::onMergeSelectedItems() {
+  if (!layerManager_)
+    return;
+
+  // Collect selected child items (non-layer items) from the tree
+  QList<ItemId> selectedIds;
+  QList<QTreeWidgetItem *> selected = layerTree_->selectedItems();
+  for (QTreeWidgetItem *sel : selected) {
+    if (sel->data(0, IsLayerRole).toBool())
+      continue;
+    ItemId id = ItemId::fromString(sel->data(0, ItemIdRole).toString());
+    if (id.isValid()) {
+      selectedIds.append(id);
+    }
+  }
+
+  if (selectedIds.size() < 2) {
+    QMessageBox::information(this, "Merge Items",
+                             "Select at least 2 items within a layer to merge.");
+    return;
+  }
+
+  ItemId groupId = layerManager_->mergeItems(selectedIds);
+  if (!groupId.isValid()) {
+    QMessageBox::warning(
+        this, "Merge Items",
+        "Could not merge items. Ensure all selected items are in the same "
+        "layer.");
+  }
+}
+
+void LayerPanel::onFlattenAll() {
+  if (!layerManager_)
+    return;
+
+  if (layerManager_->layerCount() <= 1)
+    return;
+
+  QMessageBox::StandardButton reply = QMessageBox::question(
+      this, "Flatten All Layers",
+      "This will merge all layers into a single layer. Continue?",
+      QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+  if (reply != QMessageBox::Yes) {
+    return;
+  }
+
+  layerManager_->flattenAll();
 }
 
 void LayerPanel::onTreeSelectionChanged() {
