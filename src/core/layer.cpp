@@ -535,7 +535,9 @@ ItemId LayerManager::mergeItems(const QList<ItemId> &ids) {
   group->setFlag(QGraphicsItem::ItemIsSelectable, true);
   group->setFlag(QGraphicsItem::ItemIsMovable, true);
 
-  // Remove individual items from layer and unregister from ItemStore
+  // Remove individual items from layer and unregister from ItemStore.
+  // The items are not deleted — they become children of the group
+  // via createItemGroup, which manages their lifetime.
   for (const ItemId &id : ids) {
     layer->removeItem(id);
     itemStore_->unregisterItem(id);

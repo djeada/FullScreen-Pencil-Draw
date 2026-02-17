@@ -264,7 +264,7 @@ void LayerPanel::setupUI() {
   controlsRow3->setSpacing(4);
 
   mergeItemsButton_ =
-      new QPushButton(QString::fromUtf8("\xe2\x8a\x9e"), container);
+      new QPushButton(QString::fromUtf8("\xe2\x8a\x9e"), container); // ⊞
   mergeItemsButton_->setToolTip("Merge selected items into group");
   mergeItemsButton_->setMinimumSize(40, 40);
   connect(mergeItemsButton_, &QPushButton::clicked, this,
@@ -272,7 +272,7 @@ void LayerPanel::setupUI() {
   controlsRow3->addWidget(mergeItemsButton_);
 
   flattenButton_ =
-      new QPushButton(QString::fromUtf8("\xe2\x8a\x9f"), container);
+      new QPushButton(QString::fromUtf8("\xe2\x8a\x9f"), container); // ⊟
   flattenButton_->setToolTip("Flatten all layers into one");
   flattenButton_->setMinimumSize(40, 40);
   connect(flattenButton_, &QPushButton::clicked, this,
