@@ -502,6 +502,8 @@ void MainWindow::onToggleTheme() { ThemeManager::instance().toggleTheme(); }
 void MainWindow::setupLayerPanel() {
   if (_canvas && _canvas->layerManager()) {
     _layerPanel = new LayerPanel(_canvas->layerManager(), this);
+    _layerPanel->setCanvas(_canvas);
+    _layerPanel->setItemStore(_canvas->itemStore());
     addDockWidget(Qt::RightDockWidgetArea, _layerPanel);
 
     // Add panel visibility actions to View menu now that both panels exist

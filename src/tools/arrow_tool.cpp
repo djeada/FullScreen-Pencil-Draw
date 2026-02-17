@@ -5,6 +5,7 @@
 #include "arrow_tool.h"
 #include "../core/scene_controller.h"
 #include "../core/scene_renderer.h"
+#include <QGraphicsItemGroup>
 #include <cmath>
 
 #ifndef M_PI
@@ -50,17 +51,9 @@ void ArrowTool::finalizeShape(const QPointF &startPos, const QPointF &endPos) {
 void ArrowTool::drawArrow(const QPointF &start, const QPointF &end) {
   SceneController *controller = renderer_->sceneController();
 
-  // Create line
+  // Create line (no flags — the group itself will be selectable/movable)
   auto *line = new QGraphicsLineItem(QLineF(start, end));
   line->setPen(renderer_->currentPen());
-  line->setFlags(QGraphicsItem::ItemIsSelectable |
-                 QGraphicsItem::ItemIsMovable);
-
-  if (controller) {
-    controller->addItem(line);
-  } else {
-    renderer_->scene()->addItem(line);
-  }
 
   // Calculate arrowhead
   double angle = std::atan2(-(end.y() - start.y()), end.x() - start.x());
@@ -76,15 +69,19 @@ void ArrowTool::drawArrow(const QPointF &start, const QPointF &end) {
   auto *arrowHeadItem = new QGraphicsPolygonItem(arrowHead);
   arrowHeadItem->setPen(renderer_->currentPen());
   arrowHeadItem->setBrush(renderer_->currentPen().color());
-  arrowHeadItem->setFlags(QGraphicsItem::ItemIsSelectable |
-                          QGraphicsItem::ItemIsMovable);
+
+  // Group line + arrowhead into a single item
+  auto *group = new QGraphicsItemGroup();
+  group->addToGroup(line);
+  group->addToGroup(arrowHeadItem);
+  group->setFlags(QGraphicsItem::ItemIsSelectable |
+                  QGraphicsItem::ItemIsMovable);
 
   if (controller) {
-    controller->addItem(arrowHeadItem);
+    controller->addItem(group);
   } else {
-    renderer_->scene()->addItem(arrowHeadItem);
+    renderer_->scene()->addItem(group);
   }
 
-  renderer_->addDrawAction(line);
-  renderer_->addDrawAction(arrowHeadItem);
+  renderer_->addDrawAction(group);
 }

@@ -172,6 +172,49 @@ public:
   bool containsItem(const ItemId &id) const;
 
   /**
+   * @brief Move an item one position up (higher z-order) within this layer
+   * @param id The ItemId of the item to move
+   * @return true if the item was moved
+   */
+  bool moveItemUp(const ItemId &id);
+
+  /**
+   * @brief Move an item one position down (lower z-order) within this layer
+   * @param id The ItemId of the item to move
+   * @return true if the item was moved
+   */
+  bool moveItemDown(const ItemId &id);
+
+  /**
+   * @brief Move an item to the top (highest z-order) within this layer
+   * @param id The ItemId of the item to move
+   * @return true if the item was moved
+   */
+  bool moveItemToTop(const ItemId &id);
+
+  /**
+   * @brief Move an item to the bottom (lowest z-order) within this layer
+   * @param id The ItemId of the item to move
+   * @return true if the item was moved
+   */
+  bool moveItemToBottom(const ItemId &id);
+
+  /**
+   * @brief Move an item from one index to another within this layer
+   * @param fromIndex The current index of the item
+   * @param toIndex The target index
+   * @return true if the item was moved
+   */
+  bool moveItem(int fromIndex, int toIndex);
+
+  /**
+   * @brief Get the z-order index of an item within this layer
+   * @param id The ItemId to look up
+   * @return The index, or -1 if not found
+   */
+  int indexOfItem(const ItemId &id) const;
+
+  /**
    * @brief Clear all items from the layer
    * @note Items are not deleted, only removed from the layer
    */
@@ -312,6 +355,49 @@ public:
   bool moveLayerDown(int index);
 
   /**
+   * @brief Move an item one position up (higher z-order) within its layer
+   * @param id The ItemId of the item to move
+   * @return true if the item was moved
+   */
+  bool moveItemUp(const ItemId &id);
+
+  /**
+   * @brief Move an item one position down (lower z-order) within its layer
+   * @param id The ItemId of the item to move
+   * @return true if the item was moved
+   */
+  bool moveItemDown(const ItemId &id);
+
+  /**
+   * @brief Move an item to the top (highest z-order) within its layer
+   * @param id The ItemId of the item to move
+   * @return true if the item was moved
+   */
+  bool moveItemToTop(const ItemId &id);
+
+  /**
+   * @brief Move an item to the bottom (lowest z-order) within its layer
+   * @param id The ItemId of the item to move
+   * @return true if the item was moved
+   */
+  bool moveItemToBottom(const ItemId &id);
+
+  /**
+   * @brief Move an item to a specific index within its layer
+   * @param id The ItemId of the item to move
+   * @param newIndex The target index
+   * @return true if the item was moved
+   */
+  bool reorderItem(const ItemId &id, int newIndex);
+
+  /**
+   * @brief Find which layer contains a specific item by ItemId
+   * @param id The ItemId to search for
+   * @return Pointer to the containing layer, or nullptr
+   */
+  Layer *findLayerForItem(const ItemId &id) const;
+
+  /**
    * @brief Find which layer contains a specific item
    * @param item The graphics item
    * @return Pointer to the containing layer, or nullptr
@@ -378,6 +464,11 @@ signals:
    * @brief Emitted when layer order changes
    */
   void layerOrderChanged();
+
+  /**
+   * @brief Emitted when item order within a layer changes
+   */
+  void itemOrderChanged();
 
 private:
   QGraphicsScene *scene_;

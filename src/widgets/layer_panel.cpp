@@ -3,16 +3,130 @@
  * @brief Implementation of the layer panel widget.
  */
 #include "layer_panel.h"
+#include "../core/item_store.h"
 #include "../core/layer.h"
+#include "../core/scene_controller.h"
+#include "canvas.h"
+#include <QDropEvent>
+#include <QGraphicsEllipseItem>
+#include <QGraphicsItemGroup>
+#include <QGraphicsLineItem>
+#include <QGraphicsPathItem>
+#include <QGraphicsPixmapItem>
+#include <QGraphicsPolygonItem>
+#include <QGraphicsRectItem>
+#include <QGraphicsTextItem>
 #include <QGroupBox>
 #include <QHBoxLayout>
+#include <QHeaderView>
 #include <QMessageBox>
 #include <QVBoxLayout>
 
+// LayerTreeWidget implementation
+LayerTreeWidget::LayerTreeWidget(QWidget *parent) : QTreeWidget(parent) {}
+
+void LayerTreeWidget::dropEvent(QDropEvent *event) {
+  if (!layerManager_) {
+    QTreeWidget::dropEvent(event);
+    return;
+  }
+
+  // Get dragged item before Qt processes the drop
+  QList<QTreeWidgetItem *> draggedItems = selectedItems();
+  if (draggedItems.isEmpty()) {
+    QTreeWidget::dropEvent(event);
+    return;
+  }
+
+  QTreeWidgetItem *draggedItem = draggedItems.first();
+
+  // Only allow reordering child items (not layers)
+  bool isLayer =
+      draggedItem->data(0, LayerPanel::IsLayerRole).toBool();
+  if (isLayer) {
+    event->ignore();
+    return;
+  }
+
+  // Get the item being dragged
+  ItemId itemId =
+      ItemId::fromString(draggedItem->data(0, LayerPanel::ItemIdRole).toString());
+  QUuid layerId(draggedItem->data(0, LayerPanel::LayerIdRole).toString());
+  int oldItemIndex = draggedItem->data(0, LayerPanel::ItemIndexRole).toInt();
+
+  // Find drop target
+  QTreeWidgetItem *dropTarget = itemAt(event->position().toPoint());
+  if (!dropTarget) {
+    event->ignore();
+    return;
+  }
+
+  // Determine parent (must be same layer)
+  QTreeWidgetItem *targetParent = dropTarget->parent();
+  bool droppingOnLayer =
+      dropTarget->data(0, LayerPanel::IsLayerRole).toBool();
+
+  if (droppingOnLayer) {
+    targetParent = dropTarget;
+  }
+
+  if (!targetParent) {
+    event->ignore();
+    return;
+  }
+
+  // Verify same layer
+  QUuid targetLayerId(targetParent->data(0, LayerPanel::LayerIdRole).toString());
+  if (targetLayerId != layerId) {
+    event->ignore();
+    return;
+  }
+
+  // Calculate new index from drop position
+  // Tree shows items in reverse z-order (highest first), so we need to convert
+  DropIndicatorPosition dropPos = dropIndicatorPosition();
+  int visualIndex = 0;
+  if (droppingOnLayer) {
+    // Dropping on the layer itself means top of list = highest z
+    visualIndex = 0;
+  } else {
+    visualIndex = targetParent->indexOfChild(dropTarget);
+    if (dropPos == QAbstractItemView::BelowItem) {
+      visualIndex += 1;
+    }
+  }
+
+  // Convert visual index (0 = top = highest z) to layer index
+  Layer *layer = layerManager_->layer(layerId);
+  if (!layer) {
+    event->ignore();
+    return;
+  }
+  int totalItems = layer->itemCount();
+  int newItemIndex = totalItems - 1 - visualIndex;
+  if (newItemIndex < 0)
+    newItemIndex = 0;
+  if (newItemIndex >= totalItems)
+    newItemIndex = totalItems - 1;
+
+  if (newItemIndex != oldItemIndex && itemId.isValid()) {
+    layerManager_->reorderItem(itemId, newItemIndex);
+  }
+
+  // Don't let Qt handle the default move — we rebuild the tree via refresh
+  event->accept();
+  emit itemReordered();
+}
+
 LayerPanel::LayerPanel(LayerManager *manager, QWidget *parent)
-    : QDockWidget("Layers", parent), layerManager_(manager) {
+    : QDockWidget("Layers", parent), layerManager_(manager),
+      itemStore_(nullptr), canvas_(nullptr), updatingSelection_(false) {
   setupUI();
   refreshLayerList();
+
+  // Connect tree widget reorder signal
+  connect(layerTree_, &LayerTreeWidget::itemReordered, this,
+          &LayerPanel::refreshLayerList);
 
   // Connect layer manager signals
   if (layerManager_) {
@@ -24,10 +138,32 @@ LayerPanel::LayerPanel(LayerManager *manager, QWidget *parent)
             &LayerPanel::refreshLayerList);
     connect(layerManager_, &LayerManager::activeLayerChanged, this,
             &LayerPanel::refreshLayerList);
+    connect(layerManager_, &LayerManager::itemOrderChanged, this,
+            &LayerPanel::refreshLayerList);
   }
 }
 
 LayerPanel::~LayerPanel() = default;
+
+void LayerPanel::setCanvas(Canvas *canvas) {
+  canvas_ = canvas;
+  if (canvas_ && canvas_->scene()) {
+    connect(canvas_->scene(), &QGraphicsScene::selectionChanged, this,
+            &LayerPanel::onCanvasSelectionChanged);
+  }
+  // Refresh tree when items are actually added/removed (not on every canvas
+  // modification, which fires too often and destroys tree state mid-click).
+  if (canvas_ && canvas_->sceneController()) {
+    connect(canvas_->sceneController(), &SceneController::itemAdded, this,
+            &LayerPanel::refreshLayerList);
+    connect(canvas_->sceneController(), &SceneController::itemRemoved, this,
+            &LayerPanel::refreshLayerList);
+    connect(canvas_->sceneController(), &SceneController::itemRestored, this,
+            &LayerPanel::refreshLayerList);
+  }
+}
+
+void LayerPanel::setItemStore(ItemStore *store) { itemStore_ = store; }
 
 void LayerPanel::setupUI() {
   QWidget *container = new QWidget(this);
@@ -35,40 +171,49 @@ void LayerPanel::setupUI() {
   mainLayout->setContentsMargins(8, 8, 8, 8);
   mainLayout->setSpacing(8);
 
-  // Layer list
-  layerList_ = new QListWidget(container);
-  layerList_->setDragDropMode(QAbstractItemView::InternalMove);
-  layerList_->setSelectionMode(QAbstractItemView::SingleSelection);
-  layerList_->setMaximumHeight(200);
-  connect(layerList_, &QListWidget::currentRowChanged, this,
-          &LayerPanel::onLayerSelectionChanged);
-  mainLayout->addWidget(layerList_);
+  // Layer tree
+  layerTree_ = new LayerTreeWidget(container);
+  layerTree_->setLayerManager(layerManager_);
+  layerTree_->setHeaderHidden(true);
+  layerTree_->setColumnCount(1);
+  layerTree_->setSelectionMode(QAbstractItemView::ExtendedSelection);
+  layerTree_->setDragDropMode(QAbstractItemView::InternalMove);
+  layerTree_->setDefaultDropAction(Qt::MoveAction);
+  layerTree_->setDragEnabled(true);
+  layerTree_->setAcceptDrops(true);
+  layerTree_->setDropIndicatorShown(true);
+  layerTree_->setExpandsOnDoubleClick(false);
+  layerTree_->setIndentation(16);
+  layerTree_->setMaximumHeight(350);
+  connect(layerTree_, &QTreeWidget::itemSelectionChanged, this,
+          &LayerPanel::onTreeSelectionChanged);
+  mainLayout->addWidget(layerTree_);
 
   // Layer controls row 1 - Add/Delete/Duplicate/Merge
   QHBoxLayout *controlsRow1 = new QHBoxLayout();
   controlsRow1->setSpacing(4);
 
-  addButton_ = new QPushButton("＋", container);
+  addButton_ = new QPushButton(QString::fromUtf8("＋"), container);
   addButton_->setToolTip("Add new layer");
   addButton_->setMinimumSize(40, 40);
   connect(addButton_, &QPushButton::clicked, this, &LayerPanel::onAddLayer);
   controlsRow1->addWidget(addButton_);
 
-  deleteButton_ = new QPushButton("−", container);
+  deleteButton_ = new QPushButton(QString::fromUtf8("−"), container);
   deleteButton_->setToolTip("Delete layer");
   deleteButton_->setMinimumSize(40, 40);
   connect(deleteButton_, &QPushButton::clicked, this,
           &LayerPanel::onDeleteLayer);
   controlsRow1->addWidget(deleteButton_);
 
-  duplicateButton_ = new QPushButton("⧉", container);
+  duplicateButton_ = new QPushButton(QString::fromUtf8("⧉"), container);
   duplicateButton_->setToolTip("Duplicate layer");
   duplicateButton_->setMinimumSize(40, 40);
   connect(duplicateButton_, &QPushButton::clicked, this,
           &LayerPanel::onDuplicateLayer);
   controlsRow1->addWidget(duplicateButton_);
 
-  mergeButton_ = new QPushButton("⊕", container);
+  mergeButton_ = new QPushButton(QString::fromUtf8("⊕"), container);
   mergeButton_->setToolTip("Merge with layer below");
   mergeButton_->setMinimumSize(40, 40);
   connect(mergeButton_, &QPushButton::clicked, this, &LayerPanel::onMergeDown);
@@ -81,21 +226,22 @@ void LayerPanel::setupUI() {
   QHBoxLayout *controlsRow2 = new QHBoxLayout();
   controlsRow2->setSpacing(4);
 
-  moveUpButton_ = new QPushButton("▲", container);
+  moveUpButton_ = new QPushButton(QString::fromUtf8("▲"), container);
   moveUpButton_->setToolTip("Move layer up");
   moveUpButton_->setMinimumSize(40, 40);
   connect(moveUpButton_, &QPushButton::clicked, this,
           &LayerPanel::onMoveLayerUp);
   controlsRow2->addWidget(moveUpButton_);
 
-  moveDownButton_ = new QPushButton("▼", container);
+  moveDownButton_ = new QPushButton(QString::fromUtf8("▼"), container);
   moveDownButton_->setToolTip("Move layer down");
   moveDownButton_->setMinimumSize(40, 40);
   connect(moveDownButton_, &QPushButton::clicked, this,
           &LayerPanel::onMoveLayerDown);
   controlsRow2->addWidget(moveDownButton_);
 
-  visibilityButton_ = new QPushButton("👁", container);
+  visibilityButton_ =
+      new QPushButton(QString::fromUtf8("\xF0\x9F\x91\x81"), container);
   visibilityButton_->setToolTip("Toggle visibility");
   visibilityButton_->setMinimumSize(40, 40);
   visibilityButton_->setCheckable(true);
@@ -103,7 +249,8 @@ void LayerPanel::setupUI() {
           &LayerPanel::onVisibilityToggled);
   controlsRow2->addWidget(visibilityButton_);
 
-  lockButton_ = new QPushButton("🔒", container);
+  lockButton_ =
+      new QPushButton(QString::fromUtf8("\xF0\x9F\x94\x92"), container);
   lockButton_->setToolTip("Toggle lock");
   lockButton_->setMinimumSize(40, 40);
   lockButton_->setCheckable(true);
@@ -152,7 +299,7 @@ void LayerPanel::setupUI() {
       font-weight: 600;
       border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     }
-    QListWidget {
+    QTreeWidget {
       background-color: #161618;
       color: #f8f8fc;
       border: 1px solid rgba(255, 255, 255, 0.06);
@@ -160,17 +307,30 @@ void LayerPanel::setupUI() {
       padding: 6px;
       outline: none;
     }
-    QListWidget::item {
-      padding: 10px 12px;
-      border-radius: 8px;
-      margin: 2px;
+    QTreeWidget::item {
+      padding: 6px 8px;
+      border-radius: 6px;
+      margin: 1px;
     }
-    QListWidget::item:hover {
+    QTreeWidget::item:hover {
       background-color: rgba(255, 255, 255, 0.06);
     }
-    QListWidget::item:selected {
+    QTreeWidget::item:selected {
       background-color: #3b82f6;
       color: #ffffff;
+    }
+    QTreeWidget::branch {
+      background: transparent;
+    }
+    QTreeWidget::branch:has-children:!has-siblings:closed,
+    QTreeWidget::branch:closed:has-children:has-siblings {
+      image: none;
+      border-image: none;
+    }
+    QTreeWidget::branch:open:has-children:!has-siblings,
+    QTreeWidget::branch:open:has-children:has-siblings {
+      image: none;
+      border-image: none;
     }
     QPushButton {
       background-color: rgba(255, 255, 255, 0.06);
@@ -246,40 +406,121 @@ void LayerPanel::refreshLayerList() {
   if (!layerManager_)
     return;
 
-  // Block signals to prevent infinite recursion:
-  // setCurrentRow -> currentRowChanged -> onLayerSelectionChanged ->
-  // activeLayerChanged -> refreshLayerList
-  layerList_->blockSignals(true);
+  // Don't rebuild the tree during a selection interaction — it would
+  // destroy the items the user is clicking/dragging.
+  if (updatingSelection_)
+    return;
 
-  int currentRow = layerList_->currentRow();
-  layerList_->clear();
+  // Block signals to prevent infinite recursion
+  layerTree_->blockSignals(true);
 
-  // Add layers in reverse order (top layer first in list)
-  for (int i = layerManager_->layerCount() - 1; i >= 0; --i) {
-    Layer *layer = layerManager_->layer(i);
-    if (layer) {
-      QString prefix = layer->isVisible() ? "👁 " : "   ";
-      if (layer->isLocked()) {
-        prefix += "🔒 ";
-      }
-      layerList_->addItem(prefix + layer->name());
+  // Remember expanded state
+  QSet<QUuid> expandedLayers;
+  for (int i = 0; i < layerTree_->topLevelItemCount(); ++i) {
+    QTreeWidgetItem *item = layerTree_->topLevelItem(i);
+    if (item->isExpanded()) {
+      expandedLayers.insert(
+          QUuid(item->data(0, LayerIdRole).toString()));
     }
   }
 
-  // Restore or set selection
-  int activeIndex = layerManager_->activeLayerIndex();
-  if (activeIndex >= 0) {
-    // Convert to list index (reversed)
-    int listIndex = layerManager_->layerCount() - 1 - activeIndex;
-    layerList_->setCurrentRow(listIndex);
-  } else if (currentRow >= 0 && currentRow < layerList_->count()) {
-    layerList_->setCurrentRow(currentRow);
+  layerTree_->clear();
+
+  // Add layers in reverse order (top layer first in tree)
+  for (int i = layerManager_->layerCount() - 1; i >= 0; --i) {
+    Layer *layer = layerManager_->layer(i);
+    if (!layer)
+      continue;
+
+    QString prefix;
+    if (layer->isVisible()) {
+      prefix = QString::fromUtf8("\xF0\x9F\x91\x81 ");
+    } else {
+      prefix = "   ";
+    }
+    if (layer->isLocked()) {
+      prefix += QString::fromUtf8("\xF0\x9F\x94\x92 ");
+    }
+
+    QTreeWidgetItem *layerItem = new QTreeWidgetItem(layerTree_);
+    layerItem->setText(0, prefix + layer->name());
+    layerItem->setData(0, LayerIdRole, layer->id().toString());
+    layerItem->setData(0, IsLayerRole, true);
+    // Layers accept drops (items can be reordered within)
+    layerItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable |
+                        Qt::ItemIsDropEnabled);
+
+    // Add items in reverse order (top item first = last in itemIds)
+    const QList<ItemId> &ids = layer->itemIds();
+    for (int j = ids.size() - 1; j >= 0; --j) {
+      QTreeWidgetItem *childItem = new QTreeWidgetItem(layerItem);
+      childItem->setText(0, itemDescription(ids[j]));
+      childItem->setData(0, ItemIdRole, ids[j].toString());
+      childItem->setData(0, LayerIdRole, layer->id().toString());
+      childItem->setData(0, IsLayerRole, false);
+      childItem->setData(0, ItemIndexRole, j);
+      // Items can be dragged and selected
+      childItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable |
+                          Qt::ItemIsDragEnabled);
+    }
+
+    // Expand if was previously expanded, or expand by default
+    if (expandedLayers.contains(layer->id()) || expandedLayers.isEmpty()) {
+      layerItem->setExpanded(true);
+    }
   }
 
-  layerList_->blockSignals(false);
+  // Highlight active layer
+  int activeIndex = layerManager_->activeLayerIndex();
+  if (activeIndex >= 0) {
+    int treeIndex = layerManager_->layerCount() - 1 - activeIndex;
+    if (treeIndex >= 0 && treeIndex < layerTree_->topLevelItemCount()) {
+      QTreeWidgetItem *activeItem = layerTree_->topLevelItem(treeIndex);
+      QFont boldFont = activeItem->font(0);
+      boldFont.setBold(true);
+      activeItem->setFont(0, boldFont);
+    }
+  }
+
+  layerTree_->blockSignals(false);
 
   updateButtonStates();
   updatePropertyControls();
+}
+
+void LayerPanel::onCanvasSelectionChanged() {
+  if (updatingSelection_ || !canvas_ || !canvas_->scene() || !itemStore_)
+    return;
+
+  updatingSelection_ = true;
+  layerTree_->blockSignals(true);
+
+  // Clear tree selection
+  layerTree_->clearSelection();
+
+  // Find and select tree items matching canvas selection
+  QList<QGraphicsItem *> selected = canvas_->scene()->selectedItems();
+  for (QGraphicsItem *gItem : selected) {
+    ItemId id = itemStore_->idForItem(gItem);
+    if (!id.isValid())
+      continue;
+
+    QString idStr = id.toString();
+    // Search all child items in tree
+    for (int i = 0; i < layerTree_->topLevelItemCount(); ++i) {
+      QTreeWidgetItem *layerItem = layerTree_->topLevelItem(i);
+      for (int j = 0; j < layerItem->childCount(); ++j) {
+        QTreeWidgetItem *child = layerItem->child(j);
+        if (child->data(0, ItemIdRole).toString() == idStr) {
+          child->setSelected(true);
+          layerTree_->scrollToItem(child);
+        }
+      }
+    }
+  }
+
+  layerTree_->blockSignals(false);
+  updatingSelection_ = false;
 }
 
 void LayerPanel::updateButtonStates() {
@@ -378,17 +619,48 @@ void LayerPanel::onMergeDown() {
   }
 }
 
-void LayerPanel::onLayerSelectionChanged() {
-  if (!layerManager_)
+void LayerPanel::onTreeSelectionChanged() {
+  if (!layerManager_ || updatingSelection_)
     return;
 
-  int listIndex = layerList_->currentRow();
-  if (listIndex >= 0) {
-    // Convert from list index (reversed) to layer index
-    int layerIndex = layerManager_->layerCount() - 1 - listIndex;
-    layerManager_->setActiveLayer(layerIndex);
-    emit layerSelected(layerIndex);
+  QList<QTreeWidgetItem *> selected = layerTree_->selectedItems();
+  if (selected.isEmpty())
+    return;
+
+  // Gather all data from tree items BEFORE triggering any signals that
+  // could call refreshLayerList() and destroy the tree items.
+  QTreeWidgetItem *first = selected.first();
+  bool isLayer = first->data(0, IsLayerRole).toBool();
+  QUuid layerId(first->data(0, LayerIdRole).toString());
+
+  QList<ItemId> selectedItemIds;
+  if (!isLayer) {
+    for (QTreeWidgetItem *sel : selected) {
+      if (sel->data(0, IsLayerRole).toBool())
+        continue;
+      selectedItemIds.append(
+          ItemId::fromString(sel->data(0, ItemIdRole).toString()));
+    }
   }
+
+  // Now safe to trigger signals — tree items may be destroyed after this
+  updatingSelection_ = true;
+  layerManager_->setActiveLayer(layerId);
+
+  if (!isLayer && canvas_ && canvas_->scene() && itemStore_) {
+    canvas_->scene()->clearSelection();
+    for (const ItemId &id : selectedItemIds) {
+      if (QGraphicsItem *gItem = itemStore_->item(id)) {
+        gItem->setSelected(true);
+      }
+    }
+  }
+
+  if (isLayer) {
+    emit layerSelected(layerManager_->activeLayerIndex());
+  }
+  updatingSelection_ = false;
+
   updateButtonStates();
   updatePropertyControls();
 }
@@ -423,4 +695,56 @@ void LayerPanel::onLockToggled() {
       refreshLayerList();
     }
   }
+}
+
+void LayerPanel::onTreeItemDropped(QTreeWidgetItem *item, int fromIndex,
+                                   int toIndex) {
+  Q_UNUSED(item);
+  Q_UNUSED(fromIndex);
+  Q_UNUSED(toIndex);
+  // Handled via dropEvent override in tree widget
+}
+
+QString LayerPanel::itemDescription(const ItemId &id) const {
+  if (!itemStore_)
+    return id.toString().left(8);
+
+  QGraphicsItem *item = itemStore_->item(id);
+  if (!item)
+    return "(deleted)";
+
+  if (dynamic_cast<QGraphicsRectItem *>(item))
+    return "Rectangle";
+  if (dynamic_cast<QGraphicsEllipseItem *>(item))
+    return "Ellipse";
+  if (auto *text = dynamic_cast<QGraphicsTextItem *>(item)) {
+    QString t = text->toPlainText().left(20);
+    return t.isEmpty() ? "Text" : QString("Text: %1").arg(t);
+  }
+  if (dynamic_cast<QGraphicsLineItem *>(item))
+    return "Line";
+  if (dynamic_cast<QGraphicsPathItem *>(item))
+    return "Path";
+  if (dynamic_cast<QGraphicsPixmapItem *>(item))
+    return "Image";
+  if (auto *group = dynamic_cast<QGraphicsItemGroup *>(item)) {
+    // Detect arrow groups: a line + polygon child pair
+    QList<QGraphicsItem *> children = group->childItems();
+    if (children.size() == 2) {
+      bool hasLine = false, hasPoly = false;
+      for (QGraphicsItem *c : children) {
+        if (dynamic_cast<QGraphicsLineItem *>(c))
+          hasLine = true;
+        if (dynamic_cast<QGraphicsPolygonItem *>(c))
+          hasPoly = true;
+      }
+      if (hasLine && hasPoly)
+        return "Arrow";
+    }
+    return "Group";
+  }
+  if (dynamic_cast<QGraphicsPolygonItem *>(item))
+    return "Polygon";
+
+  return "Element";
 }

@@ -10,6 +10,7 @@
 #include "latex_text_item.h"
 #include "mermaid_text_item.h"
 #include "transform_handle_item.h"
+#include <algorithm>
 #include <QApplication>
 #include <QClipboard>
 #include <QColorDialog>
@@ -947,6 +948,229 @@ void Canvas::ungroupSelectedItems() {
   }
 }
 
+void Canvas::bringToFront() {
+  if (!scene_ || !layerManager_)
+    return;
+  ItemStore *store = itemStore();
+  if (!store)
+    return;
+
+  QList<QGraphicsItem *> selected = scene_->selectedItems();
+  if (selected.isEmpty())
+    return;
+
+  // Collect items with their current indices, grouped by layer
+  struct ItemInfo {
+    ItemId id;
+    Layer *layer;
+    int oldIndex;
+  };
+  QList<ItemInfo> items;
+  for (QGraphicsItem *item : selected) {
+    ItemId id = store->idForItem(item);
+    if (!id.isValid())
+      continue;
+    Layer *layer = layerManager_->findLayerForItem(id);
+    if (!layer)
+      continue;
+    int idx = layer->indexOfItem(id);
+    if (idx < layer->itemCount() - 1) {
+      items.append({id, layer, idx});
+    }
+  }
+  if (items.isEmpty())
+    return;
+
+  // Sort by current index ascending — process lowest first so higher indices
+  // stay valid
+  std::sort(items.begin(), items.end(),
+            [](const ItemInfo &a, const ItemInfo &b) {
+              return a.oldIndex < b.oldIndex;
+            });
+
+  auto composite = std::make_unique<CompositeAction>();
+  for (const auto &info : items) {
+    int currentIdx = info.layer->indexOfItem(info.id);
+    int newIdx = info.layer->itemCount() - 1;
+    if (currentIdx == newIdx)
+      continue;
+    layerManager_->moveItemToTop(info.id);
+    composite->addAction(std::make_unique<ReorderAction>(
+        info.id, info.layer->id(), currentIdx, info.layer->itemCount() - 1,
+        layerManager_));
+  }
+  if (!composite->isEmpty()) {
+    undoStack_.push_back(std::move(composite));
+    clearRedoStack();
+  }
+  emit canvasModified();
+}
+
+void Canvas::bringForward() {
+  if (!scene_ || !layerManager_)
+    return;
+  ItemStore *store = itemStore();
+  if (!store)
+    return;
+
+  QList<QGraphicsItem *> selected = scene_->selectedItems();
+  if (selected.isEmpty())
+    return;
+
+  struct ItemInfo {
+    ItemId id;
+    Layer *layer;
+    int oldIndex;
+  };
+  QList<ItemInfo> items;
+  for (QGraphicsItem *item : selected) {
+    ItemId id = store->idForItem(item);
+    if (!id.isValid())
+      continue;
+    Layer *layer = layerManager_->findLayerForItem(id);
+    if (!layer)
+      continue;
+    int idx = layer->indexOfItem(id);
+    if (idx < layer->itemCount() - 1) {
+      items.append({id, layer, idx});
+    }
+  }
+  if (items.isEmpty())
+    return;
+
+  // Process from highest index down to avoid invalidating lower indices
+  std::sort(items.begin(), items.end(),
+            [](const ItemInfo &a, const ItemInfo &b) {
+              return a.oldIndex > b.oldIndex;
+            });
+
+  auto composite = std::make_unique<CompositeAction>();
+  for (const auto &info : items) {
+    int currentIdx = info.layer->indexOfItem(info.id);
+    if (currentIdx >= info.layer->itemCount() - 1)
+      continue;
+    layerManager_->moveItemUp(info.id);
+    composite->addAction(std::make_unique<ReorderAction>(
+        info.id, info.layer->id(), currentIdx, currentIdx + 1,
+        layerManager_));
+  }
+  if (!composite->isEmpty()) {
+    undoStack_.push_back(std::move(composite));
+    clearRedoStack();
+  }
+  emit canvasModified();
+}
+
+void Canvas::sendBackward() {
+  if (!scene_ || !layerManager_)
+    return;
+  ItemStore *store = itemStore();
+  if (!store)
+    return;
+
+  QList<QGraphicsItem *> selected = scene_->selectedItems();
+  if (selected.isEmpty())
+    return;
+
+  struct ItemInfo {
+    ItemId id;
+    Layer *layer;
+    int oldIndex;
+  };
+  QList<ItemInfo> items;
+  for (QGraphicsItem *item : selected) {
+    ItemId id = store->idForItem(item);
+    if (!id.isValid())
+      continue;
+    Layer *layer = layerManager_->findLayerForItem(id);
+    if (!layer)
+      continue;
+    int idx = layer->indexOfItem(id);
+    if (idx > 0) {
+      items.append({id, layer, idx});
+    }
+  }
+  if (items.isEmpty())
+    return;
+
+  // Process from lowest index up to avoid invalidating higher indices
+  std::sort(items.begin(), items.end(),
+            [](const ItemInfo &a, const ItemInfo &b) {
+              return a.oldIndex < b.oldIndex;
+            });
+
+  auto composite = std::make_unique<CompositeAction>();
+  for (const auto &info : items) {
+    int currentIdx = info.layer->indexOfItem(info.id);
+    if (currentIdx <= 0)
+      continue;
+    layerManager_->moveItemDown(info.id);
+    composite->addAction(std::make_unique<ReorderAction>(
+        info.id, info.layer->id(), currentIdx, currentIdx - 1,
+        layerManager_));
+  }
+  if (!composite->isEmpty()) {
+    undoStack_.push_back(std::move(composite));
+    clearRedoStack();
+  }
+  emit canvasModified();
+}
+
+void Canvas::sendToBack() {
+  if (!scene_ || !layerManager_)
+    return;
+  ItemStore *store = itemStore();
+  if (!store)
+    return;
+
+  QList<QGraphicsItem *> selected = scene_->selectedItems();
+  if (selected.isEmpty())
+    return;
+
+  struct ItemInfo {
+    ItemId id;
+    Layer *layer;
+    int oldIndex;
+  };
+  QList<ItemInfo> items;
+  for (QGraphicsItem *item : selected) {
+    ItemId id = store->idForItem(item);
+    if (!id.isValid())
+      continue;
+    Layer *layer = layerManager_->findLayerForItem(id);
+    if (!layer)
+      continue;
+    int idx = layer->indexOfItem(id);
+    if (idx > 0) {
+      items.append({id, layer, idx});
+    }
+  }
+  if (items.isEmpty())
+    return;
+
+  // Sort by index descending — process highest first so lower indices stay
+  // valid
+  std::sort(items.begin(), items.end(),
+            [](const ItemInfo &a, const ItemInfo &b) {
+              return a.oldIndex > b.oldIndex;
+            });
+
+  auto composite = std::make_unique<CompositeAction>();
+  for (const auto &info : items) {
+    int currentIdx = info.layer->indexOfItem(info.id);
+    if (currentIdx == 0)
+      continue;
+    layerManager_->moveItemToBottom(info.id);
+    composite->addAction(std::make_unique<ReorderAction>(
+        info.id, info.layer->id(), currentIdx, 0, layerManager_));
+  }
+  if (!composite->isEmpty()) {
+    undoStack_.push_back(std::move(composite));
+    clearRedoStack();
+  }
+  emit canvasModified();
+}
+
 QString Canvas::calculateDistance(const QPointF &p1, const QPointF &p2) const {
   qreal dx = p2.x() - p1.x();
   qreal dy = p2.y() - p1.y();
@@ -1447,8 +1671,6 @@ void Canvas::drawArrow(const QPointF &start, const QPointF &end) {
     return;
   auto li = new QGraphicsLineItem(QLineF(start, end));
   li->setPen(currentPen_);
-  li->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
-  scene_->addItem(li);
   double angle = std::atan2(end.y() - start.y(), end.x() - start.x());
   double sz = currentPen_.width() * 4;
   QPolygonF ah;
@@ -1460,10 +1682,14 @@ void Canvas::drawArrow(const QPointF &start, const QPointF &end) {
   auto ahi = new QGraphicsPolygonItem(ah);
   ahi->setPen(currentPen_);
   ahi->setBrush(currentPen_.color());
-  ahi->setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
-  scene_->addItem(ahi);
-  addDrawAction(li);
-  addDrawAction(ahi);
+
+  auto *group = new QGraphicsItemGroup();
+  group->addToGroup(li);
+  group->addToGroup(ahi);
+  group->setFlags(QGraphicsItem::ItemIsSelectable |
+                  QGraphicsItem::ItemIsMovable);
+  scene_->addItem(group);
+  addDrawAction(group);
 }
 
 void Canvas::drawCurvedArrow(const QPointF &start, const QPointF &end,
@@ -2478,6 +2704,34 @@ void Canvas::contextMenuEvent(QContextMenuEvent *event) {
 
     contextMenu.addSeparator();
 
+    // Arrange submenu for z-order control
+    QMenu *arrangeMenu = contextMenu.addMenu("Arrange");
+
+    QAction *bringToFrontAction = arrangeMenu->addAction("Bring to Front");
+    bringToFrontAction->setShortcut(
+        QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_BracketRight));
+    connect(bringToFrontAction, &QAction::triggered, this,
+            &Canvas::bringToFront);
+
+    QAction *bringForwardAction = arrangeMenu->addAction("Bring Forward");
+    bringForwardAction->setShortcut(
+        QKeySequence(Qt::CTRL | Qt::Key_BracketRight));
+    connect(bringForwardAction, &QAction::triggered, this,
+            &Canvas::bringForward);
+
+    QAction *sendBackwardAction = arrangeMenu->addAction("Send Backward");
+    sendBackwardAction->setShortcut(
+        QKeySequence(Qt::CTRL | Qt::Key_BracketLeft));
+    connect(sendBackwardAction, &QAction::triggered, this,
+            &Canvas::sendBackward);
+
+    QAction *sendToBackAction = arrangeMenu->addAction("Send to Back");
+    sendToBackAction->setShortcut(
+        QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_BracketLeft));
+    connect(sendToBackAction, &QAction::triggered, this, &Canvas::sendToBack);
+
+    contextMenu.addSeparator();
+
     QAction *exportSVGAction = contextMenu.addAction("Export Selection as SVG");
     QAction *exportPNGAction = contextMenu.addAction("Export Selection as PNG");
     QAction *exportJPGAction = contextMenu.addAction("Export Selection as JPG");
@@ -2800,7 +3054,7 @@ void Canvas::applyResizeToOtherItems(QGraphicsItem *sourceItem, qreal scaleX,
       continue;
 
     // Handle text items specially - adjust font size instead of transform
-    // scaling
+    // scaling, then reposition relative to the shared anchor.
     if (LatexTextItem *textItem = dynamic_cast<LatexTextItem *>(item)) {
       // Prefer the axis that actually changed; use average for corner drags.
       qreal dx = qAbs(scaleX - 1.0);
@@ -2828,24 +3082,34 @@ void Canvas::applyResizeToOtherItems(QGraphicsItem *sourceItem, qreal scaleX,
         currentFont.setPointSizeF(newSize);
         textItem->setFont(currentFont);
       }
+
+      // Reposition so the text's center moves relative to the shared anchor
+      // just like every other item, preserving relative layout.
+      QRectF bounds =
+          textItem->mapToScene(textItem->boundingRect()).boundingRect();
+      QPointF center = bounds.center();
+      QPointF newCenter =
+          anchor + QPointF((center.x() - anchor.x()) * scaleX,
+                           (center.y() - anchor.y()) * scaleY);
+      QPointF localCenter = textItem->mapFromScene(center);
+      QPointF newSceneCenter = textItem->mapToScene(localCenter);
+      textItem->setPos(textItem->pos() + (newCenter - newSceneCenter));
       continue;
     }
 
-    // Apply the same scale transformation relative to each item's own center
-    QRectF itemBounds = item->mapToScene(item->boundingRect()).boundingRect();
-    QPointF itemCenter = itemBounds.center();
-    QPointF localCenter = item->mapFromScene(itemCenter);
+    // Scale around the shared anchor point so relative positions are preserved
+    QPointF localAnchor = item->mapFromScene(anchor);
 
     QTransform scaleTransform;
-    scaleTransform.translate(localCenter.x(), localCenter.y());
+    scaleTransform.translate(localAnchor.x(), localAnchor.y());
     scaleTransform.scale(scaleX, scaleY);
-    scaleTransform.translate(-localCenter.x(), -localCenter.y());
+    scaleTransform.translate(-localAnchor.x(), -localAnchor.y());
 
     item->setTransform(item->transform() * scaleTransform);
 
-    // Keep center fixed
-    QPointF newCenterPos = item->mapToScene(localCenter);
-    QPointF posAdjust = itemCenter - newCenterPos;
+    // Keep the anchor point fixed in scene space
+    QPointF newAnchorPos = item->mapToScene(localAnchor);
+    QPointF posAdjust = anchor - newAnchorPos;
     item->setPos(item->pos() + posAdjust);
   }
 
@@ -2871,10 +3135,8 @@ void Canvas::applyRotationToOtherItems(QGraphicsItem *sourceItem,
     if (item->type() == TransformHandleItem::Type)
       continue;
 
-    // Apply the same rotation relative to each item's own center
-    QRectF itemBounds = item->mapToScene(item->boundingRect()).boundingRect();
-    QPointF itemCenter = itemBounds.center();
-    QPointF localCenter = item->mapFromScene(itemCenter);
+    // Rotate around the shared center so relative positions are preserved
+    QPointF localCenter = item->mapFromScene(center);
 
     QTransform rotateTransform;
     rotateTransform.translate(localCenter.x(), localCenter.y());
@@ -2883,9 +3145,9 @@ void Canvas::applyRotationToOtherItems(QGraphicsItem *sourceItem,
 
     item->setTransform(item->transform() * rotateTransform);
 
-    // Keep center fixed
+    // Keep the shared center fixed in scene space
     QPointF newCenterPos = item->mapToScene(localCenter);
-    QPointF posAdjust = itemCenter - newCenterPos;
+    QPointF posAdjust = center - newCenterPos;
     item->setPos(item->pos() + posAdjust);
   }
 

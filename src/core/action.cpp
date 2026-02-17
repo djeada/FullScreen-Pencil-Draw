@@ -6,6 +6,7 @@
  */
 #include "action.h"
 #include "item_store.h"
+#include "layer.h"
 #include <QGraphicsEllipseItem>
 #include <QGraphicsItemGroup>
 #include <QGraphicsPolygonItem>
@@ -370,4 +371,27 @@ void UngroupAction::redo() {
       ++i;
     }
   }
+}
+
+// ReorderAction implementation
+ReorderAction::ReorderAction(const ItemId &itemId, const QUuid &layerId,
+                             int oldIndex, int newIndex,
+                             LayerManager *layerManager)
+    : itemId_(itemId), layerId_(layerId), oldIndex_(oldIndex),
+      newIndex_(newIndex), layerManager_(layerManager) {}
+
+ReorderAction::~ReorderAction() = default;
+
+void ReorderAction::undo() {
+  if (!layerManager_ || !itemId_.isValid())
+    return;
+
+  layerManager_->reorderItem(itemId_, oldIndex_);
+}
+
+void ReorderAction::redo() {
+  if (!layerManager_ || !itemId_.isValid())
+    return;
+
+  layerManager_->reorderItem(itemId_, newIndex_);
 }

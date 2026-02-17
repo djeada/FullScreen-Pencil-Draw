@@ -95,6 +95,56 @@ bool Layer::removeItem(QGraphicsItem *item) {
 
 bool Layer::removeItem(const ItemId &id) { return itemIds_.removeOne(id); }
 
+bool Layer::moveItemUp(const ItemId &id) {
+  int idx = itemIds_.indexOf(id);
+  if (idx < 0 || idx >= itemIds_.size() - 1) {
+    return false;
+  }
+  itemIds_.swapItemsAt(idx, idx + 1);
+  return true;
+}
+
+bool Layer::moveItemDown(const ItemId &id) {
+  int idx = itemIds_.indexOf(id);
+  if (idx <= 0) {
+    return false;
+  }
+  itemIds_.swapItemsAt(idx, idx - 1);
+  return true;
+}
+
+bool Layer::moveItemToTop(const ItemId &id) {
+  int idx = itemIds_.indexOf(id);
+  if (idx < 0 || idx == itemIds_.size() - 1) {
+    return false;
+  }
+  itemIds_.removeAt(idx);
+  itemIds_.append(id);
+  return true;
+}
+
+bool Layer::moveItemToBottom(const ItemId &id) {
+  int idx = itemIds_.indexOf(id);
+  if (idx <= 0) {
+    return false;
+  }
+  itemIds_.removeAt(idx);
+  itemIds_.prepend(id);
+  return true;
+}
+
+bool Layer::moveItem(int fromIndex, int toIndex) {
+  if (fromIndex < 0 || fromIndex >= itemIds_.size() || toIndex < 0 ||
+      toIndex >= itemIds_.size() || fromIndex == toIndex) {
+    return false;
+  }
+  ItemId id = itemIds_.takeAt(fromIndex);
+  itemIds_.insert(toIndex, id);
+  return true;
+}
+
+int Layer::indexOfItem(const ItemId &id) const { return itemIds_.indexOf(id); }
+
 QList<QGraphicsItem *> Layer::items() const {
   QList<QGraphicsItem *> result;
   if (!itemStore_) {
@@ -339,12 +389,7 @@ Layer *LayerManager::findLayerForItem(QGraphicsItem *item) const {
   if (itemStore_) {
     ItemId id = itemStore_->idForItem(item);
     if (id.isValid()) {
-      for (const auto &layer : layers_) {
-        if (layer && layer->containsItem(id)) {
-          return layer.get();
-        }
-      }
-      return nullptr;
+      return findLayerForItem(id);
     }
   }
   for (const auto &layer : layers_) {
@@ -353,6 +398,71 @@ Layer *LayerManager::findLayerForItem(QGraphicsItem *item) const {
     }
   }
   return nullptr;
+}
+
+Layer *LayerManager::findLayerForItem(const ItemId &id) const {
+  if (id.isValid()) {
+    for (const auto &layer : layers_) {
+      if (layer && layer->containsItem(id)) {
+        return layer.get();
+      }
+    }
+  }
+  return nullptr;
+}
+
+bool LayerManager::moveItemUp(const ItemId &id) {
+  Layer *layer = findLayerForItem(id);
+  if (!layer || !layer->moveItemUp(id)) {
+    return false;
+  }
+  updateLayerZOrder();
+  emit itemOrderChanged();
+  return true;
+}
+
+bool LayerManager::moveItemDown(const ItemId &id) {
+  Layer *layer = findLayerForItem(id);
+  if (!layer || !layer->moveItemDown(id)) {
+    return false;
+  }
+  updateLayerZOrder();
+  emit itemOrderChanged();
+  return true;
+}
+
+bool LayerManager::moveItemToTop(const ItemId &id) {
+  Layer *layer = findLayerForItem(id);
+  if (!layer || !layer->moveItemToTop(id)) {
+    return false;
+  }
+  updateLayerZOrder();
+  emit itemOrderChanged();
+  return true;
+}
+
+bool LayerManager::moveItemToBottom(const ItemId &id) {
+  Layer *layer = findLayerForItem(id);
+  if (!layer || !layer->moveItemToBottom(id)) {
+    return false;
+  }
+  updateLayerZOrder();
+  emit itemOrderChanged();
+  return true;
+}
+
+bool LayerManager::reorderItem(const ItemId &id, int newIndex) {
+  Layer *layer = findLayerForItem(id);
+  if (!layer) {
+    return false;
+  }
+  int oldIndex = layer->indexOfItem(id);
+  if (oldIndex < 0 || !layer->moveItem(oldIndex, newIndex)) {
+    return false;
+  }
+  updateLayerZOrder();
+  emit itemOrderChanged();
+  return true;
 }
 
 void LayerManager::addItemToActiveLayer(QGraphicsItem *item) {
@@ -452,21 +562,22 @@ void LayerManager::clear() {
 }
 
 void LayerManager::updateLayerZOrder() {
-  // Set Z-value based on layer order (first layer = bottom)
+  // Set Z-value based on layer order and item position within layer
   qreal zBase = 0.0;
   for (size_t i = 0; i < layers_.size(); ++i) {
     qreal layerZ = zBase + static_cast<qreal>(i) * 1000.0;
+    const QList<ItemId> &ids = layers_[i]->itemIds();
     if (itemStore_) {
-      for (const ItemId &id : layers_[i]->itemIds()) {
-        if (QGraphicsItem *item = itemStore_->item(id)) {
-          item->setZValue(layerZ);
+      for (int j = 0; j < ids.size(); ++j) {
+        if (QGraphicsItem *item = itemStore_->item(ids[j])) {
+          item->setZValue(layerZ + static_cast<qreal>(j));
         }
       }
     } else {
-      for (auto *item : layers_[i]->items()) {
-        // Check if item is still valid before accessing
-        if (item && item->scene()) {
-          item->setZValue(layerZ);
+      QList<QGraphicsItem *> layerItems = layers_[i]->items();
+      for (int j = 0; j < layerItems.size(); ++j) {
+        if (layerItems[j] && layerItems[j]->scene()) {
+          layerItems[j]->setZValue(layerZ + static_cast<qreal>(j));
         }
       }
     }

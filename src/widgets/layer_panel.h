@@ -5,20 +5,46 @@
 #ifndef LAYER_PANEL_H
 #define LAYER_PANEL_H
 
+#include "../core/item_id.h"
 #include <QDockWidget>
 #include <QLabel>
-#include <QListWidget>
 #include <QPushButton>
 #include <QSlider>
+#include <QTreeWidget>
+#include <QUuid>
 
 class LayerManager;
 class Layer;
+class ItemStore;
+class Canvas;
+
+/**
+ * @brief Custom tree widget that handles drag-and-drop reordering of items.
+ */
+class LayerTreeWidget : public QTreeWidget {
+  Q_OBJECT
+
+public:
+  explicit LayerTreeWidget(QWidget *parent = nullptr);
+
+  void setLayerManager(LayerManager *manager) { layerManager_ = manager; }
+
+signals:
+  void itemReordered();
+
+protected:
+  void dropEvent(QDropEvent *event) override;
+
+private:
+  LayerManager *layerManager_ = nullptr;
+};
 
 /**
  * @brief A dock widget panel for managing layers.
  *
  * Provides a visual interface for creating, deleting, reordering,
- * and modifying layer properties.
+ * and modifying layer properties. Shows elements nested under their
+ * layers with drag-and-drop reordering support.
  */
 class LayerPanel : public QDockWidget {
   Q_OBJECT
@@ -27,11 +53,26 @@ public:
   explicit LayerPanel(LayerManager *manager, QWidget *parent = nullptr);
   ~LayerPanel() override;
 
+  /**
+   * @brief Set the canvas for selection synchronization
+   */
+  void setCanvas(Canvas *canvas);
+
+  /**
+   * @brief Set the ItemStore for item type lookups
+   */
+  void setItemStore(ItemStore *store);
+
 public slots:
   /**
    * @brief Refresh the layer list display
    */
   void refreshLayerList();
+
+  /**
+   * @brief Update selection highlight from canvas selection
+   */
+  void onCanvasSelectionChanged();
 
 signals:
   /**
@@ -57,14 +98,17 @@ private slots:
   void onMoveLayerDown();
   void onDuplicateLayer();
   void onMergeDown();
-  void onLayerSelectionChanged();
+  void onTreeSelectionChanged();
   void onOpacityChanged(int value);
   void onVisibilityToggled();
   void onLockToggled();
+  void onTreeItemDropped(QTreeWidgetItem *item, int fromIndex, int toIndex);
 
 private:
   LayerManager *layerManager_;
-  QListWidget *layerList_;
+  ItemStore *itemStore_;
+  Canvas *canvas_;
+  LayerTreeWidget *layerTree_;
   QPushButton *addButton_;
   QPushButton *deleteButton_;
   QPushButton *moveUpButton_;
@@ -75,10 +119,19 @@ private:
   QPushButton *lockButton_;
   QSlider *opacitySlider_;
   QLabel *opacityLabel_;
+  bool updatingSelection_;
 
   void setupUI();
   void updateButtonStates();
   void updatePropertyControls();
+  QString itemDescription(const ItemId &id) const;
+
+public:
+  // Custom data roles (public for LayerTreeWidget access)
+  static constexpr int LayerIdRole = Qt::UserRole + 1;
+  static constexpr int ItemIdRole = Qt::UserRole + 2;
+  static constexpr int IsLayerRole = Qt::UserRole + 3;
+  static constexpr int ItemIndexRole = Qt::UserRole + 4;
 };
 
 #endif // LAYER_PANEL_H

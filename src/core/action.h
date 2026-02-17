@@ -13,6 +13,7 @@
 #include <QGraphicsScene>
 #include <QPointF>
 #include <QPointer>
+#include <QUuid>
 #include <functional>
 #include <memory>
 #include <vector>
@@ -142,6 +143,30 @@ private:
 };
 
 class QGraphicsItemGroup;
+
+class LayerManager;
+
+/**
+ * @brief Action for reordering an item's z-position within its layer.
+ * Tracks the layer by UUID and item by ItemId.
+ */
+class ReorderAction : public Action {
+public:
+  ReorderAction(const ItemId &itemId, const QUuid &layerId,
+                int oldIndex, int newIndex, LayerManager *layerManager);
+  ~ReorderAction() override;
+
+  void undo() override;
+  void redo() override;
+  QString description() const override { return "Reorder"; }
+
+private:
+  ItemId itemId_;
+  QUuid layerId_;
+  int oldIndex_;
+  int newIndex_;
+  LayerManager *layerManager_;
+};
 
 /**
  * @brief Action for grouping multiple items together.

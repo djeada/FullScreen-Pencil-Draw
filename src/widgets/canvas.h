@@ -159,6 +159,10 @@ public slots:
   void selectAll();
   void groupSelectedItems();
   void ungroupSelectedItems();
+  void bringToFront();
+  void bringForward();
+  void sendBackward();
+  void sendToBack();
   void exportSelectionToSVG();
   void exportSelectionToPNG();
   void exportSelectionToJPG();
