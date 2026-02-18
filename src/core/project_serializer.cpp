@@ -173,8 +173,8 @@ QGraphicsItem *ProjectSerializer::deserializeItem(const QJsonObject &obj) {
   if (type == "path") {
     QPainterPath path;
     QJsonArray elements = obj["pathElements"].toArray();
-    for (const QJsonValue &v : elements) {
-      QJsonObject el = v.toObject();
+    for (int i = 0; i < elements.size(); ++i) {
+      QJsonObject el = elements[i].toObject();
       int elType = el["type"].toInt();
       qreal ex = el["x"].toDouble();
       qreal ey = el["y"].toDouble();
@@ -185,10 +185,25 @@ QGraphicsItem *ProjectSerializer::deserializeItem(const QJsonObject &obj) {
       case QPainterPath::LineToElement:
         path.lineTo(ex, ey);
         break;
-      case QPainterPath::CurveToElement:
-        // CurveTo requires two subsequent CurveToDataElements
-        // They will be consumed by QPainterPath automatically
-        path.cubicTo(ex, ey, ex, ey, ex, ey);
+      case QPainterPath::CurveToElement: {
+        // CurveTo is followed by two CurveToDataElements
+        qreal c2x = ex, c2y = ey, epx = ex, epy = ey;
+        if (i + 1 < elements.size()) {
+          QJsonObject d1 = elements[i + 1].toObject();
+          c2x = d1["x"].toDouble();
+          c2y = d1["y"].toDouble();
+        }
+        if (i + 2 < elements.size()) {
+          QJsonObject d2 = elements[i + 2].toObject();
+          epx = d2["x"].toDouble();
+          epy = d2["y"].toDouble();
+        }
+        path.cubicTo(ex, ey, c2x, c2y, epx, epy);
+        i += 2; // Skip the two CurveToDataElements
+        break;
+      }
+      case QPainterPath::CurveToDataElement:
+        // Consumed by CurveToElement handling above
         break;
       default:
         break;
