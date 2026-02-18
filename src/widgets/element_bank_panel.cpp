@@ -58,7 +58,7 @@ QVector<ElementInfo> ElementBankPanel::defaultElements() {
       // ---- Security ----
       {"key", "Key", "🔑", "API key / secret", "Security"},
       {"lock", "Lock", "🔒", "Encryption / TLS", "Security"},
-      {"auth", "Auth", "👤", "Authentication provider", "Security"},
+      {"auth", "Auth", "🔐", "Authentication provider", "Security"},
       {"certificate", "Cert", "📜", "TLS certificate", "Security"},
 
       // ---- Data Flow ----

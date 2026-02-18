@@ -4470,7 +4470,7 @@ void Canvas::placeElement(const QString &elementId) {
       // Security
       {"key", {"🔑", "Key"}},
       {"lock", {"🔒", "Lock"}},
-      {"auth", {"👤", "Auth"}},
+      {"auth", {"🔐", "Auth"}},
       {"certificate", {"📜", "Cert"}},
       // Data Flow
       {"api_gateway", {"⛩", "Gateway"}},
