@@ -14,6 +14,7 @@
 #include <QGraphicsScene>
 #include <QList>
 #include <QObject>
+#include <QPainter>
 #include <QString>
 #include <QUuid>
 #include <memory>
@@ -39,6 +40,24 @@ public:
     Vector, ///< Vector graphics layer (shapes, paths, text)
     Raster, ///< Raster graphics layer (images, pixels)
     Mixed   ///< Mixed content layer
+  };
+
+  /**
+   * @brief Blend mode for layer compositing
+   */
+  enum class BlendMode {
+    Normal,     ///< Standard alpha compositing (source over)
+    Multiply,   ///< Darkens by multiplying colors
+    Screen,     ///< Lightens by inverting, multiplying, inverting
+    Overlay,    ///< Combines Multiply and Screen
+    Darken,     ///< Keeps the darker of source and destination
+    Lighten,    ///< Keeps the lighter of source and destination
+    ColorDodge, ///< Brightens destination by decreasing contrast
+    ColorBurn,  ///< Darkens destination by increasing contrast
+    HardLight,  ///< Combines Multiply and Screen based on source
+    SoftLight,  ///< Softer version of Hard Light
+    Difference, ///< Subtracts the darker from the lighter
+    Exclusion   ///< Similar to Difference but lower contrast
   };
 
   /**
@@ -110,6 +129,25 @@ public:
    * @param opacity New opacity value (0.0 to 1.0)
    */
   void setOpacity(qreal opacity);
+
+  /**
+   * @brief Get the layer blend mode
+   * @return The current blend mode
+   */
+  BlendMode blendMode() const { return blendMode_; }
+
+  /**
+   * @brief Set the layer blend mode
+   * @param mode The blend mode to use for compositing
+   */
+  void setBlendMode(BlendMode mode) { blendMode_ = mode; }
+
+  /**
+   * @brief Convert the layer blend mode to a QPainter::CompositionMode
+   * @return The corresponding QPainter::CompositionMode
+   */
+  static QPainter::CompositionMode
+  toCompositionMode(BlendMode mode);
 
   /**
    * @brief Get the layer type
@@ -239,6 +277,7 @@ private:
   bool visible_;
   bool locked_;
   qreal opacity_;
+  BlendMode blendMode_;
   QList<ItemId> itemIds_; // Primary storage: stable ItemIds
   ItemStore *itemStore_;  // For resolving ItemIds to items
 

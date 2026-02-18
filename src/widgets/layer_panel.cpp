@@ -306,6 +306,40 @@ void LayerPanel::setupUI() {
 
   mainLayout->addWidget(opacityGroup);
 
+  // Blend mode control
+  QGroupBox *blendGroup = new QGroupBox("Blend Mode", container);
+  QHBoxLayout *blendLayout = new QHBoxLayout(blendGroup);
+  blendLayout->setContentsMargins(8, 12, 8, 8);
+
+  blendModeCombo_ = new QComboBox(blendGroup);
+  blendModeCombo_->addItem("Normal", static_cast<int>(Layer::BlendMode::Normal));
+  blendModeCombo_->addItem("Multiply",
+                           static_cast<int>(Layer::BlendMode::Multiply));
+  blendModeCombo_->addItem("Screen", static_cast<int>(Layer::BlendMode::Screen));
+  blendModeCombo_->addItem("Overlay",
+                           static_cast<int>(Layer::BlendMode::Overlay));
+  blendModeCombo_->addItem("Darken", static_cast<int>(Layer::BlendMode::Darken));
+  blendModeCombo_->addItem("Lighten",
+                           static_cast<int>(Layer::BlendMode::Lighten));
+  blendModeCombo_->addItem("Color Dodge",
+                           static_cast<int>(Layer::BlendMode::ColorDodge));
+  blendModeCombo_->addItem("Color Burn",
+                           static_cast<int>(Layer::BlendMode::ColorBurn));
+  blendModeCombo_->addItem("Hard Light",
+                           static_cast<int>(Layer::BlendMode::HardLight));
+  blendModeCombo_->addItem("Soft Light",
+                           static_cast<int>(Layer::BlendMode::SoftLight));
+  blendModeCombo_->addItem("Difference",
+                           static_cast<int>(Layer::BlendMode::Difference));
+  blendModeCombo_->addItem("Exclusion",
+                           static_cast<int>(Layer::BlendMode::Exclusion));
+  blendModeCombo_->setMinimumHeight(28);
+  connect(blendModeCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged),
+          this, &LayerPanel::onBlendModeChanged);
+  blendLayout->addWidget(blendModeCombo_);
+
+  mainLayout->addWidget(blendGroup);
+
   mainLayout->addStretch();
 
   container->setLayout(mainLayout);
@@ -425,6 +459,37 @@ void LayerPanel::setupUI() {
     }
     QLabel {
       color: #f8f8fc;
+    }
+    QComboBox {
+      background-color: rgba(255, 255, 255, 0.06);
+      color: #e0e0e6;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 6px 10px;
+      min-height: 22px;
+      font-weight: 500;
+    }
+    QComboBox:hover {
+      background-color: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+    QComboBox::drop-down {
+      border: none;
+      padding-right: 8px;
+    }
+    QComboBox::down-arrow {
+      image: none;
+      border-left: 4px solid transparent;
+      border-right: 4px solid transparent;
+      border-top: 5px solid #a0a0a8;
+    }
+    QComboBox QAbstractItemView {
+      background-color: #1a1a1e;
+      color: #e0e0e6;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      selection-background-color: #3b82f6;
+      selection-color: #ffffff;
+      outline: none;
     }
   )");
 }
@@ -585,6 +650,14 @@ void LayerPanel::updatePropertyControls() {
     opacitySlider_->blockSignals(false);
     opacityLabel_->setText(
         QString("%1%").arg(static_cast<int>(layer->opacity() * 100)));
+
+    blendModeCombo_->blockSignals(true);
+    int modeIndex = blendModeCombo_->findData(
+        static_cast<int>(layer->blendMode()));
+    if (modeIndex >= 0) {
+      blendModeCombo_->setCurrentIndex(modeIndex);
+    }
+    blendModeCombo_->blockSignals(false);
 
     visibilityButton_->setChecked(layer->isVisible());
     lockButton_->setChecked(layer->isLocked());
@@ -757,6 +830,20 @@ void LayerPanel::onOpacityChanged(int value) {
     if (layer) {
       layer->setOpacity(value / 100.0);
       opacityLabel_->setText(QString("%1%").arg(value));
+    }
+  }
+}
+
+void LayerPanel::onBlendModeChanged(int index) {
+  if (layerManager_) {
+    Layer *layer = layerManager_->activeLayer();
+    if (layer && index >= 0) {
+      auto mode = static_cast<Layer::BlendMode>(
+          blendModeCombo_->itemData(index).toInt());
+      layer->setBlendMode(mode);
+      if (canvas_) {
+        canvas_->viewport()->update();
+      }
     }
   }
 }

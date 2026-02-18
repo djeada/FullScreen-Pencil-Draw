@@ -191,6 +191,7 @@ protected:
   void mouseMoveEvent(QMouseEvent *event) override;
   void mouseReleaseEvent(QMouseEvent *event) override;
   void wheelEvent(QWheelEvent *event) override;
+  void paintEvent(QPaintEvent *event) override;
   void drawBackground(QPainter *painter, const QRectF &rect) override;
   void drawForeground(QPainter *painter, const QRectF &rect) override;
   void dragEnterEvent(QDragEnterEvent *event) override;
@@ -310,6 +311,7 @@ private:
                                qreal scaleY, const QPointF &anchor);
   void applyRotationToOtherItems(QGraphicsItem *sourceItem, qreal angleDelta,
                                  const QPointF &center);
+  bool hasNonNormalBlendModes() const;
   void importSvg(const QString &filePath,
                  const QPointF &position = QPointF());
 };

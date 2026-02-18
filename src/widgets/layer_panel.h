@@ -6,6 +6,7 @@
 #define LAYER_PANEL_H
 
 #include "../core/item_id.h"
+#include <QComboBox>
 #include <QDockWidget>
 #include <QLabel>
 #include <QPoint>
@@ -103,6 +104,7 @@ private slots:
   void onFlattenAll();
   void onTreeSelectionChanged();
   void onOpacityChanged(int value);
+  void onBlendModeChanged(int index);
   void onVisibilityToggled();
   void onLockToggled();
   void onTreeItemDropped(QTreeWidgetItem *item, int fromIndex, int toIndex);
@@ -126,6 +128,7 @@ private:
   QPushButton *lockButton_;
   QSlider *opacitySlider_;
   QLabel *opacityLabel_;
+  QComboBox *blendModeCombo_;
   bool updatingSelection_;
 
   void setupUI();
