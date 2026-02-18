@@ -128,7 +128,7 @@ void BezierTool::updatePreview(const QPointF &mousePos) {
   preview.moveTo(last.position);
 
   if (last.hasHandle) {
-    // Mirror the handle for a smooth continuation
+    // Reflect handle across anchor point for C1 continuity
     QPointF mirroredHandle =
         2.0 * last.position - last.handleOut;
     preview.cubicTo(mirroredHandle, mousePos, mousePos);
@@ -167,7 +167,7 @@ void BezierTool::rebuildPath() {
       cp1 = prev.position;
     }
 
-    // Incoming control point for current anchor (mirror of outgoing handle)
+    // Incoming control point: reflect outgoing handle for C1 continuity
     if (curr.hasHandle) {
       cp2 = 2.0 * curr.position - curr.handleOut;
     } else {
