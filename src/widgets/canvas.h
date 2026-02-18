@@ -136,6 +136,7 @@ public slots:
   void setColorSelectTool();
   void setArrowTool();
   void setCurvedArrowTool();
+  void setBezierTool();
   void setPanTool();
   void setPenColor(const QColor &color);
   void setOpacity(int opacity);
@@ -154,6 +155,8 @@ public slots:
   void zoomReset();
   void saveToFile();
   void openFile();
+  void saveProject();
+  void openProject();
   void newCanvas(int width, int height, const QColor &bgColor);
   void toggleGrid();
   void toggleFilledShapes();
@@ -181,6 +184,7 @@ public slots:
   void addImageFromScreenshot(const QImage &image);
   void scaleSelectedItems();
   void scaleActiveLayer();
+  void resizeCanvas();
 
 protected:
   void mousePressEvent(QMouseEvent *event) override;
@@ -211,7 +215,8 @@ private:
     ColorSelect,
     Arrow,
     Pan,
-    CurvedArrow
+    CurvedArrow,
+    Bezier
   };
 
   // Member variables
@@ -307,6 +312,8 @@ private:
   void applyRotationToOtherItems(QGraphicsItem *sourceItem, qreal angleDelta,
                                  const QPointF &center);
   bool hasNonNormalBlendModes() const;
+  void importSvg(const QString &filePath,
+                 const QPointF &position = QPointF());
 };
 
 #endif // CANVAS_H

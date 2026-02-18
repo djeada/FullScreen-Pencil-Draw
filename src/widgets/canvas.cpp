@@ -5,10 +5,12 @@
 #include "canvas.h"
 #include "../core/fill_utils.h"
 #include "../core/item_store.h"
+#include "../core/project_serializer.h"
 #include "../core/recent_files_manager.h"
 #include "../core/scene_controller.h"
 #include "../core/transform_action.h"
 #include "image_size_dialog.h"
+#include "resize_canvas_dialog.h"
 #include "latex_text_item.h"
 #include "mermaid_text_item.h"
 #include "scale_dialog.h"
@@ -40,6 +42,7 @@
 #include <algorithm>
 #ifdef HAVE_QT_SVG
 #include <QSvgGenerator>
+#include <QSvgRenderer>
 #endif
 #include <QUrl>
 #include <QWheelEvent>
@@ -764,6 +767,19 @@ void Canvas::setArrowTool() {
 
 void Canvas::setCurvedArrowTool() {
   currentShape_ = CurvedArrow;
+  tempShapeItem_ = nullptr;
+  this->setDragMode(QGraphicsView::NoDrag);
+  hideEraserPreview();
+  if (scene_)
+    scene_->clearSelection();
+  if (colorSelectionOverlay_)
+    colorSelectionOverlay_->hide();
+  setCursor(Qt::CrossCursor);
+  isPanning_ = false;
+}
+
+void Canvas::setBezierTool() {
+  currentShape_ = Bezier;
   tempShapeItem_ = nullptr;
   this->setDragMode(QGraphicsView::NoDrag);
   hideEraserPreview();
@@ -1688,15 +1704,63 @@ void Canvas::duplicateSelectedItems() {
 void Canvas::saveToFile() {
   QString fileName = QFileDialog::getSaveFileName(
       this, "Save Image", "",
-      "PNG (*.png);;JPEG (*.jpg);;BMP (*.bmp);;PDF (*.pdf)");
+#ifdef HAVE_QT_SVG
+      "PNG (*.png);;JPEG (*.jpg);;BMP (*.bmp);;PDF (*.pdf);;SVG (*.svg);;"
+      "Project (*.fspd)");
+#else
+      "PNG (*.png);;JPEG (*.jpg);;BMP (*.bmp);;PDF (*.pdf);;Project (*.fspd)");
+#endif
   if (fileName.isEmpty())
     return;
+
+  // Check if saving as project file
+  if (fileName.endsWith(".fspd", Qt::CaseInsensitive)) {
+    if (ProjectSerializer::saveProject(fileName, scene_, itemStore(),
+                                       layerManager_, scene_->sceneRect(),
+                                       backgroundColor_)) {
+      RecentFilesManager::instance().addRecentFile(fileName);
+    }
+    return;
+  }
 
   // Check if saving as PDF - pass the filename to avoid double dialog
   if (fileName.endsWith(".pdf", Qt::CaseInsensitive)) {
     exportToPDFWithFilename(fileName);
     return;
   }
+
+#ifdef HAVE_QT_SVG
+  // Check if saving as SVG
+  if (fileName.endsWith(".svg", Qt::CaseInsensitive)) {
+    bool ev = eraserPreview_ && eraserPreview_->isVisible();
+    if (eraserPreview_)
+      eraserPreview_->hide();
+    scene_->clearSelection();
+    QRectF sr = scene_->itemsBoundingRect();
+    if (sr.isEmpty())
+      sr = scene_->sceneRect();
+    sr.adjust(-10, -10, 10, 10);
+
+    QSvgGenerator generator;
+    generator.setFileName(fileName);
+    generator.setSize(sr.size().toSize());
+    generator.setViewBox(QRect(0, 0, sr.width(), sr.height()));
+    generator.setTitle("FullScreen Pencil Draw Export");
+    generator.setDescription("Exported from FullScreen Pencil Draw");
+
+    QPainter svgPainter;
+    svgPainter.begin(&generator);
+    svgPainter.setRenderHint(QPainter::Antialiasing);
+    svgPainter.setRenderHint(QPainter::TextAntialiasing);
+    scene_->render(&svgPainter, QRectF(), sr);
+    svgPainter.end();
+
+    if (ev && eraserPreview_)
+      eraserPreview_->show();
+    RecentFilesManager::instance().addRecentFile(fileName);
+    return;
+  }
+#endif
 
   bool ev = eraserPreview_ && eraserPreview_->isVisible();
   if (eraserPreview_)
@@ -1723,11 +1787,46 @@ void Canvas::saveToFile() {
 
 void Canvas::openFile() {
   resetColorSelection();
-  QString fileName = QFileDialog::getOpenFileName(
-      this, "Open Image", "",
-      "Images (*.png *.jpg *.jpeg *.bmp *.gif);;All (*)");
+  QString fileFilter =
+#ifdef HAVE_QT_SVG
+      "All Supported (*.png *.jpg *.jpeg *.bmp *.gif *.svg *.fspd);;Images "
+      "(*.png *.jpg *.jpeg *.bmp *.gif *.svg);;Project Files "
+      "(*.fspd);;All (*)";
+#else
+      "All Supported (*.png *.jpg *.jpeg *.bmp *.gif *.fspd);;Images (*.png "
+      "*.jpg *.jpeg *.bmp *.gif);;Project Files (*.fspd);;All (*)";
+#endif
+  QString fileName =
+      QFileDialog::getOpenFileName(this, "Open File", "", fileFilter);
   if (fileName.isEmpty())
     return;
+
+  // Handle project files
+  if (fileName.endsWith(".fspd", Qt::CaseInsensitive)) {
+    QRectF loadedRect;
+    QColor loadedBg;
+    if (ProjectSerializer::loadProject(fileName, scene_, itemStore(),
+                                       layerManager_, loadedRect, loadedBg)) {
+      backgroundColor_ = loadedBg;
+      eraserPen_.setColor(backgroundColor_);
+      scene_->setSceneRect(loadedRect);
+      scene_->setBackgroundBrush(backgroundColor_);
+      RecentFilesManager::instance().addRecentFile(fileName);
+      emit canvasModified();
+    } else {
+      QMessageBox::warning(this, "Error",
+                           QString("Could not open project: %1").arg(fileName));
+    }
+    return;
+  }
+
+#ifdef HAVE_QT_SVG
+  if (fileName.endsWith(".svg", Qt::CaseInsensitive)) {
+    importSvg(fileName);
+    RecentFilesManager::instance().addRecentFile(fileName);
+    return;
+  }
+#endif
   QPixmap pm(fileName);
   if (pm.isNull())
     return;
@@ -1754,6 +1853,33 @@ void Canvas::openRecentFile(const QString &filePath) {
   resetColorSelection();
   if (filePath.isEmpty())
     return;
+
+  // Handle project files
+  if (filePath.endsWith(".fspd", Qt::CaseInsensitive)) {
+    QRectF loadedRect;
+    QColor loadedBg;
+    if (ProjectSerializer::loadProject(filePath, scene_, itemStore(),
+                                       layerManager_, loadedRect, loadedBg)) {
+      backgroundColor_ = loadedBg;
+      eraserPen_.setColor(backgroundColor_);
+      scene_->setSceneRect(loadedRect);
+      scene_->setBackgroundBrush(backgroundColor_);
+      RecentFilesManager::instance().addRecentFile(filePath);
+      emit canvasModified();
+    } else {
+      QMessageBox::warning(this, "Error",
+                           QString("Could not open project: %1").arg(filePath));
+    }
+    return;
+  }
+#ifdef HAVE_QT_SVG
+  if (filePath.endsWith(".svg", Qt::CaseInsensitive)) {
+    importSvg(filePath);
+    RecentFilesManager::instance().addRecentFile(filePath);
+    return;
+  }
+#endif
+
   QPixmap pm(filePath);
   if (pm.isNull()) {
     QMessageBox::warning(this, "Error",
@@ -1777,6 +1903,45 @@ void Canvas::openRecentFile(const QString &filePath) {
 
   // Update recent files
   RecentFilesManager::instance().addRecentFile(filePath);
+}
+
+void Canvas::saveProject() {
+  QString fileName = QFileDialog::getSaveFileName(
+      this, "Save Project", "", ProjectSerializer::fileFilter());
+  if (fileName.isEmpty())
+    return;
+  if (!fileName.endsWith(".fspd", Qt::CaseInsensitive))
+    fileName += ".fspd";
+  if (ProjectSerializer::saveProject(fileName, scene_, itemStore(),
+                                     layerManager_, scene_->sceneRect(),
+                                     backgroundColor_)) {
+    RecentFilesManager::instance().addRecentFile(fileName);
+  } else {
+    QMessageBox::warning(this, "Error",
+                         QString("Could not save project: %1").arg(fileName));
+  }
+}
+
+void Canvas::openProject() {
+  resetColorSelection();
+  QString fileName = QFileDialog::getOpenFileName(
+      this, "Open Project", "", ProjectSerializer::fileFilter());
+  if (fileName.isEmpty())
+    return;
+  QRectF loadedRect;
+  QColor loadedBg;
+  if (ProjectSerializer::loadProject(fileName, scene_, itemStore(),
+                                     layerManager_, loadedRect, loadedBg)) {
+    backgroundColor_ = loadedBg;
+    eraserPen_.setColor(backgroundColor_);
+    scene_->setSceneRect(loadedRect);
+    scene_->setBackgroundBrush(backgroundColor_);
+    RecentFilesManager::instance().addRecentFile(fileName);
+    emit canvasModified();
+  } else {
+    QMessageBox::warning(this, "Error",
+                         QString("Could not open project: %1").arg(fileName));
+  }
 }
 
 void Canvas::exportToPDF() {
@@ -3194,8 +3359,20 @@ void Canvas::dropEvent(QDropEvent *event) {
           event->acceptProposedAction();
           return;
         }
+
+#ifdef HAVE_QT_SVG
+        // Check if the file is an SVG
+        if (extension == "svg") {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+          QPointF dropPosition = mapToScene(event->position().toPoint());
+#else
+          QPointF dropPosition = mapToScene(event->pos());
+#endif
+          importSvg(filePath, dropPosition);
+        } else
+#endif
         // Check if the file is a supported image format
-        else if (SUPPORTED_IMAGE_EXTENSIONS.contains(extension)) {
+        if (SUPPORTED_IMAGE_EXTENSIONS.contains(extension)) {
           // Get the drop position in scene coordinates
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
           QPointF dropPosition = mapToScene(event->position().toPoint());
@@ -3210,7 +3387,11 @@ void Canvas::dropEvent(QDropEvent *event) {
           QMessageBox::warning(
               this, "Unsupported File",
               QString("File '%1' is not a supported format.\n\nSupported "
+#ifdef HAVE_QT_SVG
+                      "formats: PNG, JPG, JPEG, BMP, GIF, SVG, PDF")
+#else
                       "formats: PNG, JPG, JPEG, BMP, GIF, PDF")
+#endif
                   .arg(QFileInfo(filePath).fileName()));
         }
       }
@@ -3500,6 +3681,51 @@ void Canvas::exportSelectionToSVG() {
   }
 
   painter.end();
+#endif
+}
+
+void Canvas::importSvg(const QString &filePath, const QPointF &position) {
+#ifndef HAVE_QT_SVG
+  Q_UNUSED(filePath)
+  Q_UNUSED(position)
+  QMessageBox::information(this, "SVG Import Unavailable",
+                           "SVG import requires the Qt SVG module, which was "
+                           "not found at build time.");
+#else
+  QSvgRenderer renderer(filePath);
+  if (!renderer.isValid()) {
+    QMessageBox::warning(
+        this, "Invalid SVG",
+        QString("Failed to load SVG from '%1'.\n\nThe file may be corrupted or "
+                "not a valid SVG.")
+            .arg(QFileInfo(filePath).fileName()));
+    return;
+  }
+
+  QSize svgSize = renderer.defaultSize();
+  if (svgSize.isEmpty())
+    svgSize = QSize(400, 400);
+
+  QImage image(svgSize, QImage::Format_ARGB32);
+  image.fill(Qt::transparent);
+  QPainter painter(&image);
+  renderer.render(&painter);
+  painter.end();
+
+  QPixmap pixmap = QPixmap::fromImage(image);
+  QGraphicsPixmapItem *pixmapItem = new QGraphicsPixmapItem(pixmap);
+
+  pixmapItem->setPos(position.x() - svgSize.width() / 2.0,
+                     position.y() - svgSize.height() / 2.0);
+  pixmapItem->setFlag(QGraphicsItem::ItemIsSelectable, true);
+  pixmapItem->setFlag(QGraphicsItem::ItemIsMovable, true);
+
+  if (sceneController_) {
+    sceneController_->addItem(pixmapItem);
+  } else {
+    scene_->addItem(pixmapItem);
+  }
+  addDrawAction(pixmapItem);
 #endif
 }
 
@@ -3940,5 +4166,74 @@ void Canvas::scaleActiveLayer() {
   }
 
   updateTransformHandles();
+  emit canvasModified();
+}
+
+void Canvas::resizeCanvas() {
+  if (!scene_)
+    return;
+
+  int oldW = static_cast<int>(scene_->sceneRect().width());
+  int oldH = static_cast<int>(scene_->sceneRect().height());
+
+  ResizeCanvasDialog dialog(oldW, oldH, this);
+  if (dialog.exec() != QDialog::Accepted)
+    return;
+
+  int newW = dialog.getWidth();
+  int newH = dialog.getHeight();
+  if (newW == oldW && newH == oldH)
+    return;
+
+  // Compute offset based on anchor position
+  int dw = newW - oldW;
+  int dh = newH - oldH;
+  qreal offsetX = 0, offsetY = 0;
+
+  switch (dialog.getAnchor()) {
+  case ResizeCanvasDialog::TopLeft:
+    break;
+  case ResizeCanvasDialog::TopCenter:
+    offsetX = dw / 2.0;
+    break;
+  case ResizeCanvasDialog::TopRight:
+    offsetX = dw;
+    break;
+  case ResizeCanvasDialog::MiddleLeft:
+    offsetY = dh / 2.0;
+    break;
+  case ResizeCanvasDialog::Center:
+    offsetX = dw / 2.0;
+    offsetY = dh / 2.0;
+    break;
+  case ResizeCanvasDialog::MiddleRight:
+    offsetX = dw;
+    offsetY = dh / 2.0;
+    break;
+  case ResizeCanvasDialog::BottomLeft:
+    offsetY = dh;
+    break;
+  case ResizeCanvasDialog::BottomCenter:
+    offsetX = dw / 2.0;
+    offsetY = dh;
+    break;
+  case ResizeCanvasDialog::BottomRight:
+    offsetX = dw;
+    offsetY = dh;
+    break;
+  }
+
+  // Move existing items so they stay at the correct position relative to anchor
+  if (offsetX != 0.0 || offsetY != 0.0) {
+    for (auto *item : scene_->items()) {
+      if (!item)
+        continue;
+      if (item == eraserPreview_ || item == colorSelectionOverlay_)
+        continue;
+      item->moveBy(offsetX, offsetY);
+    }
+  }
+
+  scene_->setSceneRect(0, 0, newW, newH);
   emit canvasModified();
 }

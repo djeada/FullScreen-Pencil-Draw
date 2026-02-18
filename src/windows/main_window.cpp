@@ -157,6 +157,8 @@ void MainWindow::setupConnections() {
   connect(_toolPanel, &ToolPanel::curvedArrowSelected, _canvas,
           &Canvas::setCurvedArrowTool);
   connect(_toolPanel, &ToolPanel::panSelected, _canvas, &Canvas::setPanTool);
+  connect(_toolPanel, &ToolPanel::bezierSelected, _canvas,
+          &Canvas::setBezierTool);
   connect(_toolPanel, &ToolPanel::colorSelected, _canvas, &Canvas::setPenColor);
   connect(_toolPanel, &ToolPanel::opacitySelected, _canvas,
           &Canvas::setOpacity);
@@ -193,6 +195,9 @@ void MainWindow::setupConnections() {
             [this]() { _pdfViewer->setToolType(ToolManager::ToolType::Line); });
     connect(_toolPanel, &ToolPanel::selectionSelected, this, [this]() {
       _pdfViewer->setToolType(ToolManager::ToolType::Selection);
+    });
+    connect(_toolPanel, &ToolPanel::bezierSelected, this, [this]() {
+      _pdfViewer->setToolType(ToolManager::ToolType::Bezier);
     });
 
     // Connect color selection to PDF viewer
@@ -296,9 +301,10 @@ void MainWindow::setupMenuBar() {
   createAction(fileMenu, "&New", QKeySequence::New, this, SLOT(onNewCanvas()));
   createAction(fileMenu, "&Open...", QKeySequence::Open, _canvas,
                SLOT(openFile()));
+  fileMenu->addAction("Open &Project...", _canvas, SLOT(openProject()));
 
 #ifdef HAVE_QT_PDF
-  createAction(fileMenu, "Open &PDF...",
+  createAction(fileMenu, "Open P&DF...",
                QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_O), this,
                SLOT(onOpenPdf()));
 #endif
@@ -311,6 +317,7 @@ void MainWindow::setupMenuBar() {
 
   createAction(fileMenu, "&Save...", QKeySequence::Save, _canvas,
                SLOT(saveToFile()));
+  fileMenu->addAction("Save Pro&ject...", _canvas, SLOT(saveProject()));
   fileMenu->addAction("Export to &PDF...", _canvas, SLOT(exportToPDF()));
 
 #ifdef HAVE_QT_PDF
@@ -432,6 +439,10 @@ void MainWindow::setupMenuBar() {
   createAction(editMenu, "Scale Active &Layer...",
                QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_R), _canvas,
                SLOT(scaleActiveLayer()));
+
+  // Edit menu - canvas resize
+  editMenu->addSeparator();
+  editMenu->addAction("Resize Canvas...", _canvas, SLOT(resizeCanvas()));
 
   // Tools menu
   QMenu *toolsMenu = menuBar->addMenu("&Tools");
@@ -726,6 +737,9 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
     _toolPanel->onActionPan();
   } else if (event->key() == Qt::Key_G) {
     _canvas->toggleGrid();
+  } else if (event->key() == Qt::Key_B &&
+             (event->modifiers() & Qt::ShiftModifier)) {
+    _toolPanel->onActionBezier();
   } else if (event->key() == Qt::Key_B) {
     _canvas->toggleFilledShapes();
   } else if (event->key() == Qt::Key_D &&
