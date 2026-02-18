@@ -5,6 +5,7 @@
 #include "canvas.h"
 #include "../core/fill_utils.h"
 #include "../core/item_store.h"
+#include "../core/project_serializer.h"
 #include "../core/recent_files_manager.h"
 #include "../core/scene_controller.h"
 #include "../core/transform_action.h"
@@ -1556,9 +1557,19 @@ void Canvas::duplicateSelectedItems() {
 void Canvas::saveToFile() {
   QString fileName = QFileDialog::getSaveFileName(
       this, "Save Image", "",
-      "PNG (*.png);;JPEG (*.jpg);;BMP (*.bmp);;PDF (*.pdf)");
+      "PNG (*.png);;JPEG (*.jpg);;BMP (*.bmp);;PDF (*.pdf);;Project (*.fspd)");
   if (fileName.isEmpty())
     return;
+
+  // Check if saving as project file
+  if (fileName.endsWith(".fspd", Qt::CaseInsensitive)) {
+    if (ProjectSerializer::saveProject(fileName, scene_, itemStore(),
+                                       layerManager_, scene_->sceneRect(),
+                                       backgroundColor_)) {
+      RecentFilesManager::instance().addRecentFile(fileName);
+    }
+    return;
+  }
 
   // Check if saving as PDF - pass the filename to avoid double dialog
   if (fileName.endsWith(".pdf", Qt::CaseInsensitive)) {
@@ -1592,10 +1603,31 @@ void Canvas::saveToFile() {
 void Canvas::openFile() {
   resetColorSelection();
   QString fileName = QFileDialog::getOpenFileName(
-      this, "Open Image", "",
-      "Images (*.png *.jpg *.jpeg *.bmp *.gif);;All (*)");
+      this, "Open File", "",
+      "All Supported (*.png *.jpg *.jpeg *.bmp *.gif *.fspd);;Images (*.png "
+      "*.jpg *.jpeg *.bmp *.gif);;Project Files (*.fspd);;All (*)");
   if (fileName.isEmpty())
     return;
+
+  // Handle project files
+  if (fileName.endsWith(".fspd", Qt::CaseInsensitive)) {
+    QRectF loadedRect;
+    QColor loadedBg;
+    if (ProjectSerializer::loadProject(fileName, scene_, itemStore(),
+                                       layerManager_, loadedRect, loadedBg)) {
+      backgroundColor_ = loadedBg;
+      eraserPen_.setColor(backgroundColor_);
+      scene_->setSceneRect(loadedRect);
+      scene_->setBackgroundBrush(backgroundColor_);
+      RecentFilesManager::instance().addRecentFile(fileName);
+      emit canvasModified();
+    } else {
+      QMessageBox::warning(this, "Error",
+                           QString("Could not open project: %1").arg(fileName));
+    }
+    return;
+  }
+
   QPixmap pm(fileName);
   if (pm.isNull())
     return;
@@ -1622,6 +1654,26 @@ void Canvas::openRecentFile(const QString &filePath) {
   resetColorSelection();
   if (filePath.isEmpty())
     return;
+
+  // Handle project files
+  if (filePath.endsWith(".fspd", Qt::CaseInsensitive)) {
+    QRectF loadedRect;
+    QColor loadedBg;
+    if (ProjectSerializer::loadProject(filePath, scene_, itemStore(),
+                                       layerManager_, loadedRect, loadedBg)) {
+      backgroundColor_ = loadedBg;
+      eraserPen_.setColor(backgroundColor_);
+      scene_->setSceneRect(loadedRect);
+      scene_->setBackgroundBrush(backgroundColor_);
+      RecentFilesManager::instance().addRecentFile(filePath);
+      emit canvasModified();
+    } else {
+      QMessageBox::warning(this, "Error",
+                           QString("Could not open project: %1").arg(filePath));
+    }
+    return;
+  }
+
   QPixmap pm(filePath);
   if (pm.isNull()) {
     QMessageBox::warning(this, "Error",
@@ -1645,6 +1697,45 @@ void Canvas::openRecentFile(const QString &filePath) {
 
   // Update recent files
   RecentFilesManager::instance().addRecentFile(filePath);
+}
+
+void Canvas::saveProject() {
+  QString fileName = QFileDialog::getSaveFileName(
+      this, "Save Project", "", ProjectSerializer::fileFilter());
+  if (fileName.isEmpty())
+    return;
+  if (!fileName.endsWith(".fspd", Qt::CaseInsensitive))
+    fileName += ".fspd";
+  if (ProjectSerializer::saveProject(fileName, scene_, itemStore(),
+                                     layerManager_, scene_->sceneRect(),
+                                     backgroundColor_)) {
+    RecentFilesManager::instance().addRecentFile(fileName);
+  } else {
+    QMessageBox::warning(this, "Error",
+                         QString("Could not save project: %1").arg(fileName));
+  }
+}
+
+void Canvas::openProject() {
+  resetColorSelection();
+  QString fileName = QFileDialog::getOpenFileName(
+      this, "Open Project", "", ProjectSerializer::fileFilter());
+  if (fileName.isEmpty())
+    return;
+  QRectF loadedRect;
+  QColor loadedBg;
+  if (ProjectSerializer::loadProject(fileName, scene_, itemStore(),
+                                     layerManager_, loadedRect, loadedBg)) {
+    backgroundColor_ = loadedBg;
+    eraserPen_.setColor(backgroundColor_);
+    scene_->setSceneRect(loadedRect);
+    scene_->setBackgroundBrush(backgroundColor_);
+    RecentFilesManager::instance().addRecentFile(fileName);
+    emit canvasModified();
+  } else {
+    QMessageBox::warning(this, "Error",
+                         QString("Could not open project: %1").arg(fileName));
+  }
 }
 
 void Canvas::exportToPDF() {

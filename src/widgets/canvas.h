@@ -154,6 +154,8 @@ public slots:
   void zoomReset();
   void saveToFile();
   void openFile();
+  void saveProject();
+  void openProject();
   void newCanvas(int width, int height, const QColor &bgColor);
   void toggleGrid();
   void toggleFilledShapes();
