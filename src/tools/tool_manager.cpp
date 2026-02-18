@@ -14,6 +14,7 @@
 #include "pen_tool.h"
 #include "rectangle_tool.h"
 #include "selection_tool.h"
+#include "text_on_path_tool.h"
 #include "text_tool.h"
 #include "tool.h"
 
@@ -39,6 +40,8 @@ void ToolManager::initializeTools() {
   registerTool(ToolType::Pan, std::make_unique<PanTool>(renderer_));
   registerTool(ToolType::Mermaid, std::make_unique<MermaidTool>(renderer_));
   registerTool(ToolType::Bezier, std::make_unique<BezierTool>(renderer_));
+  registerTool(ToolType::TextOnPath,
+               std::make_unique<TextOnPathTool>(renderer_));
 }
 
 void ToolManager::registerTool(ToolType type, std::unique_ptr<Tool> tool) {

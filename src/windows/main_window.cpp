@@ -159,6 +159,8 @@ void MainWindow::setupConnections() {
   connect(_toolPanel, &ToolPanel::panSelected, _canvas, &Canvas::setPanTool);
   connect(_toolPanel, &ToolPanel::bezierSelected, _canvas,
           &Canvas::setBezierTool);
+  connect(_toolPanel, &ToolPanel::textOnPathSelected, _canvas,
+          &Canvas::setTextOnPathTool);
   connect(_toolPanel, &ToolPanel::colorSelected, _canvas, &Canvas::setPenColor);
   connect(_toolPanel, &ToolPanel::opacitySelected, _canvas,
           &Canvas::setOpacity);
@@ -198,6 +200,9 @@ void MainWindow::setupConnections() {
     });
     connect(_toolPanel, &ToolPanel::bezierSelected, this, [this]() {
       _pdfViewer->setToolType(ToolManager::ToolType::Bezier);
+    });
+    connect(_toolPanel, &ToolPanel::textOnPathSelected, this, [this]() {
+      _pdfViewer->setToolType(ToolManager::ToolType::TextOnPath);
     });
 
     // Connect color selection to PDF viewer
@@ -725,6 +730,9 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
     _toolPanel->onActionPen();
   } else if (event->key() == Qt::Key_E) {
     _toolPanel->onActionEraser();
+  } else if (event->key() == Qt::Key_T &&
+             (event->modifiers() & Qt::ShiftModifier)) {
+    _toolPanel->onActionTextOnPath();
   } else if (event->key() == Qt::Key_T) {
     _toolPanel->onActionText();
   } else if (event->key() == Qt::Key_M) {

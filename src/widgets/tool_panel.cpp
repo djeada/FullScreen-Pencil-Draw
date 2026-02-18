@@ -135,6 +135,12 @@ ToolPanel::ToolPanel(QWidget *parent)
   actionBezier->setCheckable(true);
   connect(actionBezier, &QAction::triggered, this, &ToolPanel::onActionBezier);
 
+  actionTextOnPath = new QAction("⌇T TxtPath", this);
+  actionTextOnPath->setToolTip("Place text along a path (Shift+T)");
+  actionTextOnPath->setCheckable(true);
+  connect(actionTextOnPath, &QAction::triggered, this,
+          &ToolPanel::onActionTextOnPath);
+
   // Shape tools grid (3x2) - wrapped for centering
   QWidget *shapeGridWidget = new QWidget(container);
   QGridLayout *shapeGrid = new QGridLayout(shapeGridWidget);
@@ -148,6 +154,8 @@ ToolPanel::ToolPanel(QWidget *parent)
                        1);
   shapeGrid->addWidget(createToolButton(actionCircle, shapeGridWidget), 2, 0);
   shapeGrid->addWidget(createToolButton(actionBezier, shapeGridWidget), 2, 1);
+  shapeGrid->addWidget(createToolButton(actionTextOnPath, shapeGridWidget), 3,
+                       0);
   shapeGridWidget->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
   mainLayout->addWidget(shapeGridWidget, 0, Qt::AlignHCenter);
 
@@ -563,6 +571,7 @@ void ToolPanel::clearActiveToolStyles() {
   actionCircle->setChecked(false);
   actionSelection->setChecked(false);
   actionBezier->setChecked(false);
+  actionTextOnPath->setChecked(false);
   actionPan->setChecked(false);
 }
 
@@ -572,7 +581,7 @@ void ToolPanel::setActiveTool(const QString &toolName) {
       {"Mermaid", "⬡"}, {"Fill", "◉"},        {"ColorSelect", "◎"},
       {"Line", "╱"},    {"Arrow", "➤"},       {"CurvedArrow", "↪"},
       {"Rectangle", "▢"}, {"Circle", "◯"},    {"Select", "⬚"},
-      {"Pan", "☰"},       {"Bezier", "⌇"}};
+      {"Pan", "☰"},       {"Bezier", "⌇"},    {"TextOnPath", "⌇T"}};
   QString icon = toolIcons.value(toolName, "•");
   activeToolLabel->setText(icon + " " + toolName);
 }
@@ -699,6 +708,12 @@ void ToolPanel::onActionBezier() {
   actionBezier->setChecked(true);
   setActiveTool("Bezier");
   emit bezierSelected();
+}
+void ToolPanel::onActionTextOnPath() {
+  clearActiveToolStyles();
+  actionTextOnPath->setChecked(true);
+  setActiveTool("TextOnPath");
+  emit textOnPathSelected();
 }
 
 void ToolPanel::onActionColor() {
