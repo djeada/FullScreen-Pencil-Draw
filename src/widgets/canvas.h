@@ -136,6 +136,7 @@ public slots:
   void setColorSelectTool();
   void setArrowTool();
   void setCurvedArrowTool();
+  void setBezierTool();
   void setPanTool();
   void setPenColor(const QColor &color);
   void setOpacity(int opacity);
@@ -210,7 +211,8 @@ private:
     ColorSelect,
     Arrow,
     Pan,
-    CurvedArrow
+    CurvedArrow,
+    Bezier
   };
 
   // Member variables

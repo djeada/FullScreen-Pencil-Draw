@@ -130,6 +130,11 @@ ToolPanel::ToolPanel(QWidget *parent)
   actionCircle->setCheckable(true);
   connect(actionCircle, &QAction::triggered, this, &ToolPanel::onActionCircle);
 
+  actionBezier = new QAction("⌇ Bezier", this);
+  actionBezier->setToolTip("Draw Bezier path (Shift+B)");
+  actionBezier->setCheckable(true);
+  connect(actionBezier, &QAction::triggered, this, &ToolPanel::onActionBezier);
+
   // Shape tools grid (3x2) - wrapped for centering
   QWidget *shapeGridWidget = new QWidget(container);
   QGridLayout *shapeGrid = new QGridLayout(shapeGridWidget);
@@ -141,8 +146,8 @@ ToolPanel::ToolPanel(QWidget *parent)
                        0);
   shapeGrid->addWidget(createToolButton(actionRectangle, shapeGridWidget), 1,
                        1);
-  shapeGrid->addWidget(createToolButton(actionCircle, shapeGridWidget), 2, 0, 1,
-                       2, Qt::AlignCenter);
+  shapeGrid->addWidget(createToolButton(actionCircle, shapeGridWidget), 2, 0);
+  shapeGrid->addWidget(createToolButton(actionBezier, shapeGridWidget), 2, 1);
   shapeGridWidget->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
   mainLayout->addWidget(shapeGridWidget, 0, Qt::AlignHCenter);
 
@@ -547,6 +552,7 @@ void ToolPanel::clearActiveToolStyles() {
   actionRectangle->setChecked(false);
   actionCircle->setChecked(false);
   actionSelection->setChecked(false);
+  actionBezier->setChecked(false);
   actionPan->setChecked(false);
 }
 
@@ -556,7 +562,7 @@ void ToolPanel::setActiveTool(const QString &toolName) {
       {"Mermaid", "⬡"}, {"Fill", "◉"},        {"ColorSelect", "◎"},
       {"Line", "╱"},    {"Arrow", "➤"},       {"CurvedArrow", "↪"},
       {"Rectangle", "▢"}, {"Circle", "◯"},    {"Select", "⬚"},
-      {"Pan", "☰"}};
+      {"Pan", "☰"},       {"Bezier", "⌇"}};
   QString icon = toolIcons.value(toolName, "•");
   activeToolLabel->setText(icon + " " + toolName);
 }
@@ -677,6 +683,12 @@ void ToolPanel::onActionPan() {
   actionPan->setChecked(true);
   setActiveTool("Pan");
   emit panSelected();
+}
+void ToolPanel::onActionBezier() {
+  clearActiveToolStyles();
+  actionBezier->setChecked(true);
+  setActiveTool("Bezier");
+  emit bezierSelected();
 }
 
 void ToolPanel::onActionColor() {
