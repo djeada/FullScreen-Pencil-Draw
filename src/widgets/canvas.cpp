@@ -59,8 +59,9 @@ static constexpr int MAX_PRESSURE_BUFFER_SIZE = 200;
 static constexpr int PRESSURE_BUFFER_TRIM_SIZE = 100;
 
 // Supported image file extensions for drag-and-drop
-static const QSet<QString> SUPPORTED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg",
-                                                         "bmp", "gif"};
+static const QSet<QString> SUPPORTED_IMAGE_EXTENSIONS = {"png",  "jpg", "jpeg",
+                                                         "bmp",  "gif", "webp",
+                                                         "tiff", "tif"};
 
 namespace {
 constexpr qreal CURVED_ARROW_BASE_FACTOR = 0.28;
@@ -1720,10 +1721,12 @@ void Canvas::saveToFile() {
   QString fileName = QFileDialog::getSaveFileName(
       this, "Save Image", "",
 #ifdef HAVE_QT_SVG
-      "PNG (*.png);;JPEG (*.jpg);;BMP (*.bmp);;PDF (*.pdf);;SVG (*.svg);;"
+      "PNG (*.png);;JPEG (*.jpg);;BMP (*.bmp);;WebP (*.webp);;TIFF "
+      "(*.tiff *.tif);;PDF (*.pdf);;SVG (*.svg);;"
       "Project (*.fspd)");
 #else
-      "PNG (*.png);;JPEG (*.jpg);;BMP (*.bmp);;PDF (*.pdf);;Project (*.fspd)");
+      "PNG (*.png);;JPEG (*.jpg);;BMP (*.bmp);;WebP (*.webp);;TIFF "
+      "(*.tiff *.tif);;PDF (*.pdf);;Project (*.fspd)");
 #endif
   if (fileName.isEmpty())
     return;
@@ -1804,12 +1807,16 @@ void Canvas::openFile() {
   resetColorSelection();
   QString fileFilter =
 #ifdef HAVE_QT_SVG
-      "All Supported (*.png *.jpg *.jpeg *.bmp *.gif *.svg *.fspd);;Images "
-      "(*.png *.jpg *.jpeg *.bmp *.gif *.svg);;Project Files "
+      "All Supported (*.png *.jpg *.jpeg *.bmp *.gif *.webp *.tiff *.tif *.svg "
+      "*.fspd);;Images "
+      "(*.png *.jpg *.jpeg *.bmp *.gif *.webp *.tiff *.tif *.svg);;Project "
+      "Files "
       "(*.fspd);;All (*)";
 #else
-      "All Supported (*.png *.jpg *.jpeg *.bmp *.gif *.fspd);;Images (*.png "
-      "*.jpg *.jpeg *.bmp *.gif);;Project Files (*.fspd);;All (*)";
+      "All Supported (*.png *.jpg *.jpeg *.bmp *.gif *.webp *.tiff *.tif "
+      "*.fspd);;Images (*.png "
+      "*.jpg *.jpeg *.bmp *.gif *.webp *.tiff *.tif);;Project Files "
+      "(*.fspd);;All (*)";
 #endif
   QString fileName =
       QFileDialog::getOpenFileName(this, "Open File", "", fileFilter);
@@ -3515,9 +3522,9 @@ void Canvas::dropEvent(QDropEvent *event) {
               this, "Unsupported File",
               QString("File '%1' is not a supported format.\n\nSupported "
 #ifdef HAVE_QT_SVG
-                      "formats: PNG, JPG, JPEG, BMP, GIF, SVG, PDF")
+                      "formats: PNG, JPG, JPEG, BMP, GIF, WebP, TIFF, SVG, PDF")
 #else
-                      "formats: PNG, JPG, JPEG, BMP, GIF, PDF")
+                      "formats: PNG, JPG, JPEG, BMP, GIF, WebP, TIFF, PDF")
 #endif
                   .arg(QFileInfo(filePath).fileName()));
         }
@@ -3703,6 +3710,10 @@ void Canvas::contextMenuEvent(QContextMenuEvent *event) {
     QAction *exportSVGAction = contextMenu.addAction("Export Selection as SVG");
     QAction *exportPNGAction = contextMenu.addAction("Export Selection as PNG");
     QAction *exportJPGAction = contextMenu.addAction("Export Selection as JPG");
+    QAction *exportWebPAction =
+        contextMenu.addAction("Export Selection as WebP");
+    QAction *exportTIFFAction =
+        contextMenu.addAction("Export Selection as TIFF");
 
 #ifdef HAVE_QT_SVG
     connect(exportSVGAction, &QAction::triggered, this,
@@ -3715,6 +3726,10 @@ void Canvas::contextMenuEvent(QContextMenuEvent *event) {
             &Canvas::exportSelectionToPNG);
     connect(exportJPGAction, &QAction::triggered, this,
             &Canvas::exportSelectionToJPG);
+    connect(exportWebPAction, &QAction::triggered, this,
+            &Canvas::exportSelectionToWebP);
+    connect(exportTIFFAction, &QAction::triggered, this,
+            &Canvas::exportSelectionToTIFF);
 
     contextMenu.addSeparator();
 
@@ -3939,6 +3954,84 @@ void Canvas::exportSelectionToJPG() {
 
   painter.end();
   image.save(fileName);
+}
+
+void Canvas::exportSelectionToWebP() {
+  if (!scene_ || scene_->selectedItems().isEmpty())
+    return;
+
+  QString fileName = QFileDialog::getSaveFileName(
+      this, "Export Selection as WebP", "", "WebP (*.webp)");
+  if (fileName.isEmpty())
+    return;
+
+  QRectF boundingRect = getSelectionBoundingRect();
+  if (boundingRect.isEmpty())
+    return;
+
+  // Create image with transparency and render selected items
+  QImage image(boundingRect.size().toSize(), QImage::Format_ARGB32);
+  image.fill(Qt::transparent);
+
+  QPainter painter(&image);
+  painter.setRenderHint(QPainter::Antialiasing);
+  painter.setRenderHint(QPainter::TextAntialiasing);
+  painter.translate(-boundingRect.topLeft());
+
+  QList<QGraphicsItem *> selectedItems = scene_->selectedItems();
+  for (QGraphicsItem *item : selectedItems) {
+    if (!item)
+      continue;
+    if (item != eraserPreview_ && item != backgroundImage_ &&
+        item != colorSelectionOverlay_) {
+      painter.save();
+      painter.setTransform(item->sceneTransform(), true);
+      item->paint(&painter, nullptr, nullptr);
+      painter.restore();
+    }
+  }
+
+  painter.end();
+  image.save(fileName, "WEBP");
+}
+
+void Canvas::exportSelectionToTIFF() {
+  if (!scene_ || scene_->selectedItems().isEmpty())
+    return;
+
+  QString fileName = QFileDialog::getSaveFileName(
+      this, "Export Selection as TIFF", "", "TIFF (*.tiff *.tif)");
+  if (fileName.isEmpty())
+    return;
+
+  QRectF boundingRect = getSelectionBoundingRect();
+  if (boundingRect.isEmpty())
+    return;
+
+  // Create image with transparency and render selected items
+  QImage image(boundingRect.size().toSize(), QImage::Format_ARGB32);
+  image.fill(Qt::transparent);
+
+  QPainter painter(&image);
+  painter.setRenderHint(QPainter::Antialiasing);
+  painter.setRenderHint(QPainter::TextAntialiasing);
+  painter.translate(-boundingRect.topLeft());
+
+  QList<QGraphicsItem *> selectedItems = scene_->selectedItems();
+  for (QGraphicsItem *item : selectedItems) {
+    if (!item)
+      continue;
+    if (item != eraserPreview_ && item != backgroundImage_ &&
+        item != colorSelectionOverlay_) {
+      painter.save();
+      painter.setTransform(item->sceneTransform(), true);
+      item->paint(&painter, nullptr, nullptr);
+      painter.restore();
+    }
+  }
+
+  painter.end();
+  image.save(fileName, "TIFF");
 }
 
 void Canvas::updateTransformHandles() {

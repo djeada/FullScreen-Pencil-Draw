@@ -179,6 +179,8 @@ public slots:
   void exportSelectionToSVG();
   void exportSelectionToPNG();
   void exportSelectionToJPG();
+  void exportSelectionToWebP();
+  void exportSelectionToTIFF();
   void exportToPDF();
   void extractColorSelectionToNewLayer();
   void clearColorSelection();
