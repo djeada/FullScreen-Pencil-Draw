@@ -181,6 +181,7 @@ public slots:
   void addImageFromScreenshot(const QImage &image);
   void scaleSelectedItems();
   void scaleActiveLayer();
+  void resizeCanvas();
 
 protected:
   void mousePressEvent(QMouseEvent *event) override;

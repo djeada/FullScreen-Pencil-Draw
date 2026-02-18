@@ -433,6 +433,10 @@ void MainWindow::setupMenuBar() {
                QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_R), _canvas,
                SLOT(scaleActiveLayer()));
 
+  // Edit menu - canvas resize
+  editMenu->addSeparator();
+  editMenu->addAction("Resize Canvas...", _canvas, SLOT(resizeCanvas()));
+
   // Tools menu
   QMenu *toolsMenu = menuBar->addMenu("&Tools");
 
