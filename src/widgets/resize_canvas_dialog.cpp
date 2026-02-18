@@ -9,7 +9,7 @@
 
 ResizeCanvasDialog::ResizeCanvasDialog(int currentWidth, int currentHeight,
                                        QWidget *parent)
-    : QDialog(parent), selectedAnchor_(TopLeft) {
+    : QDialog(parent), selectedAnchor_(Center) {
 
   setWindowTitle("Resize Canvas");
   setModal(true);
