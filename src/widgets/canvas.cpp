@@ -9,6 +9,7 @@
 #include "../core/scene_controller.h"
 #include "../core/transform_action.h"
 #include "image_size_dialog.h"
+#include "resize_canvas_dialog.h"
 #include "latex_text_item.h"
 #include "mermaid_text_item.h"
 #include "scale_dialog.h"
@@ -3808,5 +3809,74 @@ void Canvas::scaleActiveLayer() {
   }
 
   updateTransformHandles();
+  emit canvasModified();
+}
+
+void Canvas::resizeCanvas() {
+  if (!scene_)
+    return;
+
+  int oldW = static_cast<int>(scene_->sceneRect().width());
+  int oldH = static_cast<int>(scene_->sceneRect().height());
+
+  ResizeCanvasDialog dialog(oldW, oldH, this);
+  if (dialog.exec() != QDialog::Accepted)
+    return;
+
+  int newW = dialog.getWidth();
+  int newH = dialog.getHeight();
+  if (newW == oldW && newH == oldH)
+    return;
+
+  // Compute offset based on anchor position
+  int dw = newW - oldW;
+  int dh = newH - oldH;
+  qreal offsetX = 0, offsetY = 0;
+
+  switch (dialog.getAnchor()) {
+  case ResizeCanvasDialog::TopLeft:
+    break;
+  case ResizeCanvasDialog::TopCenter:
+    offsetX = dw / 2.0;
+    break;
+  case ResizeCanvasDialog::TopRight:
+    offsetX = dw;
+    break;
+  case ResizeCanvasDialog::MiddleLeft:
+    offsetY = dh / 2.0;
+    break;
+  case ResizeCanvasDialog::Center:
+    offsetX = dw / 2.0;
+    offsetY = dh / 2.0;
+    break;
+  case ResizeCanvasDialog::MiddleRight:
+    offsetX = dw;
+    offsetY = dh / 2.0;
+    break;
+  case ResizeCanvasDialog::BottomLeft:
+    offsetY = dh;
+    break;
+  case ResizeCanvasDialog::BottomCenter:
+    offsetX = dw / 2.0;
+    offsetY = dh;
+    break;
+  case ResizeCanvasDialog::BottomRight:
+    offsetX = dw;
+    offsetY = dh;
+    break;
+  }
+
+  // Move existing items so they stay at the correct position relative to anchor
+  if (offsetX != 0.0 || offsetY != 0.0) {
+    for (auto *item : scene_->items()) {
+      if (!item)
+        continue;
+      if (item == eraserPreview_ || item == colorSelectionOverlay_)
+        continue;
+      item->moveBy(offsetX, offsetY);
+    }
+  }
+
+  scene_->setSceneRect(0, 0, newW, newH);
   emit canvasModified();
 }
