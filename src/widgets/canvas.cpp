@@ -15,6 +15,7 @@
 #include "latex_text_item.h"
 #include "mermaid_text_item.h"
 #include "scale_dialog.h"
+#include "perspective_transform_dialog.h"
 #include "transform_handle_item.h"
 #include <QApplication>
 #include <QClipboard>
@@ -3714,6 +3715,13 @@ void Canvas::contextMenuEvent(QContextMenuEvent *event) {
             &Canvas::exportSelectionToPNG);
     connect(exportJPGAction, &QAction::triggered, this,
             &Canvas::exportSelectionToJPG);
+
+    contextMenu.addSeparator();
+
+    QAction *perspectiveAction =
+        contextMenu.addAction("Perspective Transform...");
+    connect(perspectiveAction, &QAction::triggered, this,
+            &Canvas::perspectiveTransformSelectedItems);
   }
 
   if (hasActiveColorSelection()) {
@@ -4227,6 +4235,80 @@ void Canvas::scaleSelectedItems() {
 
     QPointF offset = oldPos - center;
     QPointF newPos = center + QPointF(offset.x() * sx, offset.y() * sy);
+    item->setPos(newPos);
+
+    // Record undo action
+    if (sceneController_) {
+      ItemId id = sceneController_->idForItem(item);
+      if (id.isValid()) {
+        addAction(std::make_unique<TransformAction>(
+            id, sceneController_->itemStore(), oldTransform, item->transform(),
+            oldPos, item->pos()));
+      }
+    }
+  }
+
+  updateTransformHandles();
+  emit canvasModified();
+}
+
+void Canvas::perspectiveTransformSelectedItems() {
+  if (!scene_) {
+    return;
+  }
+
+  QList<QGraphicsItem *> selected = scene_->selectedItems();
+  if (selected.isEmpty()) {
+    return;
+  }
+
+  PerspectiveTransformDialog dialog(this);
+  if (dialog.exec() != QDialog::Accepted) {
+    return;
+  }
+
+  // Compute combined bounding rect of selected items
+  QRectF bounds;
+  for (QGraphicsItem *item : selected) {
+    bounds =
+        bounds.united(item->mapToScene(item->boundingRect()).boundingRect());
+  }
+
+  QTransform perspective = dialog.perspectiveTransform(bounds);
+  if (perspective.isIdentity()) {
+    return;
+  }
+
+  for (QGraphicsItem *item : selected) {
+    QTransform oldTransform = item->transform();
+    QPointF oldPos = item->pos();
+
+    // The perspective transform is defined in scene coordinates.
+    // To apply it correctly we translate into scene space, apply the
+    // perspective, then translate back into item-local space.
+    //   localToScene = item->sceneTransform()
+    //   newSceneTransform = localToScene * perspective
+    // However setTransform() only sets the item-local transform (not
+    // including pos), so we factor pos out.
+    //
+    // sceneTransform() == T(pos) * itemTransform
+    // We want: T(newPos) * newItemTransform == oldScene * perspective
+    //
+    // Compute the full new scene matrix, then extract pos and local
+    // transform separately.
+    QTransform oldScene = item->sceneTransform();
+    QTransform newScene = oldScene * perspective;
+
+    // The position is the translation component of the scene transform
+    // when the item-local transform has no translation itself (which is
+    // the convention used throughout this codebase).  We use the origin
+    // mapping to get the new position.
+    QPointF newPos = newScene.map(QPointF(0, 0));
+
+    // Remove the translation to get the pure local transform.
+    QTransform newLocal = newScene * QTransform::fromTranslate(-newPos.x(), -newPos.y());
+
+    item->setTransform(newLocal);
     item->setPos(newPos);
 
     // Record undo action
