@@ -589,13 +589,10 @@ void Canvas::paintEvent(QPaintEvent *event) {
 
   // Draw foreground elements (ruler, etc.) on top
   if (showRuler_) {
-    QPainter fgPainter(viewport());
-    fgPainter.setRenderHints(renderHints());
+    viewportPainter.setRenderHints(renderHints());
     QRectF sceneRect = mapToScene(viewport()->rect()).boundingRect();
-    // Ruler is drawn via drawForeground, but we need to handle the transform
-    fgPainter.setTransform(viewportTransform());
-    drawRuler(&fgPainter, sceneRect);
-    fgPainter.end();
+    viewportPainter.setTransform(viewportTransform());
+    drawRuler(&viewportPainter, sceneRect);
   }
 }
 

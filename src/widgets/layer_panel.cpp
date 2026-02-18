@@ -460,6 +460,37 @@ void LayerPanel::setupUI() {
     QLabel {
       color: #f8f8fc;
     }
+    QComboBox {
+      background-color: rgba(255, 255, 255, 0.06);
+      color: #e0e0e6;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 6px 10px;
+      min-height: 22px;
+      font-weight: 500;
+    }
+    QComboBox:hover {
+      background-color: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+    QComboBox::drop-down {
+      border: none;
+      padding-right: 8px;
+    }
+    QComboBox::down-arrow {
+      image: none;
+      border-left: 4px solid transparent;
+      border-right: 4px solid transparent;
+      border-top: 5px solid #a0a0a8;
+    }
+    QComboBox QAbstractItemView {
+      background-color: #1a1a1e;
+      color: #e0e0e6;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      selection-background-color: #3b82f6;
+      selection-color: #ffffff;
+      outline: none;
+    }
   )");
 }
 
