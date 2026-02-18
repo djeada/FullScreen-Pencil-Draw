@@ -19,7 +19,9 @@
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QInputDialog>
 #include <QMessageBox>
+#include <QMenu>
 #include <QVBoxLayout>
 
 // LayerTreeWidget implementation
@@ -184,8 +186,11 @@ void LayerPanel::setupUI() {
   layerTree_->setExpandsOnDoubleClick(false);
   layerTree_->setIndentation(16);
   layerTree_->setMaximumHeight(350);
+  layerTree_->setContextMenuPolicy(Qt::CustomContextMenu);
   connect(layerTree_, &QTreeWidget::itemSelectionChanged, this,
           &LayerPanel::onTreeSelectionChanged);
+  connect(layerTree_, &QWidget::customContextMenuRequested, this,
+          &LayerPanel::onLayerTreeContextMenuRequested);
   mainLayout->addWidget(layerTree_);
 
   // Layer controls row 1 - Add/Delete/Duplicate/Merge
@@ -701,6 +706,202 @@ void LayerPanel::onTreeItemDropped(QTreeWidgetItem *item, int fromIndex,
   Q_UNUSED(fromIndex);
   Q_UNUSED(toIndex);
   // Handled via dropEvent override in tree widget
+}
+
+void LayerPanel::onLayerTreeContextMenuRequested(const QPoint &pos) {
+  if (!layerManager_ || !layerTree_) {
+    return;
+  }
+
+  QTreeWidgetItem *clickedItem = layerTree_->itemAt(pos);
+  const QPoint globalPos = layerTree_->viewport()->mapToGlobal(pos);
+  QMenu menu(this);
+
+  if (!clickedItem) {
+    QAction *addLayerAction = menu.addAction("Add Layer");
+    QAction *chosen = menu.exec(globalPos);
+    if (chosen == addLayerAction) {
+      onAddLayer();
+    }
+    return;
+  }
+
+  // Match common UX: right-click selects the clicked row if it wasn't selected.
+  if (!clickedItem->isSelected()) {
+    layerTree_->clearSelection();
+    clickedItem->setSelected(true);
+    layerTree_->setCurrentItem(clickedItem);
+  }
+
+  const bool isLayer = clickedItem->data(0, IsLayerRole).toBool();
+  const QUuid layerId(clickedItem->data(0, LayerIdRole).toString());
+
+  if (isLayer) {
+    Layer *layer = layerManager_->layer(layerId);
+    if (!layer) {
+      return;
+    }
+    int layerIndex = -1;
+    for (int i = 0; i < layerManager_->layerCount(); ++i) {
+      Layer *candidate = layerManager_->layer(i);
+      if (candidate && candidate->id() == layerId) {
+        layerIndex = i;
+        break;
+      }
+    }
+
+    const int layerCount = layerManager_->layerCount();
+
+    QAction *addLayerAction = menu.addAction("Add Layer");
+    menu.addSeparator();
+    QAction *renameLayerAction = menu.addAction("Rename Layer...");
+    QAction *duplicateLayerAction = menu.addAction("Duplicate Layer");
+    QAction *mergeDownAction = menu.addAction("Merge Down");
+    QAction *deleteLayerAction = menu.addAction("Delete Layer");
+    menu.addSeparator();
+    QAction *moveLayerUpAction = menu.addAction("Move Layer Up");
+    QAction *moveLayerDownAction = menu.addAction("Move Layer Down");
+    menu.addSeparator();
+
+    QAction *toggleVisibilityAction =
+        menu.addAction((layer && layer->isVisible()) ? "Hide Layer"
+                                                     : "Show Layer");
+    toggleVisibilityAction->setCheckable(true);
+    toggleVisibilityAction->setChecked(layer && layer->isVisible());
+
+    QAction *toggleLockAction = menu.addAction((layer && layer->isLocked())
+                                                   ? "Unlock Layer"
+                                                   : "Lock Layer");
+    toggleLockAction->setCheckable(true);
+    toggleLockAction->setChecked(layer && layer->isLocked());
+
+    deleteLayerAction->setEnabled(layerCount > 1);
+    mergeDownAction->setEnabled(layerIndex > 0);
+    moveLayerUpAction->setEnabled(layerIndex > 0);
+    moveLayerDownAction->setEnabled(layerIndex >= 0 &&
+                                    layerIndex < layerCount - 1);
+
+    QAction *chosen = menu.exec(globalPos);
+    if (!chosen) {
+      return;
+    }
+    if (chosen == addLayerAction) {
+      onAddLayer();
+      return;
+    }
+
+    if (!layerId.isNull()) {
+      layerManager_->setActiveLayer(layerId);
+    }
+
+    if (chosen == renameLayerAction) {
+      onRenameLayer();
+    } else if (chosen == duplicateLayerAction) {
+      onDuplicateLayer();
+    } else if (chosen == mergeDownAction) {
+      onMergeDown();
+    } else if (chosen == deleteLayerAction) {
+      onDeleteLayer();
+    } else if (chosen == moveLayerUpAction) {
+      onMoveLayerUp();
+    } else if (chosen == moveLayerDownAction) {
+      onMoveLayerDown();
+    } else if (chosen == toggleVisibilityAction) {
+      onVisibilityToggled();
+    } else if (chosen == toggleLockAction) {
+      onLockToggled();
+    }
+    return;
+  }
+
+  QList<QTreeWidgetItem *> selectedTreeItems = layerTree_->selectedItems();
+  QList<ItemId> selectedItemIds;
+  bool canBringForward = false;
+  bool canSendBackward = false;
+
+  for (QTreeWidgetItem *item : selectedTreeItems) {
+    if (!item || item->data(0, IsLayerRole).toBool()) {
+      continue;
+    }
+    ItemId id = ItemId::fromString(item->data(0, ItemIdRole).toString());
+    if (!id.isValid()) {
+      continue;
+    }
+    selectedItemIds.append(id);
+    if (Layer *owner = layerManager_->findLayerForItem(id)) {
+      const int idx = owner->indexOfItem(id);
+      if (idx > 0) {
+        canSendBackward = true;
+      }
+      if (idx < owner->itemCount() - 1) {
+        canBringForward = true;
+      }
+    }
+  }
+
+  const bool hasItems = !selectedItemIds.isEmpty();
+  const bool hasCanvas = canvas_ && canvas_->scene();
+
+  QAction *deleteItemsAction = menu.addAction(
+      selectedItemIds.size() > 1 ? "Delete Selected Items" : "Delete Item");
+  QAction *mergeItemsAction = menu.addAction("Merge Selected");
+  menu.addSeparator();
+  QAction *bringToFrontAction = menu.addAction("Bring to Front");
+  QAction *bringForwardAction = menu.addAction("Bring Forward");
+  QAction *sendBackwardAction = menu.addAction("Send Backward");
+  QAction *sendToBackAction = menu.addAction("Send to Back");
+
+  deleteItemsAction->setEnabled(hasItems && hasCanvas);
+  mergeItemsAction->setEnabled(hasCanvas && selectedItemIds.size() > 1);
+  bringToFrontAction->setEnabled(hasItems && hasCanvas && canBringForward);
+  bringForwardAction->setEnabled(hasItems && hasCanvas && canBringForward);
+  sendBackwardAction->setEnabled(hasItems && hasCanvas && canSendBackward);
+  sendToBackAction->setEnabled(hasItems && hasCanvas && canSendBackward);
+
+  QAction *chosen = menu.exec(globalPos);
+  if (!chosen || !hasCanvas) {
+    return;
+  }
+
+  if (chosen == deleteItemsAction) {
+    canvas_->deleteSelectedItems();
+  } else if (chosen == mergeItemsAction) {
+    canvas_->groupSelectedItems();
+  } else if (chosen == bringToFrontAction) {
+    canvas_->bringToFront();
+  } else if (chosen == bringForwardAction) {
+    canvas_->bringForward();
+  } else if (chosen == sendBackwardAction) {
+    canvas_->sendBackward();
+  } else if (chosen == sendToBackAction) {
+    canvas_->sendToBack();
+  }
+}
+
+void LayerPanel::onRenameLayer() {
+  if (!layerManager_) {
+    return;
+  }
+
+  Layer *layer = layerManager_->activeLayer();
+  if (!layer) {
+    return;
+  }
+
+  bool ok = false;
+  QString name = QInputDialog::getText(this, "Rename Layer", "Layer name:",
+                                       QLineEdit::Normal, layer->name(), &ok);
+  if (!ok) {
+    return;
+  }
+
+  name = name.trimmed();
+  if (name.isEmpty() || name == layer->name()) {
+    return;
+  }
+
+  layer->setName(name);
+  refreshLayerList();
 }
 
 QString LayerPanel::itemDescription(const ItemId &id) const {
