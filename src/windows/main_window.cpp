@@ -6,6 +6,7 @@
 #include "../core/theme_manager.h"
 #include "../tools/tool_manager.h"
 #include "../widgets/canvas.h"
+#include "../widgets/element_bank_panel.h"
 #include "../widgets/layer_panel.h"
 #include "../widgets/tool_panel.h"
 #include <QApplication>
@@ -42,10 +43,11 @@ static QAction *createAction(QMenu *menu, const QString &text,
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), _canvas(new Canvas(this)),
       _toolPanel(new ToolPanel(this)), _layerPanel(nullptr),
-      _autoSaveManager(nullptr), _statusLabel(nullptr),
-      _measurementLabel(nullptr), _recentFilesMenu(nullptr),
-      _snapToGridAction(nullptr), _autoSaveAction(nullptr),
-      _rulerAction(nullptr), _measurementAction(nullptr)
+      _elementBankPanel(new ElementBankPanel(this)), _autoSaveManager(nullptr),
+      _statusLabel(nullptr), _measurementLabel(nullptr),
+      _recentFilesMenu(nullptr), _snapToGridAction(nullptr),
+      _autoSaveAction(nullptr), _rulerAction(nullptr),
+      _measurementAction(nullptr)
 #ifdef HAVE_QT_PDF
       ,
       _pdfViewer(nullptr), _thumbnailPanel(nullptr), _centralSplitter(nullptr),
@@ -77,6 +79,7 @@ MainWindow::MainWindow(QWidget *parent)
 #endif
 
   this->addDockWidget(Qt::LeftDockWidgetArea, _toolPanel);
+  this->addDockWidget(Qt::RightDockWidgetArea, _elementBankPanel);
   this->setWindowTitle("FullScreen Pencil Draw - Professional Edition");
   this->resize(1400, 900);
 
@@ -272,6 +275,10 @@ void MainWindow::setupConnections() {
   connect(_toolPanel, &ToolPanel::pressureSensitivityToggled, _canvas,
           &Canvas::togglePressureSensitivity);
 
+  // Element bank
+  connect(_elementBankPanel, &ElementBankPanel::elementSelected, _canvas,
+          &Canvas::placeElement);
+
   // Filled shapes feedback
   connect(_canvas, &Canvas::filledShapesChanged, this,
           &MainWindow::onFilledShapesChanged);
@@ -423,6 +430,10 @@ void MainWindow::setupMenuBar() {
       createAction(themeMenu, "Toggle &Dark/Light Theme",
                    QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_T), this,
                    SLOT(onToggleTheme()));
+
+  // Panels
+  viewMenu->addSeparator();
+  viewMenu->addAction(_elementBankPanel->toggleViewAction());
 
   // Edit menu - add lock/unlock after other edit items
   editMenu->addSeparator();

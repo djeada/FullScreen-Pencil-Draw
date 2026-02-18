@@ -10,6 +10,7 @@
 #include "../core/recent_files_manager.h"
 #include "../core/scene_controller.h"
 #include "../core/transform_action.h"
+#include "architecture_elements.h"
 #include "image_size_dialog.h"
 #include "resize_canvas_dialog.h"
 #include "latex_text_item.h"
@@ -4621,4 +4622,49 @@ void Canvas::applySharpenToSelection() {
 
   if (applied)
     emit canvasModified();
+}
+
+void Canvas::placeElement(const QString &elementId) {
+  if (!scene_)
+    return;
+
+  // Create the appropriate custom vector-drawn element
+  ArchitectureElementItem *elem = nullptr;
+  if (elementId == "client")
+    elem = new ClientElement();
+  else if (elementId == "load_balancer")
+    elem = new LoadBalancerElement();
+  else if (elementId == "api_gateway")
+    elem = new ApiGatewayElement();
+  else if (elementId == "app_server")
+    elem = new AppServerElement();
+  else if (elementId == "cache")
+    elem = new CacheElement();
+  else if (elementId == "message_queue")
+    elem = new MessageQueueElement();
+  else if (elementId == "database")
+    elem = new DatabaseElement();
+  else if (elementId == "object_storage")
+    elem = new ObjectStorageElement();
+  else if (elementId == "auth")
+    elem = new AuthElement();
+  else if (elementId == "monitoring")
+    elem = new MonitoringElement();
+
+  if (!elem)
+    return;
+
+  // Position at the centre of the visible viewport
+  QRectF br = elem->boundingRect();
+  QPointF center = mapToScene(viewport()->rect().center());
+  elem->setPos(center.x() - br.width() / 2.0, center.y() - br.height() / 2.0);
+
+  // Add to scene via SceneController
+  if (sceneController_) {
+    sceneController_->addItem(elem);
+  } else {
+    scene_->addItem(elem);
+  }
+  addDrawAction(elem);
+  emit canvasModified();
 }
