@@ -40,6 +40,7 @@
 #include <algorithm>
 #ifdef HAVE_QT_SVG
 #include <QSvgGenerator>
+#include <QSvgRenderer>
 #endif
 #include <QUrl>
 #include <QWheelEvent>
@@ -1557,7 +1558,11 @@ void Canvas::duplicateSelectedItems() {
 void Canvas::saveToFile() {
   QString fileName = QFileDialog::getSaveFileName(
       this, "Save Image", "",
+#ifdef HAVE_QT_SVG
+      "PNG (*.png);;JPEG (*.jpg);;BMP (*.bmp);;PDF (*.pdf);;SVG (*.svg)");
+#else
       "PNG (*.png);;JPEG (*.jpg);;BMP (*.bmp);;PDF (*.pdf)");
+#endif
   if (fileName.isEmpty())
     return;
 
@@ -1566,6 +1571,39 @@ void Canvas::saveToFile() {
     exportToPDFWithFilename(fileName);
     return;
   }
+
+#ifdef HAVE_QT_SVG
+  // Check if saving as SVG
+  if (fileName.endsWith(".svg", Qt::CaseInsensitive)) {
+    bool ev = eraserPreview_ && eraserPreview_->isVisible();
+    if (eraserPreview_)
+      eraserPreview_->hide();
+    scene_->clearSelection();
+    QRectF sr = scene_->itemsBoundingRect();
+    if (sr.isEmpty())
+      sr = scene_->sceneRect();
+    sr.adjust(-10, -10, 10, 10);
+
+    QSvgGenerator generator;
+    generator.setFileName(fileName);
+    generator.setSize(sr.size().toSize());
+    generator.setViewBox(QRect(0, 0, sr.width(), sr.height()));
+    generator.setTitle("FullScreen Pencil Draw Export");
+    generator.setDescription("Exported from FullScreen Pencil Draw");
+
+    QPainter svgPainter;
+    svgPainter.begin(&generator);
+    svgPainter.setRenderHint(QPainter::Antialiasing);
+    svgPainter.setRenderHint(QPainter::TextAntialiasing);
+    scene_->render(&svgPainter, QRectF(), sr);
+    svgPainter.end();
+
+    if (ev && eraserPreview_)
+      eraserPreview_->show();
+    RecentFilesManager::instance().addRecentFile(fileName);
+    return;
+  }
+#endif
 
   bool ev = eraserPreview_ && eraserPreview_->isVisible();
   if (eraserPreview_)
@@ -1594,9 +1632,21 @@ void Canvas::openFile() {
   resetColorSelection();
   QString fileName = QFileDialog::getOpenFileName(
       this, "Open Image", "",
+#ifdef HAVE_QT_SVG
+      "Images (*.png *.jpg *.jpeg *.bmp *.gif *.svg);;All (*)");
+#else
       "Images (*.png *.jpg *.jpeg *.bmp *.gif);;All (*)");
+#endif
   if (fileName.isEmpty())
     return;
+
+#ifdef HAVE_QT_SVG
+  if (fileName.endsWith(".svg", Qt::CaseInsensitive)) {
+    importSvg(fileName);
+    RecentFilesManager::instance().addRecentFile(fileName);
+    return;
+  }
+#endif
   QPixmap pm(fileName);
   if (pm.isNull())
     return;
@@ -1623,6 +1673,15 @@ void Canvas::openRecentFile(const QString &filePath) {
   resetColorSelection();
   if (filePath.isEmpty())
     return;
+
+#ifdef HAVE_QT_SVG
+  if (filePath.endsWith(".svg", Qt::CaseInsensitive)) {
+    importSvg(filePath);
+    RecentFilesManager::instance().addRecentFile(filePath);
+    return;
+  }
+#endif
+
   QPixmap pm(filePath);
   if (pm.isNull()) {
     QMessageBox::warning(this, "Error",
@@ -3063,8 +3122,20 @@ void Canvas::dropEvent(QDropEvent *event) {
           event->acceptProposedAction();
           return;
         }
+
+#ifdef HAVE_QT_SVG
+        // Check if the file is an SVG
+        if (extension == "svg") {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+          QPointF dropPosition = mapToScene(event->position().toPoint());
+#else
+          QPointF dropPosition = mapToScene(event->pos());
+#endif
+          importSvg(filePath, dropPosition);
+        } else
+#endif
         // Check if the file is a supported image format
-        else if (SUPPORTED_IMAGE_EXTENSIONS.contains(extension)) {
+        if (SUPPORTED_IMAGE_EXTENSIONS.contains(extension)) {
           // Get the drop position in scene coordinates
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
           QPointF dropPosition = mapToScene(event->position().toPoint());
@@ -3079,7 +3150,11 @@ void Canvas::dropEvent(QDropEvent *event) {
           QMessageBox::warning(
               this, "Unsupported File",
               QString("File '%1' is not a supported format.\n\nSupported "
+#ifdef HAVE_QT_SVG
+                      "formats: PNG, JPG, JPEG, BMP, GIF, SVG, PDF")
+#else
                       "formats: PNG, JPG, JPEG, BMP, GIF, PDF")
+#endif
                   .arg(QFileInfo(filePath).fileName()));
         }
       }
@@ -3369,6 +3444,51 @@ void Canvas::exportSelectionToSVG() {
   }
 
   painter.end();
+#endif
+}
+
+void Canvas::importSvg(const QString &filePath, const QPointF &position) {
+#ifndef HAVE_QT_SVG
+  Q_UNUSED(filePath)
+  Q_UNUSED(position)
+  QMessageBox::information(this, "SVG Import Unavailable",
+                           "SVG import requires the Qt SVG module, which was "
+                           "not found at build time.");
+#else
+  QSvgRenderer renderer(filePath);
+  if (!renderer.isValid()) {
+    QMessageBox::warning(
+        this, "Invalid SVG",
+        QString("Failed to load SVG from '%1'.\n\nThe file may be corrupted or "
+                "not a valid SVG.")
+            .arg(QFileInfo(filePath).fileName()));
+    return;
+  }
+
+  QSize svgSize = renderer.defaultSize();
+  if (svgSize.isEmpty())
+    svgSize = QSize(400, 400);
+
+  QImage image(svgSize, QImage::Format_ARGB32);
+  image.fill(Qt::transparent);
+  QPainter painter(&image);
+  renderer.render(&painter);
+  painter.end();
+
+  QPixmap pixmap = QPixmap::fromImage(image);
+  QGraphicsPixmapItem *pixmapItem = new QGraphicsPixmapItem(pixmap);
+
+  pixmapItem->setPos(position.x() - svgSize.width() / 2.0,
+                     position.y() - svgSize.height() / 2.0);
+  pixmapItem->setFlag(QGraphicsItem::ItemIsSelectable, true);
+  pixmapItem->setFlag(QGraphicsItem::ItemIsMovable, true);
+
+  if (sceneController_) {
+    sceneController_->addItem(pixmapItem);
+  } else {
+    scene_->addItem(pixmapItem);
+  }
+  addDrawAction(pixmapItem);
 #endif
 }
 

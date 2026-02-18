@@ -306,6 +306,8 @@ private:
                                qreal scaleY, const QPointF &anchor);
   void applyRotationToOtherItems(QGraphicsItem *sourceItem, qreal angleDelta,
                                  const QPointF &center);
+  void importSvg(const QString &filePath,
+                 const QPointF &position = QPointF());
 };
 
 #endif // CANVAS_H
