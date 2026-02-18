@@ -93,11 +93,11 @@ private slots:
     int origDark = qRed(img.pixel(9, 0));
     int origLight = qRed(img.pixel(10, 0));
     // The difference should be at least as large as original
-    QVERIFY2((lightSide - darkSide) >= (origLight - origDark),
-             qPrintable(
-                 QString("Sharpened contrast %1 should be >= original %2")
-                     .arg(lightSide - darkSide)
-                     .arg(origLight - origDark)));
+    QVERIFY2(
+        (lightSide - darkSide) >= (origLight - origDark),
+        qPrintable(QString("Sharpened contrast %1 should be >= original %2")
+                       .arg(lightSide - darkSide)
+                       .arg(origLight - origDark)));
   }
 
   void blurOutputSameSize() {

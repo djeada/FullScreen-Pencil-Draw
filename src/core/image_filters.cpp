@@ -39,8 +39,7 @@ QImage blur(const QImage &source, int radius) {
           bSum += qBlue(px);
         }
       }
-      dst[x] =
-          qRgba(rSum / area, gSum / area, bSum / area, aSum / area);
+      dst[x] = qRgba(rSum / area, gSum / area, bSum / area, aSum / area);
     }
   }
 
@@ -67,17 +66,16 @@ QImage sharpen(const QImage &source, int radius, double strength) {
     auto *dstRow = reinterpret_cast<QRgb *>(result.scanLine(y));
     for (int x = 0; x < w; ++x) {
       int r = qRed(srcRow[x]) +
-              static_cast<int>(strength *
-                               (qRed(srcRow[x]) - qRed(blurRow[x])));
-      int g = qGreen(srcRow[x]) +
-              static_cast<int>(strength *
-                               (qGreen(srcRow[x]) - qGreen(blurRow[x])));
-      int b = qBlue(srcRow[x]) +
-              static_cast<int>(strength *
-                               (qBlue(srcRow[x]) - qBlue(blurRow[x])));
+              static_cast<int>(strength * (qRed(srcRow[x]) - qRed(blurRow[x])));
+      int g =
+          qGreen(srcRow[x]) +
+          static_cast<int>(strength * (qGreen(srcRow[x]) - qGreen(blurRow[x])));
+      int b =
+          qBlue(srcRow[x]) +
+          static_cast<int>(strength * (qBlue(srcRow[x]) - qBlue(blurRow[x])));
       int a = qAlpha(srcRow[x]);
       dstRow[x] = qRgba(std::clamp(r, 0, 255), std::clamp(g, 0, 255),
-                         std::clamp(b, 0, 255), std::clamp(a, 0, 255));
+                        std::clamp(b, 0, 255), std::clamp(a, 0, 255));
     }
   }
 

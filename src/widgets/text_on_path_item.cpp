@@ -9,8 +9,7 @@
 #include <QtMath>
 
 TextOnPathItem::TextOnPathItem(QGraphicsItem *parent)
-    : QGraphicsObject(parent), textColor_(Qt::black),
-      font_("Arial", 14) {
+    : QGraphicsObject(parent), textColor_(Qt::black), font_("Arial", 14) {
   setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
 }
 
@@ -80,9 +79,8 @@ void TextOnPathItem::setFont(const QFont &font) {
 void TextOnPathItem::mouseDoubleClickEvent(
     QGraphicsSceneMouseEvent * /*event*/) {
   bool ok = false;
-  QString newText = QInputDialog::getText(nullptr, "Edit Text on Path",
-                                          "Text:", QLineEdit::Normal,
-                                          text_, &ok);
+  QString newText = QInputDialog::getText(
+      nullptr, "Edit Text on Path", "Text:", QLineEdit::Normal, text_, &ok);
   if (ok && !newText.isEmpty()) {
     setText(newText);
   }
@@ -98,7 +96,7 @@ void TextOnPathItem::rebuildLayout() {
 
   QFontMetricsF fm(font_);
   qreal margin = fm.height();
-  cachedBounds_ = path_.boundingRect().adjusted(-margin, -margin,
-                                                 margin, margin);
+  cachedBounds_ =
+      path_.boundingRect().adjusted(-margin, -margin, margin, margin);
   update();
 }

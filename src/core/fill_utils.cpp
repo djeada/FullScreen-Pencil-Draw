@@ -285,8 +285,7 @@ bool applyFillToItem(QGraphicsItem *item, ItemStore *store, const QColor &color,
     applyTintState(pixmap, newState);
     ItemId id = resolveItemId();
     if (store && id.isValid()) {
-      outAction =
-          std::make_unique<FillAction>(id, store, oldState, newState);
+      outAction = std::make_unique<FillAction>(id, store, oldState, newState);
     }
     return true;
   }
@@ -297,7 +296,8 @@ bool applyFillToItem(QGraphicsItem *item, ItemStore *store, const QColor &color,
 
 bool fillTopItemAtPoint(
     QGraphicsScene *scene, const QPointF &point, const QColor &color,
-    ItemStore *store, QGraphicsItem *backgroundItem, QGraphicsItem *extraSkipItem,
+    ItemStore *store, QGraphicsItem *backgroundItem,
+    QGraphicsItem *extraSkipItem,
     const std::function<void(std::unique_ptr<Action>)> &pushAction) {
   if (!scene) {
     return false;

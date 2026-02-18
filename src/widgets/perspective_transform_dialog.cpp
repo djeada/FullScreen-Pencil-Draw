@@ -138,7 +138,8 @@ void PerspectivePreviewWidget::mouseReleaseEvent(QMouseEvent * /*event*/) {
 // ---------------------------------------------------------------------------
 
 PerspectiveTransformDialog::PerspectiveTransformDialog(QWidget *parent)
-    : QDialog(parent), updatingFromPreview_(false), updatingFromSpinBox_(false) {
+    : QDialog(parent), updatingFromPreview_(false),
+      updatingFromSpinBox_(false) {
   setWindowTitle("Perspective Transform");
   setModal(true);
   setMinimumWidth(460);
@@ -268,18 +269,14 @@ void PerspectiveTransformDialog::syncPreviewFromSpinBoxes() {
 
   auto fromPercent = [](double pct, double def) { return def + pct / 100.0; };
 
-  preview_->setCorner(
-      0, QPointF(fromPercent(tlX_->value(), 0.0),
-                 fromPercent(tlY_->value(), 0.0)));
-  preview_->setCorner(
-      1, QPointF(fromPercent(trX_->value(), 1.0),
-                 fromPercent(trY_->value(), 0.0)));
-  preview_->setCorner(
-      2, QPointF(fromPercent(brX_->value(), 1.0),
-                 fromPercent(brY_->value(), 1.0)));
-  preview_->setCorner(
-      3, QPointF(fromPercent(blX_->value(), 0.0),
-                 fromPercent(blY_->value(), 1.0)));
+  preview_->setCorner(0, QPointF(fromPercent(tlX_->value(), 0.0),
+                                 fromPercent(tlY_->value(), 0.0)));
+  preview_->setCorner(1, QPointF(fromPercent(trX_->value(), 1.0),
+                                 fromPercent(trY_->value(), 0.0)));
+  preview_->setCorner(2, QPointF(fromPercent(brX_->value(), 1.0),
+                                 fromPercent(brY_->value(), 1.0)));
+  preview_->setCorner(3, QPointF(fromPercent(blX_->value(), 0.0),
+                                 fromPercent(blY_->value(), 1.0)));
 
   preview_->update();
   updatingFromSpinBox_ = false;

@@ -5,10 +5,10 @@
  * All actions use ItemId-based storage only. Item pointers are NEVER cached.
  */
 #include "action.h"
-#include "item_store.h"
-#include "layer.h"
 #include "../widgets/latex_text_item.h"
 #include "../widgets/mermaid_text_item.h"
+#include "item_store.h"
+#include "layer.h"
 #include <QAbstractGraphicsShapeItem>
 #include <QGraphicsColorizeEffect>
 #include <QGraphicsItemGroup>
@@ -138,8 +138,8 @@ FillAction::FillAction(const ItemId &id, ItemStore *store,
 
 FillAction::FillAction(const ItemId &id, ItemStore *store, const QPen &oldPen,
                        const QPen &newPen)
-    : itemId_(id), itemStore_(store), property_(Property::Pen),
-      oldPen_(oldPen), newPen_(newPen) {}
+    : itemId_(id), itemStore_(store), property_(Property::Pen), oldPen_(oldPen),
+      newPen_(newPen) {}
 
 FillAction::FillAction(const ItemId &id, ItemStore *store,
                        const QColor &oldColor, const QColor &newColor)

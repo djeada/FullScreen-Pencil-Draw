@@ -25,9 +25,9 @@
 #include <QGraphicsRectItem>
 #include <QGraphicsScene>
 #include <QGraphicsTextItem>
-#include <QImage>
 #include <QGraphicsView>
 #include <QHash>
+#include <QImage>
 #include <QList>
 #include <QMenu>
 #include <QMimeData>
@@ -332,8 +332,7 @@ private:
   void applyRotationToOtherItems(QGraphicsItem *sourceItem, qreal angleDelta,
                                  const QPointF &center);
   bool hasNonNormalBlendModes() const;
-  void importSvg(const QString &filePath,
-                 const QPointF &position = QPointF());
+  void importSvg(const QString &filePath, const QPointF &position = QPointF());
 };
 
 #endif // CANVAS_H

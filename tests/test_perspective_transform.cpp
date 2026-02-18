@@ -1,6 +1,7 @@
 /**
  * @file test_perspective_transform.cpp
- * @brief Unit tests for PerspectiveTransformDialog and PerspectivePreviewWidget.
+ * @brief Unit tests for PerspectiveTransformDialog and
+ * PerspectivePreviewWidget.
  */
 #include "../src/widgets/perspective_transform_dialog.h"
 #include <QTest>
@@ -70,8 +71,7 @@ private slots:
     QPointF bl = t.map(rect.bottomLeft());
 
     auto fuzzyCompare = [](const QPointF &a, const QPointF &b) {
-      return std::abs(a.x() - b.x()) < 0.01 &&
-             std::abs(a.y() - b.y()) < 0.01;
+      return std::abs(a.x() - b.x()) < 0.01 && std::abs(a.y() - b.y()) < 0.01;
     };
 
     QVERIFY(fuzzyCompare(tl, rect.topLeft()));

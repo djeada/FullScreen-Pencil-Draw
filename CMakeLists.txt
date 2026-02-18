@@ -60,6 +60,9 @@ set(PROJECT_FILES
     ${PROJECT_HEADERS}
 )
 
+# Always include UI icon resources
+set(UI_RESOURCES resources/ui_icons.qrc)
+
 # Add Qt resources if WebEngine is available (KaTeX assets)
 if(HAVE_QT_WEBENGINE)
     set(KATEX_RESOURCES resources/resources.qrc)
@@ -70,17 +73,20 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
     qt_add_executable(${PROJECT_NAME}
         MANUAL_FINALIZATION
         ${PROJECT_FILES}
+        ${UI_RESOURCES}
         ${KATEX_RESOURCES}
     )
 else()
     if(ANDROID)
         add_library(${PROJECT_NAME} SHARED
             ${PROJECT_FILES}
+            ${UI_RESOURCES}
             ${KATEX_RESOURCES}
         )
     else()
         add_executable(${PROJECT_NAME}
             ${PROJECT_FILES}
+            ${UI_RESOURCES}
             ${KATEX_RESOURCES}
         )
     endif()

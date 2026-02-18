@@ -19,10 +19,23 @@
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QIcon>
 #include <QInputDialog>
-#include <QMessageBox>
 #include <QMenu>
+#include <QMessageBox>
 #include <QVBoxLayout>
+
+static void applyLayerButtonIcon(QPushButton *button, const QString &iconPath,
+                                 const QString &fallbackText) {
+  const QIcon icon(iconPath);
+  if (icon.isNull()) {
+    button->setText(fallbackText);
+    return;
+  }
+  button->setText(QString());
+  button->setIcon(icon);
+  button->setIconSize(QSize(18, 18));
+}
 
 // LayerTreeWidget implementation
 LayerTreeWidget::LayerTreeWidget(QWidget *parent) : QTreeWidget(parent) {}
@@ -169,8 +182,8 @@ void LayerPanel::setItemStore(ItemStore *store) { itemStore_ = store; }
 void LayerPanel::setupUI() {
   QWidget *container = new QWidget(this);
   QVBoxLayout *mainLayout = new QVBoxLayout(container);
-  mainLayout->setContentsMargins(8, 8, 8, 8);
-  mainLayout->setSpacing(8);
+  mainLayout->setContentsMargins(10, 10, 10, 10);
+  mainLayout->setSpacing(10);
 
   // Layer tree
   layerTree_ = new LayerTreeWidget(container);
@@ -185,7 +198,7 @@ void LayerPanel::setupUI() {
   layerTree_->setDropIndicatorShown(true);
   layerTree_->setExpandsOnDoubleClick(false);
   layerTree_->setIndentation(16);
-  layerTree_->setMaximumHeight(350);
+  layerTree_->setMaximumHeight(320);
   layerTree_->setContextMenuPolicy(Qt::CustomContextMenu);
   connect(layerTree_, &QTreeWidget::itemSelectionChanged, this,
           &LayerPanel::onTreeSelectionChanged);
@@ -195,96 +208,104 @@ void LayerPanel::setupUI() {
 
   // Layer controls row 1 - Add/Delete/Duplicate/Merge
   QHBoxLayout *controlsRow1 = new QHBoxLayout();
-  controlsRow1->setSpacing(4);
+  controlsRow1->setSpacing(6);
+  controlsRow1->setAlignment(Qt::AlignHCenter);
 
-  addButton_ = new QPushButton(QString::fromUtf8("＋"), container);
+  addButton_ = new QPushButton("", container);
   addButton_->setToolTip("Add new layer");
-  addButton_->setMinimumSize(40, 40);
+  applyLayerButtonIcon(addButton_, ":/ui-icons/layer_add.svg", "+");
+  addButton_->setFixedSize(40, 40);
   connect(addButton_, &QPushButton::clicked, this, &LayerPanel::onAddLayer);
   controlsRow1->addWidget(addButton_);
 
-  deleteButton_ = new QPushButton(QString::fromUtf8("−"), container);
+  deleteButton_ = new QPushButton("", container);
   deleteButton_->setToolTip("Delete layer");
-  deleteButton_->setMinimumSize(40, 40);
+  applyLayerButtonIcon(deleteButton_, ":/ui-icons/layer_delete.svg", "-");
+  deleteButton_->setFixedSize(40, 40);
   connect(deleteButton_, &QPushButton::clicked, this,
           &LayerPanel::onDeleteLayer);
   controlsRow1->addWidget(deleteButton_);
 
-  duplicateButton_ = new QPushButton(QString::fromUtf8("⧉"), container);
+  duplicateButton_ = new QPushButton("", container);
   duplicateButton_->setToolTip("Duplicate layer");
-  duplicateButton_->setMinimumSize(40, 40);
+  applyLayerButtonIcon(duplicateButton_, ":/ui-icons/layer_duplicate.svg",
+                       "D");
+  duplicateButton_->setFixedSize(40, 40);
   connect(duplicateButton_, &QPushButton::clicked, this,
           &LayerPanel::onDuplicateLayer);
   controlsRow1->addWidget(duplicateButton_);
 
-  mergeButton_ = new QPushButton(QString::fromUtf8("⊕"), container);
+  mergeButton_ = new QPushButton("", container);
   mergeButton_->setToolTip("Merge with layer below");
-  mergeButton_->setMinimumSize(40, 40);
+  applyLayerButtonIcon(mergeButton_, ":/ui-icons/layer_merge_down.svg", "M");
+  mergeButton_->setFixedSize(40, 40);
   connect(mergeButton_, &QPushButton::clicked, this, &LayerPanel::onMergeDown);
   controlsRow1->addWidget(mergeButton_);
 
-  controlsRow1->addStretch();
   mainLayout->addLayout(controlsRow1);
 
   // Layer controls row 2 - Move/Visibility/Lock
   QHBoxLayout *controlsRow2 = new QHBoxLayout();
-  controlsRow2->setSpacing(4);
+  controlsRow2->setSpacing(6);
+  controlsRow2->setAlignment(Qt::AlignHCenter);
 
-  moveUpButton_ = new QPushButton(QString::fromUtf8("▲"), container);
+  moveUpButton_ = new QPushButton("", container);
   moveUpButton_->setToolTip("Move layer up");
-  moveUpButton_->setMinimumSize(40, 40);
+  applyLayerButtonIcon(moveUpButton_, ":/ui-icons/layer_move_up.svg", "U");
+  moveUpButton_->setFixedSize(40, 40);
   connect(moveUpButton_, &QPushButton::clicked, this,
           &LayerPanel::onMoveLayerUp);
   controlsRow2->addWidget(moveUpButton_);
 
-  moveDownButton_ = new QPushButton(QString::fromUtf8("▼"), container);
+  moveDownButton_ = new QPushButton("", container);
   moveDownButton_->setToolTip("Move layer down");
-  moveDownButton_->setMinimumSize(40, 40);
+  applyLayerButtonIcon(moveDownButton_, ":/ui-icons/layer_move_down.svg", "D");
+  moveDownButton_->setFixedSize(40, 40);
   connect(moveDownButton_, &QPushButton::clicked, this,
           &LayerPanel::onMoveLayerDown);
   controlsRow2->addWidget(moveDownButton_);
 
-  visibilityButton_ =
-      new QPushButton(QString::fromUtf8("\xF0\x9F\x91\x81"), container);
+  visibilityButton_ = new QPushButton("", container);
   visibilityButton_->setToolTip("Toggle visibility");
-  visibilityButton_->setMinimumSize(40, 40);
+  applyLayerButtonIcon(visibilityButton_, ":/ui-icons/layer_visibility.svg",
+                       "V");
+  visibilityButton_->setFixedSize(40, 40);
   visibilityButton_->setCheckable(true);
   connect(visibilityButton_, &QPushButton::clicked, this,
           &LayerPanel::onVisibilityToggled);
   controlsRow2->addWidget(visibilityButton_);
 
-  lockButton_ =
-      new QPushButton(QString::fromUtf8("\xF0\x9F\x94\x92"), container);
+  lockButton_ = new QPushButton("", container);
   lockButton_->setToolTip("Toggle lock");
-  lockButton_->setMinimumSize(40, 40);
+  applyLayerButtonIcon(lockButton_, ":/ui-icons/layer_lock.svg", "L");
+  lockButton_->setFixedSize(40, 40);
   lockButton_->setCheckable(true);
   connect(lockButton_, &QPushButton::clicked, this, &LayerPanel::onLockToggled);
   controlsRow2->addWidget(lockButton_);
 
-  controlsRow2->addStretch();
   mainLayout->addLayout(controlsRow2);
 
   // Layer controls row 3 - Merge Items/Flatten All
   QHBoxLayout *controlsRow3 = new QHBoxLayout();
-  controlsRow3->setSpacing(4);
+  controlsRow3->setSpacing(6);
+  controlsRow3->setAlignment(Qt::AlignHCenter);
 
-  mergeItemsButton_ =
-      new QPushButton(QString::fromUtf8("\xe2\x8a\x9e"), container); // ⊞
+  mergeItemsButton_ = new QPushButton("Grp", container);
   mergeItemsButton_->setToolTip("Merge selected items into group");
-  mergeItemsButton_->setMinimumSize(40, 40);
+  applyLayerButtonIcon(mergeItemsButton_, ":/ui-icons/layer_group.svg", "G");
+  mergeItemsButton_->setFixedSize(40, 40);
   connect(mergeItemsButton_, &QPushButton::clicked, this,
           &LayerPanel::onMergeSelectedItems);
   controlsRow3->addWidget(mergeItemsButton_);
 
-  flattenButton_ =
-      new QPushButton(QString::fromUtf8("\xe2\x8a\x9f"), container); // ⊟
+  flattenButton_ = new QPushButton("Flat", container);
   flattenButton_->setToolTip("Flatten all layers into one");
-  flattenButton_->setMinimumSize(40, 40);
+  applyLayerButtonIcon(flattenButton_, ":/ui-icons/layer_flatten.svg", "F");
+  flattenButton_->setFixedSize(40, 40);
   connect(flattenButton_, &QPushButton::clicked, this,
           &LayerPanel::onFlattenAll);
   controlsRow3->addWidget(flattenButton_);
 
-  controlsRow3->addStretch();
   mainLayout->addLayout(controlsRow3);
 
   // Opacity control
@@ -312,13 +333,16 @@ void LayerPanel::setupUI() {
   blendLayout->setContentsMargins(8, 12, 8, 8);
 
   blendModeCombo_ = new QComboBox(blendGroup);
-  blendModeCombo_->addItem("Normal", static_cast<int>(Layer::BlendMode::Normal));
+  blendModeCombo_->addItem("Normal",
+                           static_cast<int>(Layer::BlendMode::Normal));
   blendModeCombo_->addItem("Multiply",
                            static_cast<int>(Layer::BlendMode::Multiply));
-  blendModeCombo_->addItem("Screen", static_cast<int>(Layer::BlendMode::Screen));
+  blendModeCombo_->addItem("Screen",
+                           static_cast<int>(Layer::BlendMode::Screen));
   blendModeCombo_->addItem("Overlay",
                            static_cast<int>(Layer::BlendMode::Overlay));
-  blendModeCombo_->addItem("Darken", static_cast<int>(Layer::BlendMode::Darken));
+  blendModeCombo_->addItem("Darken",
+                           static_cast<int>(Layer::BlendMode::Darken));
   blendModeCombo_->addItem("Lighten",
                            static_cast<int>(Layer::BlendMode::Lighten));
   blendModeCombo_->addItem("Color Dodge",
@@ -398,8 +422,10 @@ void LayerPanel::setupUI() {
       color: #e0e0e6;
       border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 8px;
-      padding: 10px;
-      min-height: 26px;
+      padding: 0px;
+      min-width: 38px;
+      min-height: 38px;
+      font-size: 13px;
       font-weight: 500;
     }
     QPushButton:hover {
@@ -523,15 +549,12 @@ void LayerPanel::refreshLayerList() {
     if (!layer)
       continue;
 
-    QString prefix;
-    if (layer->isVisible()) {
-      prefix = QString::fromUtf8("\xF0\x9F\x91\x81 ");
-    } else {
-      prefix = "   ";
-    }
+    QStringList statusTokens;
+    statusTokens.append(layer->isVisible() ? "V" : "H");
     if (layer->isLocked()) {
-      prefix += QString::fromUtf8("\xF0\x9F\x94\x92 ");
+      statusTokens.append("L");
     }
+    const QString prefix = QString("[%1] ").arg(statusTokens.join("|"));
 
     QTreeWidgetItem *layerItem = new QTreeWidgetItem(layerTree_);
     layerItem->setText(0, prefix + layer->name());
@@ -652,8 +675,8 @@ void LayerPanel::updatePropertyControls() {
         QString("%1%").arg(static_cast<int>(layer->opacity() * 100)));
 
     blendModeCombo_->blockSignals(true);
-    int modeIndex = blendModeCombo_->findData(
-        static_cast<int>(layer->blendMode()));
+    int modeIndex =
+        blendModeCombo_->findData(static_cast<int>(layer->blendMode()));
     if (modeIndex >= 0) {
       blendModeCombo_->setCurrentIndex(modeIndex);
     }
@@ -746,8 +769,9 @@ void LayerPanel::onMergeSelectedItems() {
   }
 
   if (selectedIds.size() < 2) {
-    QMessageBox::information(this, "Merge Items",
-                             "Select at least 2 items within a layer to merge.");
+    QMessageBox::information(
+        this, "Merge Items",
+        "Select at least 2 items within a layer to merge.");
     return;
   }
 
@@ -933,15 +957,13 @@ void LayerPanel::onLayerTreeContextMenuRequested(const QPoint &pos) {
     QAction *moveLayerDownAction = menu.addAction("Move Layer Down");
     menu.addSeparator();
 
-    QAction *toggleVisibilityAction =
-        menu.addAction((layer && layer->isVisible()) ? "Hide Layer"
-                                                     : "Show Layer");
+    QAction *toggleVisibilityAction = menu.addAction(
+        (layer && layer->isVisible()) ? "Hide Layer" : "Show Layer");
     toggleVisibilityAction->setCheckable(true);
     toggleVisibilityAction->setChecked(layer && layer->isVisible());
 
-    QAction *toggleLockAction = menu.addAction((layer && layer->isLocked())
-                                                   ? "Unlock Layer"
-                                                   : "Lock Layer");
+    QAction *toggleLockAction = menu.addAction(
+        (layer && layer->isLocked()) ? "Unlock Layer" : "Lock Layer");
     toggleLockAction->setCheckable(true);
     toggleLockAction->setChecked(layer && layer->isLocked());
 
@@ -1059,8 +1081,9 @@ void LayerPanel::onRenameLayer() {
   }
 
   bool ok = false;
-  QString name = QInputDialog::getText(this, "Rename Layer", "Layer name:",
-                                       QLineEdit::Normal, layer->name(), &ok);
+  QString name = QInputDialog::getText(this, "Rename Layer",
+                                       "Layer name:", QLineEdit::Normal,
+                                       layer->name(), &ok);
   if (!ok) {
     return;
   }

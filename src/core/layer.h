@@ -146,8 +146,7 @@ public:
    * @brief Convert the layer blend mode to a QPainter::CompositionMode
    * @return The corresponding QPainter::CompositionMode
    */
-  static QPainter::CompositionMode
-  toCompositionMode(BlendMode mode);
+  static QPainter::CompositionMode toCompositionMode(BlendMode mode);
 
   /**
    * @brief Get the layer type

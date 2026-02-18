@@ -43,10 +43,10 @@ void TextOnPathTool::mousePressEvent(QMouseEvent *event,
     renderer_->scene()->addItem(previewPath_);
   }
 
-  auto *marker = new QGraphicsEllipseItem(
-      scenePos.x() - ANCHOR_MARKER_SIZE / 2,
-      scenePos.y() - ANCHOR_MARKER_SIZE / 2, ANCHOR_MARKER_SIZE,
-      ANCHOR_MARKER_SIZE);
+  auto *marker =
+      new QGraphicsEllipseItem(scenePos.x() - ANCHOR_MARKER_SIZE / 2,
+                               scenePos.y() - ANCHOR_MARKER_SIZE / 2,
+                               ANCHOR_MARKER_SIZE, ANCHOR_MARKER_SIZE);
   QPen markerPen(renderer_->currentPen().color());
   markerPen.setWidth(1);
   marker->setPen(markerPen);
@@ -128,9 +128,9 @@ void TextOnPathTool::finalizePath() {
 
   // Ask user for text
   bool ok = false;
-  QString text = QInputDialog::getText(nullptr, "Text on Path",
-                                       "Enter text:", QLineEdit::Normal,
-                                       QString(), &ok);
+  QString text =
+      QInputDialog::getText(nullptr, "Text on Path",
+                            "Enter text:", QLineEdit::Normal, QString(), &ok);
   if (!ok || text.trimmed().isEmpty()) {
     anchors_.clear();
     isDragging_ = false;
@@ -139,8 +139,7 @@ void TextOnPathTool::finalizePath() {
 
   // Create the final TextOnPathItem
   auto *item = new TextOnPathItem();
-  item->setFont(
-      QFont("Arial", qMax(12, renderer_->currentPen().width() * 3)));
+  item->setFont(QFont("Arial", qMax(12, renderer_->currentPen().width() * 3)));
   item->setTextColor(renderer_->currentPen().color());
   item->setPath(path);
   item->setText(text);

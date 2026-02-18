@@ -577,11 +577,11 @@ void ToolPanel::clearActiveToolStyles() {
 
 void ToolPanel::setActiveTool(const QString &toolName) {
   static const QHash<QString, QString> toolIcons = {
-      {"Pen", "✎"},     {"Eraser", "⌫"},      {"Text", "T"},
-      {"Mermaid", "⬡"}, {"Fill", "◉"},        {"ColorSelect", "◎"},
-      {"Line", "╱"},    {"Arrow", "➤"},       {"CurvedArrow", "↪"},
-      {"Rectangle", "▢"}, {"Circle", "◯"},    {"Select", "⬚"},
-      {"Pan", "☰"},       {"Bezier", "⌇"},    {"TextOnPath", "⌇T"}};
+      {"Pen", "✎"},       {"Eraser", "⌫"}, {"Text", "T"},
+      {"Mermaid", "⬡"},   {"Fill", "◉"},   {"ColorSelect", "◎"},
+      {"Line", "╱"},      {"Arrow", "➤"},  {"CurvedArrow", "↪"},
+      {"Rectangle", "▢"}, {"Circle", "◯"}, {"Select", "⬚"},
+      {"Pan", "☰"},       {"Bezier", "⌇"}, {"TextOnPath", "⌇T"}};
   QString icon = toolIcons.value(toolName, "•");
   activeToolLabel->setText(icon + " " + toolName);
 }

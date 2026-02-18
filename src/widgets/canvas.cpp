@@ -12,11 +12,11 @@
 #include "../core/transform_action.h"
 #include "architecture_elements.h"
 #include "image_size_dialog.h"
-#include "resize_canvas_dialog.h"
 #include "latex_text_item.h"
 #include "mermaid_text_item.h"
-#include "scale_dialog.h"
 #include "perspective_transform_dialog.h"
+#include "resize_canvas_dialog.h"
+#include "scale_dialog.h"
 #include "transform_handle_item.h"
 #include <QApplication>
 #include <QClipboard>
@@ -60,9 +60,8 @@ static constexpr int MAX_PRESSURE_BUFFER_SIZE = 200;
 static constexpr int PRESSURE_BUFFER_TRIM_SIZE = 100;
 
 // Supported image file extensions for drag-and-drop
-static const QSet<QString> SUPPORTED_IMAGE_EXTENSIONS = {"png",  "jpg", "jpeg",
-                                                         "bmp",  "gif", "webp",
-                                                         "tiff", "tif"};
+static const QSet<QString> SUPPORTED_IMAGE_EXTENSIONS = {
+    "png", "jpg", "jpeg", "bmp", "gif", "webp", "tiff", "tif"};
 
 namespace {
 constexpr qreal CURVED_ARROW_BASE_FACTOR = 0.28;
@@ -322,8 +321,8 @@ bool Canvas::hasActiveColorSelection() const {
     return false;
   }
 
-  return dynamic_cast<QGraphicsPixmapItem *>(store->item(colorSelectionItemId_)) !=
-         nullptr;
+  return dynamic_cast<QGraphicsPixmapItem *>(
+             store->item(colorSelectionItemId_)) != nullptr;
 }
 
 ItemStore *Canvas::itemStore() const {
@@ -2221,14 +2220,16 @@ void Canvas::refreshColorSelectionOverlay() {
   auto *sourceItem = store ? dynamic_cast<QGraphicsPixmapItem *>(
                                  store->item(colorSelectionItemId_))
                            : nullptr;
-  if (!sourceItem || colorSelectionMask_.isNull() || !colorSelectionHasPixels_) {
+  if (!sourceItem || colorSelectionMask_.isNull() ||
+      !colorSelectionHasPixels_) {
     resetColorSelection();
     return;
   }
 
-  QImage sourceImage = sourceItem->pixmap().toImage().convertToFormat(
-      QImage::Format_ARGB32);
-  if (sourceImage.isNull() || sourceImage.size() != colorSelectionMask_.size()) {
+  QImage sourceImage =
+      sourceItem->pixmap().toImage().convertToFormat(QImage::Format_ARGB32);
+  if (sourceImage.isNull() ||
+      sourceImage.size() != colorSelectionMask_.size()) {
     resetColorSelection();
     return;
   }
@@ -2367,15 +2368,15 @@ void Canvas::extractColorSelectionToNewLayer() {
     return;
   }
 
-  auto *sourceItem = dynamic_cast<QGraphicsPixmapItem *>(
-      store->item(colorSelectionItemId_));
+  auto *sourceItem =
+      dynamic_cast<QGraphicsPixmapItem *>(store->item(colorSelectionItemId_));
   if (!sourceItem) {
     resetColorSelection();
     return;
   }
 
-  QImage originalImage = sourceItem->pixmap().toImage().convertToFormat(
-      QImage::Format_ARGB32);
+  QImage originalImage =
+      sourceItem->pixmap().toImage().convertToFormat(QImage::Format_ARGB32);
   if (originalImage.isNull() ||
       originalImage.size() != colorSelectionMask_.size()) {
     resetColorSelection();
@@ -2397,8 +2398,8 @@ void Canvas::extractColorSelectionToNewLayer() {
     for (int x = 0; x < originalImage.width(); ++x) {
       if (maskRow[x] == COLOR_SELECTION_MARK) {
         extractedRow[x] = sourceRow[x];
-        remainingRow[x] =
-            qRgba(qRed(sourceRow[x]), qGreen(sourceRow[x]), qBlue(sourceRow[x]), 0);
+        remainingRow[x] = qRgba(qRed(sourceRow[x]), qGreen(sourceRow[x]),
+                                qBlue(sourceRow[x]), 0);
         anyExtracted = true;
       }
     }
@@ -2500,13 +2501,13 @@ void Canvas::fillAt(const QPointF &point) {
   if (!scene_)
     return;
 
-  fillTopItemAtPoint(
-      scene_, point, currentPen_.color(), itemStore(), backgroundImage_,
-      eraserPreview_, [this](std::unique_ptr<Action> action) {
-        if (action) {
-          addAction(std::move(action));
-        }
-      });
+  fillTopItemAtPoint(scene_, point, currentPen_.color(), itemStore(),
+                     backgroundImage_, eraserPreview_,
+                     [this](std::unique_ptr<Action> action) {
+                       if (action) {
+                         addAction(std::move(action));
+                       }
+                     });
 }
 
 void Canvas::drawArrow(const QPointF &start, const QPointF &end) {
@@ -3374,7 +3375,8 @@ void Canvas::addPressurePoint(const QPointF &point, qreal pressure) {
 
   for (int i = 0; i < pointBuffer_.size(); ++i) {
     qreal p = pressureBuffer_.at(i);
-    qreal w = currentPen_.widthF() * qBound(MIN_PRESSURE_THRESHOLD, p, 1.0) * 0.5;
+    qreal w =
+        currentPen_.widthF() * qBound(MIN_PRESSURE_THRESHOLD, p, 1.0) * 0.5;
 
     QPointF dir;
     if (i == 0) {
@@ -3519,29 +3521,30 @@ void Canvas::dropEvent(QDropEvent *event) {
           importSvg(filePath, dropPosition);
         } else
 #endif
-        // Check if the file is a supported image format
-        if (SUPPORTED_IMAGE_EXTENSIONS.contains(extension)) {
-          // Get the drop position in scene coordinates
+          // Check if the file is a supported image format
+          if (SUPPORTED_IMAGE_EXTENSIONS.contains(extension)) {
+            // Get the drop position in scene coordinates
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-          QPointF dropPosition = mapToScene(event->position().toPoint());
+            QPointF dropPosition = mapToScene(event->position().toPoint());
 #else
           QPointF dropPosition = mapToScene(event->pos());
 #endif
 
-          // Load the dropped image
-          loadDroppedImage(filePath, dropPosition);
-        } else {
-          // Inform user about unsupported file type
-          QMessageBox::warning(
-              this, "Unsupported File",
-              QString("File '%1' is not a supported format.\n\nSupported "
+            // Load the dropped image
+            loadDroppedImage(filePath, dropPosition);
+          } else {
+            // Inform user about unsupported file type
+            QMessageBox::warning(
+                this, "Unsupported File",
+                QString(
+                    "File '%1' is not a supported format.\n\nSupported "
 #ifdef HAVE_QT_SVG
-                      "formats: PNG, JPG, JPEG, BMP, GIF, WebP, TIFF, SVG, PDF")
+                    "formats: PNG, JPG, JPEG, BMP, GIF, WebP, TIFF, SVG, PDF")
 #else
-                      "formats: PNG, JPG, JPEG, BMP, GIF, WebP, TIFF, PDF")
+                  "formats: PNG, JPG, JPEG, BMP, GIF, WebP, TIFF, PDF")
 #endif
-                  .arg(QFileInfo(filePath).fileName()));
-        }
+                    .arg(QFileInfo(filePath).fileName()));
+          }
       }
     }
 
@@ -3617,9 +3620,8 @@ void Canvas::addImageFromScreenshot(const QImage &image) {
     int newWidth = dialog.getWidth();
     int newHeight = dialog.getHeight();
 
-    QPixmap scaledPixmap = pixmap.scaled(newWidth, newHeight,
-                                         Qt::IgnoreAspectRatio,
-                                         Qt::SmoothTransformation);
+    QPixmap scaledPixmap = pixmap.scaled(
+        newWidth, newHeight, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
 
     // Create a graphics pixmap item
     QGraphicsPixmapItem *pixmapItem = new QGraphicsPixmapItem(scaledPixmap);
@@ -3760,7 +3762,8 @@ void Canvas::contextMenuEvent(QContextMenuEvent *event) {
     connect(extractAction, &QAction::triggered, this,
             &Canvas::extractColorSelectionToNewLayer);
 
-    QAction *clearSelectionAction = contextMenu.addAction("Clear Color Selection");
+    QAction *clearSelectionAction =
+        contextMenu.addAction("Clear Color Selection");
     connect(clearSelectionAction, &QAction::triggered, this,
             &Canvas::clearColorSelection);
   }
@@ -4413,7 +4416,8 @@ void Canvas::perspectiveTransformSelectedItems() {
     QPointF newPos = newScene.map(QPointF(0, 0));
 
     // Remove the translation to get the pure local transform.
-    QTransform newLocal = newScene * QTransform::fromTranslate(-newPos.x(), -newPos.y());
+    QTransform newLocal =
+        newScene * QTransform::fromTranslate(-newPos.x(), -newPos.y());
 
     item->setTransform(newLocal);
     item->setPos(newPos);
@@ -4597,8 +4601,8 @@ void Canvas::applySharpenToSelection() {
     return;
 
   bool ok = false;
-  double strength =
-      QInputDialog::getDouble(this, "Sharpen", "Strength:", 1.0, 0.1, 5.0, 1, &ok);
+  double strength = QInputDialog::getDouble(this, "Sharpen", "Strength:", 1.0,
+                                            0.1, 5.0, 1, &ok);
   if (!ok)
     return;
 

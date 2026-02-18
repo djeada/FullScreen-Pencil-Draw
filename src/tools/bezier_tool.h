@@ -37,9 +37,9 @@ public:
 private:
   /** @brief Information stored for each anchor point. */
   struct AnchorPoint {
-    QPointF position;    ///< The anchor position on the path
-    QPointF handleOut;   ///< The outgoing control handle (tangent)
-    bool hasHandle;      ///< True if a handle was set by dragging
+    QPointF position;  ///< The anchor position on the path
+    QPointF handleOut; ///< The outgoing control handle (tangent)
+    bool hasHandle;    ///< True if a handle was set by dragging
   };
 
   void finalizePath();
@@ -55,8 +55,8 @@ private:
   QGraphicsPathItem *previewSegment_;
   QVector<QGraphicsEllipseItem *> anchorMarkers_;
 
-  bool isDragging_;       ///< True while dragging to set a handle
-  QPointF dragStart_;     ///< Where the drag started (anchor position)
+  bool isDragging_;   ///< True while dragging to set a handle
+  QPointF dragStart_; ///< Where the drag started (anchor position)
 
   static constexpr qreal ANCHOR_MARKER_SIZE = 6.0;
 };

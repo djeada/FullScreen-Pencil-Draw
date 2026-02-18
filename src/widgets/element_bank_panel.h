@@ -23,7 +23,7 @@ class QVBoxLayout;
 struct ElementInfo {
   QString id;       ///< Unique element identifier (e.g. "server")
   QString label;    ///< Display label shown under the icon
-  QString icon;     ///< Unicode glyph used as visual icon
+  QString icon;     ///< Resource path to SVG icon
   QString tooltip;  ///< Tooltip text for hover
   QString category; ///< Category the element belongs to
 };

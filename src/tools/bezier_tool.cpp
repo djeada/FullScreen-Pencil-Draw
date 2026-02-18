@@ -49,10 +49,10 @@ void BezierTool::mousePressEvent(QMouseEvent *event, const QPointF &scenePos) {
   }
 
   // Add a visual marker for the anchor point
-  auto *marker = new QGraphicsEllipseItem(
-      scenePos.x() - ANCHOR_MARKER_SIZE / 2,
-      scenePos.y() - ANCHOR_MARKER_SIZE / 2, ANCHOR_MARKER_SIZE,
-      ANCHOR_MARKER_SIZE);
+  auto *marker =
+      new QGraphicsEllipseItem(scenePos.x() - ANCHOR_MARKER_SIZE / 2,
+                               scenePos.y() - ANCHOR_MARKER_SIZE / 2,
+                               ANCHOR_MARKER_SIZE, ANCHOR_MARKER_SIZE);
   QPen markerPen(renderer_->currentPen().color());
   markerPen.setWidth(1);
   marker->setPen(markerPen);
@@ -129,8 +129,7 @@ void BezierTool::updatePreview(const QPointF &mousePos) {
 
   if (last.hasHandle) {
     // Reflect handle across anchor point for C1 continuity
-    QPointF mirroredHandle =
-        2.0 * last.position - last.handleOut;
+    QPointF mirroredHandle = 2.0 * last.position - last.handleOut;
     preview.cubicTo(mirroredHandle, mousePos, mousePos);
   } else {
     preview.lineTo(mousePos);

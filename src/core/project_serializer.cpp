@@ -40,8 +40,7 @@ QPen ProjectSerializer::deserializePen(const QJsonObject &obj) {
   pen.setWidthF(obj["width"].toDouble(1.0));
   pen.setStyle(static_cast<Qt::PenStyle>(obj["style"].toInt(1)));
   pen.setCapStyle(static_cast<Qt::PenCapStyle>(obj["capStyle"].toInt(0x00)));
-  pen.setJoinStyle(
-      static_cast<Qt::PenJoinStyle>(obj["joinStyle"].toInt(0x00)));
+  pen.setJoinStyle(static_cast<Qt::PenJoinStyle>(obj["joinStyle"].toInt(0x00)));
   return pen;
 }
 
@@ -74,11 +73,10 @@ QJsonObject ProjectSerializer::serializeTransform(const QTransform &t) {
 }
 
 QTransform ProjectSerializer::deserializeTransform(const QJsonObject &obj) {
-  return QTransform(obj["m11"].toDouble(1), obj["m12"].toDouble(0),
-                    obj["m13"].toDouble(0), obj["m21"].toDouble(0),
-                    obj["m22"].toDouble(1), obj["m23"].toDouble(0),
-                    obj["m31"].toDouble(0), obj["m32"].toDouble(0),
-                    obj["m33"].toDouble(1));
+  return QTransform(
+      obj["m11"].toDouble(1), obj["m12"].toDouble(0), obj["m13"].toDouble(0),
+      obj["m21"].toDouble(0), obj["m22"].toDouble(1), obj["m23"].toDouble(0),
+      obj["m31"].toDouble(0), obj["m32"].toDouble(0), obj["m33"].toDouble(1));
 }
 
 // ==================== Item serialization ====================
@@ -214,28 +212,27 @@ QGraphicsItem *ProjectSerializer::deserializeItem(const QJsonObject &obj) {
     pathItem->setBrush(deserializeBrush(obj["brush"].toObject()));
     item = pathItem;
   } else if (type == "rect") {
-    QRectF r(obj["rx"].toDouble(), obj["ry"].toDouble(),
-             obj["rw"].toDouble(), obj["rh"].toDouble());
+    QRectF r(obj["rx"].toDouble(), obj["ry"].toDouble(), obj["rw"].toDouble(),
+             obj["rh"].toDouble());
     auto *rectItem = new QGraphicsRectItem(r);
     rectItem->setPen(deserializePen(obj["pen"].toObject()));
     rectItem->setBrush(deserializeBrush(obj["brush"].toObject()));
     item = rectItem;
   } else if (type == "ellipse") {
-    QRectF r(obj["rx"].toDouble(), obj["ry"].toDouble(),
-             obj["rw"].toDouble(), obj["rh"].toDouble());
+    QRectF r(obj["rx"].toDouble(), obj["ry"].toDouble(), obj["rw"].toDouble(),
+             obj["rh"].toDouble());
     auto *ellipseItem = new QGraphicsEllipseItem(r);
     ellipseItem->setPen(deserializePen(obj["pen"].toObject()));
     ellipseItem->setBrush(deserializeBrush(obj["brush"].toObject()));
     item = ellipseItem;
   } else if (type == "line") {
-    QLineF l(obj["x1"].toDouble(), obj["y1"].toDouble(),
-             obj["x2"].toDouble(), obj["y2"].toDouble());
+    QLineF l(obj["x1"].toDouble(), obj["y1"].toDouble(), obj["x2"].toDouble(),
+             obj["y2"].toDouble());
     auto *lineItem = new QGraphicsLineItem(l);
     lineItem->setPen(deserializePen(obj["pen"].toObject()));
     item = lineItem;
   } else if (type == "pixmap") {
-    QByteArray ba = QByteArray::fromBase64(
-        obj["data"].toString().toLatin1());
+    QByteArray ba = QByteArray::fromBase64(obj["data"].toString().toLatin1());
     QPixmap pm;
     pm.loadFromData(ba, "PNG");
     auto *pixItem = new QGraphicsPixmapItem(pm);
@@ -274,8 +271,7 @@ QGraphicsItem *ProjectSerializer::deserializeItem(const QJsonObject &obj) {
 // ==================== Save / Load ====================
 
 bool ProjectSerializer::saveProject(const QString &filePath,
-                                    QGraphicsScene *scene,
-                                    ItemStore *itemStore,
+                                    QGraphicsScene *scene, ItemStore *itemStore,
                                     LayerManager *layerManager,
                                     const QRectF &sceneRect,
                                     const QColor &backgroundColor) {
@@ -342,8 +338,7 @@ bool ProjectSerializer::saveProject(const QString &filePath,
 }
 
 bool ProjectSerializer::loadProject(const QString &filePath,
-                                    QGraphicsScene *scene,
-                                    ItemStore *itemStore,
+                                    QGraphicsScene *scene, ItemStore *itemStore,
                                     LayerManager *layerManager,
                                     QRectF &sceneRect,
                                     QColor &backgroundColor) {
@@ -382,8 +377,7 @@ bool ProjectSerializer::loadProject(const QString &filePath,
   sceneRect = QRectF(canvasObj["x"].toDouble(), canvasObj["y"].toDouble(),
                      canvasObj["width"].toDouble(1920),
                      canvasObj["height"].toDouble(1080));
-  backgroundColor = QColor(
-      canvasObj["backgroundColor"].toString("#ffffffff"));
+  backgroundColor = QColor(canvasObj["backgroundColor"].toString("#ffffffff"));
   scene->setSceneRect(sceneRect);
 
   // Layers

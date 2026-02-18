@@ -152,7 +152,8 @@ int SceneController::scaleLayer(Layer *layer, qreal sx, qreal sy) {
   // Compute combined bounding rect of all items
   QRectF bounds;
   for (QGraphicsItem *item : validItems) {
-    bounds = bounds.united(item->mapToScene(item->boundingRect()).boundingRect());
+    bounds =
+        bounds.united(item->mapToScene(item->boundingRect()).boundingRect());
   }
   QPointF center = bounds.center();
 

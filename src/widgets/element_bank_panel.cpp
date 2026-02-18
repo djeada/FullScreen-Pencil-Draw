@@ -5,6 +5,7 @@
 #include "element_bank_panel.h"
 #include <QFrame>
 #include <QGridLayout>
+#include <QIcon>
 #include <QLabel>
 #include <QScrollArea>
 #include <QToolButton>
@@ -29,19 +30,19 @@ static QFrame *createBankSeparator(QWidget *parent) {
 
 QVector<ElementInfo> ElementBankPanel::defaultElements() {
   return {
-      {"client", "Client", "💻", "Client application", "Architecture"},
-      {"load_balancer", "Load Bal.", "⚖", "Load balancer", "Architecture"},
-      {"api_gateway", "Gateway", "⛩", "API gateway", "Architecture"},
-      {"app_server", "App Server", "⬡", "Application server / microservice",
+      {"client", "Client", ":/ui-icons/arch_client.svg", "Client application", "Architecture"},
+      {"load_balancer", "Load Bal.", ":/ui-icons/arch_load_balancer.svg", "Load balancer", "Architecture"},
+      {"api_gateway", "Gateway", ":/ui-icons/arch_gateway.svg", "API gateway", "Architecture"},
+      {"app_server", "App Server", ":/ui-icons/arch_app_server.svg", "Application server / microservice",
        "Architecture"},
-      {"cache", "Cache", "⧖", "Cache (Redis, Memcached)", "Architecture"},
-      {"message_queue", "Queue", "☰", "Message queue / broker", "Architecture"},
-      {"database", "Database", "⛁", "Database", "Architecture"},
-      {"object_storage", "Storage", "🗄", "Object / file storage",
+      {"cache", "Cache", ":/ui-icons/arch_cache.svg", "Cache (Redis, Memcached)", "Architecture"},
+      {"message_queue", "Queue", ":/ui-icons/arch_queue.svg", "Message queue / broker", "Architecture"},
+      {"database", "Database", ":/ui-icons/arch_database.svg", "Database", "Architecture"},
+      {"object_storage", "Storage", ":/ui-icons/arch_storage.svg", "Object / file storage",
        "Architecture"},
-      {"auth", "Auth", "🔐", "Authentication / identity service",
+      {"auth", "Auth", ":/ui-icons/arch_auth.svg", "Authentication / identity service",
        "Architecture"},
-      {"monitoring", "Monitor", "📊", "Monitoring / logging system",
+      {"monitoring", "Monitor", ":/ui-icons/arch_monitor.svg", "Monitoring / logging system",
        "Architecture"},
   };
 }
@@ -65,8 +66,8 @@ ElementBankPanel::ElementBankPanel(QWidget *parent)
 
   auto *container = new QWidget(scrollArea);
   auto *mainLayout = new QVBoxLayout(container);
-  mainLayout->setContentsMargins(8, 8, 8, 8);
-  mainLayout->setSpacing(6);
+  mainLayout->setContentsMargins(10, 10, 10, 10);
+  mainLayout->setSpacing(8);
   mainLayout->setAlignment(Qt::AlignTop);
 
   // Group elements by category, preserving insertion order.
@@ -91,7 +92,8 @@ ElementBankPanel::ElementBankPanel(QWidget *parent)
   mainLayout->addStretch();
   scrollArea->setWidget(container);
   setWidget(scrollArea);
-  setFixedWidth(200);
+  setMinimumWidth(220);
+  setMaximumWidth(320);
 
   // Styling – consistent with the existing ToolPanel dark theme.
   setStyleSheet(R"(
@@ -103,7 +105,7 @@ ElementBankPanel::ElementBankPanel(QWidget *parent)
     QDockWidget::title {
       background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
                                   stop:0 #2a2a30, stop:1 #242428);
-      padding: 10px 12px;
+      padding: 12px 14px;
       font-weight: 600;
       border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     }
@@ -115,14 +117,14 @@ ElementBankPanel::ElementBankPanel(QWidget *parent)
       background-color: rgba(255, 255, 255, 0.06);
       color: #e0e0e6;
       border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 6px;
-      padding: 4px;
-      min-width: 52px;
-      min-height: 52px;
-      max-width: 52px;
-      max-height: 52px;
+      border-radius: 8px;
+      padding: 4px 2px;
+      min-width: 58px;
+      min-height: 58px;
+      max-width: 58px;
+      max-height: 58px;
       font-weight: 500;
-      font-size: 10px;
+      font-size: 11px;
     }
     QToolButton:hover {
       background-color: rgba(255, 255, 255, 0.1);
@@ -151,17 +153,20 @@ void ElementBankPanel::addCategory(QVBoxLayout *layout, const QString &category,
   // Grid of element buttons (3 columns)
   auto *gridWidget = new QWidget(this);
   auto *grid = new QGridLayout(gridWidget);
-  grid->setSpacing(4);
+  grid->setSpacing(6);
   grid->setContentsMargins(0, 0, 0, 0);
 
   for (int i = 0; i < elements.size(); ++i) {
     const ElementInfo &info = elements[i];
 
     auto *btn = new QToolButton(gridWidget);
-    btn->setText(info.icon + "\n" + info.label);
+    QIcon icon(info.icon);
+    btn->setText(info.label);
+    btn->setIcon(icon);
     btn->setToolTip(info.tooltip);
-    btn->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
-    btn->setFixedSize(52, 52);
+    btn->setToolButtonStyle(icon.isNull() ? Qt::ToolButtonTextOnly
+                                          : Qt::ToolButtonTextUnderIcon);
+    btn->setFixedSize(58, 58);
     btn->setIconSize(QSize(18, 18));
 
     connect(btn, &QToolButton::clicked, this,

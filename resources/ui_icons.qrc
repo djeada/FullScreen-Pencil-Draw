@@ -1,0 +1,26 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+  <qresource prefix="/ui-icons">
+    <file alias="layer_add.svg">ui_icons/layer_add.svg</file>
+    <file alias="layer_delete.svg">ui_icons/layer_delete.svg</file>
+    <file alias="layer_duplicate.svg">ui_icons/layer_duplicate.svg</file>
+    <file alias="layer_merge_down.svg">ui_icons/layer_merge_down.svg</file>
+    <file alias="layer_move_up.svg">ui_icons/layer_move_up.svg</file>
+    <file alias="layer_move_down.svg">ui_icons/layer_move_down.svg</file>
+    <file alias="layer_visibility.svg">ui_icons/layer_visibility.svg</file>
+    <file alias="layer_lock.svg">ui_icons/layer_lock.svg</file>
+    <file alias="layer_group.svg">ui_icons/layer_group.svg</file>
+    <file alias="layer_flatten.svg">ui_icons/layer_flatten.svg</file>
+
+    <file alias="arch_client.svg">ui_icons/arch_client.svg</file>
+    <file alias="arch_load_balancer.svg">ui_icons/arch_load_balancer.svg</file>
+    <file alias="arch_gateway.svg">ui_icons/arch_gateway.svg</file>
+    <file alias="arch_app_server.svg">ui_icons/arch_app_server.svg</file>
+    <file alias="arch_cache.svg">ui_icons/arch_cache.svg</file>
+    <file alias="arch_queue.svg">ui_icons/arch_queue.svg</file>
+    <file alias="arch_database.svg">ui_icons/arch_database.svg</file>
+    <file alias="arch_storage.svg">ui_icons/arch_storage.svg</file>
+    <file alias="arch_auth.svg">ui_icons/arch_auth.svg</file>
+    <file alias="arch_monitor.svg">ui_icons/arch_monitor.svg</file>
+  </qresource>
+</RCC>

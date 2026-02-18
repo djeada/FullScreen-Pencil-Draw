@@ -15,9 +15,10 @@ ResizeCanvasDialog::ResizeCanvasDialog(int currentWidth, int currentHeight,
   setModal(true);
   setMinimumWidth(340);
 
-  currentSizeLabel_ = new QLabel(
-      QString("Current size: %1 \u00d7 %2 px").arg(currentWidth).arg(currentHeight),
-      this);
+  currentSizeLabel_ = new QLabel(QString("Current size: %1 \u00d7 %2 px")
+                                     .arg(currentWidth)
+                                     .arg(currentHeight),
+                                 this);
   currentSizeLabel_->setStyleSheet("QLabel { color: #a0a0a8; font-size: 12px; "
                                    "padding: 6px 0; font-weight: 500; }");
 

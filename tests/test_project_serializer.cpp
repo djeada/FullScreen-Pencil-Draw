@@ -57,9 +57,8 @@ private slots:
     QRectF loadedRect;
     QColor loadedBg;
 
-    bool loaded = ProjectSerializer::loadProject(filePath, &scene2, &store2,
-                                                 &manager2, loadedRect,
-                                                 loadedBg);
+    bool loaded = ProjectSerializer::loadProject(
+        filePath, &scene2, &store2, &manager2, loadedRect, loadedBg);
     QVERIFY(loaded);
     QCOMPARE(loadedRect, sceneRect);
     QCOMPARE(loadedBg, bgColor);
@@ -99,9 +98,8 @@ private slots:
     QRectF loadedRect;
     QColor loadedBg;
 
-    bool loaded = ProjectSerializer::loadProject(filePath, &scene2, &store2,
-                                                 &manager2, loadedRect,
-                                                 loadedBg);
+    bool loaded = ProjectSerializer::loadProject(
+        filePath, &scene2, &store2, &manager2, loadedRect, loadedBg);
     QVERIFY(loaded);
 
     // Verify the layer has 1 item
@@ -155,9 +153,8 @@ private slots:
     QRectF loadedRect;
     QColor loadedBg;
 
-    bool loaded = ProjectSerializer::loadProject(filePath, &scene2, &store2,
-                                                 &manager2, loadedRect,
-                                                 loadedBg);
+    bool loaded = ProjectSerializer::loadProject(
+        filePath, &scene2, &store2, &manager2, loadedRect, loadedBg);
     QVERIFY(loaded);
 
     Layer *layer = manager2.layer(0);
@@ -209,9 +206,8 @@ private slots:
     QRectF loadedRect;
     QColor loadedBg;
 
-    bool loaded = ProjectSerializer::loadProject(filePath, &scene2, &store2,
-                                                 &manager2, loadedRect,
-                                                 loadedBg);
+    bool loaded = ProjectSerializer::loadProject(
+        filePath, &scene2, &store2, &manager2, loadedRect, loadedBg);
     QVERIFY(loaded);
 
     QCOMPARE(manager2.layerCount(), 2);
@@ -233,10 +229,10 @@ private slots:
     QVERIFY(qFuzzyCompare(l1->opacity(), 0.5));
 
     // Verify item types
-    QVERIFY(dynamic_cast<QGraphicsRectItem *>(
-        store2.item(l0->itemIds().first())));
-    QVERIFY(dynamic_cast<QGraphicsLineItem *>(
-        store2.item(l1->itemIds().first())));
+    QVERIFY(
+        dynamic_cast<QGraphicsRectItem *>(store2.item(l0->itemIds().first())));
+    QVERIFY(
+        dynamic_cast<QGraphicsLineItem *>(store2.item(l1->itemIds().first())));
   }
 
   void testSaveAndLoadEllipseItem() {
@@ -268,9 +264,8 @@ private slots:
     QRectF loadedRect;
     QColor loadedBg;
 
-    bool loaded = ProjectSerializer::loadProject(filePath, &scene2, &store2,
-                                                 &manager2, loadedRect,
-                                                 loadedBg);
+    bool loaded = ProjectSerializer::loadProject(
+        filePath, &scene2, &store2, &manager2, loadedRect, loadedBg);
     QVERIFY(loaded);
 
     Layer *layer = manager2.layer(0);
@@ -313,9 +308,8 @@ private slots:
     QRectF loadedRect;
     QColor loadedBg;
 
-    bool loaded = ProjectSerializer::loadProject(filePath, &scene2, &store2,
-                                                 &manager2, loadedRect,
-                                                 loadedBg);
+    bool loaded = ProjectSerializer::loadProject(
+        filePath, &scene2, &store2, &manager2, loadedRect, loadedBg);
     QVERIFY(loaded);
 
     Layer *layer = manager2.layer(0);
@@ -338,9 +332,9 @@ private slots:
     QColor loadedBg;
 
     // Non-existent file
-    bool loaded = ProjectSerializer::loadProject("/nonexistent/path.fspd",
-                                                 &scene, &store, &manager,
-                                                 loadedRect, loadedBg);
+    bool loaded =
+        ProjectSerializer::loadProject("/nonexistent/path.fspd", &scene, &store,
+                                       &manager, loadedRect, loadedBg);
     QVERIFY(!loaded);
   }
 
@@ -362,16 +356,14 @@ private slots:
     QRectF loadedRect;
     QColor loadedBg;
 
-    bool loaded = ProjectSerializer::loadProject(filePath, &scene, &store,
-                                                 &manager, loadedRect,
-                                                 loadedBg);
+    bool loaded = ProjectSerializer::loadProject(
+        filePath, &scene, &store, &manager, loadedRect, loadedBg);
     QVERIFY(!loaded);
   }
 
   void testSaveWithNullParameters() {
-    bool saved = ProjectSerializer::saveProject("/tmp/test.fspd", nullptr,
-                                                nullptr, nullptr, QRectF(),
-                                                QColor());
+    bool saved = ProjectSerializer::saveProject(
+        "/tmp/test.fspd", nullptr, nullptr, nullptr, QRectF(), QColor());
     QVERIFY(!saved);
   }
 
@@ -419,9 +411,8 @@ private slots:
     QRectF loadedRect;
     QColor loadedBg;
 
-    bool loaded = ProjectSerializer::loadProject(filePath, &scene2, &store2,
-                                                 &manager2, loadedRect,
-                                                 loadedBg);
+    bool loaded = ProjectSerializer::loadProject(
+        filePath, &scene2, &store2, &manager2, loadedRect, loadedBg);
     QVERIFY(loaded);
 
     Layer *layer = manager2.layer(0);
