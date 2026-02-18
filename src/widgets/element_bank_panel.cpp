@@ -29,55 +29,20 @@ static QFrame *createBankSeparator(QWidget *parent) {
 
 QVector<ElementInfo> ElementBankPanel::defaultElements() {
   return {
-      // ---- Network ----
-      {"router", "Router", "⇌", "Network router", "Network"},
-      {"switch", "Switch", "⇶", "Network switch", "Network"},
-      {"firewall", "Firewall", "🛡", "Firewall / WAF", "Network"},
-      {"load_balancer", "Load Bal.", "⚖", "Load balancer", "Network"},
-      {"dns", "DNS", "🌐", "DNS server", "Network"},
-
-      // ---- Compute ----
-      {"server", "Server", "🖥", "Server / host", "Compute"},
-      {"vm", "VM", "⊞", "Virtual machine", "Compute"},
-      {"container", "Container", "☐", "Container (Docker)", "Compute"},
-      {"serverless", "Lambda", "λ", "Serverless function", "Compute"},
-      {"microservice", "Service", "⬡", "Microservice", "Compute"},
-
-      // ---- Storage ----
-      {"database", "Database", "⛁", "Database", "Storage"},
-      {"cache", "Cache", "⧖", "Cache (Redis, Memcached)", "Storage"},
-      {"queue", "Queue", "☰", "Message queue / broker", "Storage"},
-      {"storage", "Storage", "🗄", "Object / file storage", "Storage"},
-
-      // ---- Client ----
-      {"browser", "Browser", "🌍", "Web browser", "Client"},
-      {"mobile", "Mobile", "📱", "Mobile client", "Client"},
-      {"desktop", "Desktop", "💻", "Desktop client", "Client"},
-      {"api_client", "API", "⇄", "API consumer", "Client"},
-
-      // ---- Security ----
-      {"key", "Key", "🔑", "API key / secret", "Security"},
-      {"lock", "Lock", "🔒", "Encryption / TLS", "Security"},
-      {"auth", "Auth", "🔐", "Authentication provider", "Security"},
-      {"certificate", "Cert", "📜", "TLS certificate", "Security"},
-
-      // ---- Data Flow ----
-      {"api_gateway", "Gateway", "⛩", "API gateway", "Data Flow"},
-      {"bus", "Event Bus", "⇉", "Event / message bus", "Data Flow"},
-      {"pipeline", "Pipeline", "⟿", "Data pipeline", "Data Flow"},
-      {"cdn", "CDN", "◎", "Content delivery network", "Data Flow"},
-
-      // ---- Cloud ----
-      {"cloud", "Cloud", "☁", "Cloud provider", "Cloud"},
-      {"region", "Region", "⬜", "Cloud region / VPC", "Cloud"},
-      {"cluster", "Cluster", "⊟", "Kubernetes cluster", "Cloud"},
-      {"node", "Node", "◻", "Compute node", "Cloud"},
-
-      // ---- General ----
-      {"user", "User", "👤", "End-user / actor", "General"},
-      {"monitor", "Monitor", "📊", "Monitoring / observability", "General"},
-      {"log", "Logs", "📝", "Logging service", "General"},
-      {"ci_cd", "CI/CD", "⟳", "CI/CD pipeline", "General"},
+      {"client", "Client", "💻", "Client application", "Architecture"},
+      {"load_balancer", "Load Bal.", "⚖", "Load balancer", "Architecture"},
+      {"api_gateway", "Gateway", "⛩", "API gateway", "Architecture"},
+      {"app_server", "App Server", "⬡", "Application server / microservice",
+       "Architecture"},
+      {"cache", "Cache", "⧖", "Cache (Redis, Memcached)", "Architecture"},
+      {"message_queue", "Queue", "☰", "Message queue / broker", "Architecture"},
+      {"database", "Database", "⛁", "Database", "Architecture"},
+      {"object_storage", "Storage", "🗄", "Object / file storage",
+       "Architecture"},
+      {"auth", "Auth", "🔐", "Authentication / identity service",
+       "Architecture"},
+      {"monitoring", "Monitor", "📊", "Monitoring / logging system",
+       "Architecture"},
   };
 }
 

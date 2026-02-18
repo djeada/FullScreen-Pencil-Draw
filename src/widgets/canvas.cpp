@@ -4445,48 +4445,16 @@ void Canvas::placeElement(const QString &elementId) {
     QString label;
   };
   static const QHash<QString, ElemDef> defs = {
-      // Network
-      {"router", {"⇌", "Router"}},
-      {"switch", {"⇶", "Switch"}},
-      {"firewall", {"🛡", "Firewall"}},
+      {"client", {"💻", "Client"}},
       {"load_balancer", {"⚖", "Load Balancer"}},
-      {"dns", {"🌐", "DNS"}},
-      // Compute
-      {"server", {"🖥", "Server"}},
-      {"vm", {"⊞", "VM"}},
-      {"container", {"☐", "Container"}},
-      {"serverless", {"λ", "Lambda"}},
-      {"microservice", {"⬡", "Service"}},
-      // Storage
-      {"database", {"⛁", "Database"}},
+      {"api_gateway", {"⛩", "API Gateway"}},
+      {"app_server", {"⬡", "App Server"}},
       {"cache", {"⧖", "Cache"}},
-      {"queue", {"☰", "Queue"}},
-      {"storage", {"🗄", "Storage"}},
-      // Client
-      {"browser", {"🌍", "Browser"}},
-      {"mobile", {"📱", "Mobile"}},
-      {"desktop", {"💻", "Desktop"}},
-      {"api_client", {"⇄", "API"}},
-      // Security
-      {"key", {"🔑", "Key"}},
-      {"lock", {"🔒", "Lock"}},
+      {"message_queue", {"☰", "Queue"}},
+      {"database", {"⛁", "Database"}},
+      {"object_storage", {"🗄", "Storage"}},
       {"auth", {"🔐", "Auth"}},
-      {"certificate", {"📜", "Cert"}},
-      // Data Flow
-      {"api_gateway", {"⛩", "Gateway"}},
-      {"bus", {"⇉", "Event Bus"}},
-      {"pipeline", {"⟿", "Pipeline"}},
-      {"cdn", {"◎", "CDN"}},
-      // Cloud
-      {"cloud", {"☁", "Cloud"}},
-      {"region", {"⬜", "Region"}},
-      {"cluster", {"⊟", "Cluster"}},
-      {"node", {"◻", "Node"}},
-      // General
-      {"user", {"👤", "User"}},
-      {"monitor", {"📊", "Monitor"}},
-      {"log", {"📝", "Logs"}},
-      {"ci_cd", {"⟳", "CI/CD"}},
+      {"monitoring", {"📊", "Monitor"}},
   };
 
   auto it = defs.find(elementId);
