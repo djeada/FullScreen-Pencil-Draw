@@ -33,6 +33,7 @@
 #include <QMimeData>
 #include <QMouseEvent>
 #include <QPen>
+#include <QTabletEvent>
 #include <QVector>
 #include <QWheelEvent>
 #include <memory>
@@ -75,6 +76,7 @@ public:
   bool isSnapToGridEnabled() const;
   bool isRulerVisible() const;
   bool isMeasurementToolEnabled() const;
+  bool isPressureSensitive() const override { return pressureSensitive_; }
   int colorSelectTolerance() const { return colorSelectTolerance_; }
   bool isColorSelectContiguous() const { return colorSelectContiguous_; }
   bool hasActiveColorSelection() const;
@@ -125,6 +127,7 @@ signals:
   void measurementToolChanged(bool enabled);
   void measurementUpdated(const QString &measurement);
   void pdfFileDropped(const QString &filePath);
+  void pressureSensitivityChanged(bool enabled);
 
 public slots:
   void setShape(const QString &shapeType);
@@ -163,6 +166,7 @@ public slots:
   void toggleSnapToGrid();
   void toggleRuler();
   void toggleMeasurementTool();
+  void togglePressureSensitivity();
   void lockSelectedItems();
   void unlockSelectedItems();
   void selectAll();
@@ -192,6 +196,7 @@ protected:
   void mousePressEvent(QMouseEvent *event) override;
   void mouseMoveEvent(QMouseEvent *event) override;
   void mouseReleaseEvent(QMouseEvent *event) override;
+  void tabletEvent(QTabletEvent *event) override;
   void wheelEvent(QWheelEvent *event) override;
   void paintEvent(QPaintEvent *event) override;
   void drawBackground(QPainter *painter, const QRectF &rect) override;
@@ -277,6 +282,12 @@ private:
   QPointF previousPoint_;
   QPointF measurementStart_;
 
+  // Pressure sensitivity state
+  bool pressureSensitive_ = false;
+  qreal tabletPressure_ = 1.0;
+  bool tabletActive_ = false;
+  QVector<qreal> pressureBuffer_;
+
   // Undo/Redo stacks (using vector for move-only types)
   std::vector<std::unique_ptr<Action>> undoStack_;
   std::vector<std::unique_ptr<Action>> redoStack_;
@@ -285,6 +296,7 @@ private:
   void updateEraserPreview(const QPointF &position);
   void hideEraserPreview();
   void addPoint(const QPointF &point);
+  void addPressurePoint(const QPointF &point, qreal pressure);
   void eraseAt(const QPointF &point);
   void applyZoom(double factor);
   void fillAt(const QPointF &point);

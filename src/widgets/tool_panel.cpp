@@ -275,6 +275,16 @@ ToolPanel::ToolPanel(QWidget *parent)
   opacityLayout->addWidget(opacitySlider);
   mainLayout->addLayout(opacityLayout);
 
+  // === PRESSURE SENSITIVITY ===
+  pressureSensitivityCheckBox_ = new QCheckBox("Pressure", container);
+  pressureSensitivityCheckBox_->setToolTip(
+      "Enable pressure sensitivity for stylus input");
+  pressureSensitivityCheckBox_->setStyleSheet(
+      "QCheckBox { color: #a0a0a8; font-size: 11px; }");
+  connect(pressureSensitivityCheckBox_, &QCheckBox::toggled, this,
+          &ToolPanel::pressureSensitivityToggled);
+  mainLayout->addWidget(pressureSensitivityCheckBox_, 0, Qt::AlignCenter);
+
   mainLayout->addWidget(createSeparator(container));
 
   // === ZOOM CONTROLS ===
