@@ -36,7 +36,7 @@ void PerspectivePreviewWidget::reset() {
 }
 
 void PerspectivePreviewWidget::setCorner(int index, const QPointF &pos) {
-  if (index < 0 || index > 3)
+  if (index < 0 || index >= 4)
     return;
   corners_[index] = pos;
   update();

@@ -4283,13 +4283,33 @@ void Canvas::perspectiveTransformSelectedItems() {
     QTransform oldTransform = item->transform();
     QPointF oldPos = item->pos();
 
-    // Map the item's current scene position through the perspective transform
-    QPointF scenePos = item->mapToScene(QPointF(0, 0));
-    QPointF newScenePos = perspective.map(scenePos);
+    // The perspective transform is defined in scene coordinates.
+    // To apply it correctly we translate into scene space, apply the
+    // perspective, then translate back into item-local space.
+    //   localToScene = item->sceneTransform()
+    //   newSceneTransform = localToScene * perspective
+    // However setTransform() only sets the item-local transform (not
+    // including pos), so we factor pos out.
+    //
+    // sceneTransform() == T(pos) * itemTransform
+    // We want: T(newPos) * newItemTransform == oldScene * perspective
+    //
+    // Compute the full new scene matrix, then extract pos and local
+    // transform separately.
+    QTransform oldScene = item->sceneTransform();
+    QTransform newScene = oldScene * perspective;
 
-    QTransform newTransform = oldTransform * perspective;
-    item->setTransform(newTransform);
-    item->setPos(oldPos + (newScenePos - scenePos));
+    // The position is the translation component of the scene transform
+    // when the item-local transform has no translation itself (which is
+    // the convention used throughout this codebase).  We use the origin
+    // mapping to get the new position.
+    QPointF newPos = newScene.map(QPointF(0, 0));
+
+    // Remove the translation to get the pure local transform.
+    QTransform newLocal = newScene * QTransform::fromTranslate(-newPos.x(), -newPos.y());
+
+    item->setTransform(newLocal);
+    item->setPos(newPos);
 
     // Record undo action
     if (sceneController_) {
