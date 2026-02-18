@@ -38,6 +38,7 @@ signals:
   void curvedArrowSelected();
   void panSelected();
   void mermaidSelected();
+  void bezierSelected();
   void colorSelected(const QColor &color);
   void opacitySelected(int opacity);
   void increaseBrushSize();
@@ -74,6 +75,7 @@ private:
   QAction *actionArrow;
   QAction *actionCurvedArrow;
   QAction *actionPan;
+  QAction *actionBezier;
   QAction *actionIncreaseBrush;
   QAction *actionDecreaseBrush;
   QAction *actionClear;
@@ -131,6 +133,7 @@ public slots:
   void onActionArrow();
   void onActionCurvedArrow();
   void onActionPan();
+  void onActionBezier();
 };
 
 #endif // TOOLPANEL_H

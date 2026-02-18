@@ -38,7 +38,8 @@ public:
     Circle,
     Selection,
     Pan,
-    Mermaid
+    Mermaid,
+    Bezier
   };
   Q_ENUM(ToolType)
 

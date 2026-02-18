@@ -4,6 +4,7 @@
  */
 #include "tool_manager.h"
 #include "arrow_tool.h"
+#include "bezier_tool.h"
 #include "circle_tool.h"
 #include "eraser_tool.h"
 #include "fill_tool.h"
@@ -37,6 +38,7 @@ void ToolManager::initializeTools() {
   registerTool(ToolType::Selection, std::make_unique<SelectionTool>(renderer_));
   registerTool(ToolType::Pan, std::make_unique<PanTool>(renderer_));
   registerTool(ToolType::Mermaid, std::make_unique<MermaidTool>(renderer_));
+  registerTool(ToolType::Bezier, std::make_unique<BezierTool>(renderer_));
 }
 
 void ToolManager::registerTool(ToolType type, std::unique_ptr<Tool> tool) {

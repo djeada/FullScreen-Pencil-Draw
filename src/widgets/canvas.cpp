@@ -646,6 +646,19 @@ void Canvas::setCurvedArrowTool() {
   isPanning_ = false;
 }
 
+void Canvas::setBezierTool() {
+  currentShape_ = Bezier;
+  tempShapeItem_ = nullptr;
+  this->setDragMode(QGraphicsView::NoDrag);
+  hideEraserPreview();
+  if (scene_)
+    scene_->clearSelection();
+  if (colorSelectionOverlay_)
+    colorSelectionOverlay_->hide();
+  setCursor(Qt::CrossCursor);
+  isPanning_ = false;
+}
+
 void Canvas::setPanTool() {
   currentShape_ = Pan;
   tempShapeItem_ = nullptr;

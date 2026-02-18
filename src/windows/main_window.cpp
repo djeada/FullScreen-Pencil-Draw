@@ -157,6 +157,8 @@ void MainWindow::setupConnections() {
   connect(_toolPanel, &ToolPanel::curvedArrowSelected, _canvas,
           &Canvas::setCurvedArrowTool);
   connect(_toolPanel, &ToolPanel::panSelected, _canvas, &Canvas::setPanTool);
+  connect(_toolPanel, &ToolPanel::bezierSelected, _canvas,
+          &Canvas::setBezierTool);
   connect(_toolPanel, &ToolPanel::colorSelected, _canvas, &Canvas::setPenColor);
   connect(_toolPanel, &ToolPanel::opacitySelected, _canvas,
           &Canvas::setOpacity);
@@ -193,6 +195,9 @@ void MainWindow::setupConnections() {
             [this]() { _pdfViewer->setToolType(ToolManager::ToolType::Line); });
     connect(_toolPanel, &ToolPanel::selectionSelected, this, [this]() {
       _pdfViewer->setToolType(ToolManager::ToolType::Selection);
+    });
+    connect(_toolPanel, &ToolPanel::bezierSelected, this, [this]() {
+      _pdfViewer->setToolType(ToolManager::ToolType::Bezier);
     });
 
     // Connect color selection to PDF viewer
@@ -732,6 +737,9 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
     _toolPanel->onActionPan();
   } else if (event->key() == Qt::Key_G) {
     _canvas->toggleGrid();
+  } else if (event->key() == Qt::Key_B &&
+             (event->modifiers() & Qt::ShiftModifier)) {
+    _toolPanel->onActionBezier();
   } else if (event->key() == Qt::Key_B) {
     _canvas->toggleFilledShapes();
   } else if (event->key() == Qt::Key_D &&
