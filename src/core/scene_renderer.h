@@ -64,6 +64,12 @@ public:
   virtual bool isFilledShapes() const = 0;
 
   /**
+   * @brief Check if pressure sensitivity is enabled
+   * @return true if brush dynamics should respond to stylus pressure
+   */
+  virtual bool isPressureSensitive() const { return false; }
+
+  /**
    * @brief Add a draw action to the undo stack
    * @param item The graphics item that was drawn
    */

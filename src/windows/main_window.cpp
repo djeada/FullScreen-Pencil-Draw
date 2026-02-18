@@ -263,6 +263,10 @@ void MainWindow::setupConnections() {
   connect(_toolPanel, &ToolPanel::toggleFilledShapesAction, _canvas,
           &Canvas::toggleFilledShapes);
 
+  // Pressure sensitivity
+  connect(_toolPanel, &ToolPanel::pressureSensitivityToggled, _canvas,
+          &Canvas::togglePressureSensitivity);
+
   // Filled shapes feedback
   connect(_canvas, &Canvas::filledShapesChanged, this,
           &MainWindow::onFilledShapesChanged);

@@ -2,6 +2,7 @@
 #define TOOLPANEL_H
 
 #include <QAction>
+#include <QCheckBox>
 #include <QColor>
 #include <QDockWidget>
 #include <QLabel>
@@ -60,6 +61,7 @@ signals:
   void duplicateAction();
   void deleteAction();
   void selectAllAction();
+  void pressureSensitivityToggled();
 
 private:
   QAction *actionRectangle;
@@ -98,6 +100,7 @@ private:
   QLabel *positionLabel;
   QSlider *opacitySlider;
   BrushPreview *brushPreview_;
+  QCheckBox *pressureSensitivityCheckBox_;
 
   void clearActiveToolStyles();
   bool eventFilter(QObject *obj, QEvent *event) override;

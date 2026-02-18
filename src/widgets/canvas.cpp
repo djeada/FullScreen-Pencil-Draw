@@ -39,6 +39,7 @@
 #include <QPointer>
 #include <QQueue>
 #include <QScrollBar>
+#include <QTabletEvent>
 #include <algorithm>
 #ifdef HAVE_QT_SVG
 #include <QSvgGenerator>
@@ -987,6 +988,11 @@ void Canvas::toggleRuler() {
 void Canvas::toggleMeasurementTool() {
   measurementToolEnabled_ = !measurementToolEnabled_;
   emit measurementToolChanged(measurementToolEnabled_);
+}
+
+void Canvas::togglePressureSensitivity() {
+  pressureSensitive_ = !pressureSensitive_;
+  emit pressureSensitivityChanged(pressureSensitive_);
 }
 
 void Canvas::lockSelectedItems() {
@@ -2603,7 +2609,13 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
     break;
   case Pen: {
     currentPath_ = new QGraphicsPathItem();
-    currentPath_->setPen(currentPen_);
+    if (pressureSensitive_ && tabletActive_) {
+      // Use a no-stroke pen and fill with the pen color for pressure strokes
+      currentPath_->setPen(Qt::NoPen);
+      currentPath_->setBrush(currentPen_.color());
+    } else {
+      currentPath_->setPen(currentPen_);
+    }
     currentPath_->setFlags(QGraphicsItem::ItemIsSelectable |
                            QGraphicsItem::ItemIsMovable);
     QPainterPath p;
@@ -2611,7 +2623,11 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
     currentPath_->setPath(p);
     scene_->addItem(currentPath_);
     pointBuffer_.clear();
+    pressureBuffer_.clear();
     pointBuffer_.append(sp);
+    if (pressureSensitive_ && tabletActive_) {
+      pressureBuffer_.append(tabletPressure_);
+    }
     addDrawAction(currentPath_);
   } break;
   case Rectangle: {
@@ -2723,8 +2739,12 @@ void Canvas::mouseMoveEvent(QMouseEvent *event) {
   }
   switch (currentShape_) {
   case Pen:
-    if (event->buttons() & Qt::LeftButton)
-      addPoint(cp);
+    if (event->buttons() & Qt::LeftButton) {
+      if (pressureSensitive_ && tabletActive_)
+        addPressurePoint(cp, tabletPressure_);
+      else
+        addPoint(cp);
+    }
     break;
   case Eraser:
     if (event->buttons() & Qt::LeftButton)
@@ -2863,7 +2883,41 @@ void Canvas::mouseReleaseEvent(QMouseEvent *event) {
   else if (currentShape_ == Pen) {
     currentPath_ = nullptr;
     pointBuffer_.clear();
+    pressureBuffer_.clear();
+    tabletActive_ = false;
   }
+}
+
+void Canvas::tabletEvent(QTabletEvent *event) {
+  if (!event)
+    return;
+
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+  tabletPressure_ = event->pressure();
+#else
+  tabletPressure_ = event->pressure();
+#endif
+
+  switch (event->type()) {
+  case QEvent::TabletPress:
+    tabletActive_ = true;
+    event->accept();
+    break;
+  case QEvent::TabletMove:
+    event->accept();
+    break;
+  case QEvent::TabletRelease:
+    tabletActive_ = false;
+    tabletPressure_ = 1.0;
+    event->accept();
+    break;
+  default:
+    break;
+  }
+
+  // Let the mouse events handle the actual drawing;
+  // the tablet event just updates pressure state.
+  QGraphicsView::tabletEvent(event);
 }
 
 void Canvas::updateEraserPreview(const QPointF &pos) {
@@ -3264,6 +3318,76 @@ void Canvas::addPoint(const QPointF &point) {
   }
   if (pointBuffer_.size() > mpr)
     pointBuffer_.removeFirst();
+}
+
+void Canvas::addPressurePoint(const QPointF &point, qreal pressure) {
+  if (!currentPath_)
+    return;
+
+  qreal width = currentPen_.widthF() * qBound(0.1, pressure, 1.0);
+
+  if (pointBuffer_.isEmpty()) {
+    pointBuffer_.append(point);
+    pressureBuffer_.append(pressure);
+    return;
+  }
+
+  QPointF prev = pointBuffer_.last();
+  qreal dist = QLineF(prev, point).length();
+  if (dist < 1.0)
+    return;
+
+  pointBuffer_.append(point);
+  pressureBuffer_.append(pressure);
+
+  // Build the filled stroke outline from the accumulated points
+  if (pointBuffer_.size() < 2)
+    return;
+
+  QPainterPath outline;
+  QVector<QPointF> leftSide;
+  QVector<QPointF> rightSide;
+
+  for (int i = 0; i < pointBuffer_.size(); ++i) {
+    qreal p = pressureBuffer_.at(i);
+    qreal w = currentPen_.widthF() * qBound(0.1, p, 1.0) * 0.5;
+
+    QPointF dir;
+    if (i == 0) {
+      dir = pointBuffer_.at(1) - pointBuffer_.at(0);
+    } else if (i == pointBuffer_.size() - 1) {
+      dir = pointBuffer_.at(i) - pointBuffer_.at(i - 1);
+    } else {
+      dir = pointBuffer_.at(i + 1) - pointBuffer_.at(i - 1);
+    }
+
+    qreal len = std::sqrt(dir.x() * dir.x() + dir.y() * dir.y());
+    if (len < 0.001)
+      continue;
+
+    QPointF normal(-dir.y() / len, dir.x() / len);
+    leftSide.append(pointBuffer_.at(i) + normal * w);
+    rightSide.append(pointBuffer_.at(i) - normal * w);
+  }
+
+  if (leftSide.size() < 2)
+    return;
+
+  // Build a closed path: left side forward, right side backward
+  outline.moveTo(leftSide.first());
+  for (int i = 1; i < leftSide.size(); ++i)
+    outline.lineTo(leftSide.at(i));
+  for (int i = rightSide.size() - 1; i >= 0; --i)
+    outline.lineTo(rightSide.at(i));
+  outline.closeSubpath();
+
+  currentPath_->setPath(outline);
+
+  // Keep a sliding window to avoid unbounded growth
+  if (pointBuffer_.size() > 200) {
+    pointBuffer_.remove(0, 100);
+    pressureBuffer_.remove(0, 100);
+  }
 }
 
 void Canvas::eraseAt(const QPointF &point) {
