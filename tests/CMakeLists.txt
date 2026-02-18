@@ -70,9 +70,31 @@ set_target_properties(test_project_serializer PROPERTIES
 
 add_test(NAME TestProjectSerializer COMMAND test_project_serializer)
 
+# ImageFilters tests
+add_executable(test_image_filters
+    test_image_filters.cpp
+    ../src/core/image_filters.cpp
+    ../src/core/image_filters.h
+)
+
+target_include_directories(test_image_filters PRIVATE
+    ../src/core
+)
+
+target_link_libraries(test_image_filters PRIVATE
+    Qt${QT_VERSION_MAJOR}::Widgets
+    Qt${QT_VERSION_MAJOR}::Test
+)
+
+set_target_properties(test_image_filters PROPERTIES
+    AUTOMOC ON
+)
+
+add_test(NAME TestImageFilters COMMAND test_image_filters)
+
 # Add custom target to run all tests
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-    DEPENDS test_item_store test_project_serializer
+    DEPENDS test_item_store test_project_serializer test_image_filters
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )

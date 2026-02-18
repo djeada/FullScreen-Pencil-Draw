@@ -185,6 +185,8 @@ public slots:
   void scaleSelectedItems();
   void scaleActiveLayer();
   void resizeCanvas();
+  void applyBlurToSelection();
+  void applySharpenToSelection();
 
 protected:
   void mousePressEvent(QMouseEvent *event) override;

@@ -4,6 +4,7 @@
  */
 #include "canvas.h"
 #include "../core/fill_utils.h"
+#include "../core/image_filters.h"
 #include "../core/item_store.h"
 #include "../core/project_serializer.h"
 #include "../core/recent_files_manager.h"
@@ -4236,4 +4237,75 @@ void Canvas::resizeCanvas() {
 
   scene_->setSceneRect(0, 0, newW, newH);
   emit canvasModified();
+}
+
+void Canvas::applyBlurToSelection() {
+  if (!scene_ || !sceneController_)
+    return;
+
+  QList<QGraphicsItem *> selected = scene_->selectedItems();
+  if (selected.isEmpty())
+    return;
+
+  bool ok = false;
+  int radius = QInputDialog::getInt(this, "Blur", "Radius:", 3, 1, 20, 1, &ok);
+  if (!ok)
+    return;
+
+  bool applied = false;
+  for (QGraphicsItem *item : selected) {
+    auto *pixmapItem = dynamic_cast<QGraphicsPixmapItem *>(item);
+    if (!pixmapItem)
+      continue;
+
+    QImage oldImage = pixmapItem->pixmap().toImage();
+    QImage newImage = ImageFilters::blur(oldImage, radius);
+    pixmapItem->setPixmap(QPixmap::fromImage(newImage));
+
+    ItemId id = sceneController_->idForItem(pixmapItem);
+    if (id.isValid()) {
+      addAction(std::make_unique<RasterPixmapAction>(
+          id, sceneController_->itemStore(), oldImage, newImage));
+    }
+    applied = true;
+  }
+
+  if (applied)
+    emit canvasModified();
+}
+
+void Canvas::applySharpenToSelection() {
+  if (!scene_ || !sceneController_)
+    return;
+
+  QList<QGraphicsItem *> selected = scene_->selectedItems();
+  if (selected.isEmpty())
+    return;
+
+  bool ok = false;
+  double strength =
+      QInputDialog::getDouble(this, "Sharpen", "Strength:", 1.0, 0.1, 5.0, 1, &ok);
+  if (!ok)
+    return;
+
+  bool applied = false;
+  for (QGraphicsItem *item : selected) {
+    auto *pixmapItem = dynamic_cast<QGraphicsPixmapItem *>(item);
+    if (!pixmapItem)
+      continue;
+
+    QImage oldImage = pixmapItem->pixmap().toImage();
+    QImage newImage = ImageFilters::sharpen(oldImage, 3, strength);
+    pixmapItem->setPixmap(QPixmap::fromImage(newImage));
+
+    ItemId id = sceneController_->idForItem(pixmapItem);
+    if (id.isValid()) {
+      addAction(std::make_unique<RasterPixmapAction>(
+          id, sceneController_->itemStore(), oldImage, newImage));
+    }
+    applied = true;
+  }
+
+  if (applied)
+    emit canvasModified();
 }
