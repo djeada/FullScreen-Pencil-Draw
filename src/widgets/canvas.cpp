@@ -4,6 +4,7 @@
  */
 #include "canvas.h"
 #include "../core/fill_utils.h"
+#include "../core/image_filters.h"
 #include "../core/item_store.h"
 #include "../core/project_serializer.h"
 #include "../core/recent_files_manager.h"
@@ -4236,4 +4237,64 @@ void Canvas::resizeCanvas() {
 
   scene_->setSceneRect(0, 0, newW, newH);
   emit canvasModified();
+}
+
+void Canvas::applyBlurToSelection() {
+  if (!scene_ || !sceneController_)
+    return;
+
+  QList<QGraphicsItem *> selected = scene_->selectedItems();
+  if (selected.isEmpty())
+    return;
+
+  bool applied = false;
+  for (QGraphicsItem *item : selected) {
+    auto *pixmapItem = dynamic_cast<QGraphicsPixmapItem *>(item);
+    if (!pixmapItem)
+      continue;
+
+    QImage oldImage = pixmapItem->pixmap().toImage();
+    QImage newImage = ImageFilters::blur(oldImage, 3);
+    pixmapItem->setPixmap(QPixmap::fromImage(newImage));
+
+    ItemId id = sceneController_->idForItem(pixmapItem);
+    if (id.isValid()) {
+      addAction(std::make_unique<RasterPixmapAction>(
+          id, sceneController_->itemStore(), oldImage, newImage));
+    }
+    applied = true;
+  }
+
+  if (applied)
+    emit canvasModified();
+}
+
+void Canvas::applySharpenToSelection() {
+  if (!scene_ || !sceneController_)
+    return;
+
+  QList<QGraphicsItem *> selected = scene_->selectedItems();
+  if (selected.isEmpty())
+    return;
+
+  bool applied = false;
+  for (QGraphicsItem *item : selected) {
+    auto *pixmapItem = dynamic_cast<QGraphicsPixmapItem *>(item);
+    if (!pixmapItem)
+      continue;
+
+    QImage oldImage = pixmapItem->pixmap().toImage();
+    QImage newImage = ImageFilters::sharpen(oldImage, 3, 1.0);
+    pixmapItem->setPixmap(QPixmap::fromImage(newImage));
+
+    ItemId id = sceneController_->idForItem(pixmapItem);
+    if (id.isValid()) {
+      addAction(std::make_unique<RasterPixmapAction>(
+          id, sceneController_->itemStore(), oldImage, newImage));
+    }
+    applied = true;
+  }
+
+  if (applied)
+    emit canvasModified();
 }

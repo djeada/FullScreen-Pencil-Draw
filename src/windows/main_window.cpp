@@ -480,6 +480,11 @@ void MainWindow::setupMenuBar() {
   connect(clearColorSelectionAction, &QAction::triggered, _canvas,
           &Canvas::clearColorSelection);
 
+  // Filters menu
+  QMenu *filtersMenu = menuBar->addMenu("F&ilters");
+  filtersMenu->addAction("&Blur", _canvas, SLOT(applyBlurToSelection()));
+  filtersMenu->addAction("&Sharpen", _canvas, SLOT(applySharpenToSelection()));
+
   // Help menu
   QMenu *helpMenu = menuBar->addMenu("&Help");
 
