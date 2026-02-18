@@ -39,7 +39,8 @@ public:
     Selection,
     Pan,
     Mermaid,
-    Bezier
+    Bezier,
+    TextOnPath
   };
   Q_ENUM(ToolType)
 

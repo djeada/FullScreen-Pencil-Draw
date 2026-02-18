@@ -800,6 +800,19 @@ void Canvas::setBezierTool() {
   isPanning_ = false;
 }
 
+void Canvas::setTextOnPathTool() {
+  currentShape_ = TextOnPath;
+  tempShapeItem_ = nullptr;
+  this->setDragMode(QGraphicsView::NoDrag);
+  hideEraserPreview();
+  if (scene_)
+    scene_->clearSelection();
+  if (colorSelectionOverlay_)
+    colorSelectionOverlay_->hide();
+  setCursor(Qt::CrossCursor);
+  isPanning_ = false;
+}
+
 void Canvas::setPanTool() {
   currentShape_ = Pan;
   tempShapeItem_ = nullptr;
