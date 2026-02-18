@@ -4434,3 +4434,104 @@ void Canvas::applySharpenToSelection() {
   if (applied)
     emit canvasModified();
 }
+
+void Canvas::placeElement(const QString &elementId) {
+  if (!scene_)
+    return;
+
+  // Map of element id to (unicode icon, display label)
+  struct ElemDef {
+    QString icon;
+    QString label;
+  };
+  static const QHash<QString, ElemDef> defs = {
+      // Network
+      {"router", {"⇌", "Router"}},
+      {"switch", {"⇶", "Switch"}},
+      {"firewall", {"🛡", "Firewall"}},
+      {"load_balancer", {"⚖", "Load Balancer"}},
+      {"dns", {"🌐", "DNS"}},
+      // Compute
+      {"server", {"🖥", "Server"}},
+      {"vm", {"⊞", "VM"}},
+      {"container", {"☐", "Container"}},
+      {"serverless", {"λ", "Lambda"}},
+      {"microservice", {"⬡", "Service"}},
+      // Storage
+      {"database", {"⛁", "Database"}},
+      {"cache", {"⧖", "Cache"}},
+      {"queue", {"☰", "Queue"}},
+      {"storage", {"🗄", "Storage"}},
+      // Client
+      {"browser", {"🌍", "Browser"}},
+      {"mobile", {"📱", "Mobile"}},
+      {"desktop", {"💻", "Desktop"}},
+      {"api_client", {"⇄", "API"}},
+      // Security
+      {"key", {"🔑", "Key"}},
+      {"lock", {"🔒", "Lock"}},
+      {"auth", {"👤", "Auth"}},
+      {"certificate", {"📜", "Cert"}},
+      // Data Flow
+      {"api_gateway", {"⛩", "Gateway"}},
+      {"bus", {"⇉", "Event Bus"}},
+      {"pipeline", {"⟿", "Pipeline"}},
+      {"cdn", {"◎", "CDN"}},
+      // Cloud
+      {"cloud", {"☁", "Cloud"}},
+      {"region", {"⬜", "Region"}},
+      {"cluster", {"⊟", "Cluster"}},
+      {"node", {"◻", "Node"}},
+      // General
+      {"user", {"👤", "User"}},
+      {"monitor", {"📊", "Monitor"}},
+      {"log", {"📝", "Logs"}},
+      {"ci_cd", {"⟳", "CI/CD"}},
+  };
+
+  auto it = defs.find(elementId);
+  if (it == defs.end())
+    return;
+
+  const ElemDef &def = it.value();
+
+  // Build a group: rounded rectangle background + icon + label
+  constexpr qreal W = 100.0;
+  constexpr qreal H = 70.0;
+  constexpr qreal CORNER = 8.0;
+
+  QPainterPath bgPath;
+  bgPath.addRoundedRect(0, 0, W, H, CORNER, CORNER);
+
+  auto *bgItem = new QGraphicsPathItem(bgPath);
+  bgItem->setPen(QPen(QColor("#3b82f6"), 2));
+  bgItem->setBrush(QColor("#23232a"));
+
+  auto *iconItem = new QGraphicsTextItem(def.icon);
+  iconItem->setFont(QFont("Segoe UI Emoji", 20));
+  iconItem->setDefaultTextColor(QColor("#f8f8fc"));
+  QRectF ib = iconItem->boundingRect();
+  iconItem->setPos((W - ib.width()) / 2.0, 2);
+
+  auto *labelItem = new QGraphicsTextItem(def.label);
+  labelItem->setFont(QFont("Arial", 9, QFont::Bold));
+  labelItem->setDefaultTextColor(QColor("#a0a0a8"));
+  QRectF lb = labelItem->boundingRect();
+  labelItem->setPos((W - lb.width()) / 2.0, H - lb.height() - 4);
+
+  // Group them
+  auto *group = scene_->createItemGroup({bgItem, iconItem, labelItem});
+  group->setFlag(QGraphicsItem::ItemIsSelectable, true);
+  group->setFlag(QGraphicsItem::ItemIsMovable, true);
+
+  // Position at the centre of the visible viewport
+  QPointF center = mapToScene(viewport()->rect().center());
+  group->setPos(center.x() - W / 2.0, center.y() - H / 2.0);
+
+  // Register with SceneController
+  if (sceneController_) {
+    sceneController_->addItem(group);
+  }
+  addDrawAction(group);
+  emit canvasModified();
+}

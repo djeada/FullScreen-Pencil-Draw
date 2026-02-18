@@ -191,6 +191,7 @@ public slots:
   void resizeCanvas();
   void applyBlurToSelection();
   void applySharpenToSelection();
+  void placeElement(const QString &elementId);
 
 protected:
   void mousePressEvent(QMouseEvent *event) override;
