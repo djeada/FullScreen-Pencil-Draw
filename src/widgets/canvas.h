@@ -183,6 +183,7 @@ public slots:
   void addImageFromScreenshot(const QImage &image);
   void scaleSelectedItems();
   void scaleActiveLayer();
+  void resizeCanvas();
 
 protected:
   void mousePressEvent(QMouseEvent *event) override;
@@ -307,6 +308,8 @@ private:
                                qreal scaleY, const QPointF &anchor);
   void applyRotationToOtherItems(QGraphicsItem *sourceItem, qreal angleDelta,
                                  const QPointF &center);
+  void importSvg(const QString &filePath,
+                 const QPointF &position = QPointF());
 };
 
 #endif // CANVAS_H
