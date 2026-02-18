@@ -910,6 +910,8 @@ void Canvas::groupSelectedItems() {
   SceneController *controller = sceneController_;
   QList<ItemId> itemIds;
   QList<QPointF> originalPositions;
+  QHash<QString, QUuid> originalLayerIds;
+  QUuid targetLayerId;
   if (store) {
     for (QGraphicsItem *item : itemsToGroup) {
       ItemId id = store->idForItem(item);
@@ -919,6 +921,14 @@ void Canvas::groupSelectedItems() {
       if (id.isValid()) {
         itemIds.append(id);
         originalPositions.append(item->scenePos());
+        if (layerManager_) {
+          if (Layer *layer = layerManager_->findLayerForItem(id)) {
+            originalLayerIds.insert(id.toString(), layer->id());
+            if (targetLayerId.isNull()) {
+              targetLayerId = layer->id();
+            }
+          }
+        }
       }
     }
   }
@@ -928,6 +938,11 @@ void Canvas::groupSelectedItems() {
 
   // Remove items from scene and add to group
   for (QGraphicsItem *item : itemsToGroup) {
+    if (layerManager_) {
+      if (Layer *layer = layerManager_->findLayerForItem(item)) {
+        layer->removeItem(item);
+      }
+    }
     scene_->removeItem(item);
     group->addToGroup(item);
   }
@@ -936,8 +951,8 @@ void Canvas::groupSelectedItems() {
   ItemId groupId;
   if (controller) {
     Layer *targetLayer = nullptr;
-    if (layerManager_ && !itemsToGroup.isEmpty()) {
-      targetLayer = layerManager_->findLayerForItem(itemsToGroup.first());
+    if (layerManager_ && !targetLayerId.isNull()) {
+      targetLayer = layerManager_->layer(targetLayerId);
     }
     groupId = controller->addItem(group, targetLayer);
   } else {
@@ -948,10 +963,44 @@ void Canvas::groupSelectedItems() {
 
   // Create undo action
   if (store && groupId.isValid() && !itemIds.isEmpty()) {
+    auto onAdd = [this, store, targetLayerId,
+                  originalLayerIds](QGraphicsItem *item) {
+      if (!layerManager_ || !store || !item) {
+        return;
+      }
+      ItemId id = store->idForItem(item);
+      if (!id.isValid()) {
+        return;
+      }
+
+      QUuid layerId = targetLayerId;
+      if (originalLayerIds.contains(id.toString())) {
+        layerId = originalLayerIds.value(id.toString());
+      }
+
+      if (!layerId.isNull()) {
+        if (Layer *layer = layerManager_->layer(layerId)) {
+          layer->addItem(id, store);
+          return;
+        }
+      }
+      layerManager_->addItemToActiveLayer(item);
+    };
+    auto onRemove = [this, store](QGraphicsItem *item) {
+      if (!layerManager_ || !store || !item) {
+        return;
+      }
+      ItemId id = store->idForItem(item);
+      if (!id.isValid()) {
+        return;
+      }
+      if (Layer *layer = layerManager_->findLayerForItem(id)) {
+        layer->removeItem(id);
+      }
+    };
+
     auto action = std::make_unique<GroupAction>(
-        groupId, itemIds, store, originalPositions,
-        [this](QGraphicsItem *item) { onItemRemoved(item); },
-        [this](QGraphicsItem *item) { onItemRemoved(item); });
+        groupId, itemIds, store, originalPositions, onAdd, onRemove);
     addAction(std::move(action));
   } else {
     qWarning() << "Cannot create GroupAction without ItemStore";
@@ -989,6 +1038,13 @@ void Canvas::ungroupSelectedItems() {
 
     // Store group position for undo
     QPointF groupPosition = group->pos();
+    QUuid groupLayerId;
+    if (layerManager_) {
+      if (Layer *layer = layerManager_->findLayerForItem(group)) {
+        groupLayerId = layer->id();
+        layer->removeItem(group);
+      }
+    }
 
     // Remove group from scene
     scene_->removeItem(group);
@@ -1002,6 +1058,11 @@ void Canvas::ungroupSelectedItems() {
       child->setFlags(QGraphicsItem::ItemIsSelectable |
                       QGraphicsItem::ItemIsMovable);
       child->setSelected(true);
+      if (layerManager_ && !groupLayerId.isNull()) {
+        if (Layer *layer = layerManager_->layer(groupLayerId)) {
+          layer->addItem(child);
+        }
+      }
     }
 
     // Create undo action
@@ -1018,10 +1079,37 @@ void Canvas::ungroupSelectedItems() {
         }
       }
       if (groupId.isValid() && !itemIds.isEmpty()) {
+        auto onAdd = [this, store, groupLayerId](QGraphicsItem *graphicsItem) {
+          if (!layerManager_ || !store || !graphicsItem) {
+            return;
+          }
+          ItemId id = store->idForItem(graphicsItem);
+          if (!id.isValid()) {
+            return;
+          }
+          if (!groupLayerId.isNull()) {
+            if (Layer *layer = layerManager_->layer(groupLayerId)) {
+              layer->addItem(id, store);
+              return;
+            }
+          }
+          layerManager_->addItemToActiveLayer(graphicsItem);
+        };
+        auto onRemove = [this, store](QGraphicsItem *graphicsItem) {
+          if (!layerManager_ || !store || !graphicsItem) {
+            return;
+          }
+          ItemId id = store->idForItem(graphicsItem);
+          if (!id.isValid()) {
+            return;
+          }
+          if (Layer *layer = layerManager_->findLayerForItem(id)) {
+            layer->removeItem(id);
+          }
+        };
+
         auto action = std::make_unique<UngroupAction>(
-            groupId, itemIds, store, groupPosition,
-            [this](QGraphicsItem *item) { onItemRemoved(item); },
-            [this](QGraphicsItem *item) { onItemRemoved(item); });
+            groupId, itemIds, store, groupPosition, onAdd, onRemove);
         addAction(std::move(action));
       } else {
         qWarning() << "Cannot create UngroupAction without valid IDs";

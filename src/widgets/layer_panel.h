@@ -8,6 +8,7 @@
 #include "../core/item_id.h"
 #include <QDockWidget>
 #include <QLabel>
+#include <QPoint>
 #include <QPushButton>
 #include <QSlider>
 #include <QTreeWidget>
@@ -105,6 +106,8 @@ private slots:
   void onVisibilityToggled();
   void onLockToggled();
   void onTreeItemDropped(QTreeWidgetItem *item, int fromIndex, int toIndex);
+  void onLayerTreeContextMenuRequested(const QPoint &pos);
+  void onRenameLayer();
 
 private:
   LayerManager *layerManager_;
