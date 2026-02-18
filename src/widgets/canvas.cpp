@@ -4247,6 +4247,11 @@ void Canvas::applyBlurToSelection() {
   if (selected.isEmpty())
     return;
 
+  bool ok = false;
+  int radius = QInputDialog::getInt(this, "Blur", "Radius:", 3, 1, 20, 1, &ok);
+  if (!ok)
+    return;
+
   bool applied = false;
   for (QGraphicsItem *item : selected) {
     auto *pixmapItem = dynamic_cast<QGraphicsPixmapItem *>(item);
@@ -4254,7 +4259,7 @@ void Canvas::applyBlurToSelection() {
       continue;
 
     QImage oldImage = pixmapItem->pixmap().toImage();
-    QImage newImage = ImageFilters::blur(oldImage, 3);
+    QImage newImage = ImageFilters::blur(oldImage, radius);
     pixmapItem->setPixmap(QPixmap::fromImage(newImage));
 
     ItemId id = sceneController_->idForItem(pixmapItem);
@@ -4277,6 +4282,12 @@ void Canvas::applySharpenToSelection() {
   if (selected.isEmpty())
     return;
 
+  bool ok = false;
+  double strength =
+      QInputDialog::getDouble(this, "Sharpen", "Strength:", 1.0, 0.1, 5.0, 1, &ok);
+  if (!ok)
+    return;
+
   bool applied = false;
   for (QGraphicsItem *item : selected) {
     auto *pixmapItem = dynamic_cast<QGraphicsPixmapItem *>(item);
@@ -4284,7 +4295,7 @@ void Canvas::applySharpenToSelection() {
       continue;
 
     QImage oldImage = pixmapItem->pixmap().toImage();
-    QImage newImage = ImageFilters::sharpen(oldImage, 3, 1.0);
+    QImage newImage = ImageFilters::sharpen(oldImage, 3, strength);
     pixmapItem->setPixmap(QPixmap::fromImage(newImage));
 
     ItemId id = sceneController_->idForItem(pixmapItem);
