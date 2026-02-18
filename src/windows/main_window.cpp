@@ -296,9 +296,10 @@ void MainWindow::setupMenuBar() {
   createAction(fileMenu, "&New", QKeySequence::New, this, SLOT(onNewCanvas()));
   createAction(fileMenu, "&Open...", QKeySequence::Open, _canvas,
                SLOT(openFile()));
+  fileMenu->addAction("Open &Project...", _canvas, SLOT(openProject()));
 
 #ifdef HAVE_QT_PDF
-  createAction(fileMenu, "Open &PDF...",
+  createAction(fileMenu, "Open P&DF...",
                QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_O), this,
                SLOT(onOpenPdf()));
 #endif
@@ -311,6 +312,7 @@ void MainWindow::setupMenuBar() {
 
   createAction(fileMenu, "&Save...", QKeySequence::Save, _canvas,
                SLOT(saveToFile()));
+  fileMenu->addAction("Save Pro&ject...", _canvas, SLOT(saveProject()));
   fileMenu->addAction("Export to &PDF...", _canvas, SLOT(exportToPDF()));
 
 #ifdef HAVE_QT_PDF

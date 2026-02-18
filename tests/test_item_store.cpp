@@ -647,6 +647,8 @@ private slots:
     QTransform t = rect->transform();
     QVERIFY(qFuzzyCompare(t.m11(), 2.0));
     QVERIFY(qFuzzyCompare(t.m22(), 3.0));
+  }
+
   // ========== Layer Merge Tests ==========
 
   void testMergeItemsCreatesGroup() {
