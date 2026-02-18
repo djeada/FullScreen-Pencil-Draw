@@ -49,6 +49,13 @@
 #include <QWheelEvent>
 #include <cmath>
 
+// Pressure sensitivity constants
+static constexpr qreal MIN_PRESSURE_THRESHOLD = 0.1;
+static constexpr qreal MIN_POINT_DISTANCE = 1.0;
+static constexpr qreal LENGTH_EPSILON = 0.001;
+static constexpr int MAX_PRESSURE_BUFFER_SIZE = 200;
+static constexpr int PRESSURE_BUFFER_TRIM_SIZE = 100;
+
 // Supported image file extensions for drag-and-drop
 static const QSet<QString> SUPPORTED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg",
                                                          "bmp", "gif"};
@@ -2892,11 +2899,7 @@ void Canvas::tabletEvent(QTabletEvent *event) {
   if (!event)
     return;
 
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
   tabletPressure_ = event->pressure();
-#else
-  tabletPressure_ = event->pressure();
-#endif
 
   switch (event->type()) {
   case QEvent::TabletPress:
@@ -3324,8 +3327,6 @@ void Canvas::addPressurePoint(const QPointF &point, qreal pressure) {
   if (!currentPath_)
     return;
 
-  qreal width = currentPen_.widthF() * qBound(0.1, pressure, 1.0);
-
   if (pointBuffer_.isEmpty()) {
     pointBuffer_.append(point);
     pressureBuffer_.append(pressure);
@@ -3334,7 +3335,7 @@ void Canvas::addPressurePoint(const QPointF &point, qreal pressure) {
 
   QPointF prev = pointBuffer_.last();
   qreal dist = QLineF(prev, point).length();
-  if (dist < 1.0)
+  if (dist < MIN_POINT_DISTANCE)
     return;
 
   pointBuffer_.append(point);
@@ -3350,7 +3351,7 @@ void Canvas::addPressurePoint(const QPointF &point, qreal pressure) {
 
   for (int i = 0; i < pointBuffer_.size(); ++i) {
     qreal p = pressureBuffer_.at(i);
-    qreal w = currentPen_.widthF() * qBound(0.1, p, 1.0) * 0.5;
+    qreal w = currentPen_.widthF() * qBound(MIN_PRESSURE_THRESHOLD, p, 1.0) * 0.5;
 
     QPointF dir;
     if (i == 0) {
@@ -3362,7 +3363,7 @@ void Canvas::addPressurePoint(const QPointF &point, qreal pressure) {
     }
 
     qreal len = std::sqrt(dir.x() * dir.x() + dir.y() * dir.y());
-    if (len < 0.001)
+    if (len < LENGTH_EPSILON)
       continue;
 
     QPointF normal(-dir.y() / len, dir.x() / len);
@@ -3384,9 +3385,9 @@ void Canvas::addPressurePoint(const QPointF &point, qreal pressure) {
   currentPath_->setPath(outline);
 
   // Keep a sliding window to avoid unbounded growth
-  if (pointBuffer_.size() > 200) {
-    pointBuffer_.remove(0, 100);
-    pressureBuffer_.remove(0, 100);
+  if (pointBuffer_.size() > MAX_PRESSURE_BUFFER_SIZE) {
+    pointBuffer_.remove(0, PRESSURE_BUFFER_TRIM_SIZE);
+    pressureBuffer_.remove(0, PRESSURE_BUFFER_TRIM_SIZE);
   }
 }
 
