@@ -92,9 +92,31 @@ set_target_properties(test_image_filters PROPERTIES
 
 add_test(NAME TestImageFilters COMMAND test_image_filters)
 
+# PerspectiveTransform tests
+add_executable(test_perspective_transform
+    test_perspective_transform.cpp
+    ../src/widgets/perspective_transform_dialog.cpp
+    ../src/widgets/perspective_transform_dialog.h
+)
+
+target_include_directories(test_perspective_transform PRIVATE
+    ../src/widgets
+)
+
+target_link_libraries(test_perspective_transform PRIVATE
+    Qt${QT_VERSION_MAJOR}::Widgets
+    Qt${QT_VERSION_MAJOR}::Test
+)
+
+set_target_properties(test_perspective_transform PROPERTIES
+    AUTOMOC ON
+)
+
+add_test(NAME TestPerspectiveTransform COMMAND test_perspective_transform)
+
 # Add custom target to run all tests
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-    DEPENDS test_item_store test_project_serializer test_image_filters
+    DEPENDS test_item_store test_project_serializer test_image_filters test_perspective_transform
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )

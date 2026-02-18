@@ -444,6 +444,11 @@ void MainWindow::setupMenuBar() {
                QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_R), _canvas,
                SLOT(scaleActiveLayer()));
 
+  // Edit menu - perspective transform
+  createAction(editMenu, "&Perspective Transform...",
+               QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_P), _canvas,
+               SLOT(perspectiveTransformSelectedItems()));
+
   // Edit menu - canvas resize
   editMenu->addSeparator();
   editMenu->addAction("Resize Canvas...", _canvas, SLOT(resizeCanvas()));

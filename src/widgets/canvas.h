@@ -189,6 +189,7 @@ public slots:
   void openRecentFile(const QString &filePath);
   void addImageFromScreenshot(const QImage &image);
   void scaleSelectedItems();
+  void perspectiveTransformSelectedItems();
   void scaleActiveLayer();
   void resizeCanvas();
   void applyBlurToSelection();
