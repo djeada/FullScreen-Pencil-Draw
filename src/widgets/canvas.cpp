@@ -10,6 +10,7 @@
 #include "../core/recent_files_manager.h"
 #include "../core/scene_controller.h"
 #include "../core/transform_action.h"
+#include "architecture_elements.h"
 #include "image_size_dialog.h"
 #include "resize_canvas_dialog.h"
 #include "latex_text_item.h"
@@ -4439,67 +4440,43 @@ void Canvas::placeElement(const QString &elementId) {
   if (!scene_)
     return;
 
-  // Map of element id to (unicode icon, display label)
-  struct ElemDef {
-    QString icon;
-    QString label;
-  };
-  static const QHash<QString, ElemDef> defs = {
-      {"client", {"💻", "Client"}},
-      {"load_balancer", {"⚖", "Load Balancer"}},
-      {"api_gateway", {"⛩", "API Gateway"}},
-      {"app_server", {"⬡", "App Server"}},
-      {"cache", {"⧖", "Cache"}},
-      {"message_queue", {"☰", "Queue"}},
-      {"database", {"⛁", "Database"}},
-      {"object_storage", {"🗄", "Storage"}},
-      {"auth", {"🔐", "Auth"}},
-      {"monitoring", {"📊", "Monitor"}},
-  };
+  // Create the appropriate custom vector-drawn element
+  ArchitectureElementItem *elem = nullptr;
+  if (elementId == "client")
+    elem = new ClientElement();
+  else if (elementId == "load_balancer")
+    elem = new LoadBalancerElement();
+  else if (elementId == "api_gateway")
+    elem = new ApiGatewayElement();
+  else if (elementId == "app_server")
+    elem = new AppServerElement();
+  else if (elementId == "cache")
+    elem = new CacheElement();
+  else if (elementId == "message_queue")
+    elem = new MessageQueueElement();
+  else if (elementId == "database")
+    elem = new DatabaseElement();
+  else if (elementId == "object_storage")
+    elem = new ObjectStorageElement();
+  else if (elementId == "auth")
+    elem = new AuthElement();
+  else if (elementId == "monitoring")
+    elem = new MonitoringElement();
 
-  auto it = defs.find(elementId);
-  if (it == defs.end())
+  if (!elem)
     return;
 
-  const ElemDef &def = it.value();
-
-  // Build a group: rounded rectangle background + icon + label
-  constexpr qreal W = 100.0;
-  constexpr qreal H = 70.0;
-  constexpr qreal CORNER = 8.0;
-
-  QPainterPath bgPath;
-  bgPath.addRoundedRect(0, 0, W, H, CORNER, CORNER);
-
-  auto *bgItem = new QGraphicsPathItem(bgPath);
-  bgItem->setPen(QPen(QColor("#3b82f6"), 2));
-  bgItem->setBrush(QColor("#23232a"));
-
-  auto *iconItem = new QGraphicsTextItem(def.icon);
-  iconItem->setFont(QFont("Segoe UI Emoji", 20));
-  iconItem->setDefaultTextColor(QColor("#f8f8fc"));
-  QRectF ib = iconItem->boundingRect();
-  iconItem->setPos((W - ib.width()) / 2.0, 2);
-
-  auto *labelItem = new QGraphicsTextItem(def.label);
-  labelItem->setFont(QFont("Arial", 9, QFont::Bold));
-  labelItem->setDefaultTextColor(QColor("#a0a0a8"));
-  QRectF lb = labelItem->boundingRect();
-  labelItem->setPos((W - lb.width()) / 2.0, H - lb.height() - 4);
-
-  // Group them
-  auto *group = scene_->createItemGroup({bgItem, iconItem, labelItem});
-  group->setFlag(QGraphicsItem::ItemIsSelectable, true);
-  group->setFlag(QGraphicsItem::ItemIsMovable, true);
-
   // Position at the centre of the visible viewport
+  QRectF br = elem->boundingRect();
   QPointF center = mapToScene(viewport()->rect().center());
-  group->setPos(center.x() - W / 2.0, center.y() - H / 2.0);
+  elem->setPos(center.x() - br.width() / 2.0, center.y() - br.height() / 2.0);
 
-  // Register with SceneController
+  // Add to scene via SceneController
   if (sceneController_) {
-    sceneController_->addItem(group);
+    sceneController_->addItem(elem);
+  } else {
+    scene_->addItem(elem);
   }
-  addDrawAction(group);
+  addDrawAction(elem);
   emit canvasModified();
 }
