@@ -11,15 +11,16 @@
 // Layer implementation
 Layer::Layer(const QString &name, Type type)
     : id_(QUuid::createUuid()), name_(name), type_(type), visible_(true),
-      locked_(false), opacity_(1.0), itemStore_(nullptr) {}
+      locked_(false), opacity_(1.0), blendMode_(BlendMode::Normal),
+      itemStore_(nullptr) {}
 
 Layer::~Layer() = default;
 
 Layer::Layer(Layer &&other) noexcept
     : id_(other.id_), name_(std::move(other.name_)), type_(other.type_),
       visible_(other.visible_), locked_(other.locked_),
-      opacity_(other.opacity_), itemIds_(std::move(other.itemIds_)),
-      itemStore_(other.itemStore_) {}
+      opacity_(other.opacity_), blendMode_(other.blendMode_),
+      itemIds_(std::move(other.itemIds_)), itemStore_(other.itemStore_) {}
 
 Layer &Layer::operator=(Layer &&other) noexcept {
   if (this != &other) {
@@ -29,6 +30,7 @@ Layer &Layer::operator=(Layer &&other) noexcept {
     visible_ = other.visible_;
     locked_ = other.locked_;
     opacity_ = other.opacity_;
+    blendMode_ = other.blendMode_;
     itemIds_ = std::move(other.itemIds_);
     itemStore_ = other.itemStore_;
   }
@@ -45,6 +47,36 @@ void Layer::setVisible(bool visible) {
 void Layer::setOpacity(qreal opacity) {
   opacity_ = qBound(0.0, opacity, 1.0);
   updateItemsOpacity();
+}
+
+QPainter::CompositionMode Layer::toCompositionMode(BlendMode mode) {
+  switch (mode) {
+  case BlendMode::Multiply:
+    return QPainter::CompositionMode_Multiply;
+  case BlendMode::Screen:
+    return QPainter::CompositionMode_Screen;
+  case BlendMode::Overlay:
+    return QPainter::CompositionMode_Overlay;
+  case BlendMode::Darken:
+    return QPainter::CompositionMode_Darken;
+  case BlendMode::Lighten:
+    return QPainter::CompositionMode_Lighten;
+  case BlendMode::ColorDodge:
+    return QPainter::CompositionMode_ColorDodge;
+  case BlendMode::ColorBurn:
+    return QPainter::CompositionMode_ColorBurn;
+  case BlendMode::HardLight:
+    return QPainter::CompositionMode_HardLight;
+  case BlendMode::SoftLight:
+    return QPainter::CompositionMode_SoftLight;
+  case BlendMode::Difference:
+    return QPainter::CompositionMode_Difference;
+  case BlendMode::Exclusion:
+    return QPainter::CompositionMode_Exclusion;
+  case BlendMode::Normal:
+  default:
+    return QPainter::CompositionMode_SourceOver;
+  }
 }
 
 void Layer::addItem(QGraphicsItem *item) {
@@ -595,6 +627,7 @@ Layer *LayerManager::duplicateLayer(int index) {
     newLayer->setVisible(source->isVisible());
     newLayer->setLocked(source->isLocked());
     newLayer->setOpacity(source->opacity());
+    newLayer->setBlendMode(source->blendMode());
     // Note: Items are not duplicated, only the layer properties
   }
 

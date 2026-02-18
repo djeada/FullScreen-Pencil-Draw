@@ -32,6 +32,7 @@
 #include <QMimeData>
 #include <QMouseEvent>
 #include <QPageSize>
+#include <QPaintEvent>
 #include <QPdfWriter>
 #include <QPointer>
 #include <QQueue>
@@ -463,6 +464,140 @@ void Canvas::addAction(std::unique_ptr<Action> action) {
 }
 
 void Canvas::clearRedoStack() { redoStack_.clear(); }
+
+bool Canvas::hasNonNormalBlendModes() const {
+  if (!layerManager_) {
+    return false;
+  }
+  for (int i = 0; i < layerManager_->layerCount(); ++i) {
+    Layer *layer = layerManager_->layer(i);
+    if (layer && layer->blendMode() != Layer::BlendMode::Normal) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void Canvas::paintEvent(QPaintEvent *event) {
+  if (!hasNonNormalBlendModes()) {
+    // No blend modes active — use default rendering for best performance
+    QGraphicsView::paintEvent(event);
+    return;
+  }
+
+  // Custom layer-by-layer rendering with blend mode compositing.
+  // 1. Temporarily hide all managed items so the base scene paint
+  //    only renders background/grid/foreground.
+  // 2. Paint each layer into an offscreen image with the layer's blend mode.
+
+  QSize vpSize = viewport()->size();
+  if (vpSize.isEmpty()) {
+    QGraphicsView::paintEvent(event);
+    return;
+  }
+
+  // Collect all managed items and record their original visibility
+  struct ItemState {
+    QGraphicsItem *item;
+    bool wasVisible;
+  };
+  QList<ItemState> allStates;
+
+  for (int i = 0; i < layerManager_->layerCount(); ++i) {
+    Layer *layer = layerManager_->layer(i);
+    if (!layer)
+      continue;
+    for (QGraphicsItem *item : layer->items()) {
+      if (item) {
+        allStates.append({item, item->isVisible()});
+        item->setVisible(false);
+      }
+    }
+  }
+
+  // Render the base scene (background, grid) without any managed items
+  QImage baseImage(vpSize, QImage::Format_ARGB32_Premultiplied);
+  baseImage.fill(Qt::transparent);
+  {
+    QPainter basePainter(&baseImage);
+    basePainter.setRenderHints(renderHints());
+    QGraphicsView::render(&basePainter, QRectF(), viewport()->rect());
+    basePainter.end();
+  }
+
+  // Composited result starts with the base
+  QImage result = baseImage;
+  QPainter resultPainter(&result);
+  resultPainter.setRenderHints(renderHints());
+
+  // Render each layer
+  for (int i = 0; i < layerManager_->layerCount(); ++i) {
+    Layer *layer = layerManager_->layer(i);
+    if (!layer || !layer->isVisible())
+      continue;
+
+    QList<QGraphicsItem *> layerItems = layer->items();
+    if (layerItems.isEmpty())
+      continue;
+
+    // Show only this layer's items
+    for (QGraphicsItem *item : layerItems) {
+      if (item) {
+        item->setVisible(true);
+      }
+    }
+
+    // Render the scene (only this layer's items are visible)
+    QImage layerImage(vpSize, QImage::Format_ARGB32_Premultiplied);
+    layerImage.fill(Qt::transparent);
+    {
+      QPainter layerPainter(&layerImage);
+      layerPainter.setRenderHints(renderHints());
+      // Render scene items only (skip background to avoid double-drawing)
+      scene_->render(&layerPainter, QRectF(viewport()->rect()),
+                     mapToScene(viewport()->rect()).boundingRect());
+      layerPainter.end();
+    }
+
+    // Hide items again
+    for (QGraphicsItem *item : layerItems) {
+      if (item) {
+        item->setVisible(false);
+      }
+    }
+
+    // Composite this layer with its blend mode
+    QPainter::CompositionMode mode =
+        Layer::toCompositionMode(layer->blendMode());
+    resultPainter.setCompositionMode(mode);
+    resultPainter.drawImage(0, 0, layerImage);
+    resultPainter.setCompositionMode(QPainter::CompositionMode_SourceOver);
+  }
+
+  resultPainter.end();
+
+  // Restore original visibility
+  for (const auto &state : allStates) {
+    if (state.item) {
+      state.item->setVisible(state.wasVisible);
+    }
+  }
+
+  // Paint the composited result to the viewport
+  QPainter viewportPainter(viewport());
+  viewportPainter.drawImage(0, 0, result);
+
+  // Draw foreground elements (ruler, etc.) on top
+  if (showRuler_) {
+    QPainter fgPainter(viewport());
+    fgPainter.setRenderHints(renderHints());
+    QRectF sceneRect = mapToScene(viewport()->rect()).boundingRect();
+    // Ruler is drawn via drawForeground, but we need to handle the transform
+    fgPainter.setTransform(viewportTransform());
+    drawRuler(&fgPainter, sceneRect);
+    fgPainter.end();
+  }
+}
 
 void Canvas::drawBackground(QPainter *painter, const QRectF &rect) {
   QGraphicsView::drawBackground(painter, rect);

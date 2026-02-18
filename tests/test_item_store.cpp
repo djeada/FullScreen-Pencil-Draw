@@ -647,6 +647,7 @@ private slots:
     QTransform t = rect->transform();
     QVERIFY(qFuzzyCompare(t.m11(), 2.0));
     QVERIFY(qFuzzyCompare(t.m22(), 3.0));
+  }
   // ========== Layer Merge Tests ==========
 
   void testMergeItemsCreatesGroup() {
@@ -773,6 +774,76 @@ private slots:
     Layer *remaining = manager.layer(0);
     QVERIFY(remaining);
     QCOMPARE(remaining->itemCount(), 2);
+  }
+
+  // ========== Blend Mode Tests ==========
+
+  void testBlendModeDefaultNormal() {
+    Layer layer("Test");
+    QCOMPARE(layer.blendMode(), Layer::BlendMode::Normal);
+  }
+
+  void testBlendModeSetGet() {
+    Layer layer("Test");
+
+    layer.setBlendMode(Layer::BlendMode::Multiply);
+    QCOMPARE(layer.blendMode(), Layer::BlendMode::Multiply);
+
+    layer.setBlendMode(Layer::BlendMode::Screen);
+    QCOMPARE(layer.blendMode(), Layer::BlendMode::Screen);
+
+    layer.setBlendMode(Layer::BlendMode::Overlay);
+    QCOMPARE(layer.blendMode(), Layer::BlendMode::Overlay);
+  }
+
+  void testBlendModeToCompositionMode() {
+    QCOMPARE(Layer::toCompositionMode(Layer::BlendMode::Normal),
+             QPainter::CompositionMode_SourceOver);
+    QCOMPARE(Layer::toCompositionMode(Layer::BlendMode::Multiply),
+             QPainter::CompositionMode_Multiply);
+    QCOMPARE(Layer::toCompositionMode(Layer::BlendMode::Screen),
+             QPainter::CompositionMode_Screen);
+    QCOMPARE(Layer::toCompositionMode(Layer::BlendMode::Overlay),
+             QPainter::CompositionMode_Overlay);
+    QCOMPARE(Layer::toCompositionMode(Layer::BlendMode::Darken),
+             QPainter::CompositionMode_Darken);
+    QCOMPARE(Layer::toCompositionMode(Layer::BlendMode::Lighten),
+             QPainter::CompositionMode_Lighten);
+    QCOMPARE(Layer::toCompositionMode(Layer::BlendMode::ColorDodge),
+             QPainter::CompositionMode_ColorDodge);
+    QCOMPARE(Layer::toCompositionMode(Layer::BlendMode::ColorBurn),
+             QPainter::CompositionMode_ColorBurn);
+    QCOMPARE(Layer::toCompositionMode(Layer::BlendMode::HardLight),
+             QPainter::CompositionMode_HardLight);
+    QCOMPARE(Layer::toCompositionMode(Layer::BlendMode::SoftLight),
+             QPainter::CompositionMode_SoftLight);
+    QCOMPARE(Layer::toCompositionMode(Layer::BlendMode::Difference),
+             QPainter::CompositionMode_Difference);
+    QCOMPARE(Layer::toCompositionMode(Layer::BlendMode::Exclusion),
+             QPainter::CompositionMode_Exclusion);
+  }
+
+  void testBlendModeDuplicateLayer() {
+    QGraphicsScene scene;
+    SceneController controller(&scene);
+    LayerManager manager(&scene);
+    controller.setLayerManager(&manager);
+
+    Layer *layer = manager.activeLayer();
+    QVERIFY(layer);
+    layer->setBlendMode(Layer::BlendMode::Screen);
+
+    Layer *copy = manager.duplicateLayer(0);
+    QVERIFY(copy);
+    QCOMPARE(copy->blendMode(), Layer::BlendMode::Screen);
+  }
+
+  void testBlendModeMoveConstructor() {
+    Layer original("Test");
+    original.setBlendMode(Layer::BlendMode::Overlay);
+
+    Layer moved(std::move(original));
+    QCOMPARE(moved.blendMode(), Layer::BlendMode::Overlay);
   }
 };
 
