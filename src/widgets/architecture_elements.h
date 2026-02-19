@@ -38,10 +38,10 @@ protected:
   /// @p rect is the area reserved for the icon (centred horizontally).
   virtual void paintIcon(QPainter *painter, const QRectF &rect) const = 0;
 
-  static constexpr qreal ELEM_W = 110.0;
-  static constexpr qreal ELEM_H = 80.0;
-  static constexpr qreal CORNER = 8.0;
-  static constexpr qreal ICON_SIZE = 36.0;
+  static constexpr qreal ELEM_W = 130.0;
+  static constexpr qreal ELEM_H = 100.0;
+  static constexpr qreal CORNER = 10.0;
+  static constexpr qreal ICON_SIZE = 44.0;
 
 private:
   QString label_;

@@ -44,15 +44,15 @@ void ArchitectureElementItem::paint(QPainter *painter,
 
   // --- icon area (centred, upper portion) ---
   qreal iconX = (ELEM_W - ICON_SIZE) / 2.0;
-  qreal iconY = 6.0;
+  qreal iconY = 8.0;
   QRectF iconRect(iconX, iconY, ICON_SIZE, ICON_SIZE);
   paintIcon(painter, iconRect);
 
   // --- label ---
   painter->setPen(QColor("#a0a0a8"));
-  QFont font("Arial", 9, QFont::Bold);
+  QFont font("Arial", 10, QFont::Bold);
   painter->setFont(font);
-  QRectF labelRect(0, ELEM_H - 22, ELEM_W, 18);
+  QRectF labelRect(0, ELEM_H - 26, ELEM_W, 20);
   painter->drawText(labelRect, Qt::AlignCenter, label_);
 }
 
@@ -69,22 +69,32 @@ void ClientElement::paintIcon(QPainter *p, const QRectF &r) const {
   p->setPen(pen);
   p->setBrush(QColor("#1e3a5f"));
 
-  // Screen
-  qreal sw = r.width() * 0.78;
-  qreal sh = r.height() * 0.55;
+  // Screen (wider aspect ratio for a modern monitor)
+  qreal sw = r.width() * 0.82;
+  qreal sh = r.height() * 0.52;
   qreal sx = r.x() + (r.width() - sw) / 2.0;
   qreal sy = r.y() + 2;
-  p->drawRoundedRect(QRectF(sx, sy, sw, sh), 2, 2);
+  p->drawRoundedRect(QRectF(sx, sy, sw, sh), 3, 3);
 
-  // Stand
+  // Inner screen bezel highlight
+  p->setPen(Qt::NoPen);
+  p->setBrush(QColor("#2563eb"));
+  p->drawRoundedRect(QRectF(sx + 2, sy + 2, sw - 4, sh - 4), 2, 2);
+
+  // Neck
+  p->setPen(pen);
+  p->setBrush(QColor("#1e3a5f"));
   qreal cx = r.x() + r.width() / 2.0;
   qreal standTop = sy + sh;
-  qreal standBot = standTop + r.height() * 0.18;
-  p->drawLine(QPointF(cx, standTop), QPointF(cx, standBot));
+  qreal neckW = r.width() * 0.10;
+  qreal neckH = r.height() * 0.16;
+  p->drawRect(QRectF(cx - neckW / 2, standTop, neckW, neckH));
 
-  // Base
-  qreal bw = r.width() * 0.4;
-  p->drawLine(QPointF(cx - bw / 2, standBot), QPointF(cx + bw / 2, standBot));
+  // Base (elliptical for realism)
+  qreal baseY = standTop + neckH;
+  qreal bw = r.width() * 0.44;
+  qreal bh = r.height() * 0.08;
+  p->drawEllipse(QRectF(cx - bw / 2, baseY, bw, bh));
   p->restore();
 }
 
@@ -102,37 +112,52 @@ void LoadBalancerElement::paintIcon(QPainter *p, const QRectF &r) const {
   p->setBrush(Qt::NoBrush);
 
   qreal cx = r.center().x();
-  qreal top = r.top() + 3;
+  qreal top = r.top() + 2;
   qreal bot = r.bottom() - 3;
 
+  // Pivot triangle at top
+  qreal triH = 5;
+  QPolygonF pivot;
+  pivot << QPointF(cx, top) << QPointF(cx - 4, top + triH)
+        << QPointF(cx + 4, top + triH);
+  p->setBrush(QColor("#f59e0b"));
+  p->drawPolygon(pivot);
+  p->setBrush(Qt::NoBrush);
+
   // Vertical pillar
-  p->drawLine(QPointF(cx, top), QPointF(cx, bot));
+  qreal pillarTop = top + triH;
+  p->drawLine(QPointF(cx, pillarTop), QPointF(cx, bot));
 
   // Horizontal beam
-  qreal beamY = top + 5;
-  qreal half = r.width() * 0.4;
+  qreal beamY = pillarTop + 3;
+  qreal half = r.width() * 0.38;
+  p->setPen(QPen(QColor("#f59e0b"), 2.0));
   p->drawLine(QPointF(cx - half, beamY), QPointF(cx + half, beamY));
 
-  // Left pan (arc)
+  // Left pan (arc + chains)
+  p->setPen(pen);
+  qreal panW = 14;
+  qreal panH = 10;
+  p->drawLine(QPointF(cx - half, beamY), QPointF(cx - half, beamY + 8));
   QPainterPath leftArc;
-  QRectF leftR(cx - half - 6, beamY, 12, 14);
+  QRectF leftR(cx - half - panW / 2, beamY + 8, panW, panH);
   leftArc.arcMoveTo(leftR, 0);
   leftArc.arcTo(leftR, 0, -180);
   p->drawPath(leftArc);
 
-  // Right pan (arc)
+  // Right pan (arc + chains)
+  p->drawLine(QPointF(cx + half, beamY), QPointF(cx + half, beamY + 8));
   QPainterPath rightArc;
-  QRectF rightR(cx + half - 6, beamY, 12, 14);
+  QRectF rightR(cx + half - panW / 2, beamY + 8, panW, panH);
   rightArc.arcMoveTo(rightR, 0);
   rightArc.arcTo(rightR, 0, -180);
   p->drawPath(rightArc);
 
-  // Base triangle
-  qreal bw = r.width() * 0.25;
-  QPolygonF base;
-  base << QPointF(cx, bot) << QPointF(cx - bw, bot + 2)
-       << QPointF(cx + bw, bot + 2);
-  p->drawPolyline(base);
+  // Base
+  qreal bw = r.width() * 0.22;
+  qreal bh = 3;
+  p->setBrush(QColor("#f59e0b"));
+  p->drawRoundedRect(QRectF(cx - bw, bot, bw * 2, bh), 1, 1);
   p->restore();
 }
 
@@ -151,32 +176,36 @@ void ApiGatewayElement::paintIcon(QPainter *p, const QRectF &r) const {
 
   // Arch
   QPainterPath arch;
-  qreal aw = r.width() * 0.8;
-  qreal ah = r.height() * 0.7;
+  qreal aw = r.width() * 0.82;
+  qreal ah = r.height() * 0.75;
   qreal ax = r.x() + (r.width() - aw) / 2.0;
   qreal ay = r.y() + 2;
 
   arch.moveTo(ax, ay + ah);
-  arch.lineTo(ax, ay + ah * 0.4);
-  arch.arcTo(QRectF(ax, ay, aw, ah * 0.8), 180, -180);
+  arch.lineTo(ax, ay + ah * 0.38);
+  arch.arcTo(QRectF(ax, ay, aw, ah * 0.76), 180, -180);
   arch.lineTo(ax + aw, ay + ah);
 
   // Columns
-  qreal colW = aw * 0.15;
-  arch.addRect(ax, ay + ah * 0.4, colW, ah * 0.6);
-  arch.addRect(ax + aw - colW, ay + ah * 0.4, colW, ah * 0.6);
+  qreal colW = aw * 0.14;
+  arch.addRect(ax, ay + ah * 0.38, colW, ah * 0.62);
+  arch.addRect(ax + aw - colW, ay + ah * 0.38, colW, ah * 0.62);
 
   p->drawPath(arch);
 
+  // Step / base
+  p->setPen(QPen(QColor("#8b5cf6"), 1.2));
+  p->drawLine(QPointF(ax - 2, ay + ah), QPointF(ax + aw + 2, ay + ah));
+
   // Arrow through the gate
-  p->setPen(QPen(QColor("#a78bfa"), 1.4));
-  qreal arrowY = r.y() + r.height() * 0.55;
-  qreal al = ax + aw * 0.25;
-  qreal ar2 = ax + aw * 0.75;
+  p->setPen(QPen(QColor("#a78bfa"), 1.6));
+  qreal arrowY = r.y() + r.height() * 0.52;
+  qreal al = ax + aw * 0.24;
+  qreal ar2 = ax + aw * 0.76;
   p->drawLine(QPointF(al, arrowY), QPointF(ar2, arrowY));
   // Arrowhead
-  p->drawLine(QPointF(ar2, arrowY), QPointF(ar2 - 4, arrowY - 3));
-  p->drawLine(QPointF(ar2, arrowY), QPointF(ar2 - 4, arrowY + 3));
+  p->drawLine(QPointF(ar2, arrowY), QPointF(ar2 - 5, arrowY - 3.5));
+  p->drawLine(QPointF(ar2, arrowY), QPointF(ar2 - 5, arrowY + 3.5));
   p->restore();
 }
 
@@ -195,7 +224,7 @@ void AppServerElement::paintIcon(QPainter *p, const QRectF &r) const {
 
   qreal cx = r.center().x();
   qreal cy = r.center().y();
-  qreal rad = qMin(r.width(), r.height()) * 0.42;
+  qreal rad = qMin(r.width(), r.height()) * 0.44;
 
   QPolygonF hex;
   for (int i = 0; i < 6; ++i) {
@@ -205,13 +234,23 @@ void AppServerElement::paintIcon(QPainter *p, const QRectF &r) const {
   p->drawPolygon(hex);
 
   // Gear-like inner circle
-  p->setPen(QPen(QColor("#34d399"), 1.2));
+  p->setPen(QPen(QColor("#34d399"), 1.4));
   p->setBrush(Qt::NoBrush);
-  p->drawEllipse(QPointF(cx, cy), rad * 0.35, rad * 0.35);
+  p->drawEllipse(QPointF(cx, cy), rad * 0.42, rad * 0.42);
+
+  // Gear teeth (small lines radiating outward from the inner circle)
+  qreal innerR = rad * 0.42;
+  qreal toothLen = rad * 0.14;
+  for (int i = 0; i < 8; ++i) {
+    qreal angle = i * M_PI / 4.0;
+    p->drawLine(QPointF(cx + innerR * qCos(angle), cy + innerR * qSin(angle)),
+                QPointF(cx + (innerR + toothLen) * qCos(angle),
+                        cy + (innerR + toothLen) * qSin(angle)));
+  }
 
   // Inner dot
   p->setBrush(QColor("#34d399"));
-  p->drawEllipse(QPointF(cx, cy), 2.5, 2.5);
+  p->drawEllipse(QPointF(cx, cy), 3.0, 3.0);
   p->restore();
 }
 
@@ -233,19 +272,19 @@ void CacheElement::paintIcon(QPainter *p, const QRectF &r) const {
   qreal by = r.y() + 2;
   qreal bw = r.width() - 6;
   qreal bh = r.height() - 4;
-  p->drawRoundedRect(QRectF(bx, by, bw, bh), 4, 4);
+  p->drawRoundedRect(QRectF(bx, by, bw, bh), 5, 5);
 
   // Lightning bolt
-  p->setPen(QPen(QColor("#fde047"), 2));
+  p->setPen(QPen(QColor("#fde047"), 2.2));
   p->setBrush(QColor("#fde047"));
   qreal cx = r.center().x();
-  qreal top = r.top() + 7;
-  qreal bot = r.bottom() - 7;
+  qreal top = r.top() + 8;
+  qreal bot = r.bottom() - 8;
   qreal mid = (top + bot) / 2.0;
   QPolygonF bolt;
-  bolt << QPointF(cx + 2, top) << QPointF(cx - 5, mid + 1)
-       << QPointF(cx, mid + 1) << QPointF(cx - 2, bot)
-       << QPointF(cx + 5, mid - 1) << QPointF(cx, mid - 1);
+  bolt << QPointF(cx + 3, top) << QPointF(cx - 6, mid + 1.5)
+       << QPointF(cx, mid + 1.5) << QPointF(cx - 3, bot)
+       << QPointF(cx + 6, mid - 1.5) << QPointF(cx, mid - 1.5);
   p->drawPolygon(bolt);
   p->restore();
 }
@@ -265,30 +304,30 @@ void MessageQueueElement::paintIcon(QPainter *p, const QRectF &r) const {
 
   // Pipe body
   qreal px = r.x() + 3;
-  qreal py = r.center().y() - 8;
+  qreal py = r.center().y() - 10;
   qreal pw = r.width() - 6;
-  qreal ph = 16;
-  p->drawRoundedRect(QRectF(px, py, pw, ph), 6, 6);
+  qreal ph = 20;
+  p->drawRoundedRect(QRectF(px, py, pw, ph), 8, 8);
 
   // Enqueue arrow (left)
-  p->setPen(QPen(QColor("#f9a8d4"), 1.4));
+  p->setPen(QPen(QColor("#f9a8d4"), 1.6));
   qreal ay = r.center().y();
-  p->drawLine(QPointF(px - 2, ay), QPointF(px + 7, ay));
-  p->drawLine(QPointF(px + 7, ay), QPointF(px + 4, ay - 3));
-  p->drawLine(QPointF(px + 7, ay), QPointF(px + 4, ay + 3));
+  p->drawLine(QPointF(px - 3, ay), QPointF(px + 8, ay));
+  p->drawLine(QPointF(px + 8, ay), QPointF(px + 4, ay - 3.5));
+  p->drawLine(QPointF(px + 8, ay), QPointF(px + 4, ay + 3.5));
 
   // Dequeue arrow (right)
   qreal rx = px + pw;
-  p->drawLine(QPointF(rx - 7, ay), QPointF(rx + 2, ay));
-  p->drawLine(QPointF(rx + 2, ay), QPointF(rx - 1, ay - 3));
-  p->drawLine(QPointF(rx + 2, ay), QPointF(rx - 1, ay + 3));
+  p->drawLine(QPointF(rx - 8, ay), QPointF(rx + 3, ay));
+  p->drawLine(QPointF(rx + 3, ay), QPointF(rx - 1, ay - 3.5));
+  p->drawLine(QPointF(rx + 3, ay), QPointF(rx - 1, ay + 3.5));
 
   // Messages inside pipe
   p->setPen(Qt::NoPen);
   p->setBrush(QColor("#f9a8d4"));
-  for (int i = 0; i < 3; ++i) {
-    qreal mx = px + 9 + i * 8;
-    p->drawRect(QRectF(mx, py + 4, 5, 8));
+  for (int i = 0; i < 4; ++i) {
+    qreal mx = px + 10 + i * 8;
+    p->drawRoundedRect(QRectF(mx, py + 5, 5, 10), 1, 1);
   }
   p->restore();
 }
@@ -307,35 +346,39 @@ void DatabaseElement::paintIcon(QPainter *p, const QRectF &r) const {
   p->setBrush(QColor("#164e63"));
 
   qreal cx = r.center().x();
-  qreal cw = r.width() * 0.7;
-  qreal ch = r.height() * 0.75;
+  qreal cw = r.width() * 0.72;
+  qreal ch = r.height() * 0.80;
   qreal cLeft = cx - cw / 2;
-  qreal cTop = r.top() + 3;
-  qreal ellH = ch * 0.22;
+  qreal cTop = r.top() + 2;
+  qreal ellH = ch * 0.24;
 
-  // Body
+  // Cylinder body (curved sides connecting top and bottom ellipses)
   p->drawRect(QRectF(cLeft, cTop + ellH / 2, cw, ch - ellH));
 
-  // Top ellipse
+  // Bottom ellipse (full)
+  p->setBrush(QColor("#164e63"));
+  p->drawEllipse(QRectF(cLeft, cTop + ch - ellH, cw, ellH));
+
+  // Top ellipse (full, drawn last so it covers the rect top)
   p->setBrush(QColor("#0e7490"));
   p->drawEllipse(QRectF(cLeft, cTop, cw, ellH));
 
-  // Bottom ellipse
-  p->setBrush(QColor("#164e63"));
-  QPainterPath bottomArc;
-  QRectF bottomR(cLeft, cTop + ch - ellH, cw, ellH);
-  bottomArc.arcMoveTo(bottomR, 0);
-  bottomArc.arcTo(bottomR, 0, -180);
-  p->drawPath(bottomArc);
-
-  // Middle line
+  // Middle decorative line
   p->setPen(QPen(QColor("#06b6d4"), 1.0));
-  qreal midY = cTop + ch * 0.4;
+  qreal midY = cTop + ch * 0.38;
   QPainterPath midArc;
   QRectF midR(cLeft, midY - ellH / 2, cw, ellH);
   midArc.arcMoveTo(midR, 0);
   midArc.arcTo(midR, 0, -180);
   p->drawPath(midArc);
+
+  // Second decorative line
+  qreal midY2 = cTop + ch * 0.58;
+  QPainterPath midArc2;
+  QRectF midR2(cLeft, midY2 - ellH / 2, cw, ellH);
+  midArc2.arcMoveTo(midR2, 0);
+  midArc2.arcTo(midR2, 0, -180);
+  p->drawPath(midArc2);
   p->restore();
 }
 
@@ -352,19 +395,25 @@ void ObjectStorageElement::paintIcon(QPainter *p, const QRectF &r) const {
   p->setPen(pen);
   p->setBrush(QColor("#7c2d12"));
 
-  // Bucket shape
-  qreal bx = r.x() + 6;
-  qreal by = r.y() + 3;
-  qreal bw = r.width() - 12;
-  qreal bh = r.height() - 6;
+  // Bucket shape with curved bottom
+  qreal bx = r.x() + 5;
+  qreal by = r.y() + 2;
+  qreal bw = r.width() - 10;
+  qreal bh = r.height() - 4;
 
   QPainterPath bucket;
-  bucket.moveTo(bx + 3, by);
-  bucket.lineTo(bx + bw - 3, by);
-  bucket.lineTo(bx + bw, by + bh);
-  bucket.lineTo(bx, by + bh);
+  qreal topInset = 3;
+  bucket.moveTo(bx + topInset, by);
+  bucket.lineTo(bx + bw - topInset, by);
+  bucket.lineTo(bx + bw, by + bh * 0.85);
+  bucket.quadTo(bx + bw / 2.0, by + bh + 4, bx, by + bh * 0.85);
   bucket.closeSubpath();
   p->drawPath(bucket);
+
+  // Rim at top
+  p->setPen(QPen(QColor("#fb923c"), 1.4));
+  p->drawLine(QPointF(bx + topInset - 1, by + 1),
+              QPointF(bx + bw - topInset + 1, by + 1));
 
   // Horizontal bands
   p->setPen(QPen(QColor("#fb923c"), 1.0));
@@ -377,8 +426,9 @@ void ObjectStorageElement::paintIcon(QPainter *p, const QRectF &r) const {
   // Small circles (objects)
   p->setPen(Qt::NoPen);
   p->setBrush(QColor("#fb923c"));
-  p->drawEllipse(QPointF(r.center().x() - 5, by + bh * 0.5), 2.5, 2.5);
-  p->drawEllipse(QPointF(r.center().x() + 5, by + bh * 0.5), 2.5, 2.5);
+  p->drawEllipse(QPointF(r.center().x() - 6, by + bh * 0.48), 3.0, 3.0);
+  p->drawEllipse(QPointF(r.center().x() + 6, by + bh * 0.48), 3.0, 3.0);
+  p->drawEllipse(QPointF(r.center().x(), by + bh * 0.30), 2.5, 2.5);
   p->restore();
 }
 
@@ -397,27 +447,40 @@ void AuthElement::paintIcon(QPainter *p, const QRectF &r) const {
 
   // Shield outline
   qreal cx = r.center().x();
-  qreal sw = r.width() * 0.7;
-  qreal sh = r.height() * 0.82;
+  qreal sw = r.width() * 0.72;
+  qreal sh = r.height() * 0.88;
   qreal sx = cx - sw / 2;
-  qreal sy = r.top() + 2;
+  qreal sy = r.top() + 1;
 
   QPainterPath shield;
   shield.moveTo(cx, sy);
-  shield.lineTo(sx + sw, sy + sh * 0.18);
-  shield.quadTo(sx + sw, sy + sh * 0.7, cx, sy + sh);
-  shield.quadTo(sx, sy + sh * 0.7, sx, sy + sh * 0.18);
+  shield.lineTo(sx + sw, sy + sh * 0.16);
+  shield.quadTo(sx + sw, sy + sh * 0.68, cx, sy + sh);
+  shield.quadTo(sx, sy + sh * 0.68, sx, sy + sh * 0.16);
   shield.closeSubpath();
   p->drawPath(shield);
+
+  // Inner shield highlight
+  p->setPen(Qt::NoPen);
+  p->setBrush(QColor("#991b1b"));
+  qreal inset = 3;
+  QPainterPath inner;
+  inner.moveTo(cx, sy + inset);
+  inner.lineTo(sx + sw - inset, sy + sh * 0.16 + inset * 0.5);
+  inner.quadTo(sx + sw - inset, sy + sh * 0.68, cx, sy + sh - inset);
+  inner.quadTo(sx + inset, sy + sh * 0.68, sx + inset,
+               sy + sh * 0.16 + inset * 0.5);
+  inner.closeSubpath();
+  p->drawPath(inner);
 
   // Keyhole
   p->setPen(QPen(QColor("#fca5a5"), 1.4));
   p->setBrush(QColor("#fca5a5"));
-  qreal kcy = r.center().y() - 1;
-  p->drawEllipse(QPointF(cx, kcy), 3.5, 3.5);
+  qreal kcy = r.center().y() - 2;
+  p->drawEllipse(QPointF(cx, kcy), 4.0, 4.0);
   QPolygonF keySlot;
-  keySlot << QPointF(cx - 2.2, kcy + 2) << QPointF(cx + 2.2, kcy + 2)
-          << QPointF(cx + 1.2, kcy + 8) << QPointF(cx - 1.2, kcy + 8);
+  keySlot << QPointF(cx - 2.5, kcy + 3) << QPointF(cx + 2.5, kcy + 3)
+          << QPointF(cx + 1.5, kcy + 10) << QPointF(cx - 1.5, kcy + 10);
   p->drawPolygon(keySlot);
   p->restore();
 }
@@ -436,27 +499,34 @@ void MonitoringElement::paintIcon(QPainter *p, const QRectF &r) const {
   p->setBrush(QColor("#134e4a"));
 
   // Chart background
-  qreal cx = r.x() + 4;
+  qreal cx = r.x() + 3;
   qreal cy = r.y() + 2;
-  qreal cw = r.width() - 8;
+  qreal cw = r.width() - 6;
   qreal ch = r.height() - 4;
-  p->drawRoundedRect(QRectF(cx, cy, cw, ch), 3, 3);
+  p->drawRoundedRect(QRectF(cx, cy, cw, ch), 4, 4);
 
   // Axes
-  p->setPen(QPen(QColor("#5eead4"), 1.2));
-  qreal axLeft = cx + 5;
-  qreal axBot = cy + ch - 5;
-  qreal axRight = cx + cw - 5;
-  qreal axTop = cy + 5;
+  p->setPen(QPen(QColor("#5eead4"), 1.4));
+  qreal axLeft = cx + 6;
+  qreal axBot = cy + ch - 6;
+  qreal axRight = cx + cw - 6;
+  qreal axTop = cy + 6;
   p->drawLine(QPointF(axLeft, axTop), QPointF(axLeft, axBot));
   p->drawLine(QPointF(axLeft, axBot), QPointF(axRight, axBot));
 
+  // Grid lines (subtle)
+  p->setPen(QPen(QColor("#5eead4"), 0.4));
+  for (int i = 1; i <= 3; ++i) {
+    qreal gy = axBot - (axBot - axTop) * i / 4.0;
+    p->drawLine(QPointF(axLeft + 1, gy), QPointF(axRight, gy));
+  }
+
   // Line chart
-  p->setPen(QPen(QColor("#2dd4bf"), 1.6));
+  p->setPen(QPen(QColor("#2dd4bf"), 1.8));
   QVector<QPointF> points;
-  qreal dx = (axRight - axLeft) / 5.0;
-  qreal heights[] = {0.6, 0.3, 0.7, 0.2, 0.5, 0.35};
-  for (int i = 0; i <= 5; ++i) {
+  qreal dx = (axRight - axLeft) / 6.0;
+  qreal heights[] = {0.55, 0.3, 0.72, 0.2, 0.55, 0.40, 0.62};
+  for (int i = 0; i <= 6; ++i) {
     qreal x = axLeft + i * dx;
     qreal y = axBot - (axBot - axTop) * heights[i];
     points.append(QPointF(x, y));
@@ -469,7 +539,7 @@ void MonitoringElement::paintIcon(QPainter *p, const QRectF &r) const {
   p->setPen(Qt::NoPen);
   p->setBrush(QColor("#5eead4"));
   for (const auto &pt : points) {
-    p->drawEllipse(pt, 2, 2);
+    p->drawEllipse(pt, 2.5, 2.5);
   }
   p->restore();
 }
