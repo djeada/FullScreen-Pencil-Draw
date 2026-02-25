@@ -222,7 +222,8 @@ Canvas::Canvas(QWidget *parent)
       tempShapeItem_(nullptr), currentShape_(Pen), currentPen_(Qt::white, 3),
       eraserPen_(Qt::black, 10), currentPath_(nullptr),
       backgroundColor_(Qt::black), eraserPreview_(nullptr),
-      backgroundImage_(nullptr), isPanning_(false) {
+      backgroundImage_(nullptr), isPanning_(false),
+      snapEngine_(GRID_SIZE, 10.0) {
 
   this->setScene(scene_);
   this->setRenderHint(QPainter::Antialiasing);
@@ -305,6 +306,7 @@ int Canvas::getCurrentOpacity() const { return currentOpacity_; }
 bool Canvas::isGridVisible() const { return showGrid_; }
 bool Canvas::isFilledShapes() const { return fillShapes_; }
 bool Canvas::isSnapToGridEnabled() const { return snapToGrid_; }
+bool Canvas::isSnapToObjectEnabled() const { return snapToObject_; }
 bool Canvas::isRulerVisible() const { return showRuler_; }
 bool Canvas::isMeasurementToolEnabled() const {
   return measurementToolEnabled_;
@@ -999,7 +1001,14 @@ void Canvas::toggleFilledShapes() {
 
 void Canvas::toggleSnapToGrid() {
   snapToGrid_ = !snapToGrid_;
+  snapEngine_.setSnapToGridEnabled(snapToGrid_);
   emit snapToGridChanged(snapToGrid_);
+}
+
+void Canvas::toggleSnapToObject() {
+  snapToObject_ = !snapToObject_;
+  snapEngine_.setSnapToObjectEnabled(snapToObject_);
+  emit snapToObjectChanged(snapToObject_);
 }
 
 void Canvas::toggleRuler() {
@@ -1527,6 +1536,25 @@ QString Canvas::calculateDistance(const QPointF &p1, const QPointF &p2) const {
 
 void Canvas::drawForeground(QPainter *painter, const QRectF &rect) {
   QGraphicsView::drawForeground(painter, rect);
+
+  // Draw snap guide lines
+  if (hasActiveSnap_ && (lastSnapResult_.snappedX || lastSnapResult_.snappedY)) {
+    painter->save();
+    QPen guidePen(QColor(0, 180, 255, 180), 0);
+    guidePen.setStyle(Qt::DashLine);
+    painter->setPen(guidePen);
+
+    if (lastSnapResult_.snappedX) {
+      painter->drawLine(QPointF(lastSnapResult_.guideX, rect.top()),
+                        QPointF(lastSnapResult_.guideX, rect.bottom()));
+    }
+    if (lastSnapResult_.snappedY) {
+      painter->drawLine(QPointF(rect.left(), lastSnapResult_.guideY),
+                        QPointF(rect.right(), lastSnapResult_.guideY));
+    }
+    painter->restore();
+  }
+
   if (showRuler_) {
     drawRuler(painter, rect);
   }
@@ -1605,6 +1633,40 @@ QPointF Canvas::snapToGridPoint(const QPointF &point) const {
   qreal x = qRound(point.x() / GRID_SIZE) * GRID_SIZE;
   qreal y = qRound(point.y() / GRID_SIZE) * GRID_SIZE;
   return QPointF(x, y);
+}
+
+QPointF Canvas::snapPoint(const QPointF &point,
+                          const QSet<QGraphicsItem *> &excludeItems) {
+  if (!snapToGrid_ && !snapToObject_) {
+    hasActiveSnap_ = false;
+    return point;
+  }
+
+  // Build exclude set: always exclude helper items
+  QSet<QGraphicsItem *> exclude = excludeItems;
+  if (eraserPreview_)
+    exclude.insert(eraserPreview_);
+  if (backgroundImage_)
+    exclude.insert(backgroundImage_);
+  if (colorSelectionOverlay_)
+    exclude.insert(colorSelectionOverlay_);
+  if (tempShapeItem_)
+    exclude.insert(tempShapeItem_);
+  for (TransformHandleItem *h : transformHandles_) {
+    if (h)
+      exclude.insert(h);
+  }
+
+  SnapResult result =
+      snapEngine_.snap(point, scene_ ? scene_->items() : QList<QGraphicsItem *>(),
+                       exclude);
+  lastSnapResult_ = result;
+  hasActiveSnap_ = result.snappedX || result.snappedY;
+
+  if (hasActiveSnap_)
+    viewport()->update();
+
+  return result.snappedPoint;
 }
 
 QPointF Canvas::calculateSmartDuplicateOffset() const {
@@ -1693,7 +1755,9 @@ void Canvas::duplicateSelectedItems() {
       // Duplicate entire group
       QGraphicsItemGroup *newGroup = new QGraphicsItemGroup();
       QPointF groupOffset =
-          snapToGrid_ ? snapToGridPoint(g->pos() + offset) : g->pos() + offset;
+          (snapToGrid_ || snapToObject_)
+              ? snapPoint(g->pos() + offset)
+              : g->pos() + offset;
       newGroup->setPos(groupOffset);
 
       // Duplicate each child item and add to new group
@@ -1713,8 +1777,9 @@ void Canvas::duplicateSelectedItems() {
       // Clone individual item
       QGraphicsItem *newItem = cloneItem(item, eraserPreview_);
       if (newItem) {
-        QPointF newPos = snapToGrid_ ? snapToGridPoint(item->pos() + offset)
-                                     : item->pos() + offset;
+        QPointF newPos = (snapToGrid_ || snapToObject_)
+                             ? snapPoint(item->pos() + offset)
+                             : item->pos() + offset;
         newItem->setPos(newPos);
         newItem->setFlags(QGraphicsItem::ItemIsSelectable |
                           QGraphicsItem::ItemIsMovable);
@@ -2568,11 +2633,12 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
   }
 
   QPointF sp = mapToScene(event->pos());
-  // Apply snap-to-grid for shape tools
-  if (snapToGrid_ && (currentShape_ == Rectangle || currentShape_ == Circle ||
-                      currentShape_ == Line || currentShape_ == Arrow ||
-                      currentShape_ == CurvedArrow)) {
-    sp = snapToGridPoint(sp);
+  // Apply snapping for shape tools
+  if ((snapToGrid_ || snapToObject_) &&
+      (currentShape_ == Rectangle || currentShape_ == Circle ||
+       currentShape_ == Line || currentShape_ == Arrow ||
+       currentShape_ == CurvedArrow)) {
+    sp = snapPoint(sp);
   }
   emit cursorPositionChanged(sp);
   if (currentShape_ == Selection) {
@@ -2624,10 +2690,10 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
   startPoint_ = sp;
   switch (currentShape_) {
   case Text:
-    createTextItem(snapToGrid_ ? snapToGridPoint(sp) : sp);
+    createTextItem((snapToGrid_ || snapToObject_) ? snapPoint(sp) : sp);
     break;
   case Mermaid:
-    createMermaidItem(snapToGrid_ ? snapToGridPoint(sp) : sp);
+    createMermaidItem((snapToGrid_ || snapToObject_) ? snapPoint(sp) : sp);
     break;
   case Fill:
     fillAt(sp);
@@ -2732,11 +2798,12 @@ void Canvas::mouseMoveEvent(QMouseEvent *event) {
     return;
   }
   QPointF cp = mapToScene(event->pos());
-  // Apply snap-to-grid for shape tools during drawing
-  if (snapToGrid_ && (currentShape_ == Rectangle || currentShape_ == Circle ||
-                      currentShape_ == Line || currentShape_ == Arrow ||
-                      currentShape_ == CurvedArrow)) {
-    cp = snapToGridPoint(cp);
+  // Apply snapping for shape tools during drawing
+  if ((snapToGrid_ || snapToObject_) &&
+      (currentShape_ == Rectangle || currentShape_ == Circle ||
+       currentShape_ == Line || currentShape_ == Arrow ||
+       currentShape_ == CurvedArrow)) {
+    cp = snapPoint(cp);
   }
   emit cursorPositionChanged(cp);
 
@@ -2836,12 +2903,17 @@ void Canvas::mouseReleaseEvent(QMouseEvent *event) {
     return;
   }
   QPointF ep = mapToScene(event->pos());
-  // Apply snap-to-grid for shape tools
-  if (snapToGrid_ && (currentShape_ == Rectangle || currentShape_ == Circle ||
-                      currentShape_ == Line || currentShape_ == Arrow ||
-                      currentShape_ == CurvedArrow)) {
-    ep = snapToGridPoint(ep);
+  // Apply snapping for shape tools
+  if ((snapToGrid_ || snapToObject_) &&
+      (currentShape_ == Rectangle || currentShape_ == Circle ||
+       currentShape_ == Line || currentShape_ == Arrow ||
+       currentShape_ == CurvedArrow)) {
+    ep = snapPoint(ep);
   }
+
+  // Clear snap guides on release
+  hasActiveSnap_ = false;
+  viewport()->update();
   if (currentShape_ == Selection) {
     QGraphicsView::mouseReleaseEvent(event);
     if (!transformHandles_.isEmpty()) {

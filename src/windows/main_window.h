@@ -41,6 +41,7 @@ private slots:
   void onCursorPositionChanged(const QPointF &pos);
   void onFilledShapesChanged(bool filled);
   void onSnapToGridChanged(bool enabled);
+  void onSnapToObjectChanged(bool enabled);
   void onRulerVisibilityChanged(bool visible);
   void onMeasurementToolChanged(bool enabled);
   void onMeasurementUpdated(const QString &measurement);
@@ -72,6 +73,7 @@ private:
   QLabel *_measurementLabel;
   QMenu *_recentFilesMenu;
   QAction *_snapToGridAction;
+  QAction *_snapToObjectAction;
   QAction *_autoSaveAction;
   QAction *_rulerAction;
   QAction *_measurementAction;
