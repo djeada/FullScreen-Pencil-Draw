@@ -527,6 +527,8 @@ void MainWindow::setupMenuBar() {
   filtersMenu->addAction("&Sharpen", _canvas, SLOT(applySharpenToSelection()));
   filtersMenu->addAction("Scan &Document", _canvas,
                          SLOT(applyScanDocumentToSelection()));
+  filtersMenu->addAction("Color Curves / &Levels", _canvas,
+                         SLOT(applyColorCurvesToSelection()));
 
   // Help menu
   QMenu *helpMenu = menuBar->addMenu("&Help");
