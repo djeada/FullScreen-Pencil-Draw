@@ -3068,6 +3068,11 @@ void Canvas::copySelectedItems() {
     } else if (auto pg = dynamic_cast<QGraphicsPolygonItem *>(item)) {
       ds << QString("PolygonT") << pg->polygon() << pg->pos() << pg->pen()
          << pg->brush() << pg->transform();
+    } else if (auto px = dynamic_cast<QGraphicsPixmapItem *>(item)) {
+      if (px != backgroundImage_) {
+        ds << QString("PixmapT") << px->pixmap().toImage() << px->pos()
+           << px->transform();
+      }
     }
   }
   md->setData("application/x-canvas-items", ba);
@@ -3344,6 +3349,21 @@ void Canvas::pasteItems() {
         scene_->addItem(n);
         pi.append(n);
         addDrawAction(n);
+      } else if (t == "PixmapT") {
+        QImage img;
+        QPointF p;
+        QTransform tr;
+        ds >> img >> p >> tr;
+        if (!img.isNull()) {
+          auto n = new QGraphicsPixmapItem(QPixmap::fromImage(img));
+          n->setPos(p + QPointF(20, 20));
+          n->setTransform(tr);
+          n->setFlags(QGraphicsItem::ItemIsSelectable |
+                      QGraphicsItem::ItemIsMovable);
+          scene_->addItem(n);
+          pi.append(n);
+          addDrawAction(n);
+        }
       }
     }
     scene_->clearSelection();
@@ -3371,6 +3391,63 @@ void Canvas::pasteItems() {
       pixmapItem->setSelected(true);
       emit canvasModified();
       return;
+    }
+  }
+
+  // Handle image file URLs from clipboard (e.g. files copied in file manager)
+  if (md->hasUrls()) {
+    for (const QUrl &url : md->urls()) {
+      if (!url.isLocalFile())
+        continue;
+      QString filePath = url.toLocalFile();
+      QString ext = QFileInfo(filePath).suffix().toLower();
+      if (!SUPPORTED_IMAGE_EXTENSIONS.contains(ext))
+        continue;
+      QPixmap pixmap(filePath);
+      if (pixmap.isNull())
+        continue;
+      QPointF centerPos = mapToScene(viewport()->rect().center());
+      auto *pixmapItem = new QGraphicsPixmapItem(pixmap);
+      pixmapItem->setPos(centerPos -
+                         QPointF(pixmap.width() / 2.0, pixmap.height() / 2.0));
+      pixmapItem->setFlags(QGraphicsItem::ItemIsSelectable |
+                           QGraphicsItem::ItemIsMovable);
+      scene_->addItem(pixmapItem);
+      addDrawAction(pixmapItem);
+
+      scene_->clearSelection();
+      pixmapItem->setSelected(true);
+      emit canvasModified();
+      return;
+    }
+  }
+
+  // Fallback: try raw image MIME formats (e.g. image/png on some platforms)
+  {
+    static const QStringList imageMimeTypes = {
+        "image/png", "image/jpeg", "image/bmp", "image/gif", "image/webp",
+        "image/tiff"};
+    for (const QString &mimeType : imageMimeTypes) {
+      if (md->hasFormat(mimeType)) {
+        QImage image;
+        if (image.loadFromData(md->data(mimeType))) {
+          QPointF centerPos = mapToScene(viewport()->rect().center());
+          QPixmap pixmap = QPixmap::fromImage(image);
+          auto *pixmapItem = new QGraphicsPixmapItem(pixmap);
+          pixmapItem->setPos(
+              centerPos -
+              QPointF(pixmap.width() / 2.0, pixmap.height() / 2.0));
+          pixmapItem->setFlags(QGraphicsItem::ItemIsSelectable |
+                               QGraphicsItem::ItemIsMovable);
+          scene_->addItem(pixmapItem);
+          addDrawAction(pixmapItem);
+
+          scene_->clearSelection();
+          pixmapItem->setSelected(true);
+          emit canvasModified();
+          return;
+        }
+      }
     }
   }
 
@@ -3735,7 +3812,7 @@ void Canvas::contextMenuEvent(QContextMenuEvent *event) {
   // Clipboard actions - always available
   auto md = QApplication::clipboard()->mimeData();
   bool canPaste = md && (md->hasFormat("application/x-canvas-items") ||
-                         md->hasImage() || md->hasText());
+                         md->hasImage() || md->hasUrls() || md->hasText());
 
   QAction *pasteAction = contextMenu.addAction("Paste");
   pasteAction->setShortcut(QKeySequence::Paste);
