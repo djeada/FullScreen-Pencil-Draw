@@ -42,6 +42,7 @@
 #include "../core/action.h"
 #include "../core/layer.h"
 #include "../core/scene_renderer.h"
+#include "../core/snap_engine.h"
 
 class ToolManager;
 class Tool;
@@ -74,6 +75,7 @@ public:
   bool isGridVisible() const;
   bool isFilledShapes() const override;
   bool isSnapToGridEnabled() const;
+  bool isSnapToObjectEnabled() const;
   bool isRulerVisible() const;
   bool isMeasurementToolEnabled() const;
   bool isPressureSensitive() const override { return pressureSensitive_; }
@@ -122,6 +124,7 @@ signals:
   void cursorPositionChanged(const QPointF &pos);
   void filledShapesChanged(bool filled);
   void snapToGridChanged(bool enabled);
+  void snapToObjectChanged(bool enabled);
   void canvasModified();
   void rulerVisibilityChanged(bool visible);
   void measurementToolChanged(bool enabled);
@@ -165,6 +168,7 @@ public slots:
   void toggleGrid();
   void toggleFilledShapes();
   void toggleSnapToGrid();
+  void toggleSnapToObject();
   void toggleRuler();
   void toggleMeasurementTool();
   void togglePressureSensitivity();
@@ -267,6 +271,7 @@ private:
   bool isPanning_ = false;
   bool fillShapes_ = false;
   bool snapToGrid_ = false;
+  bool snapToObject_ = false;
   bool showRuler_ = false;
   bool measurementToolEnabled_ = false;
   int duplicateOffset_ = 20;
@@ -322,6 +327,8 @@ private:
   void resetColorSelection();
   QRectF getSelectionBoundingRect() const;
   QPointF snapToGridPoint(const QPointF &point) const;
+  QPointF snapPoint(const QPointF &point,
+                    const QSet<QGraphicsItem *> &excludeItems = {});
   QPointF calculateSmartDuplicateOffset() const;
   void drawRuler(QPainter *painter, const QRectF &rect);
   QString calculateDistance(const QPointF &p1, const QPointF &p2) const;
@@ -333,6 +340,11 @@ private:
                                  const QPointF &center);
   bool hasNonNormalBlendModes() const;
   void importSvg(const QString &filePath, const QPointF &position = QPointF());
+
+  // Snap engine and visual guides
+  SnapEngine snapEngine_;
+  SnapResult lastSnapResult_;
+  bool hasActiveSnap_ = false;
 };
 
 #endif // CANVAS_H

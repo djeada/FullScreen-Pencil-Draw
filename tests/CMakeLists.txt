@@ -114,9 +114,31 @@ set_target_properties(test_perspective_transform PROPERTIES
 
 add_test(NAME TestPerspectiveTransform COMMAND test_perspective_transform)
 
+# SnapEngine tests
+add_executable(test_snap_engine
+    test_snap_engine.cpp
+    ../src/core/snap_engine.cpp
+    ../src/core/snap_engine.h
+)
+
+target_include_directories(test_snap_engine PRIVATE
+    ../src/core
+)
+
+target_link_libraries(test_snap_engine PRIVATE
+    Qt${QT_VERSION_MAJOR}::Widgets
+    Qt${QT_VERSION_MAJOR}::Test
+)
+
+set_target_properties(test_snap_engine PROPERTIES
+    AUTOMOC ON
+)
+
+add_test(NAME TestSnapEngine COMMAND test_snap_engine)
+
 # Add custom target to run all tests
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-    DEPENDS test_item_store test_project_serializer test_image_filters test_perspective_transform
+    DEPENDS test_item_store test_project_serializer test_image_filters test_perspective_transform test_snap_engine
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )

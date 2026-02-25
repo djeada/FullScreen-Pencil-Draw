@@ -46,6 +46,7 @@ MainWindow::MainWindow(QWidget *parent)
       _elementBankPanel(new ElementBankPanel(this)), _autoSaveManager(nullptr),
       _statusLabel(nullptr), _measurementLabel(nullptr),
       _recentFilesMenu(nullptr), _snapToGridAction(nullptr),
+      _snapToObjectAction(nullptr),
       _autoSaveAction(nullptr), _rulerAction(nullptr),
       _measurementAction(nullptr)
 #ifdef HAVE_QT_PDF
@@ -287,6 +288,10 @@ void MainWindow::setupConnections() {
   connect(_canvas, &Canvas::snapToGridChanged, this,
           &MainWindow::onSnapToGridChanged);
 
+  // Snap to object feedback
+  connect(_canvas, &Canvas::snapToObjectChanged, this,
+          &MainWindow::onSnapToObjectChanged);
+
   // Ruler and measurement feedback
   connect(_canvas, &Canvas::rulerVisibilityChanged, this,
           &MainWindow::onRulerVisibilityChanged);
@@ -393,6 +398,13 @@ void MainWindow::setupMenuBar() {
                                    SLOT(toggleSnapToGrid()));
   _snapToGridAction->setCheckable(true);
   _snapToGridAction->setChecked(_canvas->isSnapToGridEnabled());
+
+  _snapToObjectAction =
+      createAction(viewMenu, "Snap to &Objects",
+                   QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_G), _canvas,
+                   SLOT(toggleSnapToObject()));
+  _snapToObjectAction->setCheckable(true);
+  _snapToObjectAction->setChecked(_canvas->isSnapToObjectEnabled());
 
   QAction *filledAction =
       createAction(viewMenu, "Toggle &Filled Shapes", QKeySequence(Qt::Key_B),
@@ -632,6 +644,12 @@ void MainWindow::onCursorPositionChanged(const QPointF &pos) {
 void MainWindow::onSnapToGridChanged(bool enabled) {
   if (_snapToGridAction) {
     _snapToGridAction->setChecked(enabled);
+  }
+}
+
+void MainWindow::onSnapToObjectChanged(bool enabled) {
+  if (_snapToObjectAction) {
+    _snapToObjectAction->setChecked(enabled);
   }
 }
 
