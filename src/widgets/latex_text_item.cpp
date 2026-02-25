@@ -316,6 +316,16 @@ static QString plainTextToHtmlPreservingNewlines(QString text) {
 
   QString html = text.toHtmlEscaped();
   html.replace('\n', "<br/>");
+  // Preserve tab characters as four non-breaking spaces
+  html.replace('\t', "&nbsp;&nbsp;&nbsp;&nbsp;");
+  // Preserve runs of multiple spaces: replace each pair of consecutive spaces
+  // with a space followed by a non-breaking space so the browser/QTextDocument
+  // does not collapse them.
+  QString prev;
+  do {
+    prev = html;
+    html.replace("  ", " &nbsp;");
+  } while (html != prev);
   return html;
 }
 
