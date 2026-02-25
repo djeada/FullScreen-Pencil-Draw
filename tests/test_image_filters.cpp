@@ -163,7 +163,7 @@ private slots:
     opts.gamma = 2.0;
     QImage result = ImageFilters::adjustLevels(img, opts);
     QRgb px = result.pixel(2, 2);
-    // gamma 2.0 → pow(128/255, 0.5) ≈ 0.708 → ~181
+    // gamma 2.0 → exponent = 1/2.0 = 0.5, so pow(128/255, 0.5) ≈ 0.708 → ~181
     QVERIFY2(qRed(px) > 128,
              qPrintable(QString("Expected > 128, got %1").arg(qRed(px))));
   }
