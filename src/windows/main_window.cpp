@@ -323,6 +323,8 @@ void MainWindow::setupMenuBar() {
   createAction(fileMenu, "&Open...", QKeySequence::Open, _canvas,
                SLOT(openFile()));
   fileMenu->addAction("Open &Project...", _canvas, SLOT(openProject()));
+  fileMenu->addAction("Open Image (&Original Size)...", _canvas,
+                      SLOT(openSingleImage()));
 
 #ifdef HAVE_QT_PDF
   createAction(fileMenu, "Open P&DF...",
@@ -340,6 +342,8 @@ void MainWindow::setupMenuBar() {
                SLOT(saveToFile()));
   fileMenu->addAction("Save Pro&ject...", _canvas, SLOT(saveProject()));
   fileMenu->addAction("Export to &PDF...", _canvas, SLOT(exportToPDF()));
+  fileMenu->addAction("Export Single &Element...", _canvas,
+                      SLOT(exportSingleElementToPNG()));
 
 #ifdef HAVE_QT_PDF
   fileMenu->addAction("Export &Annotated PDF...", this,
@@ -463,12 +467,12 @@ void MainWindow::setupMenuBar() {
                QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_U), _canvas,
                SLOT(ungroupSelectedItems()));
 
-  // Edit menu - scaling
+  // Edit menu - scaling (elements)
   editMenu->addSeparator();
-  createAction(editMenu, "Scale &Selected Items...",
+  createAction(editMenu, "Resize Selected &Elements...",
                QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_S), _canvas,
                SLOT(scaleSelectedItems()));
-  createAction(editMenu, "Scale Active &Layer...",
+  createAction(editMenu, "Resize Active &Layer...",
                QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_R), _canvas,
                SLOT(scaleActiveLayer()));
 
@@ -479,7 +483,7 @@ void MainWindow::setupMenuBar() {
 
   // Edit menu - canvas resize
   editMenu->addSeparator();
-  editMenu->addAction("Resize Canvas...", _canvas, SLOT(resizeCanvas()));
+  editMenu->addAction("Resize &Canvas...", _canvas, SLOT(resizeCanvas()));
 
   // Tools menu
   QMenu *toolsMenu = menuBar->addMenu("&Tools");
@@ -521,6 +525,8 @@ void MainWindow::setupMenuBar() {
   QMenu *filtersMenu = menuBar->addMenu("F&ilters");
   filtersMenu->addAction("&Blur", _canvas, SLOT(applyBlurToSelection()));
   filtersMenu->addAction("&Sharpen", _canvas, SLOT(applySharpenToSelection()));
+  filtersMenu->addAction("Scan &Document", _canvas,
+                         SLOT(applyScanDocumentToSelection()));
 
   // Help menu
   QMenu *helpMenu = menuBar->addMenu("&Help");

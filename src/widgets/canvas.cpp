@@ -17,6 +17,7 @@
 #include "perspective_transform_dialog.h"
 #include "resize_canvas_dialog.h"
 #include "scale_dialog.h"
+#include "scan_document_dialog.h"
 #include "transform_handle_item.h"
 #include <QApplication>
 #include <QClipboard>
@@ -1941,9 +1942,8 @@ void Canvas::openFile() {
   backgroundImage_->setZValue(-1000);
   backgroundImage_->setFlag(QGraphicsItem::ItemIsSelectable, false);
   backgroundImage_->setFlag(QGraphicsItem::ItemIsMovable, false);
-  scene_->setSceneRect(0, 0,
-                       qMax(scene_->sceneRect().width(), (qreal)pm.width()),
-                       qMax(scene_->sceneRect().height(), (qreal)pm.height()));
+  scene_->setSceneRect(0, 0, pm.width(), pm.height());
+  fitInView(scene_->sceneRect(), Qt::KeepAspectRatio);
 
   // Add to recent files
   RecentFilesManager::instance().addRecentFile(fileName);
@@ -1997,9 +1997,8 @@ void Canvas::openRecentFile(const QString &filePath) {
   backgroundImage_->setZValue(-1000);
   backgroundImage_->setFlag(QGraphicsItem::ItemIsSelectable, false);
   backgroundImage_->setFlag(QGraphicsItem::ItemIsMovable, false);
-  scene_->setSceneRect(0, 0,
-                       qMax(scene_->sceneRect().width(), (qreal)pm.width()),
-                       qMax(scene_->sceneRect().height(), (qreal)pm.height()));
+  scene_->setSceneRect(0, 0, pm.width(), pm.height());
+  fitInView(scene_->sceneRect(), Qt::KeepAspectRatio);
 
   // Update recent files
   RecentFilesManager::instance().addRecentFile(filePath);
@@ -3648,11 +3647,10 @@ void Canvas::loadDroppedImage(const QString &filePath,
     int newWidth = dialog.getWidth();
     int newHeight = dialog.getHeight();
 
-    // Scale the pixmap to the specified dimensions
-    // Note: We use IgnoreAspectRatio because the dialog already handled
-    // aspect ratio calculations, so we want exact dimensions specified by user
-    QPixmap scaledPixmap = pixmap.scaled(
-        newWidth, newHeight, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    // Scale using high-quality Lanczos resampling
+    QImage scaledImage = ImageFilters::lanczosResize(
+        pixmap.toImage(), newWidth, newHeight);
+    QPixmap scaledPixmap = QPixmap::fromImage(scaledImage);
 
     // Create a graphics pixmap item
     QGraphicsPixmapItem *pixmapItem = new QGraphicsPixmapItem(scaledPixmap);
@@ -3692,8 +3690,9 @@ void Canvas::addImageFromScreenshot(const QImage &image) {
     int newWidth = dialog.getWidth();
     int newHeight = dialog.getHeight();
 
-    QPixmap scaledPixmap = pixmap.scaled(
-        newWidth, newHeight, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    QImage scaledImage = ImageFilters::lanczosResize(
+        pixmap.toImage(), newWidth, newHeight);
+    QPixmap scaledPixmap = QPixmap::fromImage(scaledImage);
 
     // Create a graphics pixmap item
     QGraphicsPixmapItem *pixmapItem = new QGraphicsPixmapItem(scaledPixmap);
@@ -3818,6 +3817,11 @@ void Canvas::contextMenuEvent(QContextMenuEvent *event) {
             &Canvas::exportSelectionToWebP);
     connect(exportTIFFAction, &QAction::triggered, this,
             &Canvas::exportSelectionToTIFF);
+
+    QAction *exportSingleAction =
+        contextMenu.addAction("Export Element (Lossless)...");
+    connect(exportSingleAction, &QAction::triggered, this,
+            &Canvas::exportSingleElementToPNG);
 
     contextMenu.addSeparator();
 
@@ -4698,6 +4702,200 @@ void Canvas::applySharpenToSelection() {
 
   if (applied)
     emit canvasModified();
+}
+
+void Canvas::applyScanDocumentToSelection() {
+  if (!scene_ || !sceneController_)
+    return;
+
+  QList<QGraphicsItem *> selected = scene_->selectedItems();
+  bool hasPixmapSelection = false;
+  for (QGraphicsItem *item : selected) {
+    if (dynamic_cast<QGraphicsPixmapItem *>(item)) {
+      hasPixmapSelection = true;
+      break;
+    }
+  }
+
+  ScanDocumentDialog dialog(hasPixmapSelection, this);
+  if (dialog.exec() != QDialog::Accepted)
+    return;
+
+  ImageFilters::ScanDocumentOptions opts;
+  opts.hardBinarize = dialog.hardBinarize();
+  opts.threshold = dialog.threshold();
+  opts.sharpenStrength = dialog.sharpenStrength();
+  opts.whitePoint = dialog.whitePoint();
+  opts.noiseLevel = dialog.noiseLevel();
+  opts.sepiaEnabled = dialog.sepiaEnabled();
+  opts.sepiaStrength = dialog.sepiaStrength();
+  opts.vignetteEnabled = dialog.vignetteEnabled();
+  opts.vignetteStrength = dialog.vignetteStrength();
+
+  if (dialog.target() == ScanDocumentDialog::WholeCanvas) {
+    // Flatten the entire visible canvas to a raster image, apply filter,
+    // place result as a new pixmap item
+    QRectF sr = scene_->sceneRect();
+    if (sr.isEmpty())
+      sr = scene_->itemsBoundingRect();
+    if (sr.isEmpty())
+      return;
+
+    // Render current canvas to image
+    QImage canvasImage(sr.size().toSize(), QImage::Format_ARGB32);
+    canvasImage.fill(backgroundColor_);
+    QPainter p(&canvasImage);
+    p.setRenderHint(QPainter::Antialiasing);
+    p.setRenderHint(QPainter::TextAntialiasing);
+    bool ev = eraserPreview_ && eraserPreview_->isVisible();
+    if (eraserPreview_)
+      eraserPreview_->hide();
+    scene_->render(&p, QRectF(), sr);
+    p.end();
+    if (ev && eraserPreview_)
+      eraserPreview_->show();
+
+    QImage newImage = ImageFilters::scanDocument(canvasImage, opts);
+
+    // Place result as a new pixmap item on top
+    QGraphicsPixmapItem *pixmapItem =
+        new QGraphicsPixmapItem(QPixmap::fromImage(newImage));
+    pixmapItem->setPos(sr.topLeft());
+    pixmapItem->setFlag(QGraphicsItem::ItemIsSelectable, true);
+    pixmapItem->setFlag(QGraphicsItem::ItemIsMovable, true);
+
+    if (sceneController_) {
+      sceneController_->addItem(pixmapItem);
+    } else {
+      scene_->addItem(pixmapItem);
+    }
+    addDrawAction(pixmapItem);
+
+    scene_->clearSelection();
+    pixmapItem->setSelected(true);
+    emit canvasModified();
+    return;
+  }
+
+  // Apply to selected pixmap elements
+  bool applied = false;
+  for (QGraphicsItem *item : selected) {
+    auto *pixmapItem = dynamic_cast<QGraphicsPixmapItem *>(item);
+    if (!pixmapItem)
+      continue;
+
+    QImage oldImage = pixmapItem->pixmap().toImage();
+    QImage newImage = ImageFilters::scanDocument(oldImage, opts);
+    pixmapItem->setPixmap(QPixmap::fromImage(newImage));
+
+    ItemId id = sceneController_->idForItem(pixmapItem);
+    if (id.isValid()) {
+      addAction(std::make_unique<RasterPixmapAction>(
+          id, sceneController_->itemStore(), oldImage, newImage));
+    }
+    applied = true;
+  }
+
+  if (applied)
+    emit canvasModified();
+}
+
+void Canvas::exportSingleElementToPNG() {
+  if (!scene_)
+    return;
+
+  QList<QGraphicsItem *> selected = scene_->selectedItems();
+  if (selected.isEmpty())
+    return;
+
+  // Take only the first selected item
+  QGraphicsItem *item = nullptr;
+  for (QGraphicsItem *candidate : selected) {
+    if (candidate && candidate != eraserPreview_ &&
+        candidate != backgroundImage_ &&
+        candidate != colorSelectionOverlay_) {
+      item = candidate;
+      break;
+    }
+  }
+  if (!item)
+    return;
+
+  QString fileName = QFileDialog::getSaveFileName(
+      this, "Export Element (Lossless)", "",
+      "PNG (*.png);;TIFF (*.tiff *.tif);;BMP (*.bmp)");
+  if (fileName.isEmpty())
+    return;
+
+  // If it's a pixmap item, save its native pixmap directly (no re-render)
+  auto *pixmapItem = dynamic_cast<QGraphicsPixmapItem *>(item);
+  if (pixmapItem) {
+    pixmapItem->pixmap().save(fileName);
+    return;
+  }
+
+  // For other item types, render at native bounding-rect size
+  QRectF br = item->boundingRect();
+  if (br.isEmpty())
+    return;
+
+  QImage image(br.size().toSize(), QImage::Format_ARGB32);
+  image.fill(Qt::transparent);
+
+  QPainter painter(&image);
+  painter.setRenderHint(QPainter::Antialiasing);
+  painter.setRenderHint(QPainter::TextAntialiasing);
+  item->paint(&painter, nullptr, nullptr);
+  painter.end();
+
+  image.save(fileName);
+}
+
+void Canvas::openSingleImage() {
+  QString fileFilter =
+      "Images (*.png *.jpg *.jpeg *.bmp *.gif *.webp *.tiff *.tif);;All (*)";
+  QString fileName =
+      QFileDialog::getOpenFileName(this, "Open Image (Original Size)", "",
+                                   fileFilter);
+  if (fileName.isEmpty())
+    return;
+
+  QPixmap pixmap(fileName);
+  if (pixmap.isNull()) {
+    QMessageBox::warning(
+        this, "Invalid Image",
+        QString("Failed to load image from '%1'.")
+            .arg(QFileInfo(fileName).fileName()));
+    return;
+  }
+
+  // Place at original size — no resize dialog
+  QGraphicsPixmapItem *pixmapItem = new QGraphicsPixmapItem(pixmap);
+  pixmapItem->setPos(0, 0);
+
+  pixmapItem->setFlag(QGraphicsItem::ItemIsSelectable, true);
+  pixmapItem->setFlag(QGraphicsItem::ItemIsMovable, true);
+
+  // Resize canvas to fit the image
+  scene_->setSceneRect(0, 0,
+                       qMax(scene_->sceneRect().width(), (qreal)pixmap.width()),
+                       qMax(scene_->sceneRect().height(), (qreal)pixmap.height()));
+
+  if (sceneController_) {
+    sceneController_->addItem(pixmapItem);
+  } else {
+    scene_->addItem(pixmapItem);
+  }
+
+  addDrawAction(pixmapItem);
+
+  // Select this item so user can immediately export it
+  scene_->clearSelection();
+  pixmapItem->setSelected(true);
+
+  fitInView(scene_->sceneRect(), Qt::KeepAspectRatio);
+
+  emit canvasModified();
 }
 
 void Canvas::placeElement(const QString &elementId) {

@@ -3,12 +3,13 @@
  * @brief Custom vector-drawn QGraphicsItem subclasses for CS architecture
  *        diagram elements.
  *
- * Each element renders its own icon using QPainter vector operations so that
- * the output scales cleanly and does not depend on emoji font availability.
+ * Each element renders a shared card style plus a vector icon, keeping
+ * architecture nodes visually consistent and crisp during transform scaling.
  */
 #ifndef ARCHITECTURE_ELEMENTS_H
 #define ARCHITECTURE_ELEMENTS_H
 
+#include <QColor>
 #include <QGraphicsItem>
 #include <QPainter>
 #include <QPen>
@@ -16,13 +17,27 @@
 /**
  * @brief Base class for all architecture diagram elements.
  *
- * Provides a common rounded-rectangle background, a label, and the
- * selectable/movable flags.  Subclasses override paintIcon() to draw
- * their unique vector icon.
+ * Provides a common rounded-card background, a label, icon rendering, and
+ * selectable/movable flags.
  */
 class ArchitectureElementItem : public QGraphicsItem {
 public:
+  enum class IconKind {
+    Client,
+    LoadBalancer,
+    ApiGateway,
+    AppServer,
+    Cache,
+    MessageQueue,
+    Database,
+    ObjectStorage,
+    Auth,
+    Monitoring
+  };
+
   explicit ArchitectureElementItem(const QString &label,
+                                   IconKind iconKind,
+                                   const QColor &accentColor,
                                    QGraphicsItem *parent = nullptr);
   ~ArchitectureElementItem() override = default;
 
@@ -34,17 +49,18 @@ public:
   QString label() const { return label_; }
 
 protected:
-  /// Override in subclasses to draw the element-specific vector icon.
-  /// @p rect is the area reserved for the icon (centred horizontally).
-  virtual void paintIcon(QPainter *painter, const QRectF &rect) const = 0;
+  /// Draws the element icon in vector form for crisp scaling.
+  void paintIcon(QPainter *painter, const QRectF &rect) const;
 
-  static constexpr qreal ELEM_W = 130.0;
-  static constexpr qreal ELEM_H = 100.0;
-  static constexpr qreal CORNER = 10.0;
-  static constexpr qreal ICON_SIZE = 44.0;
+  static constexpr qreal ELEM_W = 142.0;
+  static constexpr qreal ELEM_H = 106.0;
+  static constexpr qreal CORNER = 13.0;
+  static constexpr qreal ICON_SIZE = 46.0;
 
 private:
   QString label_;
+  IconKind iconKind_;
+  QColor accentColor_;
 };
 
 // ----- Concrete element classes -----
@@ -52,81 +68,51 @@ private:
 class ClientElement : public ArchitectureElementItem {
 public:
   explicit ClientElement(QGraphicsItem *parent = nullptr);
-
-protected:
-  void paintIcon(QPainter *painter, const QRectF &rect) const override;
 };
 
 class LoadBalancerElement : public ArchitectureElementItem {
 public:
   explicit LoadBalancerElement(QGraphicsItem *parent = nullptr);
-
-protected:
-  void paintIcon(QPainter *painter, const QRectF &rect) const override;
 };
 
 class ApiGatewayElement : public ArchitectureElementItem {
 public:
   explicit ApiGatewayElement(QGraphicsItem *parent = nullptr);
-
-protected:
-  void paintIcon(QPainter *painter, const QRectF &rect) const override;
 };
 
 class AppServerElement : public ArchitectureElementItem {
 public:
   explicit AppServerElement(QGraphicsItem *parent = nullptr);
-
-protected:
-  void paintIcon(QPainter *painter, const QRectF &rect) const override;
 };
 
 class CacheElement : public ArchitectureElementItem {
 public:
   explicit CacheElement(QGraphicsItem *parent = nullptr);
-
-protected:
-  void paintIcon(QPainter *painter, const QRectF &rect) const override;
 };
 
 class MessageQueueElement : public ArchitectureElementItem {
 public:
   explicit MessageQueueElement(QGraphicsItem *parent = nullptr);
-
-protected:
-  void paintIcon(QPainter *painter, const QRectF &rect) const override;
 };
 
 class DatabaseElement : public ArchitectureElementItem {
 public:
   explicit DatabaseElement(QGraphicsItem *parent = nullptr);
-
-protected:
-  void paintIcon(QPainter *painter, const QRectF &rect) const override;
 };
 
 class ObjectStorageElement : public ArchitectureElementItem {
 public:
   explicit ObjectStorageElement(QGraphicsItem *parent = nullptr);
-
-protected:
-  void paintIcon(QPainter *painter, const QRectF &rect) const override;
 };
 
 class AuthElement : public ArchitectureElementItem {
 public:
   explicit AuthElement(QGraphicsItem *parent = nullptr);
-
-protected:
-  void paintIcon(QPainter *painter, const QRectF &rect) const override;
 };
 
 class MonitoringElement : public ArchitectureElementItem {
 public:
   explicit MonitoringElement(QGraphicsItem *parent = nullptr);
-
-protected:
-  void paintIcon(QPainter *painter, const QRectF &rect) const override;
 };
 
 #endif // ARCHITECTURE_ELEMENTS_H

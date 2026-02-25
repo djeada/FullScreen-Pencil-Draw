@@ -199,6 +199,9 @@ public slots:
   void resizeCanvas();
   void applyBlurToSelection();
   void applySharpenToSelection();
+  void applyScanDocumentToSelection();
+  void exportSingleElementToPNG();
+  void openSingleImage();
   void placeElement(const QString &elementId);
 
 protected:

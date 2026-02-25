@@ -126,6 +126,16 @@ target_include_directories(test_snap_engine PRIVATE
 )
 
 target_link_libraries(test_snap_engine PRIVATE
+    Qt${QT_VERSION_MAJOR}::Widgets
+    Qt${QT_VERSION_MAJOR}::Test
+)
+
+set_target_properties(test_snap_engine PROPERTIES
+    AUTOMOC ON
+)
+
+add_test(NAME TestSnapEngine COMMAND test_snap_engine)
+
 # TextWhitespace tests
 add_executable(test_text_whitespace
     test_text_whitespace.cpp
@@ -152,11 +162,6 @@ target_link_libraries(test_latex_unicode PRIVATE
     Qt${QT_VERSION_MAJOR}::Test
 )
 
-set_target_properties(test_snap_engine PROPERTIES
-    AUTOMOC ON
-)
-
-add_test(NAME TestSnapEngine COMMAND test_snap_engine)
 set_target_properties(test_latex_unicode PROPERTIES
     AUTOMOC ON
 )
@@ -166,7 +171,6 @@ add_test(NAME TestLatexUnicode COMMAND test_latex_unicode)
 # Add custom target to run all tests
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-    DEPENDS test_item_store test_project_serializer test_image_filters test_perspective_transform test_snap_engine
-    DEPENDS test_item_store test_project_serializer test_image_filters test_perspective_transform test_text_whitespace test_latex_unicode
+    DEPENDS test_item_store test_project_serializer test_image_filters test_perspective_transform test_snap_engine test_text_whitespace test_latex_unicode
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
