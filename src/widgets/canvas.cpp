@@ -64,6 +64,11 @@ static constexpr int PRESSURE_BUFFER_TRIM_SIZE = 100;
 static const QSet<QString> SUPPORTED_IMAGE_EXTENSIONS = {
     "png", "jpg", "jpeg", "bmp", "gif", "webp", "tiff", "tif"};
 
+// Image MIME types for clipboard paste fallback
+static const QStringList CLIPBOARD_IMAGE_MIME_TYPES = {
+    "image/png", "image/jpeg", "image/bmp",
+    "image/gif", "image/webp",  "image/tiff"};
+
 namespace {
 constexpr qreal CURVED_ARROW_BASE_FACTOR = 0.28;
 constexpr qreal CURVED_ARROW_MIN_OFFSET = 12.0;
@@ -3424,10 +3429,7 @@ void Canvas::pasteItems() {
 
   // Fallback: try raw image MIME formats (e.g. image/png on some platforms)
   {
-    static const QStringList imageMimeTypes = {
-        "image/png", "image/jpeg", "image/bmp", "image/gif", "image/webp",
-        "image/tiff"};
-    for (const QString &mimeType : imageMimeTypes) {
+    for (const QString &mimeType : CLIPBOARD_IMAGE_MIME_TYPES) {
       if (md->hasFormat(mimeType)) {
         QImage image;
         if (image.loadFromData(md->data(mimeType))) {
