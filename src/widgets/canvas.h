@@ -200,6 +200,7 @@ public slots:
   void applyBlurToSelection();
   void applySharpenToSelection();
   void applyScanDocumentToSelection();
+  void applyColorCurvesToSelection();
   void exportSingleElementToPNG();
   void openSingleImage();
   void placeElement(const QString &elementId);

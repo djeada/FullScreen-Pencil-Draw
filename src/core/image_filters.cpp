@@ -292,6 +292,84 @@ QImage scanDocument(const QImage &source, const ScanDocumentOptions &opts) {
   return result;
 }
 
+// --- Levels / Curves adjustment ---
+
+// Build a 256-entry look-up table for a single channel given
+// input black/white points and gamma.
+static void buildLUT(int inputBlack, int inputWhite, double gamma,
+                     uint8_t lut[256]) {
+  if (inputBlack >= inputWhite)
+    inputWhite = inputBlack + 1; // prevent division by zero
+  const double range = inputWhite - inputBlack;
+  const double invGamma = (gamma > 0.0) ? 1.0 / gamma : 1.0;
+  for (int i = 0; i < 256; ++i) {
+    double v = (i - inputBlack) / range;
+    v = std::clamp(v, 0.0, 1.0);
+    v = std::pow(v, invGamma);
+    lut[i] = static_cast<uint8_t>(std::clamp(static_cast<int>(v * 255.0 + 0.5), 0, 255));
+  }
+}
+
+QImage adjustLevels(const QImage &source, const LevelsOptions &opts) {
+  if (source.isNull())
+    return source;
+
+  QImage img = source.convertToFormat(QImage::Format_ARGB32);
+  const int w = img.width();
+  const int h = img.height();
+  if (w == 0 || h == 0)
+    return source;
+
+  // 1. Build master LUT
+  uint8_t masterLUT[256];
+  buildLUT(opts.inputBlack, opts.inputWhite, opts.gamma, masterLUT);
+
+  // 2. Build per-channel LUTs (chained after master)
+  uint8_t redLUT[256], greenLUT[256], blueLUT[256];
+  {
+    uint8_t perR[256], perG[256], perB[256];
+    buildLUT(opts.redInputBlack, opts.redInputWhite, opts.redGamma, perR);
+    buildLUT(opts.greenInputBlack, opts.greenInputWhite, opts.greenGamma, perG);
+    buildLUT(opts.blueInputBlack, opts.blueInputWhite, opts.blueGamma, perB);
+    for (int i = 0; i < 256; ++i) {
+      redLUT[i] = perR[masterLUT[i]];
+      greenLUT[i] = perG[masterLUT[i]];
+      blueLUT[i] = perB[masterLUT[i]];
+    }
+  }
+
+  // 3. Bake brightness / contrast into the LUTs
+  if (opts.brightness != 0 || opts.contrast != 0) {
+    // contrast factor: map [-100,100] → multiplier [0.5, 1.5]
+    double cFactor = 1.0 + opts.contrast / 200.0;
+    double bOffset = opts.brightness * 255.0 / 100.0;
+    for (int i = 0; i < 256; ++i) {
+      auto applyBC = [&](uint8_t v) -> uint8_t {
+        double d = v;
+        d = (d - 127.5) * cFactor + 127.5 + bOffset;
+        return static_cast<uint8_t>(std::clamp(static_cast<int>(d + 0.5), 0, 255));
+      };
+      redLUT[i] = applyBC(redLUT[i]);
+      greenLUT[i] = applyBC(greenLUT[i]);
+      blueLUT[i] = applyBC(blueLUT[i]);
+    }
+  }
+
+  // 4. Apply LUTs to every pixel
+  QImage result(w, h, QImage::Format_ARGB32);
+  for (int y = 0; y < h; ++y) {
+    const auto *srcRow = reinterpret_cast<const QRgb *>(img.constScanLine(y));
+    auto *dstRow = reinterpret_cast<QRgb *>(result.scanLine(y));
+    for (int x = 0; x < w; ++x) {
+      QRgb px = srcRow[x];
+      dstRow[x] = qRgba(redLUT[qRed(px)], greenLUT[qGreen(px)],
+                         blueLUT[qBlue(px)], qAlpha(px));
+    }
+  }
+
+  return result;
+}
+
 // --- Lanczos-3 resize ---
 
 static double lanczosKernel(double x) {

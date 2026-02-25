@@ -18,6 +18,7 @@
 #include "resize_canvas_dialog.h"
 #include "scale_dialog.h"
 #include "scan_document_dialog.h"
+#include "color_curves_dialog.h"
 #include "transform_handle_item.h"
 #include <QApplication>
 #include <QClipboard>
@@ -4786,6 +4787,103 @@ void Canvas::applyScanDocumentToSelection() {
 
     QImage oldImage = pixmapItem->pixmap().toImage();
     QImage newImage = ImageFilters::scanDocument(oldImage, opts);
+    pixmapItem->setPixmap(QPixmap::fromImage(newImage));
+
+    ItemId id = sceneController_->idForItem(pixmapItem);
+    if (id.isValid()) {
+      addAction(std::make_unique<RasterPixmapAction>(
+          id, sceneController_->itemStore(), oldImage, newImage));
+    }
+    applied = true;
+  }
+
+  if (applied)
+    emit canvasModified();
+}
+
+void Canvas::applyColorCurvesToSelection() {
+  if (!scene_ || !sceneController_)
+    return;
+
+  QList<QGraphicsItem *> selected = scene_->selectedItems();
+  bool hasPixmapSelection = false;
+  for (QGraphicsItem *item : selected) {
+    if (dynamic_cast<QGraphicsPixmapItem *>(item)) {
+      hasPixmapSelection = true;
+      break;
+    }
+  }
+
+  ColorCurvesDialog dialog(hasPixmapSelection, this);
+  if (dialog.exec() != QDialog::Accepted)
+    return;
+
+  ImageFilters::LevelsOptions opts;
+  opts.inputBlack = dialog.inputBlack();
+  opts.inputWhite = dialog.inputWhite();
+  opts.gamma = dialog.gamma();
+  opts.redInputBlack = dialog.redInputBlack();
+  opts.redInputWhite = dialog.redInputWhite();
+  opts.redGamma = dialog.redGamma();
+  opts.greenInputBlack = dialog.greenInputBlack();
+  opts.greenInputWhite = dialog.greenInputWhite();
+  opts.greenGamma = dialog.greenGamma();
+  opts.blueInputBlack = dialog.blueInputBlack();
+  opts.blueInputWhite = dialog.blueInputWhite();
+  opts.blueGamma = dialog.blueGamma();
+  opts.brightness = dialog.brightness();
+  opts.contrast = dialog.contrast();
+
+  if (dialog.target() == ColorCurvesDialog::WholeCanvas) {
+    QRectF sr = scene_->sceneRect();
+    if (sr.isEmpty())
+      sr = scene_->itemsBoundingRect();
+    if (sr.isEmpty())
+      return;
+
+    QImage canvasImage(sr.size().toSize(), QImage::Format_ARGB32);
+    canvasImage.fill(backgroundColor_);
+    QPainter p(&canvasImage);
+    p.setRenderHint(QPainter::Antialiasing);
+    p.setRenderHint(QPainter::TextAntialiasing);
+    bool ev = eraserPreview_ && eraserPreview_->isVisible();
+    if (eraserPreview_)
+      eraserPreview_->hide();
+    scene_->render(&p, QRectF(), sr);
+    p.end();
+    if (ev && eraserPreview_)
+      eraserPreview_->show();
+
+    QImage newImage = ImageFilters::adjustLevels(canvasImage, opts);
+
+    QGraphicsPixmapItem *pixmapItem =
+        new QGraphicsPixmapItem(QPixmap::fromImage(newImage));
+    pixmapItem->setPos(sr.topLeft());
+    pixmapItem->setFlag(QGraphicsItem::ItemIsSelectable, true);
+    pixmapItem->setFlag(QGraphicsItem::ItemIsMovable, true);
+
+    if (sceneController_) {
+      sceneController_->addItem(pixmapItem);
+    } else {
+      scene_->addItem(pixmapItem);
+    }
+    addDrawAction(pixmapItem);
+
+    scene_->clearSelection();
+    pixmapItem->setSelected(true);
+    emit canvasModified();
+    return;
+  }
+
+  // Apply to selected pixmap elements
+  bool applied = false;
+  for (QGraphicsItem *item : selected) {
+    auto *pixmapItem = dynamic_cast<QGraphicsPixmapItem *>(item);
+    if (!pixmapItem)
+      continue;
+
+    QImage oldImage = pixmapItem->pixmap().toImage();
+    QImage newImage = ImageFilters::adjustLevels(oldImage, opts);
     pixmapItem->setPixmap(QPixmap::fromImage(newImage));
 
     ItemId id = sceneController_->idForItem(pixmapItem);
