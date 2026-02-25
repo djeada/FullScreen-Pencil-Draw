@@ -60,8 +60,11 @@ const QMap<QString, QString> mathSymbols = {
     {"odot", "⊙"},
     // Relations
     {"leq", "≤"},
+    {"le", "≤"},
     {"geq", "≥"},
+    {"ge", "≥"},
     {"neq", "≠"},
+    {"ne", "≠"},
     {"approx", "≈"},
     {"equiv", "≡"},
     {"sim", "∼"},
@@ -112,7 +115,9 @@ const QMap<QString, QString> mathSymbols = {
     {"bot", "⊥"},
     // Arrows
     {"rightarrow", "→"},
+    {"to", "→"},
     {"leftarrow", "←"},
+    {"gets", "←"},
     {"leftrightarrow", "↔"},
     {"Rightarrow", "⇒"},
     {"Leftarrow", "⇐"},
@@ -233,6 +238,18 @@ const QMap<QString, QString> mathSymbols = {
     {"rbrack", "]"},
     {"vert", "|"},
     {"Vert", "‖"},
+    // Delimiter sizing commands (stripped - Unicode can't auto-size)
+    {"left", ""},
+    {"right", ""},
+    {"middle", ""},
+    {"big", ""},
+    {"Big", ""},
+    {"bigg", ""},
+    {"Bigg", ""},
+    {"bigl", ""},
+    {"bigr", ""},
+    {"Bigl", ""},
+    {"Bigr", ""},
     // Special characters
     {"quad", "  "},
     {"qquad", "    "},
@@ -889,6 +906,112 @@ QString LatexTextItem::latexToHtml(const QString &latex) {
     QChar ch = m.captured(1)[0];
     return LatexSymbols::mathfrak.value(ch, m.captured(1));
   });
+
+  // Process \text{...} for plain text in math mode
+  static QRegularExpression textPattern("\\\\text\\{([^}]*)\\}");
+  processMatches(result, textPattern, [](const QRegularExpressionMatch &m) {
+    return m.captured(1);
+  });
+
+  // Process \textbf{...} for bold text
+  static QRegularExpression textbfPattern("\\\\textbf\\{([^}]*)\\}");
+  processMatches(result, textbfPattern, [](const QRegularExpressionMatch &m) {
+    return "<b>" + m.captured(1) + "</b>";
+  });
+
+  // Process \textit{...} for italic text
+  static QRegularExpression textitPattern("\\\\textit\\{([^}]*)\\}");
+  processMatches(result, textitPattern, [](const QRegularExpressionMatch &m) {
+    return "<i>" + m.captured(1) + "</i>";
+  });
+
+  // Process \mathrm{...} for roman (upright) text in math
+  static QRegularExpression mathrmPattern("\\\\mathrm\\{([^}]*)\\}");
+  processMatches(result, mathrmPattern, [](const QRegularExpressionMatch &m) {
+    return m.captured(1);
+  });
+
+  // Process \mathbf{...} for bold math
+  static QRegularExpression mathbfPattern("\\\\mathbf\\{([^}]*)\\}");
+  processMatches(result, mathbfPattern, [](const QRegularExpressionMatch &m) {
+    return "<b>" + m.captured(1) + "</b>";
+  });
+
+  // Process \mathit{...} for italic math
+  static QRegularExpression mathitPattern("\\\\mathit\\{([^}]*)\\}");
+  processMatches(result, mathitPattern, [](const QRegularExpressionMatch &m) {
+    return "<i>" + m.captured(1) + "</i>";
+  });
+
+  // Process \textrm{...} for roman text
+  static QRegularExpression textrmPattern("\\\\textrm\\{([^}]*)\\}");
+  processMatches(result, textrmPattern, [](const QRegularExpressionMatch &m) {
+    return m.captured(1);
+  });
+
+  // Process \binom{n}{k} for binomial coefficients
+  static QRegularExpression binomPattern("\\\\binom\\{([^}]*)\\}\\{([^}]*)\\}");
+  processMatches(result, binomPattern, [](const QRegularExpressionMatch &m) {
+    return "(" + m.captured(1) + " choose " + m.captured(2) + ")";
+  });
+
+  // Process accent commands with braces: \hat{x}, \bar{x}, etc.
+  // Uses Unicode combining characters for proper rendering
+  static QRegularExpression hatPattern("\\\\hat\\{([^}]*)\\}");
+  processMatches(result, hatPattern, [](const QRegularExpressionMatch &m) {
+    return m.captured(1) + QString(QChar(0x0302)); // combining circumflex
+  });
+
+  static QRegularExpression barPattern("\\\\bar\\{([^}]*)\\}");
+  processMatches(result, barPattern, [](const QRegularExpressionMatch &m) {
+    return m.captured(1) + QString(QChar(0x0304)); // combining macron
+  });
+
+  static QRegularExpression vecPattern("\\\\vec\\{([^}]*)\\}");
+  processMatches(result, vecPattern, [](const QRegularExpressionMatch &m) {
+    return m.captured(1) + QString(QChar(0x20D7)); // combining right arrow above
+  });
+
+  static QRegularExpression dotPattern("\\\\dot\\{([^}]*)\\}");
+  processMatches(result, dotPattern, [](const QRegularExpressionMatch &m) {
+    return m.captured(1) + QString(QChar(0x0307)); // combining dot above
+  });
+
+  static QRegularExpression ddotPattern("\\\\ddot\\{([^}]*)\\}");
+  processMatches(result, ddotPattern, [](const QRegularExpressionMatch &m) {
+    return m.captured(1) + QString(QChar(0x0308)); // combining diaeresis
+  });
+
+  static QRegularExpression tildePattern("\\\\tilde\\{([^}]*)\\}");
+  processMatches(result, tildePattern, [](const QRegularExpressionMatch &m) {
+    return m.captured(1) + QString(QChar(0x0303)); // combining tilde
+  });
+
+  // Process \overline{...} using combining overline
+  static QRegularExpression overlinePattern("\\\\overline\\{([^}]*)\\}");
+  processMatches(
+      result, overlinePattern, [](const QRegularExpressionMatch &m) {
+        QString content = m.captured(1);
+        QString result;
+        for (QChar ch : content) {
+          result += ch;
+          result += QChar(0x0305); // combining overline per character
+        }
+        return result;
+      });
+
+  // Process \underline{...} using combining underline
+  static QRegularExpression underlinePattern("\\\\underline\\{([^}]*)\\}");
+  processMatches(
+      result, underlinePattern, [](const QRegularExpressionMatch &m) {
+        QString content = m.captured(1);
+        QString result;
+        for (QChar ch : content) {
+          result += ch;
+          result += QChar(0x0332); // combining low line per character
+        }
+        return result;
+      });
 
   // Process fractions: \frac{a}{b} - using proper fraction slash with
   // numerator/denominator
