@@ -221,7 +221,7 @@ Canvas::Canvas(QWidget *parent)
     : QGraphicsView(parent), scene_(new QGraphicsScene(this)),
       sceneController_(nullptr), layerManager_(nullptr),
       tempShapeItem_(nullptr), currentShape_(Pen), currentPen_(Qt::white, 3),
-      eraserPen_(Qt::black, 10), currentPath_(nullptr),
+      eraserPen_(Qt::black, 10), fillBrush_(Qt::white), currentPath_(nullptr),
       backgroundColor_(Qt::black), eraserPreview_(nullptr),
       backgroundImage_(nullptr), isPanning_(false),
       snapEngine_(GRID_SIZE, 10.0) {
@@ -834,6 +834,9 @@ void Canvas::setPenColor(const QColor &color) {
   QColor newColor = color;
   newColor.setAlpha(currentOpacity_);
   currentPen_.setColor(newColor);
+  if (fillBrush_.style() == Qt::SolidPattern) {
+    fillBrush_.setColor(newColor);
+  }
   emit colorChanged(color);
 }
 
@@ -998,6 +1001,11 @@ void Canvas::toggleGrid() {
 void Canvas::toggleFilledShapes() {
   fillShapes_ = !fillShapes_;
   emit filledShapesChanged(fillShapes_);
+}
+
+void Canvas::setFillBrush(const QBrush &brush) {
+  fillBrush_ = brush;
+  emit fillBrushChanged(fillBrush_);
 }
 
 void Canvas::toggleSnapToGrid() {
@@ -2565,7 +2573,7 @@ void Canvas::fillAt(const QPointF &point) {
   if (!scene_)
     return;
 
-  fillTopItemAtPoint(scene_, point, currentPen_.color(), itemStore(),
+  fillTopItemAtPoint(scene_, point, fillBrush_, itemStore(),
                      backgroundImage_, eraserPreview_,
                      [this](std::unique_ptr<Action> action) {
                        if (action) {

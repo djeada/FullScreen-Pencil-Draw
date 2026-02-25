@@ -31,7 +31,7 @@ void FillTool::mouseReleaseEvent(QMouseEvent * /*event*/,
 void FillTool::fillAt(const QPointF &point) {
   QGraphicsScene *scene = renderer_->scene();
   ItemStore *store = renderer_->itemStore();
-  fillTopItemAtPoint(scene, point, renderer_->currentPen().color(), store,
+  fillTopItemAtPoint(scene, point, renderer_->currentBrush(), store,
                      renderer_->backgroundImageItem(), nullptr,
                      [this](std::unique_ptr<Action> action) {
                        if (action) {

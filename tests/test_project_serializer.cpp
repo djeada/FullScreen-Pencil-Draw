@@ -23,6 +23,8 @@
 #include <QGraphicsRectItem>
 #include <QGraphicsScene>
 #include <QGraphicsTextItem>
+#include <QLinearGradient>
+#include <QRadialGradient>
 #include <QTemporaryDir>
 #include <QtTest/QtTest>
 
@@ -424,6 +426,153 @@ private slots:
     QTransform loaded_t = item->transform();
     QVERIFY(qFuzzyCompare(loaded_t.m11(), 2.0));
     QVERIFY(qFuzzyCompare(loaded_t.m22(), 3.0));
+  }
+
+  void testSaveAndLoadLinearGradientBrush() {
+    QTemporaryDir tmpDir;
+    QVERIFY(tmpDir.isValid());
+    QString filePath = tmpDir.path() + "/test_lg.fspd";
+
+    QGraphicsScene scene;
+    ItemStore store(&scene);
+    LayerManager manager(&scene);
+    manager.setItemStore(&store);
+
+    // Create rect with linear gradient brush
+    auto *rect = new QGraphicsRectItem(0, 0, 100, 100);
+    QLinearGradient lg(0, 0, 1, 1);
+    lg.setCoordinateMode(QGradient::ObjectBoundingMode);
+    lg.setColorAt(0, QColor(Qt::red));
+    lg.setColorAt(1, QColor(Qt::blue));
+    rect->setBrush(QBrush(lg));
+    rect->setPen(QPen(Qt::black));
+    ItemId id = store.registerItem(rect);
+    manager.activeLayer()->addItem(id, &store);
+
+    QRectF sceneRect(0, 0, 800, 600);
+    QColor bgColor(Qt::white);
+
+    bool saved = ProjectSerializer::saveProject(filePath, &scene, &store,
+                                                &manager, sceneRect, bgColor);
+    QVERIFY(saved);
+
+    // Load
+    QGraphicsScene scene2;
+    ItemStore store2(&scene2);
+    LayerManager manager2(&scene2);
+    manager2.setItemStore(&store2);
+    QRectF loadedRect;
+    QColor loadedBg;
+
+    bool loaded = ProjectSerializer::loadProject(
+        filePath, &scene2, &store2, &manager2, loadedRect, loadedBg);
+    QVERIFY(loaded);
+
+    Layer *layer = manager2.layer(0);
+    QVERIFY(layer);
+    QCOMPARE(layer->itemCount(), 1);
+
+    auto *loadedRect2 =
+        dynamic_cast<QGraphicsRectItem *>(store2.item(layer->itemIds().first()));
+    QVERIFY(loadedRect2);
+
+    const QBrush &loadedBrush = loadedRect2->brush();
+    QVERIFY(loadedBrush.gradient() != nullptr);
+    QCOMPARE(loadedBrush.gradient()->type(), QGradient::LinearGradient);
+    QCOMPARE(loadedBrush.gradient()->stops().size(), 2);
+    QCOMPARE(loadedBrush.gradient()->coordinateMode(),
+             QGradient::ObjectBoundingMode);
+  }
+
+  void testSaveAndLoadRadialGradientBrush() {
+    QTemporaryDir tmpDir;
+    QVERIFY(tmpDir.isValid());
+    QString filePath = tmpDir.path() + "/test_rg.fspd";
+
+    QGraphicsScene scene;
+    ItemStore store(&scene);
+    LayerManager manager(&scene);
+    manager.setItemStore(&store);
+
+    auto *ellipse = new QGraphicsEllipseItem(0, 0, 80, 80);
+    QRadialGradient rg(0.5, 0.5, 0.5);
+    rg.setCoordinateMode(QGradient::ObjectBoundingMode);
+    rg.setColorAt(0, QColor(Qt::yellow));
+    rg.setColorAt(1, QColor(Qt::green));
+    ellipse->setBrush(QBrush(rg));
+    ItemId id = store.registerItem(ellipse);
+    manager.activeLayer()->addItem(id, &store);
+
+    QRectF sceneRect(0, 0, 800, 600);
+    QColor bgColor(Qt::white);
+
+    bool saved = ProjectSerializer::saveProject(filePath, &scene, &store,
+                                                &manager, sceneRect, bgColor);
+    QVERIFY(saved);
+
+    QGraphicsScene scene2;
+    ItemStore store2(&scene2);
+    LayerManager manager2(&scene2);
+    manager2.setItemStore(&store2);
+    QRectF loadedRect;
+    QColor loadedBg;
+
+    bool loaded = ProjectSerializer::loadProject(
+        filePath, &scene2, &store2, &manager2, loadedRect, loadedBg);
+    QVERIFY(loaded);
+
+    Layer *layer = manager2.layer(0);
+    QVERIFY(layer);
+    auto *loadedEllipse = dynamic_cast<QGraphicsEllipseItem *>(
+        store2.item(layer->itemIds().first()));
+    QVERIFY(loadedEllipse);
+
+    const QBrush &loadedBrush = loadedEllipse->brush();
+    QVERIFY(loadedBrush.gradient() != nullptr);
+    QCOMPARE(loadedBrush.gradient()->type(), QGradient::RadialGradient);
+    QCOMPARE(loadedBrush.gradient()->stops().size(), 2);
+  }
+
+  void testSaveAndLoadPatternBrush() {
+    QTemporaryDir tmpDir;
+    QVERIFY(tmpDir.isValid());
+    QString filePath = tmpDir.path() + "/test_pattern.fspd";
+
+    QGraphicsScene scene;
+    ItemStore store(&scene);
+    LayerManager manager(&scene);
+    manager.setItemStore(&store);
+
+    auto *rect = new QGraphicsRectItem(0, 0, 50, 50);
+    rect->setBrush(QBrush(QColor(Qt::cyan), Qt::CrossPattern));
+    ItemId id = store.registerItem(rect);
+    manager.activeLayer()->addItem(id, &store);
+
+    QRectF sceneRect(0, 0, 800, 600);
+    QColor bgColor(Qt::white);
+
+    bool saved = ProjectSerializer::saveProject(filePath, &scene, &store,
+                                                &manager, sceneRect, bgColor);
+    QVERIFY(saved);
+
+    QGraphicsScene scene2;
+    ItemStore store2(&scene2);
+    LayerManager manager2(&scene2);
+    manager2.setItemStore(&store2);
+    QRectF loadedRect;
+    QColor loadedBg;
+
+    bool loaded = ProjectSerializer::loadProject(
+        filePath, &scene2, &store2, &manager2, loadedRect, loadedBg);
+    QVERIFY(loaded);
+
+    Layer *layer = manager2.layer(0);
+    QVERIFY(layer);
+    auto *loadedRect2 =
+        dynamic_cast<QGraphicsRectItem *>(store2.item(layer->itemIds().first()));
+    QVERIFY(loadedRect2);
+    QCOMPARE(loadedRect2->brush().style(), Qt::CrossPattern);
+    QCOMPARE(loadedRect2->brush().color(), QColor(Qt::cyan));
   }
 };
 

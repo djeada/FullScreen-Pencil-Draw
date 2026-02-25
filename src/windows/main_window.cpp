@@ -271,6 +271,8 @@ void MainWindow::setupConnections() {
           &Canvas::toggleGrid);
   connect(_toolPanel, &ToolPanel::toggleFilledShapesAction, _canvas,
           &Canvas::toggleFilledShapes);
+  connect(_toolPanel, &ToolPanel::fillBrushSelected, _canvas,
+          &Canvas::setFillBrush);
 
   // Pressure sensitivity
   connect(_toolPanel, &ToolPanel::pressureSensitivityToggled, _canvas,

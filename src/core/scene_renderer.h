@@ -8,6 +8,7 @@
 #ifndef SCENE_RENDERER_H
 #define SCENE_RENDERER_H
 
+#include <QBrush>
 #include <QCursor>
 #include <QGraphicsItem>
 #include <QGraphicsScene>
@@ -44,6 +45,14 @@ public:
    * @return Reference to the current pen
    */
   virtual const QPen &currentPen() const = 0;
+
+  /**
+   * @brief Get the current fill brush (solid, gradient, or pattern)
+   * @return The current brush used for shape fills
+   */
+  virtual QBrush currentBrush() const {
+    return QBrush(currentPen().color());
+  }
 
   /**
    * @brief Get the eraser pen

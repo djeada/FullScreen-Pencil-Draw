@@ -6,6 +6,7 @@
 #include "item_store.h"
 #include "layer.h"
 #include <QBuffer>
+#include <QConicalGradient>
 #include <QFile>
 #include <QGraphicsEllipseItem>
 #include <QGraphicsLineItem>
@@ -16,7 +17,9 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QLinearGradient>
 #include <QPainterPath>
+#include <QRadialGradient>
 
 const QString ProjectSerializer::fileFilter() {
   return QStringLiteral("Project Files (*.fspd)");
@@ -48,13 +51,97 @@ QJsonObject ProjectSerializer::serializeBrush(const QBrush &brush) {
   QJsonObject obj;
   obj["color"] = brush.color().name(QColor::HexArgb);
   obj["style"] = static_cast<int>(brush.style());
+
+  const QGradient *gradient = brush.gradient();
+  if (gradient) {
+    QJsonObject gradObj;
+    gradObj["type"] = static_cast<int>(gradient->type());
+    gradObj["spread"] = static_cast<int>(gradient->spread());
+    gradObj["coordinateMode"] = static_cast<int>(gradient->coordinateMode());
+
+    QJsonArray stops;
+    for (const QGradientStop &stop : gradient->stops()) {
+      QJsonObject s;
+      s["pos"] = stop.first;
+      s["color"] = stop.second.name(QColor::HexArgb);
+      stops.append(s);
+    }
+    gradObj["stops"] = stops;
+
+    if (gradient->type() == QGradient::LinearGradient) {
+      auto *lg = static_cast<const QLinearGradient *>(gradient);
+      gradObj["x1"] = lg->start().x();
+      gradObj["y1"] = lg->start().y();
+      gradObj["x2"] = lg->finalStop().x();
+      gradObj["y2"] = lg->finalStop().y();
+    } else if (gradient->type() == QGradient::RadialGradient) {
+      auto *rg = static_cast<const QRadialGradient *>(gradient);
+      gradObj["cx"] = rg->center().x();
+      gradObj["cy"] = rg->center().y();
+      gradObj["fx"] = rg->focalPoint().x();
+      gradObj["fy"] = rg->focalPoint().y();
+      gradObj["radius"] = rg->radius();
+    } else if (gradient->type() == QGradient::ConicalGradient) {
+      auto *cg = static_cast<const QConicalGradient *>(gradient);
+      gradObj["cx"] = cg->center().x();
+      gradObj["cy"] = cg->center().y();
+      gradObj["angle"] = cg->angle();
+    }
+
+    obj["gradient"] = gradObj;
+  }
+
   return obj;
 }
 
 QBrush ProjectSerializer::deserializeBrush(const QJsonObject &obj) {
+  int style = obj["style"].toInt(0);
+
+  if (obj.contains("gradient")) {
+    QJsonObject gradObj = obj["gradient"].toObject();
+    int gradType = gradObj["type"].toInt(0);
+
+    QGradientStops stops;
+    QJsonArray stopsArr = gradObj["stops"].toArray();
+    for (const QJsonValue &sv : stopsArr) {
+      QJsonObject s = sv.toObject();
+      stops.append({s["pos"].toDouble(), QColor(s["color"].toString())});
+    }
+
+    QGradient::Spread spread =
+        static_cast<QGradient::Spread>(gradObj["spread"].toInt(0));
+    QGradient::CoordinateMode coordMode =
+        static_cast<QGradient::CoordinateMode>(
+            gradObj["coordinateMode"].toInt(0));
+
+    if (gradType == QGradient::LinearGradient) {
+      QLinearGradient lg(gradObj["x1"].toDouble(), gradObj["y1"].toDouble(),
+                         gradObj["x2"].toDouble(), gradObj["y2"].toDouble());
+      lg.setStops(stops);
+      lg.setSpread(spread);
+      lg.setCoordinateMode(coordMode);
+      return QBrush(lg);
+    } else if (gradType == QGradient::RadialGradient) {
+      QRadialGradient rg(gradObj["cx"].toDouble(), gradObj["cy"].toDouble(),
+                         gradObj["radius"].toDouble(50.0),
+                         gradObj["fx"].toDouble(), gradObj["fy"].toDouble());
+      rg.setStops(stops);
+      rg.setSpread(spread);
+      rg.setCoordinateMode(coordMode);
+      return QBrush(rg);
+    } else if (gradType == QGradient::ConicalGradient) {
+      QConicalGradient cg(gradObj["cx"].toDouble(), gradObj["cy"].toDouble(),
+                          gradObj["angle"].toDouble());
+      cg.setStops(stops);
+      cg.setSpread(spread);
+      cg.setCoordinateMode(coordMode);
+      return QBrush(cg);
+    }
+  }
+
   QBrush brush;
   brush.setColor(QColor(obj["color"].toString()));
-  brush.setStyle(static_cast<Qt::BrushStyle>(obj["style"].toInt(0)));
+  brush.setStyle(static_cast<Qt::BrushStyle>(style));
   return brush;
 }
 

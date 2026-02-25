@@ -1,11 +1,14 @@
 #include "tool_panel.h"
 #include "brush_preview.h"
 #include <QColorDialog>
+#include <QConicalGradient>
 #include <QEvent>
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
+#include <QLinearGradient>
 #include <QMouseEvent>
+#include <QRadialGradient>
 #include <QScrollArea>
 #include <QToolButton>
 #include <QVBoxLayout>
@@ -31,7 +34,8 @@ static QFrame *createSeparator(QWidget *parent) {
 }
 
 ToolPanel::ToolPanel(QWidget *parent)
-    : QDockWidget("Tools", parent), brushPreview_(nullptr) {
+    : QDockWidget("Tools", parent), brushPreview_(nullptr),
+      fillStyleCombo_(nullptr), currentColor_(Qt::white) {
   setObjectName("ToolPanel");
   setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable |
               QDockWidget::DockWidgetFloatable);
@@ -367,6 +371,58 @@ ToolPanel::ToolPanel(QWidget *parent)
   toggleWidget->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
   mainLayout->addWidget(toggleWidget, 0, Qt::AlignHCenter);
 
+  // Fill style selector
+  QLabel *fillStyleLabel = new QLabel("Fill Style", container);
+  fillStyleLabel->setStyleSheet(
+      "QLabel { color: #a0a0a8; font-size: 11px; font-weight: 500; }");
+  fillStyleLabel->setAlignment(Qt::AlignCenter);
+  mainLayout->addWidget(fillStyleLabel);
+
+  fillStyleCombo_ = new QComboBox(container);
+  fillStyleCombo_->addItem("Solid", static_cast<int>(Qt::SolidPattern));
+  fillStyleCombo_->addItem("Linear Gradient", -1);
+  fillStyleCombo_->addItem("Radial Gradient", -2);
+  fillStyleCombo_->addItem("Conical Gradient", -3);
+  fillStyleCombo_->addItem("Dense", static_cast<int>(Qt::Dense4Pattern));
+  fillStyleCombo_->addItem("Cross", static_cast<int>(Qt::CrossPattern));
+  fillStyleCombo_->addItem("Diagonal Cross",
+                           static_cast<int>(Qt::DiagCrossPattern));
+  fillStyleCombo_->addItem("Horizontal Lines",
+                           static_cast<int>(Qt::HorPattern));
+  fillStyleCombo_->addItem("Vertical Lines",
+                           static_cast<int>(Qt::VerPattern));
+  fillStyleCombo_->addItem("Forward Diagonal",
+                           static_cast<int>(Qt::FDiagPattern));
+  fillStyleCombo_->addItem("Backward Diagonal",
+                           static_cast<int>(Qt::BDiagPattern));
+  fillStyleCombo_->setToolTip("Select fill style for shapes and the fill tool");
+  fillStyleCombo_->setMaximumWidth(140);
+  fillStyleCombo_->setStyleSheet(R"(
+    QComboBox {
+      background-color: rgba(255, 255, 255, 0.06);
+      color: #e0e0e6;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 6px;
+      padding: 4px 8px;
+      font-size: 11px;
+    }
+    QComboBox:hover {
+      border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+    QComboBox::drop-down {
+      border: none;
+    }
+    QComboBox QAbstractItemView {
+      background-color: #2a2a30;
+      color: #e0e0e6;
+      selection-background-color: #3b82f6;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+  )");
+  connect(fillStyleCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged),
+          this, &ToolPanel::onFillStyleChanged);
+  mainLayout->addWidget(fillStyleCombo_, 0, Qt::AlignHCenter);
+
   mainLayout->addWidget(createSeparator(container));
 
   // === EDIT ACTIONS ===
@@ -594,6 +650,7 @@ void ToolPanel::updateBrushSizeDisplay(int size) {
 }
 
 void ToolPanel::updateColorDisplay(const QColor &color) {
+  currentColor_ = color;
   colorPreview->setStyleSheet(QString(R"(
     QLabel { 
       background-color: %1; 
@@ -604,6 +661,9 @@ void ToolPanel::updateColorDisplay(const QColor &color) {
                                   .arg(color.name()));
   if (brushPreview_) {
     brushPreview_->setBrushColor(color);
+  }
+  if (fillStyleCombo_) {
+    onFillStyleChanged(fillStyleCombo_->currentIndex());
   }
 }
 
@@ -741,6 +801,45 @@ void ToolPanel::onActionZoomOut() { emit zoomOutAction(); }
 void ToolPanel::onActionZoomReset() { emit zoomResetAction(); }
 void ToolPanel::onActionGrid() { emit toggleGridAction(); }
 void ToolPanel::onActionFilledShapes() { emit toggleFilledShapesAction(); }
+
+void ToolPanel::onFillStyleChanged(int index) {
+  if (!fillStyleCombo_)
+    return;
+
+  int data = fillStyleCombo_->currentData().toInt();
+  QBrush brush;
+
+  if (data == -1) {
+    // Linear gradient
+    QLinearGradient lg(0, 0, 1, 1);
+    lg.setCoordinateMode(QGradient::ObjectBoundingMode);
+    lg.setColorAt(0, currentColor_);
+    QColor endColor = currentColor_.lighter(180);
+    lg.setColorAt(1, endColor);
+    brush = QBrush(lg);
+  } else if (data == -2) {
+    // Radial gradient
+    QRadialGradient rg(0.5, 0.5, 0.5);
+    rg.setCoordinateMode(QGradient::ObjectBoundingMode);
+    rg.setColorAt(0, currentColor_);
+    QColor endColor = currentColor_.darker(200);
+    rg.setColorAt(1, endColor);
+    brush = QBrush(rg);
+  } else if (data == -3) {
+    // Conical gradient
+    QConicalGradient cg(0.5, 0.5, 0);
+    cg.setCoordinateMode(QGradient::ObjectBoundingMode);
+    cg.setColorAt(0, currentColor_);
+    cg.setColorAt(0.5, currentColor_.lighter(160));
+    cg.setColorAt(1, currentColor_);
+    brush = QBrush(cg);
+  } else {
+    // Solid or pattern fill
+    brush = QBrush(currentColor_, static_cast<Qt::BrushStyle>(data));
+  }
+
+  emit fillBrushSelected(brush);
+}
 
 bool ToolPanel::eventFilter(QObject *obj, QEvent *event) {
   if (obj == colorPreview && event->type() == QEvent::MouseButtonRelease) {

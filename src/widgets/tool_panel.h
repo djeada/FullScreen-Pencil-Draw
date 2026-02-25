@@ -2,8 +2,10 @@
 #define TOOLPANEL_H
 
 #include <QAction>
+#include <QBrush>
 #include <QCheckBox>
 #include <QColor>
+#include <QComboBox>
 #include <QDockWidget>
 #include <QLabel>
 #include <QSlider>
@@ -56,6 +58,7 @@ signals:
   void zoomResetAction();
   void toggleGridAction();
   void toggleFilledShapesAction();
+  void fillBrushSelected(const QBrush &brush);
   void copyAction();
   void cutAction();
   void pasteAction();
@@ -103,6 +106,8 @@ private:
   QSlider *opacitySlider;
   BrushPreview *brushPreview_;
   QCheckBox *pressureSensitivityCheckBox_;
+  QComboBox *fillStyleCombo_;
+  QColor currentColor_;
 
   void clearActiveToolStyles();
   bool eventFilter(QObject *obj, QEvent *event) override;
@@ -122,6 +127,7 @@ private slots:
   void onActionZoomReset();
   void onActionGrid();
   void onActionFilledShapes();
+  void onFillStyleChanged(int index);
   void onOpacityChanged(int value);
 
 public slots:
