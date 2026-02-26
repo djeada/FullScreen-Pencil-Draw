@@ -35,7 +35,8 @@ static QFrame *createSeparator(QWidget *parent) {
 
 ToolPanel::ToolPanel(QWidget *parent)
     : QDockWidget("Tools", parent), brushPreview_(nullptr),
-      fillStyleCombo_(nullptr), currentColor_(Qt::white) {
+      fillStyleCombo_(nullptr), brushTipCombo_(nullptr),
+      currentColor_(Qt::white) {
   setObjectName("ToolPanel");
   setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable |
               QDockWidget::DockWidgetFloatable);
@@ -172,6 +173,12 @@ ToolPanel::ToolPanel(QWidget *parent)
   connect(actionSelection, &QAction::triggered, this,
           &ToolPanel::onActionSelection);
 
+  actionLassoSelection = new QAction("⛶ Lasso", this);
+  actionLassoSelection->setToolTip("Lasso selection (Shift+S)");
+  actionLassoSelection->setCheckable(true);
+  connect(actionLassoSelection, &QAction::triggered, this,
+          &ToolPanel::onActionLassoSelection);
+
   actionPan = new QAction("☰ Pan", this);
   actionPan->setToolTip("Pan canvas (H)");
   actionPan->setCheckable(true);
@@ -182,6 +189,7 @@ ToolPanel::ToolPanel(QWidget *parent)
   navLayout->setSpacing(4);
   navLayout->setContentsMargins(0, 0, 0, 0);
   navLayout->addWidget(createToolButton(actionSelection, navWidget));
+  navLayout->addWidget(createToolButton(actionLassoSelection, navWidget));
   navLayout->addWidget(createToolButton(actionPan, navWidget));
   navWidget->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
   mainLayout->addWidget(navWidget, 0, Qt::AlignHCenter);
@@ -239,6 +247,52 @@ ToolPanel::ToolPanel(QWidget *parent)
   brushPreview_ = new BrushPreview(container);
   brushPreviewLayout->addWidget(brushPreview_);
   mainLayout->addLayout(brushPreviewLayout);
+
+  // Brush tip selector
+  QLabel *brushTipLabel = new QLabel("Brush Tip", container);
+  brushTipLabel->setStyleSheet(
+      "QLabel { color: #a0a0a8; font-size: 11px; font-weight: 500; }");
+  brushTipLabel->setAlignment(Qt::AlignCenter);
+  mainLayout->addWidget(brushTipLabel);
+
+  brushTipCombo_ = new QComboBox(container);
+  brushTipCombo_->addItem("● Round",
+                          static_cast<int>(BrushTipShape::Round));
+  brushTipCombo_->addItem("⌿ Chisel",
+                          static_cast<int>(BrushTipShape::Chisel));
+  brushTipCombo_->addItem("✦ Stamp",
+                          static_cast<int>(BrushTipShape::Stamp));
+  brushTipCombo_->addItem("▒ Textured",
+                          static_cast<int>(BrushTipShape::Textured));
+  brushTipCombo_->setToolTip(
+      "Select brush tip shape (Round, Chisel for calligraphy, Stamp, "
+      "Textured)");
+  brushTipCombo_->setMaximumWidth(140);
+  brushTipCombo_->setStyleSheet(R"(
+    QComboBox {
+      background-color: rgba(255, 255, 255, 0.06);
+      color: #e0e0e6;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 6px;
+      padding: 4px 8px;
+      font-size: 11px;
+    }
+    QComboBox:hover {
+      border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+    QComboBox::drop-down {
+      border: none;
+    }
+    QComboBox QAbstractItemView {
+      background-color: #2a2a30;
+      color: #e0e0e6;
+      selection-background-color: #3b82f6;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+  )");
+  connect(brushTipCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged),
+          this, &ToolPanel::onBrushTipChanged);
+  mainLayout->addWidget(brushTipCombo_, 0, Qt::AlignHCenter);
 
   mainLayout->addWidget(createSeparator(container));
 
@@ -626,6 +680,7 @@ void ToolPanel::clearActiveToolStyles() {
   actionRectangle->setChecked(false);
   actionCircle->setChecked(false);
   actionSelection->setChecked(false);
+  actionLassoSelection->setChecked(false);
   actionBezier->setChecked(false);
   actionTextOnPath->setChecked(false);
   actionPan->setChecked(false);
@@ -637,6 +692,7 @@ void ToolPanel::setActiveTool(const QString &toolName) {
       {"Mermaid", "⬡"},   {"Fill", "◉"},   {"ColorSelect", "◎"},
       {"Line", "╱"},      {"Arrow", "➤"},  {"CurvedArrow", "↪"},
       {"Rectangle", "▢"}, {"Circle", "◯"}, {"Select", "⬚"},
+      {"LassoSelect", "⛶"},
       {"Pan", "☰"},       {"Bezier", "⌇"}, {"TextOnPath", "⌇T"}};
   QString icon = toolIcons.value(toolName, "•");
   activeToolLabel->setText(icon + " " + toolName);
@@ -757,6 +813,13 @@ void ToolPanel::onActionSelection() {
   emit shapeSelected("Selection");
   emit selectionSelected();
 }
+void ToolPanel::onActionLassoSelection() {
+  clearActiveToolStyles();
+  actionLassoSelection->setChecked(true);
+  setActiveTool("LassoSelect");
+  emit shapeSelected("LassoSelection");
+  emit lassoSelectionSelected();
+}
 void ToolPanel::onActionPan() {
   clearActiveToolStyles();
   actionPan->setChecked(true);
@@ -839,6 +902,15 @@ void ToolPanel::onFillStyleChanged(int index) {
   }
 
   emit fillBrushSelected(brush);
+}
+
+void ToolPanel::onBrushTipChanged(int) {
+  if (!brushTipCombo_)
+    return;
+  int data = brushTipCombo_->currentData().toInt();
+  BrushTip tip;
+  tip.setShape(static_cast<BrushTipShape>(data));
+  emit brushTipSelected(tip);
 }
 
 bool ToolPanel::eventFilter(QObject *obj, QEvent *event) {

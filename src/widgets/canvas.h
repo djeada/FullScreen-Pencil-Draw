@@ -40,6 +40,7 @@
 #include <vector>
 
 #include "../core/action.h"
+#include "../core/brush_tip.h"
 #include "../core/layer.h"
 #include "../core/scene_renderer.h"
 #include "../core/snap_engine.h"
@@ -89,6 +90,7 @@ public:
   const QPen &currentPen() const override { return currentPen_; }
   const QPen &eraserPen() const override { return eraserPen_; }
   QBrush currentBrush() const override { return fillBrush_; }
+  const BrushTip &currentBrushTip() const override { return brushTip_; }
   QGraphicsPixmapItem *backgroundImageItem() const override {
     return backgroundImage_;
   }
@@ -134,6 +136,7 @@ signals:
   void measurementUpdated(const QString &measurement);
   void pdfFileDropped(const QString &filePath);
   void pressureSensitivityChanged(bool enabled);
+  void brushTipChanged(const BrushTip &tip);
 
 public slots:
   void setShape(const QString &shapeType);
@@ -176,6 +179,7 @@ public slots:
   void toggleRuler();
   void toggleMeasurementTool();
   void togglePressureSensitivity();
+  void setBrushTip(const BrushTip &tip);
   void lockSelectedItems();
   void unlockSelectedItems();
   void selectAll();
@@ -233,6 +237,7 @@ private:
     Pen,
     Eraser,
     Selection,
+    LassoSelection,
     Text,
     Mermaid,
     Fill,
@@ -297,6 +302,11 @@ private:
   QGraphicsPixmapItem *colorSelectionOverlay_ = nullptr;
   QHash<ItemId, QPointF> selectionMoveStartPositions_;
 
+  // Lasso selection state
+  QGraphicsPathItem *lassoPathItem_ = nullptr;
+  QVector<QPointF> lassoPoints_;
+  bool lassoDrawing_ = false;
+
   // Drawing state
   QVector<QPointF> pointBuffer_;
   QPointF previousPoint_;
@@ -307,6 +317,9 @@ private:
   qreal tabletPressure_ = 1.0;
   bool tabletActive_ = false;
   QVector<qreal> pressureBuffer_;
+
+  // Brush tip
+  BrushTip brushTip_;
 
   // Undo/Redo stacks (using vector for move-only types)
   std::vector<std::unique_ptr<Action>> undoStack_;

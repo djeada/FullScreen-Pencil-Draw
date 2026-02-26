@@ -5,11 +5,14 @@
 #ifndef PEN_TOOL_H
 #define PEN_TOOL_H
 
+#include "../core/brush_tip.h"
 #include "../core/item_id.h"
 #include "tool.h"
 #include <QGraphicsPathItem>
 #include <QPainterPath>
 #include <QVector>
+
+class BrushStrokeItem;
 
 /**
  * @brief Freehand drawing tool with smooth Catmull-Rom spline interpolation.
@@ -17,6 +20,10 @@
  * The pen tool allows users to draw smooth freehand curves. It uses
  * Catmull-Rom spline interpolation to create smooth curves from the
  * user's mouse movements.
+ *
+ * When a non-Round BrushTip is active the tool creates a BrushStrokeItem
+ * instead of a QGraphicsPathItem, enabling calligraphy, stamp, and textured
+ * stroke rendering.
  */
 class PenTool : public Tool {
 public:
@@ -36,7 +43,9 @@ private:
   void addPoint(const QPointF &point);
 
   QGraphicsPathItem *currentPath_;
-  ItemId currentPathId_; // Stable ID for safe reference
+  BrushStrokeItem *currentStroke_;
+  QGraphicsItem *currentItem_; // points to whichever is active
+  ItemId currentItemId_;
   QVector<QPointF> pointBuffer_;
   static constexpr int MIN_POINTS_FOR_SPLINE = 4;
 };

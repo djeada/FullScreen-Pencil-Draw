@@ -11,6 +11,8 @@
 #include <QSlider>
 #include <QToolButton>
 
+#include "../core/brush_tip.h"
+
 class BrushPreview;
 
 class ToolPanel : public QDockWidget {
@@ -32,6 +34,7 @@ signals:
   void circleSelected();
   void lineSelected();
   void selectionSelected();
+  void lassoSelectionSelected();
   void penSelected();
   void eraserSelected();
   void textSelected();
@@ -66,12 +69,14 @@ signals:
   void deleteAction();
   void selectAllAction();
   void pressureSensitivityToggled();
+  void brushTipSelected(const BrushTip &tip);
 
 private:
   QAction *actionRectangle;
   QAction *actionCircle;
   QAction *actionLine;
   QAction *actionSelection;
+  QAction *actionLassoSelection;
   QAction *actionPen;
   QAction *actionEraser;
   QAction *actionText;
@@ -107,6 +112,7 @@ private:
   BrushPreview *brushPreview_;
   QCheckBox *pressureSensitivityCheckBox_;
   QComboBox *fillStyleCombo_;
+  QComboBox *brushTipCombo_;
   QColor currentColor_;
 
   void clearActiveToolStyles();
@@ -128,6 +134,7 @@ private slots:
   void onActionGrid();
   void onActionFilledShapes();
   void onFillStyleChanged(int index);
+  void onBrushTipChanged(int index);
   void onOpacityChanged(int value);
 
 public slots:
@@ -135,6 +142,7 @@ public slots:
   void onActionCircle();
   void onActionLine();
   void onActionSelection();
+  void onActionLassoSelection();
   void onActionPen();
   void onActionEraser();
   void onActionText();
