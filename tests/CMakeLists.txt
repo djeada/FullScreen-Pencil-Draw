@@ -168,6 +168,18 @@ set_target_properties(test_latex_unicode PROPERTIES
 
 add_test(NAME TestLatexUnicode COMMAND test_latex_unicode)
 
+# BusySpinnerOverlay tests
+add_executable(test_busy_spinner_overlay
+    test_busy_spinner_overlay.cpp
+    ../src/widgets/busy_spinner_overlay.cpp
+    ../src/widgets/busy_spinner_overlay.h
+)
+
+target_include_directories(test_busy_spinner_overlay PRIVATE
+    ../src/widgets
+)
+
+target_link_libraries(test_busy_spinner_overlay PRIVATE
 # BrushTip tests
 add_executable(test_brush_tip
     test_brush_tip.cpp
@@ -184,6 +196,11 @@ target_link_libraries(test_brush_tip PRIVATE
     Qt${QT_VERSION_MAJOR}::Test
 )
 
+set_target_properties(test_busy_spinner_overlay PROPERTIES
+    AUTOMOC ON
+)
+
+add_test(NAME TestBusySpinnerOverlay COMMAND test_busy_spinner_overlay)
 set_target_properties(test_brush_tip PROPERTIES
     AUTOMOC ON
 )
@@ -193,6 +210,7 @@ add_test(NAME TestBrushTip COMMAND test_brush_tip)
 # Add custom target to run all tests
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
+    DEPENDS test_item_store test_project_serializer test_image_filters test_perspective_transform test_snap_engine test_text_whitespace test_latex_unicode test_busy_spinner_overlay
     DEPENDS test_item_store test_project_serializer test_image_filters test_perspective_transform test_snap_engine test_text_whitespace test_latex_unicode test_brush_tip
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )

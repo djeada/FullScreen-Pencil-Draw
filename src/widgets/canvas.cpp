@@ -12,6 +12,7 @@
 #include "../core/transform_action.h"
 #include "../tools/lasso_selection_tool.h"
 #include "architecture_elements.h"
+#include "busy_spinner_overlay.h"
 #include "image_size_dialog.h"
 #include "latex_text_item.h"
 #include "mermaid_text_item.h"
@@ -298,6 +299,9 @@ Canvas::Canvas(QWidget *parent)
   // Connect to scene selection changes for transform handles
   connect(scene_, &QGraphicsScene::selectionChanged, this,
           &Canvas::updateTransformHandles);
+
+  // Busy spinner overlay for long-running operations
+  busySpinner_ = new BusySpinnerOverlay(this);
 }
 
 Canvas::~Canvas() {
@@ -1836,11 +1840,13 @@ void Canvas::saveToFile() {
 
   // Check if saving as project file
   if (fileName.endsWith(".fspd", Qt::CaseInsensitive)) {
+    showBusySpinner(tr("Saving project…"));
     if (ProjectSerializer::saveProject(fileName, scene_, itemStore(),
                                        layerManager_, scene_->sceneRect(),
                                        backgroundColor_)) {
       RecentFilesManager::instance().addRecentFile(fileName);
     }
+    hideBusySpinner();
     return;
   }
 
@@ -1853,6 +1859,7 @@ void Canvas::saveToFile() {
 #ifdef HAVE_QT_SVG
   // Check if saving as SVG
   if (fileName.endsWith(".svg", Qt::CaseInsensitive)) {
+    showBusySpinner(tr("Exporting SVG…"));
     bool ev = eraserPreview_ && eraserPreview_->isVisible();
     if (eraserPreview_)
       eraserPreview_->hide();
@@ -1878,11 +1885,13 @@ void Canvas::saveToFile() {
 
     if (ev && eraserPreview_)
       eraserPreview_->show();
+    hideBusySpinner();
     RecentFilesManager::instance().addRecentFile(fileName);
     return;
   }
 #endif
 
+  showBusySpinner(tr("Saving image…"));
   bool ev = eraserPreview_ && eraserPreview_->isVisible();
   if (eraserPreview_)
     eraserPreview_->hide();
@@ -1901,6 +1910,7 @@ void Canvas::saveToFile() {
   img.save(fileName);
   if (ev && eraserPreview_)
     eraserPreview_->show();
+  hideBusySpinner();
 
   // Add to recent files
   RecentFilesManager::instance().addRecentFile(fileName);
@@ -1928,6 +1938,7 @@ void Canvas::openFile() {
 
   // Handle project files
   if (fileName.endsWith(".fspd", Qt::CaseInsensitive)) {
+    showBusySpinner(tr("Loading project…"));
     QRectF loadedRect;
     QColor loadedBg;
     if (ProjectSerializer::loadProject(fileName, scene_, itemStore(),
@@ -1942,6 +1953,7 @@ void Canvas::openFile() {
       QMessageBox::warning(this, "Error",
                            QString("Could not open project: %1").arg(fileName));
     }
+    hideBusySpinner();
     return;
   }
 
@@ -2035,6 +2047,7 @@ void Canvas::saveProject() {
     return;
   if (!fileName.endsWith(".fspd", Qt::CaseInsensitive))
     fileName += ".fspd";
+  showBusySpinner(tr("Saving project…"));
   if (ProjectSerializer::saveProject(fileName, scene_, itemStore(),
                                      layerManager_, scene_->sceneRect(),
                                      backgroundColor_)) {
@@ -2043,6 +2056,7 @@ void Canvas::saveProject() {
     QMessageBox::warning(this, "Error",
                          QString("Could not save project: %1").arg(fileName));
   }
+  hideBusySpinner();
 }
 
 void Canvas::openProject() {
@@ -2053,6 +2067,7 @@ void Canvas::openProject() {
     return;
   QRectF loadedRect;
   QColor loadedBg;
+  showBusySpinner(tr("Loading project…"));
   if (ProjectSerializer::loadProject(fileName, scene_, itemStore(),
                                      layerManager_, loadedRect, loadedBg)) {
     backgroundColor_ = loadedBg;
@@ -2065,6 +2080,7 @@ void Canvas::openProject() {
     QMessageBox::warning(this, "Error",
                          QString("Could not open project: %1").arg(fileName));
   }
+  hideBusySpinner();
 }
 
 void Canvas::exportToPDF() {
@@ -2076,6 +2092,7 @@ void Canvas::exportToPDF() {
 }
 
 void Canvas::exportToPDFWithFilename(const QString &fileName) {
+  showBusySpinner(tr("Exporting PDF…"));
   bool ev = eraserPreview_ && eraserPreview_->isVisible();
   if (eraserPreview_)
     eraserPreview_->hide();
@@ -2127,6 +2144,7 @@ void Canvas::exportToPDFWithFilename(const QString &fileName) {
 
   if (ev && eraserPreview_)
     eraserPreview_->show();
+  hideBusySpinner();
 
   // Add to recent files
   RecentFilesManager::instance().addRecentFile(fileName);
@@ -3833,8 +3851,10 @@ void Canvas::loadDroppedImage(const QString &filePath,
     int newHeight = dialog.getHeight();
 
     // Scale using high-quality Lanczos resampling
+    showBusySpinner(tr("Scaling image…"));
     QImage scaledImage = ImageFilters::lanczosResize(
         pixmap.toImage(), newWidth, newHeight);
+    hideBusySpinner();
     QPixmap scaledPixmap = QPixmap::fromImage(scaledImage);
 
     // Create a graphics pixmap item
@@ -3875,8 +3895,10 @@ void Canvas::addImageFromScreenshot(const QImage &image) {
     int newWidth = dialog.getWidth();
     int newHeight = dialog.getHeight();
 
+    showBusySpinner(tr("Scaling image…"));
     QImage scaledImage = ImageFilters::lanczosResize(
         pixmap.toImage(), newWidth, newHeight);
+    hideBusySpinner();
     QPixmap scaledPixmap = QPixmap::fromImage(scaledImage);
 
     // Create a graphics pixmap item
@@ -4077,6 +4099,8 @@ void Canvas::exportSelectionToSVG() {
   if (boundingRect.isEmpty())
     return;
 
+  showBusySpinner(tr("Exporting SVG…"));
+
   // Create SVG generator
   QSvgGenerator generator;
   generator.setFileName(fileName);
@@ -4108,6 +4132,7 @@ void Canvas::exportSelectionToSVG() {
   }
 
   painter.end();
+  hideBusySpinner();
 #endif
 }
 
@@ -4169,6 +4194,8 @@ void Canvas::exportSelectionToPNG() {
   if (boundingRect.isEmpty())
     return;
 
+  showBusySpinner(tr("Exporting PNG…"));
+
   // Create image and render selected items
   QImage image(boundingRect.size().toSize(), QImage::Format_ARGB32);
   image.fill(Qt::transparent);
@@ -4193,6 +4220,7 @@ void Canvas::exportSelectionToPNG() {
 
   painter.end();
   image.save(fileName);
+  hideBusySpinner();
 }
 
 void Canvas::exportSelectionToJPG() {
@@ -4207,6 +4235,8 @@ void Canvas::exportSelectionToJPG() {
   QRectF boundingRect = getSelectionBoundingRect();
   if (boundingRect.isEmpty())
     return;
+
+  showBusySpinner(tr("Exporting JPG…"));
 
   // Create image with white background and render selected items
   QImage image(boundingRect.size().toSize(), QImage::Format_RGB32);
@@ -4232,6 +4262,7 @@ void Canvas::exportSelectionToJPG() {
 
   painter.end();
   image.save(fileName);
+  hideBusySpinner();
 }
 
 void Canvas::exportSelectionToWebP() {
@@ -4246,6 +4277,8 @@ void Canvas::exportSelectionToWebP() {
   QRectF boundingRect = getSelectionBoundingRect();
   if (boundingRect.isEmpty())
     return;
+
+  showBusySpinner(tr("Exporting WebP…"));
 
   // Create image with transparency and render selected items
   QImage image(boundingRect.size().toSize(), QImage::Format_ARGB32);
@@ -4271,6 +4304,7 @@ void Canvas::exportSelectionToWebP() {
 
   painter.end();
   image.save(fileName, "WEBP");
+  hideBusySpinner();
 }
 
 void Canvas::exportSelectionToTIFF() {
@@ -4285,6 +4319,8 @@ void Canvas::exportSelectionToTIFF() {
   QRectF boundingRect = getSelectionBoundingRect();
   if (boundingRect.isEmpty())
     return;
+
+  showBusySpinner(tr("Exporting TIFF…"));
 
   // Create image with transparency and render selected items
   QImage image(boundingRect.size().toSize(), QImage::Format_ARGB32);
@@ -4310,6 +4346,7 @@ void Canvas::exportSelectionToTIFF() {
 
   painter.end();
   image.save(fileName, "TIFF");
+  hideBusySpinner();
 }
 
 void Canvas::updateTransformHandles() {
@@ -4831,6 +4868,7 @@ void Canvas::applyBlurToSelection() {
   if (!ok)
     return;
 
+  showBusySpinner(tr("Applying blur…"));
   bool applied = false;
   for (QGraphicsItem *item : selected) {
     auto *pixmapItem = dynamic_cast<QGraphicsPixmapItem *>(item);
@@ -4848,6 +4886,7 @@ void Canvas::applyBlurToSelection() {
     }
     applied = true;
   }
+  hideBusySpinner();
 
   if (applied)
     emit canvasModified();
@@ -4867,6 +4906,7 @@ void Canvas::applySharpenToSelection() {
   if (!ok)
     return;
 
+  showBusySpinner(tr("Applying sharpen…"));
   bool applied = false;
   for (QGraphicsItem *item : selected) {
     auto *pixmapItem = dynamic_cast<QGraphicsPixmapItem *>(item);
@@ -4884,6 +4924,7 @@ void Canvas::applySharpenToSelection() {
     }
     applied = true;
   }
+  hideBusySpinner();
 
   if (applied)
     emit canvasModified();
@@ -4926,6 +4967,8 @@ void Canvas::applyScanDocumentToSelection() {
     if (sr.isEmpty())
       return;
 
+    showBusySpinner(tr("Applying scan document filter…"));
+
     // Render current canvas to image
     QImage canvasImage(sr.size().toSize(), QImage::Format_ARGB32);
     canvasImage.fill(backgroundColor_);
@@ -4941,6 +4984,7 @@ void Canvas::applyScanDocumentToSelection() {
       eraserPreview_->show();
 
     QImage newImage = ImageFilters::scanDocument(canvasImage, opts);
+    hideBusySpinner();
 
     // Place result as a new pixmap item on top
     QGraphicsPixmapItem *pixmapItem =
@@ -4963,6 +5007,7 @@ void Canvas::applyScanDocumentToSelection() {
   }
 
   // Apply to selected pixmap elements
+  showBusySpinner(tr("Applying scan document filter…"));
   bool applied = false;
   for (QGraphicsItem *item : selected) {
     auto *pixmapItem = dynamic_cast<QGraphicsPixmapItem *>(item);
@@ -4980,6 +5025,7 @@ void Canvas::applyScanDocumentToSelection() {
     }
     applied = true;
   }
+  hideBusySpinner();
 
   if (applied)
     emit canvasModified();
@@ -5025,6 +5071,8 @@ void Canvas::applyColorCurvesToSelection() {
     if (sr.isEmpty())
       return;
 
+    showBusySpinner(tr("Adjusting color levels…"));
+
     QImage canvasImage(sr.size().toSize(), QImage::Format_ARGB32);
     canvasImage.fill(backgroundColor_);
     QPainter p(&canvasImage);
@@ -5039,6 +5087,7 @@ void Canvas::applyColorCurvesToSelection() {
       eraserPreview_->show();
 
     QImage newImage = ImageFilters::adjustLevels(canvasImage, opts);
+    hideBusySpinner();
 
     QGraphicsPixmapItem *pixmapItem =
         new QGraphicsPixmapItem(QPixmap::fromImage(newImage));
@@ -5060,6 +5109,7 @@ void Canvas::applyColorCurvesToSelection() {
   }
 
   // Apply to selected pixmap elements
+  showBusySpinner(tr("Adjusting color levels…"));
   bool applied = false;
   for (QGraphicsItem *item : selected) {
     auto *pixmapItem = dynamic_cast<QGraphicsPixmapItem *>(item);
@@ -5077,6 +5127,7 @@ void Canvas::applyColorCurvesToSelection() {
     }
     applied = true;
   }
+  hideBusySpinner();
 
   if (applied)
     emit canvasModified();
@@ -5223,4 +5274,17 @@ void Canvas::placeElement(const QString &elementId) {
   }
   addDrawAction(elem);
   emit canvasModified();
+}
+
+void Canvas::showBusySpinner(const QString &text) {
+  if (busySpinner_) {
+    busySpinner_->setGeometry(rect());
+    busySpinner_->start(text);
+    QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+  }
+}
+
+void Canvas::hideBusySpinner() {
+  if (busySpinner_)
+    busySpinner_->stop();
 }
