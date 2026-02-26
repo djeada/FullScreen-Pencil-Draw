@@ -10,6 +10,7 @@
 #include "../core/recent_files_manager.h"
 #include "../core/scene_controller.h"
 #include "../core/transform_action.h"
+#include "../tools/lasso_selection_tool.h"
 #include "architecture_elements.h"
 #include "image_size_dialog.h"
 #include "latex_text_item.h"
@@ -2706,11 +2707,17 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
 
     lassoPathItem_ = new QGraphicsPathItem();
     QPen dashPen(Qt::DashLine);
-    dashPen.setColor(QColor(100, 149, 237));
+    dashPen.setColor(QColor(LassoSelectionTool::kLassoColorR,
+                            LassoSelectionTool::kLassoColorG,
+                            LassoSelectionTool::kLassoColorB));
     dashPen.setWidth(1);
     dashPen.setCosmetic(true);
     lassoPathItem_->setPen(dashPen);
-    lassoPathItem_->setBrush(QBrush(QColor(100, 149, 237, 30)));
+    lassoPathItem_->setBrush(
+        QBrush(QColor(LassoSelectionTool::kLassoColorR,
+                      LassoSelectionTool::kLassoColorG,
+                      LassoSelectionTool::kLassoColorB,
+                      LassoSelectionTool::kLassoFillAlpha)));
     lassoPathItem_->setZValue(1e9);
     lassoPathItem_->setFlag(QGraphicsItem::ItemIsSelectable, false);
     lassoPathItem_->setFlag(QGraphicsItem::ItemIsMovable, false);

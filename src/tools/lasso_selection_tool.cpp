@@ -30,11 +30,12 @@ void LassoSelectionTool::mousePressEvent(QMouseEvent *event,
   // Create visual feedback path
   lassoPath_ = new QGraphicsPathItem();
   QPen dashPen(Qt::DashLine);
-  dashPen.setColor(QColor(100, 149, 237)); // cornflower blue
+  dashPen.setColor(QColor(kLassoColorR, kLassoColorG, kLassoColorB));
   dashPen.setWidth(1);
   dashPen.setCosmetic(true);
   lassoPath_->setPen(dashPen);
-  lassoPath_->setBrush(QBrush(QColor(100, 149, 237, 30)));
+  lassoPath_->setBrush(
+      QBrush(QColor(kLassoColorR, kLassoColorG, kLassoColorB, kLassoFillAlpha)));
   lassoPath_->setZValue(1e9); // Always on top
   lassoPath_->setFlag(QGraphicsItem::ItemIsSelectable, false);
   lassoPath_->setFlag(QGraphicsItem::ItemIsMovable, false);

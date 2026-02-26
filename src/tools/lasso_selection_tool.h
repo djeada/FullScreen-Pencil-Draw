@@ -19,6 +19,12 @@
  */
 class LassoSelectionTool : public Tool {
 public:
+  // Visual feedback colors shared with Canvas lasso handling
+  static constexpr int kLassoColorR = 100;
+  static constexpr int kLassoColorG = 149;
+  static constexpr int kLassoColorB = 237;
+  static constexpr int kLassoFillAlpha = 30;
+
   explicit LassoSelectionTool(SceneRenderer *renderer);
   ~LassoSelectionTool() override;
 
