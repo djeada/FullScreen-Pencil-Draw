@@ -1042,6 +1042,11 @@ void Canvas::togglePressureSensitivity() {
   emit pressureSensitivityChanged(pressureSensitive_);
 }
 
+void Canvas::setBrushTip(const BrushTip &tip) {
+  brushTip_ = tip;
+  emit brushTipChanged(brushTip_);
+}
+
 void Canvas::lockSelectedItems() {
   if (!scene_)
     return;
