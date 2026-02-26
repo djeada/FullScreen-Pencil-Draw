@@ -49,6 +49,7 @@ class Tool;
 class TransformHandleItem;
 class SceneController;
 class ItemStore;
+class BusySpinnerOverlay;
 
 /**
  * @brief The main drawing canvas widget.
@@ -353,6 +354,11 @@ private:
   SnapEngine snapEngine_;
   SnapResult lastSnapResult_;
   bool hasActiveSnap_ = false;
+
+  // Progress overlay for long-running operations
+  BusySpinnerOverlay *busySpinner_ = nullptr;
+  void showBusySpinner(const QString &text);
+  void hideBusySpinner();
 };
 
 #endif // CANVAS_H
