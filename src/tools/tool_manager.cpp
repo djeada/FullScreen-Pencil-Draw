@@ -14,6 +14,7 @@
 #include "pen_tool.h"
 #include "rectangle_tool.h"
 #include "selection_tool.h"
+#include "lasso_selection_tool.h"
 #include "text_on_path_tool.h"
 #include "text_tool.h"
 #include "tool.h"
@@ -37,6 +38,8 @@ void ToolManager::initializeTools() {
   registerTool(ToolType::Rectangle, std::make_unique<RectangleTool>(renderer_));
   registerTool(ToolType::Circle, std::make_unique<CircleTool>(renderer_));
   registerTool(ToolType::Selection, std::make_unique<SelectionTool>(renderer_));
+  registerTool(ToolType::LassoSelection,
+               std::make_unique<LassoSelectionTool>(renderer_));
   registerTool(ToolType::Pan, std::make_unique<PanTool>(renderer_));
   registerTool(ToolType::Mermaid, std::make_unique<MermaidTool>(renderer_));
   registerTool(ToolType::Bezier, std::make_unique<BezierTool>(renderer_));

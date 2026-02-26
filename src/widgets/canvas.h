@@ -236,6 +236,7 @@ private:
     Pen,
     Eraser,
     Selection,
+    LassoSelection,
     Text,
     Mermaid,
     Fill,
@@ -299,6 +300,11 @@ private:
   bool colorSelectionHasPixels_ = false;
   QGraphicsPixmapItem *colorSelectionOverlay_ = nullptr;
   QHash<ItemId, QPointF> selectionMoveStartPositions_;
+
+  // Lasso selection state
+  QGraphicsPathItem *lassoPathItem_ = nullptr;
+  QVector<QPointF> lassoPoints_;
+  bool lassoDrawing_ = false;
 
   // Drawing state
   QVector<QPointF> pointBuffer_;

@@ -37,6 +37,7 @@ public:
     Rectangle,
     Circle,
     Selection,
+    LassoSelection,
     Pan,
     Mermaid,
     Bezier,
