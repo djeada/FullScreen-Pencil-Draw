@@ -204,8 +204,7 @@ void drawDatabaseIcon(QPainter *p, const QRectF &r, const QColor &accent,
   p->drawRect(QRectF(body.left(), body.top() + ellH * 0.5, body.width(),
                      body.height() - ellH));
   p->drawEllipse(QRectF(body.left(), body.top(), body.width(), ellH));
-  p->drawEllipse(
-      QRectF(body.left(), body.bottom() - ellH, body.width(), ellH));
+  p->drawEllipse(QRectF(body.left(), body.bottom() - ellH, body.width(), ellH));
 
   p->setBrush(Qt::NoBrush);
   QPainterPath mid1;
@@ -314,7 +313,8 @@ void ArchitectureElementItem::paint(QPainter *painter,
   painter->setRenderHint(QPainter::Antialiasing, true);
   painter->setRenderHint(QPainter::TextAntialiasing, true);
 
-  const QColor accent = accentColor_.isValid() ? accentColor_ : QColor("#3b82f6");
+  const QColor accent =
+      accentColor_.isValid() ? accentColor_ : QColor("#3b82f6");
   const QRectF cardRect = boundingRect().adjusted(1.0, 1.0, -1.0, -1.0);
 
   // Soft shadow for depth.
@@ -349,7 +349,8 @@ void ArchitectureElementItem::paint(QPainter *painter,
   painter->restore();
 
   // Icon badge.
-  const QRectF badgeRect((ELEM_W - ICON_SIZE) / 2.0, 12.0, ICON_SIZE, ICON_SIZE);
+  const QRectF badgeRect((ELEM_W - ICON_SIZE) / 2.0, 12.0, ICON_SIZE,
+                         ICON_SIZE);
   QRadialGradient badgeGrad(badgeRect.center(), ICON_SIZE / 2.0);
   badgeGrad.setColorAt(0.0, withAlpha(accent.lighter(145), 90));
   badgeGrad.setColorAt(0.9, withAlpha(accent.darker(140), 120));
@@ -447,8 +448,8 @@ MessageQueueElement::MessageQueueElement(QGraphicsItem *parent)
                               QColor("#ec4899"), parent) {}
 
 DatabaseElement::DatabaseElement(QGraphicsItem *parent)
-    : ArchitectureElementItem("Database", IconKind::Database,
-                              QColor("#06b6d4"), parent) {}
+    : ArchitectureElementItem("Database", IconKind::Database, QColor("#06b6d4"),
+                              parent) {}
 
 ObjectStorageElement::ObjectStorageElement(QGraphicsItem *parent)
     : ArchitectureElementItem("Storage", IconKind::ObjectStorage,

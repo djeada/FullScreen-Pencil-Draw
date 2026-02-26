@@ -23,9 +23,8 @@ void PenTool::mousePressEvent(QMouseEvent *event, const QPointF &scenePos) {
   if (useStroke) {
     // Custom brush tip: use BrushStrokeItem
     QPen pen = renderer_->currentPen();
-    currentStroke_ = new BrushStrokeItem(
-        tip, pen.widthF(), pen.color(),
-        pen.color().alphaF());
+    currentStroke_ = new BrushStrokeItem(tip, pen.widthF(), pen.color(),
+                                         pen.color().alphaF());
     currentStroke_->setFlags(QGraphicsItem::ItemIsSelectable |
                              QGraphicsItem::ItemIsMovable);
     currentItem_ = currentStroke_;

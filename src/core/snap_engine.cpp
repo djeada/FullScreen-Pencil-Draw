@@ -46,10 +46,10 @@ SnapResult SnapEngine::snapToGrid(const QPointF &point) const {
   return result;
 }
 
-void SnapEngine::collectObjectTargets(
-    const QList<QGraphicsItem *> &sceneItems,
-    const QSet<QGraphicsItem *> &excludeItems, QList<qreal> &xTargets,
-    QList<qreal> &yTargets) const {
+void SnapEngine::collectObjectTargets(const QList<QGraphicsItem *> &sceneItems,
+                                      const QSet<QGraphicsItem *> &excludeItems,
+                                      QList<qreal> &xTargets,
+                                      QList<qreal> &yTargets) const {
   for (QGraphicsItem *item : sceneItems) {
     if (!item || excludeItems.contains(item))
       continue;
@@ -73,10 +73,9 @@ void SnapEngine::collectObjectTargets(
   }
 }
 
-SnapResult
-SnapEngine::snap(const QPointF &point,
-                 const QList<QGraphicsItem *> &sceneItems,
-                 const QSet<QGraphicsItem *> &excludeItems) const {
+SnapResult SnapEngine::snap(const QPointF &point,
+                            const QList<QGraphicsItem *> &sceneItems,
+                            const QSet<QGraphicsItem *> &excludeItems) const {
   SnapResult result;
   result.snappedPoint = point;
 

@@ -89,8 +89,7 @@ private slots:
     scene.addItem(rect);
 
     // Point near the left edge of rect (100)
-    SnapResult r =
-        engine.snap(QPointF(103, 70), scene.items());
+    SnapResult r = engine.snap(QPointF(103, 70), scene.items());
     QVERIFY(r.snappedX);
     QCOMPARE(r.snappedPoint.x(), 100.0);
   }
@@ -106,8 +105,7 @@ private slots:
     scene.addItem(rect);
 
     // Center of rect bounding box is (125, 125)
-    SnapResult r =
-        engine.snap(QPointF(123, 127), scene.items());
+    SnapResult r = engine.snap(QPointF(123, 127), scene.items());
     QVERIFY(r.snappedX);
     QVERIFY(r.snappedY);
     QCOMPARE(r.snappedPoint.x(), 125.0);
@@ -128,8 +126,7 @@ private slots:
     QSet<QGraphicsItem *> excludeSet;
     excludeSet.insert(rect);
 
-    SnapResult r =
-        engine.snap(QPointF(103, 103), scene.items(), excludeSet);
+    SnapResult r = engine.snap(QPointF(103, 103), scene.items(), excludeSet);
     QVERIFY(!r.snappedX);
     QVERIFY(!r.snappedY);
     QCOMPARE(r.snappedPoint, QPointF(103, 103));
@@ -145,8 +142,7 @@ private slots:
     rect->setPos(100, 100);
     scene.addItem(rect);
 
-    SnapResult r =
-        engine.snap(QPointF(103, 103), scene.items());
+    SnapResult r = engine.snap(QPointF(103, 103), scene.items());
     QVERIFY(!r.snappedX);
     QVERIFY(!r.snappedY);
   }
@@ -167,8 +163,7 @@ private slots:
 
     // Point at (99, 99) – grid at (100,100) is 1 away, object left edge (105)
     // is 6 away Grid wins on both axes
-    SnapResult r =
-        engine.snap(QPointF(99, 99), scene.items());
+    SnapResult r = engine.snap(QPointF(99, 99), scene.items());
     QCOMPARE(r.snappedPoint.x(), 100.0);
     QCOMPARE(r.snappedPoint.y(), 100.0);
     QVERIFY(r.snappedX);
@@ -189,8 +184,7 @@ private slots:
 
     // Point at (103, 103) – grid at (100,100) is 3 away, object left edge
     // (102) is 1 away. Object wins.
-    SnapResult r =
-        engine.snap(QPointF(103, 103), scene.items());
+    SnapResult r = engine.snap(QPointF(103, 103), scene.items());
     QCOMPARE(r.snappedPoint.x(), 102.0);
     QCOMPARE(r.snappedPoint.y(), 102.0);
     QVERIFY(r.snappedX);
@@ -201,8 +195,7 @@ private slots:
     QGraphicsScene scene;
     SnapEngine engine(20, 10.0);
 
-    SnapResult r =
-        engine.snap(QPointF(123, 456), scene.items());
+    SnapResult r = engine.snap(QPointF(123, 456), scene.items());
     QCOMPARE(r.snappedPoint, QPointF(123, 456));
     QVERIFY(!r.snappedX);
     QVERIFY(!r.snappedY);
@@ -254,8 +247,7 @@ private slots:
     scene.addItem(rect2);
 
     // Point near rect2's left edge (200)
-    SnapResult r =
-        engine.snap(QPointF(202, 202), scene.items());
+    SnapResult r = engine.snap(QPointF(202, 202), scene.items());
     QVERIFY(r.snappedX);
     QVERIFY(r.snappedY);
     QCOMPARE(r.snappedPoint.x(), 200.0);
@@ -273,8 +265,7 @@ private slots:
     rect->setVisible(false);
     scene.addItem(rect);
 
-    SnapResult r =
-        engine.snap(QPointF(103, 103), scene.items());
+    SnapResult r = engine.snap(QPointF(103, 103), scene.items());
     QVERIFY(!r.snappedX);
     QVERIFY(!r.snappedY);
   }

@@ -1,12 +1,13 @@
 /**
  * @file test_text_whitespace.cpp
- * @brief Tests for whitespace preservation in plainTextToHtmlPreservingNewlines.
+ * @brief Tests for whitespace preservation in
+ * plainTextToHtmlPreservingNewlines.
  *
  * The function under test is a static helper inside latex_text_item.cpp.
  * We duplicate its logic here so it can be unit-tested in isolation.
  */
-#include <QTest>
 #include <QString>
+#include <QTest>
 
 // Mirror of the static function in latex_text_item.cpp
 static QString plainTextToHtmlPreservingNewlines(QString text) {
@@ -64,7 +65,8 @@ void TestTextWhitespace::testTab() {
 void TestTextWhitespace::testMultipleTabs() {
   QString result = plainTextToHtmlPreservingNewlines("a\t\tb");
   // Two tabs = eight &nbsp; entities
-  QCOMPARE(result, QString("a&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b"));
+  QCOMPARE(result,
+           QString("a&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b"));
 }
 
 void TestTextWhitespace::testNewlines() {

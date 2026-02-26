@@ -25,12 +25,12 @@ public:
 
   Target target() const;
   bool hardBinarize() const;
-  double threshold() const;        // 0.0–1.0
-  double sharpenStrength() const;  // 0.0–3.0
-  double whitePoint() const;       // 0.0–1.0
-  int noiseLevel() const;          // 0–10
+  double threshold() const;       // 0.0–1.0
+  double sharpenStrength() const; // 0.0–3.0
+  double whitePoint() const;      // 0.0–1.0
+  int noiseLevel() const;         // 0–10
   bool sepiaEnabled() const;
-  double sepiaStrength() const;    // 0.0–1.0
+  double sepiaStrength() const; // 0.0–1.0
   bool vignetteEnabled() const;
   double vignetteStrength() const; // 0.0–1.0
 

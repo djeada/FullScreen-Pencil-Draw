@@ -13,6 +13,7 @@
 #include "../tools/lasso_selection_tool.h"
 #include "architecture_elements.h"
 #include "busy_spinner_overlay.h"
+#include "color_curves_dialog.h"
 #include "image_size_dialog.h"
 #include "latex_text_item.h"
 #include "mermaid_text_item.h"
@@ -20,7 +21,6 @@
 #include "resize_canvas_dialog.h"
 #include "scale_dialog.h"
 #include "scan_document_dialog.h"
-#include "color_curves_dialog.h"
 #include "transform_handle_item.h"
 #include <QApplication>
 #include <QClipboard>
@@ -70,7 +70,7 @@ static const QSet<QString> SUPPORTED_IMAGE_EXTENSIONS = {
 // Image MIME types for clipboard paste fallback
 static const QStringList CLIPBOARD_IMAGE_MIME_TYPES = {
     "image/png", "image/jpeg", "image/bmp",
-    "image/gif", "image/webp",  "image/tiff"};
+    "image/gif", "image/webp", "image/tiff"};
 
 namespace {
 constexpr qreal CURVED_ARROW_BASE_FACTOR = 0.28;
@@ -1567,7 +1567,8 @@ void Canvas::drawForeground(QPainter *painter, const QRectF &rect) {
   QGraphicsView::drawForeground(painter, rect);
 
   // Draw snap guide lines
-  if (hasActiveSnap_ && (lastSnapResult_.snappedX || lastSnapResult_.snappedY)) {
+  if (hasActiveSnap_ &&
+      (lastSnapResult_.snappedX || lastSnapResult_.snappedY)) {
     painter->save();
     QPen guidePen(QColor(0, 180, 255, 180), 0);
     guidePen.setStyle(Qt::DashLine);
@@ -1686,9 +1687,8 @@ QPointF Canvas::snapPoint(const QPointF &point,
       exclude.insert(h);
   }
 
-  SnapResult result =
-      snapEngine_.snap(point, scene_ ? scene_->items() : QList<QGraphicsItem *>(),
-                       exclude);
+  SnapResult result = snapEngine_.snap(
+      point, scene_ ? scene_->items() : QList<QGraphicsItem *>(), exclude);
   lastSnapResult_ = result;
   hasActiveSnap_ = result.snappedX || result.snappedY;
 
@@ -1783,10 +1783,9 @@ void Canvas::duplicateSelectedItems() {
     if (auto g = dynamic_cast<QGraphicsItemGroup *>(item)) {
       // Duplicate entire group
       QGraphicsItemGroup *newGroup = new QGraphicsItemGroup();
-      QPointF groupOffset =
-          (snapToGrid_ || snapToObject_)
-              ? snapPoint(g->pos() + offset)
-              : g->pos() + offset;
+      QPointF groupOffset = (snapToGrid_ || snapToObject_)
+                                ? snapPoint(g->pos() + offset)
+                                : g->pos() + offset;
       newGroup->setPos(groupOffset);
 
       // Duplicate each child item and add to new group
@@ -2607,9 +2606,8 @@ void Canvas::fillAt(const QPointF &point) {
   if (!scene_)
     return;
 
-  fillTopItemAtPoint(scene_, point, fillBrush_, itemStore(),
-                     backgroundImage_, eraserPreview_,
-                     [this](std::unique_ptr<Action> action) {
+  fillTopItemAtPoint(scene_, point, fillBrush_, itemStore(), backgroundImage_,
+                     eraserPreview_, [this](std::unique_ptr<Action> action) {
                        if (action) {
                          addAction(std::move(action));
                        }
@@ -2736,11 +2734,10 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
     dashPen.setWidth(1);
     dashPen.setCosmetic(true);
     lassoPathItem_->setPen(dashPen);
-    lassoPathItem_->setBrush(
-        QBrush(QColor(LassoSelectionTool::kLassoColorR,
-                      LassoSelectionTool::kLassoColorG,
-                      LassoSelectionTool::kLassoColorB,
-                      LassoSelectionTool::kLassoFillAlpha)));
+    lassoPathItem_->setBrush(QBrush(QColor(
+        LassoSelectionTool::kLassoColorR, LassoSelectionTool::kLassoColorG,
+        LassoSelectionTool::kLassoColorB,
+        LassoSelectionTool::kLassoFillAlpha)));
     lassoPathItem_->setZValue(1e9);
     lassoPathItem_->setFlag(QGraphicsItem::ItemIsSelectable, false);
     lassoPathItem_->setFlag(QGraphicsItem::ItemIsMovable, false);
@@ -3561,8 +3558,7 @@ void Canvas::pasteItems() {
           QPixmap pixmap = QPixmap::fromImage(image);
           auto *pixmapItem = new QGraphicsPixmapItem(pixmap);
           pixmapItem->setPos(
-              centerPos -
-              QPointF(pixmap.width() / 2.0, pixmap.height() / 2.0));
+              centerPos - QPointF(pixmap.width() / 2.0, pixmap.height() / 2.0));
           pixmapItem->setFlags(QGraphicsItem::ItemIsSelectable |
                                QGraphicsItem::ItemIsMovable);
           scene_->addItem(pixmapItem);
@@ -3852,8 +3848,8 @@ void Canvas::loadDroppedImage(const QString &filePath,
 
     // Scale using high-quality Lanczos resampling
     showBusySpinner(tr("Scaling image…"));
-    QImage scaledImage = ImageFilters::lanczosResize(
-        pixmap.toImage(), newWidth, newHeight);
+    QImage scaledImage =
+        ImageFilters::lanczosResize(pixmap.toImage(), newWidth, newHeight);
     hideBusySpinner();
     QPixmap scaledPixmap = QPixmap::fromImage(scaledImage);
 
@@ -3896,8 +3892,8 @@ void Canvas::addImageFromScreenshot(const QImage &image) {
     int newHeight = dialog.getHeight();
 
     showBusySpinner(tr("Scaling image…"));
-    QImage scaledImage = ImageFilters::lanczosResize(
-        pixmap.toImage(), newWidth, newHeight);
+    QImage scaledImage =
+        ImageFilters::lanczosResize(pixmap.toImage(), newWidth, newHeight);
     hideBusySpinner();
     QPixmap scaledPixmap = QPixmap::fromImage(scaledImage);
 
@@ -5145,8 +5141,7 @@ void Canvas::exportSingleElementToPNG() {
   QGraphicsItem *item = nullptr;
   for (QGraphicsItem *candidate : selected) {
     if (candidate && candidate != eraserPreview_ &&
-        candidate != backgroundImage_ &&
-        candidate != colorSelectionOverlay_) {
+        candidate != backgroundImage_ && candidate != colorSelectionOverlay_) {
       item = candidate;
       break;
     }
@@ -5187,18 +5182,16 @@ void Canvas::exportSingleElementToPNG() {
 void Canvas::openSingleImage() {
   QString fileFilter =
       "Images (*.png *.jpg *.jpeg *.bmp *.gif *.webp *.tiff *.tif);;All (*)";
-  QString fileName =
-      QFileDialog::getOpenFileName(this, "Open Image (Original Size)", "",
-                                   fileFilter);
+  QString fileName = QFileDialog::getOpenFileName(
+      this, "Open Image (Original Size)", "", fileFilter);
   if (fileName.isEmpty())
     return;
 
   QPixmap pixmap(fileName);
   if (pixmap.isNull()) {
-    QMessageBox::warning(
-        this, "Invalid Image",
-        QString("Failed to load image from '%1'.")
-            .arg(QFileInfo(fileName).fileName()));
+    QMessageBox::warning(this, "Invalid Image",
+                         QString("Failed to load image from '%1'.")
+                             .arg(QFileInfo(fileName).fileName()));
     return;
   }
 
@@ -5210,9 +5203,9 @@ void Canvas::openSingleImage() {
   pixmapItem->setFlag(QGraphicsItem::ItemIsMovable, true);
 
   // Resize canvas to fit the image
-  scene_->setSceneRect(0, 0,
-                       qMax(scene_->sceneRect().width(), (qreal)pixmap.width()),
-                       qMax(scene_->sceneRect().height(), (qreal)pixmap.height()));
+  scene_->setSceneRect(
+      0, 0, qMax(scene_->sceneRect().width(), (qreal)pixmap.width()),
+      qMax(scene_->sceneRect().height(), (qreal)pixmap.height()));
 
   if (sceneController_) {
     sceneController_->addItem(pixmapItem);

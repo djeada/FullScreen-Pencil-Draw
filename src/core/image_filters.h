@@ -35,10 +35,10 @@ struct ScanDocumentOptions {
   // Mode: false = enhance readability (default), true = artistic scan look
   bool hardBinarize = false;
 
-  double threshold = 0.5;        // 0.0–1.0 binarization / contrast strength
-  int noiseLevel = 0;            // 0–10 noise intensity (0 = clean)
+  double threshold = 0.5; // 0.0–1.0 binarization / contrast strength
+  int noiseLevel = 0;     // 0–10 noise intensity (0 = clean)
   bool sepiaEnabled = false;
-  double sepiaStrength = 0.0;    // 0.0–1.0
+  double sepiaStrength = 0.0; // 0.0–1.0
   bool vignetteEnabled = false;
   double vignetteStrength = 0.0; // 0.0–1.0
   double sharpenStrength = 1.5;  // text sharpening (0 = off, up to 3.0)
@@ -63,9 +63,9 @@ QImage scanDocument(const QImage &source,
  */
 struct LevelsOptions {
   // Master channel (applied to R, G, B uniformly)
-  int inputBlack = 0;      // 0–255
-  int inputWhite = 255;    // 0–255
-  double gamma = 1.0;      // 0.1–10.0 (1.0 = linear)
+  int inputBlack = 0;   // 0–255
+  int inputWhite = 255; // 0–255
+  double gamma = 1.0;   // 0.1–10.0 (1.0 = linear)
 
   // Per-channel overrides (applied after master)
   int redInputBlack = 0;
@@ -81,8 +81,8 @@ struct LevelsOptions {
   double blueGamma = 1.0;
 
   // Simple brightness / contrast on top
-  int brightness = 0;  // -100 – +100
-  int contrast = 0;    // -100 – +100
+  int brightness = 0; // -100 – +100
+  int contrast = 0;   // -100 – +100
 };
 
 /**

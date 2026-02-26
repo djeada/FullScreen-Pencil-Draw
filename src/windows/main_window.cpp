@@ -46,9 +46,8 @@ MainWindow::MainWindow(QWidget *parent)
       _elementBankPanel(new ElementBankPanel(this)), _autoSaveManager(nullptr),
       _statusLabel(nullptr), _measurementLabel(nullptr),
       _recentFilesMenu(nullptr), _snapToGridAction(nullptr),
-      _snapToObjectAction(nullptr),
-      _autoSaveAction(nullptr), _rulerAction(nullptr),
-      _measurementAction(nullptr)
+      _snapToObjectAction(nullptr), _autoSaveAction(nullptr),
+      _rulerAction(nullptr), _measurementAction(nullptr)
 #ifdef HAVE_QT_PDF
       ,
       _pdfViewer(nullptr), _thumbnailPanel(nullptr), _centralSplitter(nullptr),

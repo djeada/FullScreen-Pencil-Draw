@@ -74,10 +74,8 @@ QImage blur(const QImage &source, int radius) {
     for (int y = 1; y < h; ++y) {
       int addY = std::min(y + radius, h - 1);
       int remY = std::max(y - radius - 1, 0);
-      QRgb addPx =
-          reinterpret_cast<const QRgb *>(temp.constScanLine(addY))[x];
-      QRgb remPx =
-          reinterpret_cast<const QRgb *>(temp.constScanLine(remY))[x];
+      QRgb addPx = reinterpret_cast<const QRgb *>(temp.constScanLine(addY))[x];
+      QRgb remPx = reinterpret_cast<const QRgb *>(temp.constScanLine(remY))[x];
       rSum += qRed(addPx) - qRed(remPx);
       gSum += qGreen(addPx) - qGreen(remPx);
       bSum += qBlue(addPx) - qBlue(remPx);
@@ -260,7 +258,7 @@ QImage scanDocument(const QImage &source, const ScanDocumentOptions &opts) {
         int g = static_cast<int>(gr + s * (sepG - gr));
         int b = static_cast<int>(gr + s * (sepB - gr));
         dst[x] = qRgba(std::clamp(r, 0, 255), std::clamp(g, 0, 255),
-                        std::clamp(b, 0, 255), qAlpha(src[x]));
+                       std::clamp(b, 0, 255), qAlpha(src[x]));
       }
     }
   } else {
@@ -284,7 +282,7 @@ QImage scanDocument(const QImage &source, const ScanDocumentOptions &opts) {
         int g = static_cast<int>(qGreen(row[x]) * factor);
         int b = static_cast<int>(qBlue(row[x]) * factor);
         row[x] = qRgba(std::clamp(r, 0, 255), std::clamp(g, 0, 255),
-                        std::clamp(b, 0, 255), qAlpha(row[x]));
+                       std::clamp(b, 0, 255), qAlpha(row[x]));
       }
     }
   }
@@ -306,7 +304,8 @@ static void buildLUT(int inputBlack, int inputWhite, double gamma,
     double v = (i - inputBlack) / range;
     v = std::clamp(v, 0.0, 1.0);
     v = std::pow(v, invGamma);
-    lut[i] = static_cast<uint8_t>(std::clamp(static_cast<int>(v * 255.0 + 0.5), 0, 255));
+    lut[i] = static_cast<uint8_t>(
+        std::clamp(static_cast<int>(v * 255.0 + 0.5), 0, 255));
   }
 }
 
@@ -347,7 +346,8 @@ QImage adjustLevels(const QImage &source, const LevelsOptions &opts) {
       auto applyBC = [&](uint8_t v) -> uint8_t {
         double d = v;
         d = (d - 127.5) * cFactor + 127.5 + bOffset;
-        return static_cast<uint8_t>(std::clamp(static_cast<int>(d + 0.5), 0, 255));
+        return static_cast<uint8_t>(
+            std::clamp(static_cast<int>(d + 0.5), 0, 255));
       };
       redLUT[i] = applyBC(redLUT[i]);
       greenLUT[i] = applyBC(greenLUT[i]);
@@ -363,7 +363,7 @@ QImage adjustLevels(const QImage &source, const LevelsOptions &opts) {
     for (int x = 0; x < w; ++x) {
       QRgb px = srcRow[x];
       dstRow[x] = qRgba(redLUT[qRed(px)], greenLUT[qGreen(px)],
-                         blueLUT[qBlue(px)], qAlpha(px));
+                        blueLUT[qBlue(px)], qAlpha(px));
     }
   }
 
@@ -402,8 +402,7 @@ QImage lanczosResize(const QImage &source, int newWidth, int newHeight) {
     const double xRatio = static_cast<double>(srcW) / newWidth;
     const double xFilterRadius = std::max(1.0, xRatio) * A;
     for (int y = 0; y < srcH; ++y) {
-      const auto *srcRow =
-          reinterpret_cast<const QRgb *>(img.constScanLine(y));
+      const auto *srcRow = reinterpret_cast<const QRgb *>(img.constScanLine(y));
       auto *dstRow = reinterpret_cast<QRgb *>(hPass.scanLine(y));
       for (int x = 0; x < newWidth; ++x) {
         double center = (x + 0.5) * xRatio - 0.5;
@@ -429,11 +428,10 @@ QImage lanczosResize(const QImage &source, int newWidth, int newHeight) {
           bSum /= wSum;
           aSum /= wSum;
         }
-        dstRow[x] =
-            qRgba(std::clamp(static_cast<int>(rSum + 0.5), 0, 255),
-                   std::clamp(static_cast<int>(gSum + 0.5), 0, 255),
-                   std::clamp(static_cast<int>(bSum + 0.5), 0, 255),
-                   std::clamp(static_cast<int>(aSum + 0.5), 0, 255));
+        dstRow[x] = qRgba(std::clamp(static_cast<int>(rSum + 0.5), 0, 255),
+                          std::clamp(static_cast<int>(gSum + 0.5), 0, 255),
+                          std::clamp(static_cast<int>(bSum + 0.5), 0, 255),
+                          std::clamp(static_cast<int>(aSum + 0.5), 0, 255));
       }
     }
   }
@@ -455,8 +453,7 @@ QImage lanczosResize(const QImage &source, int newWidth, int newHeight) {
         for (int sy = top; sy <= bottom; ++sy) {
           double dist = (sy - center) / std::max(1.0, yRatio);
           double w = lanczosKernel(dist);
-          QRgb px =
-              reinterpret_cast<const QRgb *>(hPass.constScanLine(sy))[x];
+          QRgb px = reinterpret_cast<const QRgb *>(hPass.constScanLine(sy))[x];
           rSum += qRed(px) * w;
           gSum += qGreen(px) * w;
           bSum += qBlue(px) * w;
@@ -471,9 +468,9 @@ QImage lanczosResize(const QImage &source, int newWidth, int newHeight) {
         }
         reinterpret_cast<QRgb *>(result.scanLine(y))[x] =
             qRgba(std::clamp(static_cast<int>(rSum + 0.5), 0, 255),
-                   std::clamp(static_cast<int>(gSum + 0.5), 0, 255),
-                   std::clamp(static_cast<int>(bSum + 0.5), 0, 255),
-                   std::clamp(static_cast<int>(aSum + 0.5), 0, 255));
+                  std::clamp(static_cast<int>(gSum + 0.5), 0, 255),
+                  std::clamp(static_cast<int>(bSum + 0.5), 0, 255),
+                  std::clamp(static_cast<int>(aSum + 0.5), 0, 255));
       }
     }
   }

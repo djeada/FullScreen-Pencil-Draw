@@ -55,8 +55,8 @@ QImage BrushTip::renderTip(qreal size, const QColor &color,
   }
   case BrushTipShape::Stamp: {
     if (!tipImage_.isNull()) {
-      QImage scaled =
-          tipImage_.scaled(dim, dim, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+      QImage scaled = tipImage_.scaled(dim, dim, Qt::KeepAspectRatio,
+                                       Qt::SmoothTransformation);
       p.setOpacity(opacity);
       p.drawImage(-scaled.width() / 2, -scaled.height() / 2, scaled);
     } else {

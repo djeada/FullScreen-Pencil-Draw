@@ -256,12 +256,9 @@ ToolPanel::ToolPanel(QWidget *parent)
   mainLayout->addWidget(brushTipLabel);
 
   brushTipCombo_ = new QComboBox(container);
-  brushTipCombo_->addItem("● Round",
-                          static_cast<int>(BrushTipShape::Round));
-  brushTipCombo_->addItem("⌿ Chisel",
-                          static_cast<int>(BrushTipShape::Chisel));
-  brushTipCombo_->addItem("✦ Stamp",
-                          static_cast<int>(BrushTipShape::Stamp));
+  brushTipCombo_->addItem("● Round", static_cast<int>(BrushTipShape::Round));
+  brushTipCombo_->addItem("⌿ Chisel", static_cast<int>(BrushTipShape::Chisel));
+  brushTipCombo_->addItem("✦ Stamp", static_cast<int>(BrushTipShape::Stamp));
   brushTipCombo_->addItem("▒ Textured",
                           static_cast<int>(BrushTipShape::Textured));
   brushTipCombo_->setToolTip(
@@ -443,8 +440,7 @@ ToolPanel::ToolPanel(QWidget *parent)
                            static_cast<int>(Qt::DiagCrossPattern));
   fillStyleCombo_->addItem("Horizontal Lines",
                            static_cast<int>(Qt::HorPattern));
-  fillStyleCombo_->addItem("Vertical Lines",
-                           static_cast<int>(Qt::VerPattern));
+  fillStyleCombo_->addItem("Vertical Lines", static_cast<int>(Qt::VerPattern));
   fillStyleCombo_->addItem("Forward Diagonal",
                            static_cast<int>(Qt::FDiagPattern));
   fillStyleCombo_->addItem("Backward Diagonal",
@@ -688,12 +684,12 @@ void ToolPanel::clearActiveToolStyles() {
 
 void ToolPanel::setActiveTool(const QString &toolName) {
   static const QHash<QString, QString> toolIcons = {
-      {"Pen", "✎"},       {"Eraser", "⌫"}, {"Text", "T"},
-      {"Mermaid", "⬡"},   {"Fill", "◉"},   {"ColorSelect", "◎"},
-      {"Line", "╱"},      {"Arrow", "➤"},  {"CurvedArrow", "↪"},
-      {"Rectangle", "▢"}, {"Circle", "◯"}, {"Select", "⬚"},
-      {"LassoSelect", "⛶"},
-      {"Pan", "☰"},       {"Bezier", "⌇"}, {"TextOnPath", "⌇T"}};
+      {"Pen", "✎"},         {"Eraser", "⌫"}, {"Text", "T"},
+      {"Mermaid", "⬡"},     {"Fill", "◉"},   {"ColorSelect", "◎"},
+      {"Line", "╱"},        {"Arrow", "➤"},  {"CurvedArrow", "↪"},
+      {"Rectangle", "▢"},   {"Circle", "◯"}, {"Select", "⬚"},
+      {"LassoSelect", "⛶"}, {"Pan", "☰"},    {"Bezier", "⌇"},
+      {"TextOnPath", "⌇T"}};
   QString icon = toolIcons.value(toolName, "•");
   activeToolLabel->setText(icon + " " + toolName);
 }

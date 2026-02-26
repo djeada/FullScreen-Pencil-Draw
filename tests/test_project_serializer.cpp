@@ -472,8 +472,8 @@ private slots:
     QVERIFY(layer);
     QCOMPARE(layer->itemCount(), 1);
 
-    auto *loadedRect2 =
-        dynamic_cast<QGraphicsRectItem *>(store2.item(layer->itemIds().first()));
+    auto *loadedRect2 = dynamic_cast<QGraphicsRectItem *>(
+        store2.item(layer->itemIds().first()));
     QVERIFY(loadedRect2);
 
     const QBrush &loadedBrush = loadedRect2->brush();
@@ -568,8 +568,8 @@ private slots:
 
     Layer *layer = manager2.layer(0);
     QVERIFY(layer);
-    auto *loadedRect2 =
-        dynamic_cast<QGraphicsRectItem *>(store2.item(layer->itemIds().first()));
+    auto *loadedRect2 = dynamic_cast<QGraphicsRectItem *>(
+        store2.item(layer->itemIds().first()));
     QVERIFY(loadedRect2);
     QCOMPARE(loadedRect2->brush().style(), Qt::CrossPattern);
     QCOMPARE(loadedRect2->brush().color(), QColor(Qt::cyan));
