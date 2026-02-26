@@ -1,10 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
-  <rect x="5.3" y="8.1" width="13.4" height="7.8" stroke="#DDE3F0" stroke-width="1.25"/>
-  <ellipse cx="5.3" cy="12" rx="2.2" ry="3.9" stroke="#DDE3F0" stroke-width="1.25"/>
-  <ellipse cx="18.7" cy="12" rx="2.2" ry="3.9" stroke="#DDE3F0" stroke-width="1.25"/>
-  <rect x="6.6" y="10" width="1.8" height="4" stroke="#DDE3F0" stroke-width="1"/>
-  <rect x="9.1" y="10" width="1.8" height="4" stroke="#DDE3F0" stroke-width="1"/>
-  <rect x="11.6" y="10" width="1.8" height="4" stroke="#DDE3F0" stroke-width="1"/>
-  <rect x="14.1" y="10" width="1.8" height="4" stroke="#DDE3F0" stroke-width="1"/>
-  <rect x="16.6" y="10" width="1.8" height="4" stroke="#DDE3F0" stroke-width="1"/>
+  <!-- Horizontal pipe body -->
+  <rect x="4" y="7.5" width="16" height="9" rx="3.2" stroke="#DDE3F0" stroke-width="1.25"/>
+  <!-- Three message items inside the pipe -->
+  <rect x="6" y="9.5" width="2.8" height="5" rx="0.6" stroke="#DDE3F0" stroke-width="0.9"/>
+  <rect x="10.6" y="9.5" width="2.8" height="5" rx="0.6" stroke="#DDE3F0" stroke-width="0.9"/>
+  <rect x="15.2" y="9.5" width="2.8" height="5" rx="0.6" stroke="#DDE3F0" stroke-width="0.9"/>
+  <!-- Enqueue arrow (left) -->
+  <line x1="1" y1="12" x2="3.5" y2="12" stroke="#DDE3F0" stroke-width="1.25" stroke-linecap="round"/>
+  <polyline points="2.2,10.4 3.8,12 2.2,13.6" stroke="#DDE3F0" stroke-width="1" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Dequeue arrow (right) -->
+  <line x1="20.5" y1="12" x2="23" y2="12" stroke="#DDE3F0" stroke-width="1.25" stroke-linecap="round"/>
+  <polyline points="21.8,10.4 23.4,12 21.8,13.6" stroke="#DDE3F0" stroke-width="1" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
