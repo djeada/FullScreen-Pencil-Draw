@@ -888,7 +888,7 @@ void ToolPanel::onFillStyleChanged(int index) {
   emit fillBrushSelected(brush);
 }
 
-void ToolPanel::onBrushTipChanged(int /*index*/) {
+void ToolPanel::onBrushTipChanged(int) {
   if (!brushTipCombo_)
     return;
   int data = brushTipCombo_->currentData().toInt();

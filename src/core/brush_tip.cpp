@@ -35,7 +35,7 @@ QPainterPath BrushTip::tipShape(qreal size) const {
 
 QImage BrushTip::renderTip(qreal size, const QColor &color,
                            qreal opacity) const {
-  int dim = qMax(1, static_cast<int>(qCeil(size)));
+  int dim = qBound(1, static_cast<int>(qCeil(size)), 4096);
   QImage img(dim, dim, QImage::Format_ARGB32_Premultiplied);
   img.fill(Qt::transparent);
 
