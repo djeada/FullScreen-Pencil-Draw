@@ -278,6 +278,10 @@ void MainWindow::setupConnections() {
   connect(_toolPanel, &ToolPanel::pressureSensitivityToggled, _canvas,
           &Canvas::togglePressureSensitivity);
 
+  // Brush tip
+  connect(_toolPanel, &ToolPanel::brushTipSelected, _canvas,
+          &Canvas::setBrushTip);
+
   // Element bank
   connect(_elementBankPanel, &ElementBankPanel::elementSelected, _canvas,
           &Canvas::placeElement);

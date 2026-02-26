@@ -16,6 +16,7 @@
 #include <QScrollBar>
 #include <memory>
 
+#include "brush_tip.h"
 #include "item_id.h"
 #include "scene_controller.h"
 
@@ -52,6 +53,15 @@ public:
    */
   virtual QBrush currentBrush() const {
     return QBrush(currentPen().color());
+  }
+
+  /**
+   * @brief Get the current brush tip (shape, angle, texture)
+   * @return Reference to the current BrushTip
+   */
+  virtual const BrushTip &currentBrushTip() const {
+    static BrushTip defaultTip;
+    return defaultTip;
   }
 
   /**
