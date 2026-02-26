@@ -202,6 +202,9 @@ void MainWindow::setupConnections() {
     connect(_toolPanel, &ToolPanel::selectionSelected, this, [this]() {
       _pdfViewer->setToolType(ToolManager::ToolType::Selection);
     });
+    connect(_toolPanel, &ToolPanel::lassoSelectionSelected, this, [this]() {
+      _pdfViewer->setToolType(ToolManager::ToolType::LassoSelection);
+    });
     connect(_toolPanel, &ToolPanel::bezierSelected, this, [this]() {
       _pdfViewer->setToolType(ToolManager::ToolType::Bezier);
     });
@@ -230,6 +233,8 @@ void MainWindow::setupConnections() {
           [this]() { _canvas->setShape("Line"); });
   connect(_toolPanel, &ToolPanel::selectionSelected, _canvas,
           [this]() { _canvas->setShape("Selection"); });
+  connect(_toolPanel, &ToolPanel::lassoSelectionSelected, _canvas,
+          [this]() { _canvas->setShape("LassoSelection"); });
 
   // Edit operations
   connect(_toolPanel, &ToolPanel::copyAction, _canvas,
@@ -791,6 +796,10 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
   } else if (event->key() == Qt::Key_C &&
              !(event->modifiers() & Qt::ControlModifier)) {
     _toolPanel->onActionCircle();
+  } else if (event->key() == Qt::Key_S &&
+             !(event->modifiers() & Qt::ControlModifier) &&
+             (event->modifiers() & Qt::ShiftModifier)) {
+    _toolPanel->onActionLassoSelection();
   } else if (event->key() == Qt::Key_S &&
              !(event->modifiers() & Qt::ControlModifier)) {
     _toolPanel->onActionSelection();

@@ -172,6 +172,12 @@ ToolPanel::ToolPanel(QWidget *parent)
   connect(actionSelection, &QAction::triggered, this,
           &ToolPanel::onActionSelection);
 
+  actionLassoSelection = new QAction("⛶ Lasso", this);
+  actionLassoSelection->setToolTip("Lasso selection (Shift+S)");
+  actionLassoSelection->setCheckable(true);
+  connect(actionLassoSelection, &QAction::triggered, this,
+          &ToolPanel::onActionLassoSelection);
+
   actionPan = new QAction("☰ Pan", this);
   actionPan->setToolTip("Pan canvas (H)");
   actionPan->setCheckable(true);
@@ -182,6 +188,7 @@ ToolPanel::ToolPanel(QWidget *parent)
   navLayout->setSpacing(4);
   navLayout->setContentsMargins(0, 0, 0, 0);
   navLayout->addWidget(createToolButton(actionSelection, navWidget));
+  navLayout->addWidget(createToolButton(actionLassoSelection, navWidget));
   navLayout->addWidget(createToolButton(actionPan, navWidget));
   navWidget->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
   mainLayout->addWidget(navWidget, 0, Qt::AlignHCenter);
@@ -626,6 +633,7 @@ void ToolPanel::clearActiveToolStyles() {
   actionRectangle->setChecked(false);
   actionCircle->setChecked(false);
   actionSelection->setChecked(false);
+  actionLassoSelection->setChecked(false);
   actionBezier->setChecked(false);
   actionTextOnPath->setChecked(false);
   actionPan->setChecked(false);
@@ -637,6 +645,7 @@ void ToolPanel::setActiveTool(const QString &toolName) {
       {"Mermaid", "⬡"},   {"Fill", "◉"},   {"ColorSelect", "◎"},
       {"Line", "╱"},      {"Arrow", "➤"},  {"CurvedArrow", "↪"},
       {"Rectangle", "▢"}, {"Circle", "◯"}, {"Select", "⬚"},
+      {"LassoSelect", "⛶"},
       {"Pan", "☰"},       {"Bezier", "⌇"}, {"TextOnPath", "⌇T"}};
   QString icon = toolIcons.value(toolName, "•");
   activeToolLabel->setText(icon + " " + toolName);
@@ -756,6 +765,13 @@ void ToolPanel::onActionSelection() {
   setActiveTool("Select");
   emit shapeSelected("Selection");
   emit selectionSelected();
+}
+void ToolPanel::onActionLassoSelection() {
+  clearActiveToolStyles();
+  actionLassoSelection->setChecked(true);
+  setActiveTool("LassoSelect");
+  emit shapeSelected("LassoSelection");
+  emit lassoSelectionSelected();
 }
 void ToolPanel::onActionPan() {
   clearActiveToolStyles();

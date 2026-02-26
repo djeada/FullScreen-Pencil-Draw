@@ -32,6 +32,7 @@ signals:
   void circleSelected();
   void lineSelected();
   void selectionSelected();
+  void lassoSelectionSelected();
   void penSelected();
   void eraserSelected();
   void textSelected();
@@ -72,6 +73,7 @@ private:
   QAction *actionCircle;
   QAction *actionLine;
   QAction *actionSelection;
+  QAction *actionLassoSelection;
   QAction *actionPen;
   QAction *actionEraser;
   QAction *actionText;
@@ -135,6 +137,7 @@ public slots:
   void onActionCircle();
   void onActionLine();
   void onActionSelection();
+  void onActionLassoSelection();
   void onActionPen();
   void onActionEraser();
   void onActionText();

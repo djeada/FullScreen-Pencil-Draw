@@ -648,6 +648,10 @@ void Canvas::setShape(const QString &shapeType) {
     currentShape_ = Selection;
     setCursor(Qt::ArrowCursor);
     this->setDragMode(QGraphicsView::RubberBandDrag);
+  } else if (shapeType == "LassoSelection") {
+    currentShape_ = LassoSelection;
+    setCursor(Qt::CrossCursor);
+    this->setDragMode(QGraphicsView::NoDrag);
   } else if (shapeType == "ColorSelect") {
     currentShape_ = ColorSelect;
     setCursor(Qt::PointingHandCursor);
@@ -668,7 +672,7 @@ void Canvas::setShape(const QString &shapeType) {
       }
     }
   }
-  if (currentShape_ != Selection) {
+  if (currentShape_ != Selection && currentShape_ != LassoSelection) {
     scene_->clearSelection();
     this->setDragMode(QGraphicsView::NoDrag);
     clearTransformHandles();
@@ -2694,6 +2698,29 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
     trackingSelectionMove_ = !selectionMoveStartPositions_.isEmpty();
     return;
   }
+  if (currentShape_ == LassoSelection) {
+    scene_->clearSelection();
+    lassoPoints_.clear();
+    lassoPoints_.append(sp);
+    lassoDrawing_ = true;
+
+    lassoPathItem_ = new QGraphicsPathItem();
+    QPen dashPen(Qt::DashLine);
+    dashPen.setColor(QColor(100, 149, 237));
+    dashPen.setWidth(1);
+    dashPen.setCosmetic(true);
+    lassoPathItem_->setPen(dashPen);
+    lassoPathItem_->setBrush(QBrush(QColor(100, 149, 237, 30)));
+    lassoPathItem_->setZValue(1e9);
+    lassoPathItem_->setFlag(QGraphicsItem::ItemIsSelectable, false);
+    lassoPathItem_->setFlag(QGraphicsItem::ItemIsMovable, false);
+
+    QPainterPath path;
+    path.moveTo(sp);
+    lassoPathItem_->setPath(path);
+    scene_->addItem(lassoPathItem_);
+    return;
+  }
   if (currentShape_ == Pan) {
     isPanning_ = true;
     lastPanPoint_ = event->pos();
@@ -2831,6 +2858,21 @@ void Canvas::mouseMoveEvent(QMouseEvent *event) {
     }
   }
 
+  if (currentShape_ == LassoSelection) {
+    if (lassoDrawing_ && (event->buttons() & Qt::LeftButton) &&
+        lassoPathItem_) {
+      lassoPoints_.append(cp);
+      QPainterPath path;
+      path.moveTo(lassoPoints_.first());
+      for (int i = 1; i < lassoPoints_.size(); ++i) {
+        path.lineTo(lassoPoints_.at(i));
+      }
+      path.lineTo(lassoPoints_.first());
+      lassoPathItem_->setPath(path);
+    }
+    return;
+  }
+
   if (currentShape_ == Selection) {
     QGraphicsView::mouseMoveEvent(event);
     if ((event->buttons() & Qt::LeftButton) && !transformHandles_.isEmpty()) {
@@ -2927,6 +2969,49 @@ void Canvas::mouseReleaseEvent(QMouseEvent *event) {
   // Clear snap guides on release
   hasActiveSnap_ = false;
   viewport()->update();
+  if (currentShape_ == LassoSelection) {
+    if (lassoDrawing_) {
+      lassoDrawing_ = false;
+
+      // Build closed polygon path
+      QPainterPath selectionPath;
+      if (lassoPoints_.size() >= 3) {
+        selectionPath.moveTo(lassoPoints_.first());
+        for (int i = 1; i < lassoPoints_.size(); ++i) {
+          selectionPath.lineTo(lassoPoints_.at(i));
+        }
+        selectionPath.closeSubpath();
+      }
+
+      // Remove visual overlay
+      if (lassoPathItem_) {
+        scene_->removeItem(lassoPathItem_);
+        delete lassoPathItem_;
+        lassoPathItem_ = nullptr;
+      }
+
+      // Select items inside the lasso
+      if (!selectionPath.isEmpty()) {
+        const QList<QGraphicsItem *> allItems = scene_->items();
+        for (QGraphicsItem *item : allItems) {
+          if (!item)
+            continue;
+          if (item == eraserPreview_ || item == backgroundImage_ ||
+              item == colorSelectionOverlay_)
+            continue;
+          if (!(item->flags() & QGraphicsItem::ItemIsSelectable))
+            continue;
+          QPainterPath mappedPath = item->mapFromScene(selectionPath);
+          if (item->shape().intersects(mappedPath)) {
+            item->setSelected(true);
+          }
+        }
+      }
+
+      lassoPoints_.clear();
+    }
+    return;
+  }
   if (currentShape_ == Selection) {
     QGraphicsView::mouseReleaseEvent(event);
     if (!transformHandles_.isEmpty()) {
