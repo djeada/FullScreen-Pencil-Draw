@@ -7,7 +7,6 @@
 #include <QPainter>
 
 BusySpinnerOverlay::BusySpinnerOverlay(QWidget *parent) : QWidget(parent) {
-  setAttribute(Qt::WA_TransparentForMouseEvents, false);
   setVisible(false);
 
   connect(&animationTimer_, &QTimer::timeout, this, [this]() {

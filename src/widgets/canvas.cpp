@@ -5183,7 +5183,7 @@ void Canvas::showBusySpinner(const QString &text) {
   if (busySpinner_) {
     busySpinner_->setGeometry(rect());
     busySpinner_->start(text);
-    QApplication::processEvents();
+    QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
   }
 }
 
