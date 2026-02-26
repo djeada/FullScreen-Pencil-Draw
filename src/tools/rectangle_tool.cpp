@@ -13,7 +13,7 @@ QGraphicsItem *RectangleTool::createShape(const QPointF &startPos) {
   auto *rect = new QGraphicsRectItem(QRectF(startPos, startPos));
   rect->setPen(renderer_->currentPen());
   if (renderer_->isFilledShapes()) {
-    rect->setBrush(renderer_->currentPen().color());
+    rect->setBrush(renderer_->currentBrush());
   }
   return rect;
 }

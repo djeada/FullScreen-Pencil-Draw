@@ -108,12 +108,15 @@ void applyTintState(QGraphicsPixmapItem *pixmap,
   effect->setStrength(state.strength);
 }
 
-bool applyFillToItem(QGraphicsItem *item, ItemStore *store, const QColor &color,
+bool applyFillToItem(QGraphicsItem *item, ItemStore *store,
+                     const QBrush &brush,
                      std::unique_ptr<Action> &outAction) {
   outAction.reset();
   if (!item) {
     return false;
   }
+
+  const QColor color = brush.color();
 
   if (auto *group = dynamic_cast<QGraphicsItemGroup *>(item)) {
     std::vector<std::unique_ptr<Action>> groupActions;
@@ -121,7 +124,7 @@ bool applyFillToItem(QGraphicsItem *item, ItemStore *store, const QColor &color,
     const QList<QGraphicsItem *> children = group->childItems();
     for (QGraphicsItem *child : children) {
       std::unique_ptr<Action> childAction;
-      if (applyFillToItem(child, store, color, childAction)) {
+      if (applyFillToItem(child, store, brush, childAction)) {
         changed = true;
         if (childAction) {
           groupActions.push_back(std::move(childAction));
@@ -153,14 +156,13 @@ bool applyFillToItem(QGraphicsItem *item, ItemStore *store, const QColor &color,
     bool changed = false;
 
     const QBrush oldBrush = polygon->brush();
-    const QBrush newBrush(color);
-    if (oldBrush != newBrush) {
-      polygon->setBrush(newBrush);
+    if (oldBrush != brush) {
+      polygon->setBrush(brush);
       changed = true;
       ItemId id = resolveItemId();
       if (store && id.isValid()) {
         actions.push_back(
-            std::make_unique<FillAction>(id, store, oldBrush, newBrush));
+            std::make_unique<FillAction>(id, store, oldBrush, brush));
       }
     }
 
@@ -213,14 +215,13 @@ bool applyFillToItem(QGraphicsItem *item, ItemStore *store, const QColor &color,
 
   if (auto *shape = dynamic_cast<QAbstractGraphicsShapeItem *>(item)) {
     const QBrush oldBrush = shape->brush();
-    const QBrush newBrush(color);
-    if (oldBrush == newBrush) {
+    if (oldBrush == brush) {
       return false;
     }
-    shape->setBrush(newBrush);
+    shape->setBrush(brush);
     ItemId id = resolveItemId();
     if (store && id.isValid()) {
-      outAction = std::make_unique<FillAction>(id, store, oldBrush, newBrush);
+      outAction = std::make_unique<FillAction>(id, store, oldBrush, brush);
     }
     return true;
   }
@@ -295,7 +296,7 @@ bool applyFillToItem(QGraphicsItem *item, ItemStore *store, const QColor &color,
 } // namespace
 
 bool fillTopItemAtPoint(
-    QGraphicsScene *scene, const QPointF &point, const QColor &color,
+    QGraphicsScene *scene, const QPointF &point, const QBrush &brush,
     ItemStore *store, QGraphicsItem *backgroundItem,
     QGraphicsItem *extraSkipItem,
     const std::function<void(std::unique_ptr<Action>)> &pushAction) {
@@ -321,7 +322,7 @@ bool fillTopItemAtPoint(
     visitedTargets.insert(target);
 
     std::unique_ptr<Action> action;
-    if (applyFillToItem(target, store, color, action)) {
+    if (applyFillToItem(target, store, brush, action)) {
       if (action && pushAction) {
         pushAction(std::move(action));
       }

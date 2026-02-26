@@ -87,6 +87,7 @@ public:
   QGraphicsScene *scene() const override { return scene_; }
   const QPen &currentPen() const override { return currentPen_; }
   const QPen &eraserPen() const override { return eraserPen_; }
+  QBrush currentBrush() const override { return fillBrush_; }
   QGraphicsPixmapItem *backgroundImageItem() const override {
     return backgroundImage_;
   }
@@ -123,6 +124,7 @@ signals:
   void opacityChanged(int opacity);
   void cursorPositionChanged(const QPointF &pos);
   void filledShapesChanged(bool filled);
+  void fillBrushChanged(const QBrush &brush);
   void snapToGridChanged(bool enabled);
   void snapToObjectChanged(bool enabled);
   void canvasModified();
@@ -167,6 +169,7 @@ public slots:
   void newCanvas(int width, int height, const QColor &bgColor);
   void toggleGrid();
   void toggleFilledShapes();
+  void setFillBrush(const QBrush &brush);
   void toggleSnapToGrid();
   void toggleSnapToObject();
   void toggleRuler();
@@ -246,6 +249,7 @@ private:
   LayerManager *layerManager_;
   QPen currentPen_;
   QPen eraserPen_;
+  QBrush fillBrush_;
   ShapeType currentShape_;
   QPointF startPoint_;
   QPointF lastPanPoint_;

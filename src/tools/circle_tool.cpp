@@ -13,7 +13,7 @@ QGraphicsItem *CircleTool::createShape(const QPointF &startPos) {
   auto *ellipse = new QGraphicsEllipseItem(QRectF(startPos, startPos));
   ellipse->setPen(renderer_->currentPen());
   if (renderer_->isFilledShapes()) {
-    ellipse->setBrush(renderer_->currentPen().color());
+    ellipse->setBrush(renderer_->currentBrush());
   }
   return ellipse;
 }
