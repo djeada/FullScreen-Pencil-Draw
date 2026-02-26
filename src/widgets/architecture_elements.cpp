@@ -159,38 +159,38 @@ void drawCacheIcon(QPainter *p, const QRectF &r, const QColor &accent,
 
 void drawQueueIcon(QPainter *p, const QRectF &r, const QColor &accent,
                    qreal stroke) {
-  const qreal s = stroke * 0.74;
+  const qreal s = stroke * 0.82;
   p->setPen(QPen(accent, s, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
 
-  // Kafka-like event-log cylinder: straight body + vertical oval ends.
-  const QRectF barrel = uvRect(r, 0.18, 0.35, 0.64, 0.30);
-  const qreal capW = barrel.height() * 0.56;
-  const QRectF leftCap(barrel.left() - capW * 0.5, barrel.top(), capW,
-                       barrel.height());
-  const QRectF rightCap(barrel.right() - capW * 0.5, barrel.top(), capW,
-                        barrel.height());
+  // Horizontal rounded pipe / channel body.
+  const QRectF pipe = uvRect(r, 0.12, 0.28, 0.76, 0.44);
+  const qreal pipeCorner = pipe.height() * 0.38;
+  QLinearGradient pipeGrad(pipe.topLeft(), pipe.bottomLeft());
+  pipeGrad.setColorAt(0.0, withAlpha(accent.lighter(130), 38));
+  pipeGrad.setColorAt(1.0, withAlpha(accent.darker(115), 18));
+  p->setBrush(pipeGrad);
+  p->drawRoundedRect(pipe, pipeCorner, pipeCorner);
 
-  QLinearGradient bodyGrad(barrel.topLeft(), barrel.bottomLeft());
-  bodyGrad.setColorAt(0.0, withAlpha(accent.lighter(136), 40));
-  bodyGrad.setColorAt(1.0, withAlpha(accent.darker(122), 20));
-  p->setBrush(bodyGrad);
-  p->drawRect(barrel);
-  p->drawEllipse(leftCap);
-  p->drawEllipse(rightCap);
-
-  // Segment slots inside the event log.
-  p->setBrush(withAlpha(accent, 28));
-  const qreal slotH = barrel.height() * 0.50;
-  const qreal slotY = barrel.center().y() - slotH * 0.5;
-  const qreal startX = barrel.left() + barrel.width() * 0.08;
-  const qreal usableW = barrel.width() * 0.84;
-  const int slotCount = 5;
-  const qreal gap = barrel.width() * 0.04;
-  const qreal slotW = (usableW - gap * (slotCount - 1)) / slotCount;
-  for (int i = 0; i < slotCount; ++i) {
-    const qreal x = startX + i * (slotW + gap);
-    p->drawRect(QRectF(x, slotY, slotW, slotH));
+  // Three message packets queued inside.
+  p->setBrush(withAlpha(accent.lighter(120), 90));
+  const qreal itemH = pipe.height() * 0.52;
+  const qreal itemY = pipe.center().y() - itemH * 0.5;
+  const qreal itemW = pipe.width() * 0.19;
+  const qreal gap = pipe.width() * 0.06;
+  const qreal totalW = 3.0 * itemW + 2.0 * gap;
+  const qreal startX = pipe.center().x() - totalW * 0.5;
+  const qreal itemR = s * 0.8;
+  for (int i = 0; i < 3; ++i) {
+    const qreal x = startX + i * (itemW + gap);
+    p->drawRoundedRect(QRectF(x, itemY, itemW, itemH), itemR, itemR);
   }
+
+  // Enqueue arrow entering from the left.
+  const qreal head = s * 2.0;
+  drawArrow(p, uv(r, 0.0, 0.50), uv(r, 0.14, 0.50), head);
+
+  // Dequeue arrow exiting to the right.
+  drawArrow(p, uv(r, 0.86, 0.50), uv(r, 1.0, 0.50), head);
 }
 
 void drawDatabaseIcon(QPainter *p, const QRectF &r, const QColor &accent,
