@@ -969,7 +969,8 @@ QString LatexTextItem::latexToHtml(const QString &latex) {
 
   static QRegularExpression vecPattern("\\\\vec\\{([^}]*)\\}");
   processMatches(result, vecPattern, [](const QRegularExpressionMatch &m) {
-    return m.captured(1) + QString(QChar(0x20D7)); // combining right arrow above
+    return m.captured(1) +
+           QString(QChar(0x20D7)); // combining right arrow above
   });
 
   static QRegularExpression dotPattern("\\\\dot\\{([^}]*)\\}");
@@ -989,16 +990,15 @@ QString LatexTextItem::latexToHtml(const QString &latex) {
 
   // Process \overline{...} using combining overline
   static QRegularExpression overlinePattern("\\\\overline\\{([^}]*)\\}");
-  processMatches(
-      result, overlinePattern, [](const QRegularExpressionMatch &m) {
-        QString content = m.captured(1);
-        QString result;
-        for (QChar ch : content) {
-          result += ch;
-          result += QChar(0x0305); // combining overline per character
-        }
-        return result;
-      });
+  processMatches(result, overlinePattern, [](const QRegularExpressionMatch &m) {
+    QString content = m.captured(1);
+    QString result;
+    for (QChar ch : content) {
+      result += ch;
+      result += QChar(0x0305); // combining overline per character
+    }
+    return result;
+  });
 
   // Process \underline{...} using combining underline
   static QRegularExpression underlinePattern("\\\\underline\\{([^}]*)\\}");

@@ -27,39 +27,28 @@ const QMap<QString, QString> greekLetters = {
     {"Sigma", "Σ"},   {"Phi", "Φ"},        {"Psi", "Ψ"},      {"Omega", "Ω"}};
 
 const QMap<QString, QString> mathSymbols = {
-    {"cdot", "·"},        {"times", "×"},
-    {"div", "÷"},         {"pm", "±"},
-    {"leq", "≤"},         {"le", "≤"},
-    {"geq", "≥"},         {"ge", "≥"},
-    {"neq", "≠"},         {"ne", "≠"},
-    {"approx", "≈"},      {"equiv", "≡"},
-    {"infty", "∞"},       {"partial", "∂"},
-    {"nabla", "∇"},       {"sum", "∑"},
-    {"prod", "∏"},        {"int", "∫"},
-    {"rightarrow", "→"},  {"to", "→"},
-    {"leftarrow", "←"},   {"gets", "←"},
-    {"Rightarrow", "⇒"},  {"Leftarrow", "⇐"},
-    {"in", "∈"},          {"notin", "∉"},
-    {"subset", "⊂"},      {"subseteq", "⊆"},
-    {"cup", "∪"},         {"cap", "∩"},
-    {"emptyset", "∅"},    {"forall", "∀"},
-    {"exists", "∃"},      {"lnot", "¬"},
-    {"neg", "¬"},         {"land", "∧"},
-    {"lor", "∨"},         {"sqrt", "√"},
-    {"angle", "∠"},       {"degree", "°"},
-    {"ldots", "…"},       {"cdots", "⋯"},
-    {"left", ""},         {"right", ""},
-    {"middle", ""},       {"big", ""},
-    {"Big", ""},          {"bigg", ""},
-    {"Bigg", ""},         {"langle", "⟨"},
-    {"rangle", "⟩"},      {"lfloor", "⌊"},
-    {"rfloor", "⌋"},      {"lceil", "⌈"},
-    {"rceil", "⌉"},       {"textbf", ""},
-    {"textit", ""},       {"textrm", ""},
-    {"mathrm", ""},       {"mathbf", ""},
-    {"mathit", ""},       {"mathcal", ""},
-    {"mathbb", ""},       {"mathfrak", ""},
-    {"quad", "  "},       {"qquad", "    "}};
+    {"cdot", "·"},       {"times", "×"},      {"div", "÷"},
+    {"pm", "±"},         {"leq", "≤"},        {"le", "≤"},
+    {"geq", "≥"},        {"ge", "≥"},         {"neq", "≠"},
+    {"ne", "≠"},         {"approx", "≈"},     {"equiv", "≡"},
+    {"infty", "∞"},      {"partial", "∂"},    {"nabla", "∇"},
+    {"sum", "∑"},        {"prod", "∏"},       {"int", "∫"},
+    {"rightarrow", "→"}, {"to", "→"},         {"leftarrow", "←"},
+    {"gets", "←"},       {"Rightarrow", "⇒"}, {"Leftarrow", "⇐"},
+    {"in", "∈"},         {"notin", "∉"},      {"subset", "⊂"},
+    {"subseteq", "⊆"},   {"cup", "∪"},        {"cap", "∩"},
+    {"emptyset", "∅"},   {"forall", "∀"},     {"exists", "∃"},
+    {"lnot", "¬"},       {"neg", "¬"},        {"land", "∧"},
+    {"lor", "∨"},        {"sqrt", "√"},       {"angle", "∠"},
+    {"degree", "°"},     {"ldots", "…"},      {"cdots", "⋯"},
+    {"left", ""},        {"right", ""},       {"middle", ""},
+    {"big", ""},         {"Big", ""},         {"bigg", ""},
+    {"Bigg", ""},        {"langle", "⟨"},     {"rangle", "⟩"},
+    {"lfloor", "⌊"},     {"rfloor", "⌋"},     {"lceil", "⌈"},
+    {"rceil", "⌉"},      {"textbf", ""},      {"textit", ""},
+    {"textrm", ""},      {"mathrm", ""},      {"mathbf", ""},
+    {"mathit", ""},      {"mathcal", ""},     {"mathbb", ""},
+    {"mathfrak", ""},    {"quad", "  "},      {"qquad", "    "}};
 
 const QMap<QChar, QString> superscripts = {
     {'0', "⁰"}, {'1', "¹"}, {'2', "²"}, {'3', "³"}, {'4', "⁴"},
@@ -75,15 +64,13 @@ const QMap<QChar, QString> subscripts = {
 const QMap<QChar, QString> mathbb = {
     {'N', "ℕ"}, {'Z', "ℤ"}, {'Q', "ℚ"}, {'R', "ℝ"}, {'C', "ℂ"}};
 
-const QMap<QChar, QString> mathcal = {
-    {'L', "ℒ"}, {'F', "ℱ"}, {'H', "ℋ"}};
+const QMap<QChar, QString> mathcal = {{'L', "ℒ"}, {'F', "ℱ"}, {'H', "ℋ"}};
 
-const QMap<QChar, QString> mathfrak = {
-    {'A', "𝔄"}, {'B', "𝔅"}};
+const QMap<QChar, QString> mathfrak = {{'A', "𝔄"}, {'B', "𝔅"}};
 
-const QMap<QChar, QString> mathItalic = {
-    {'a', "𝑎"}, {'b', "𝑏"}, {'x', "𝑥"}, {'y', "𝑦"}, {'z', "𝑧"},
-    {'A', "𝐴"}, {'B', "𝐵"}, {'n', "𝑛"}, {'k', "𝑘"}};
+const QMap<QChar, QString> mathItalic = {{'a', "𝑎"}, {'b', "𝑏"}, {'x', "𝑥"},
+                                         {'y', "𝑦"}, {'z', "𝑧"}, {'A', "𝐴"},
+                                         {'B', "𝐵"}, {'n', "𝑛"}, {'k', "𝑘"}};
 } // namespace LatexSymbols
 
 // ---- Duplicated conversion functions from latex_text_item.cpp ----
@@ -218,28 +205,27 @@ static QString latexToHtml(const QString &latex) {
   });
 
   static QRegularExpression overlinePattern("\\\\overline\\{([^}]*)\\}");
-  processMatches(
-      result, overlinePattern, [](const QRegularExpressionMatch &m) {
-        QString content = m.captured(1);
-        QString result;
-        for (QChar ch : content) {
-          result += ch;
-          result += QChar(0x0305);
-        }
-        return result;
-      });
+  processMatches(result, overlinePattern, [](const QRegularExpressionMatch &m) {
+    QString content = m.captured(1);
+    QString result;
+    for (QChar ch : content) {
+      result += ch;
+      result += QChar(0x0305);
+    }
+    return result;
+  });
 
   static QRegularExpression underlinePattern("\\\\underline\\{([^}]*)\\}");
-  processMatches(
-      result, underlinePattern, [](const QRegularExpressionMatch &m) {
-        QString content = m.captured(1);
-        QString result;
-        for (QChar ch : content) {
-          result += ch;
-          result += QChar(0x0332);
-        }
-        return result;
-      });
+  processMatches(result, underlinePattern,
+                 [](const QRegularExpressionMatch &m) {
+                   QString content = m.captured(1);
+                   QString result;
+                   for (QChar ch : content) {
+                     result += ch;
+                     result += QChar(0x0332);
+                   }
+                   return result;
+                 });
 
   // Process \frac{a}{b}
   static QRegularExpression fracPattern("\\\\frac\\{([^}]*)\\}\\{([^}]*)\\}");

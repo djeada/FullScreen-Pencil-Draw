@@ -108,8 +108,7 @@ void applyTintState(QGraphicsPixmapItem *pixmap,
   effect->setStrength(state.strength);
 }
 
-bool applyFillToItem(QGraphicsItem *item, ItemStore *store,
-                     const QBrush &brush,
+bool applyFillToItem(QGraphicsItem *item, ItemStore *store, const QBrush &brush,
                      std::unique_ptr<Action> &outAction) {
   outAction.reset();
   if (!item) {

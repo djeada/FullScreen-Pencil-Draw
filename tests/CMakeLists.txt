@@ -180,6 +180,10 @@ target_include_directories(test_busy_spinner_overlay PRIVATE
 )
 
 target_link_libraries(test_busy_spinner_overlay PRIVATE
+    Qt${QT_VERSION_MAJOR}::Widgets
+    Qt${QT_VERSION_MAJOR}::Test
+)
+
 # BrushTip tests
 add_executable(test_brush_tip
     test_brush_tip.cpp

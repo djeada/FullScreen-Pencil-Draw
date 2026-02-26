@@ -165,8 +165,7 @@ private slots:
   }
 
   void testShapeNameTextured() {
-    QCOMPARE(BrushTip::shapeName(BrushTipShape::Textured),
-             QString("Textured"));
+    QCOMPARE(BrushTip::shapeName(BrushTipShape::Textured), QString("Textured"));
   }
 };
 

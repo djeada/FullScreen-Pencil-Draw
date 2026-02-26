@@ -35,8 +35,7 @@ public:
     Monitoring
   };
 
-  explicit ArchitectureElementItem(const QString &label,
-                                   IconKind iconKind,
+  explicit ArchitectureElementItem(const QString &label, IconKind iconKind,
                                    const QColor &accentColor,
                                    QGraphicsItem *parent = nullptr);
   ~ArchitectureElementItem() override = default;

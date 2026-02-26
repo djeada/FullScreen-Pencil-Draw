@@ -51,9 +51,7 @@ public:
    * @brief Get the current fill brush (solid, gradient, or pattern)
    * @return The current brush used for shape fills
    */
-  virtual QBrush currentBrush() const {
-    return QBrush(currentPen().color());
-  }
+  virtual QBrush currentBrush() const { return QBrush(currentPen().color()); }
 
   /**
    * @brief Get the current brush tip (shape, angle, texture)

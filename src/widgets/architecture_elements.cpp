@@ -102,29 +102,22 @@ void drawLoadBalancerIcon(QPainter *p, const QRectF &r, const QColor &accent,
 
 void drawGatewayIcon(QPainter *p, const QRectF &r, const QColor &accent,
                      qreal stroke) {
-  p->setPen(QPen(accent, stroke, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+  const qreal s = stroke * 0.9;
+  p->setPen(QPen(accent, s, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
 
-  // Gateway frame (arch + pillars).
-  p->setBrush(withAlpha(accent, 38));
-  const QRectF archRect = uvRect(r, 0.30, 0.18, 0.40, 0.64);
-  QPainterPath gate;
-  gate.moveTo(archRect.left(), archRect.bottom());
-  gate.lineTo(archRect.left(), archRect.top() + archRect.height() * 0.42);
-  gate.arcTo(QRectF(archRect.left(), archRect.top(), archRect.width(),
-                    archRect.height() * 0.84),
-             180, -180);
-  gate.lineTo(archRect.right(), archRect.bottom());
-  p->drawPath(gate);
+  // Gateway body.
+  p->setBrush(withAlpha(accent, 30));
+  const QRectF body = uvRect(r, 0.30, 0.26, 0.40, 0.48);
+  p->drawRoundedRect(body, s * 1.5, s * 1.5);
 
-  // Inbound traffic (left) and outbound traffic (right).
+  // Gate separator.
   p->setBrush(Qt::NoBrush);
-  const qreal head = stroke * 2.45;
-  drawArrow(p, uv(r, 0.06, 0.36), uv(r, 0.37, 0.36), head);
-  drawArrow(p, uv(r, 0.06, 0.64), uv(r, 0.37, 0.64), head);
-  drawArrow(p, uv(r, 0.63, 0.50), uv(r, 0.94, 0.50), head);
+  p->drawLine(uv(r, 0.50, 0.31), uv(r, 0.50, 0.69));
 
-  p->drawLine(uv(r, 0.37, 0.36), uv(r, 0.63, 0.50));
-  p->drawLine(uv(r, 0.37, 0.64), uv(r, 0.63, 0.50));
+  // One clean in/out flow path.
+  const qreal head = s * 2.1;
+  drawArrow(p, uv(r, 0.05, 0.50), uv(r, 0.30, 0.50), head);
+  drawArrow(p, uv(r, 0.70, 0.50), uv(r, 0.95, 0.50), head);
 }
 
 void drawAppServerIcon(QPainter *p, const QRectF &r, const QColor &accent,
@@ -166,32 +159,38 @@ void drawCacheIcon(QPainter *p, const QRectF &r, const QColor &accent,
 
 void drawQueueIcon(QPainter *p, const QRectF &r, const QColor &accent,
                    qreal stroke) {
-  const qreal s = stroke * 0.9;
+  const qreal s = stroke * 0.74;
   p->setPen(QPen(accent, s, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
 
-  // Queue lane rails.
-  p->setBrush(Qt::NoBrush);
-  p->drawLine(uv(r, 0.14, 0.35), uv(r, 0.86, 0.35));
-  p->drawLine(uv(r, 0.14, 0.67), uv(r, 0.86, 0.67));
+  // Kafka-like event-log cylinder: straight body + vertical oval ends.
+  const QRectF barrel = uvRect(r, 0.18, 0.35, 0.64, 0.30);
+  const qreal capW = barrel.height() * 0.56;
+  const QRectF leftCap(barrel.left() - capW * 0.5, barrel.top(), capW,
+                       barrel.height());
+  const QRectF rightCap(barrel.right() - capW * 0.5, barrel.top(), capW,
+                        barrel.height());
 
-  // FIFO message blocks.
-  p->setBrush(withAlpha(accent, 54));
-  const QRectF m1 = uvRect(r, 0.20, 0.42, 0.14, 0.18);
-  const QRectF m2 = uvRect(r, 0.42, 0.42, 0.14, 0.18);
-  const QRectF m3 = uvRect(r, 0.64, 0.42, 0.14, 0.18);
-  p->drawRoundedRect(m1, s, s);
-  p->drawRoundedRect(m2, s, s);
-  p->drawRoundedRect(m3, s, s);
+  QLinearGradient bodyGrad(barrel.topLeft(), barrel.bottomLeft());
+  bodyGrad.setColorAt(0.0, withAlpha(accent.lighter(136), 40));
+  bodyGrad.setColorAt(1.0, withAlpha(accent.darker(122), 20));
+  p->setBrush(bodyGrad);
+  p->drawRect(barrel);
+  p->drawEllipse(leftCap);
+  p->drawEllipse(rightCap);
 
-  // Progress arrows between queued messages.
-  const qreal head = s * 2.15;
-  p->setBrush(Qt::NoBrush);
-  drawArrow(p, uv(r, 0.35, 0.51), uv(r, 0.41, 0.51), head);
-  drawArrow(p, uv(r, 0.57, 0.51), uv(r, 0.63, 0.51), head);
-
-  // Enqueue / dequeue arrows.
-  drawArrow(p, uv(r, 0.03, 0.51), uv(r, 0.13, 0.51), head);
-  drawArrow(p, uv(r, 0.87, 0.51), uv(r, 0.97, 0.51), head);
+  // Segment slots inside the event log.
+  p->setBrush(withAlpha(accent, 28));
+  const qreal slotH = barrel.height() * 0.50;
+  const qreal slotY = barrel.center().y() - slotH * 0.5;
+  const qreal startX = barrel.left() + barrel.width() * 0.08;
+  const qreal usableW = barrel.width() * 0.84;
+  const int slotCount = 5;
+  const qreal gap = barrel.width() * 0.04;
+  const qreal slotW = (usableW - gap * (slotCount - 1)) / slotCount;
+  for (int i = 0; i < slotCount; ++i) {
+    const qreal x = startX + i * (slotW + gap);
+    p->drawRect(QRectF(x, slotY, slotW, slotH));
+  }
 }
 
 void drawDatabaseIcon(QPainter *p, const QRectF &r, const QColor &accent,
@@ -205,8 +204,7 @@ void drawDatabaseIcon(QPainter *p, const QRectF &r, const QColor &accent,
   p->drawRect(QRectF(body.left(), body.top() + ellH * 0.5, body.width(),
                      body.height() - ellH));
   p->drawEllipse(QRectF(body.left(), body.top(), body.width(), ellH));
-  p->drawEllipse(
-      QRectF(body.left(), body.bottom() - ellH, body.width(), ellH));
+  p->drawEllipse(QRectF(body.left(), body.bottom() - ellH, body.width(), ellH));
 
   p->setBrush(Qt::NoBrush);
   QPainterPath mid1;
@@ -315,7 +313,8 @@ void ArchitectureElementItem::paint(QPainter *painter,
   painter->setRenderHint(QPainter::Antialiasing, true);
   painter->setRenderHint(QPainter::TextAntialiasing, true);
 
-  const QColor accent = accentColor_.isValid() ? accentColor_ : QColor("#3b82f6");
+  const QColor accent =
+      accentColor_.isValid() ? accentColor_ : QColor("#3b82f6");
   const QRectF cardRect = boundingRect().adjusted(1.0, 1.0, -1.0, -1.0);
 
   // Soft shadow for depth.
@@ -350,7 +349,8 @@ void ArchitectureElementItem::paint(QPainter *painter,
   painter->restore();
 
   // Icon badge.
-  const QRectF badgeRect((ELEM_W - ICON_SIZE) / 2.0, 12.0, ICON_SIZE, ICON_SIZE);
+  const QRectF badgeRect((ELEM_W - ICON_SIZE) / 2.0, 12.0, ICON_SIZE,
+                         ICON_SIZE);
   QRadialGradient badgeGrad(badgeRect.center(), ICON_SIZE / 2.0);
   badgeGrad.setColorAt(0.0, withAlpha(accent.lighter(145), 90));
   badgeGrad.setColorAt(0.9, withAlpha(accent.darker(140), 120));
@@ -448,8 +448,8 @@ MessageQueueElement::MessageQueueElement(QGraphicsItem *parent)
                               QColor("#ec4899"), parent) {}
 
 DatabaseElement::DatabaseElement(QGraphicsItem *parent)
-    : ArchitectureElementItem("Database", IconKind::Database,
-                              QColor("#06b6d4"), parent) {}
+    : ArchitectureElementItem("Database", IconKind::Database, QColor("#06b6d4"),
+                              parent) {}
 
 ObjectStorageElement::ObjectStorageElement(QGraphicsItem *parent)
     : ArchitectureElementItem("Storage", IconKind::ObjectStorage,

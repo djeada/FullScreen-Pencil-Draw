@@ -34,8 +34,8 @@ void LassoSelectionTool::mousePressEvent(QMouseEvent *event,
   dashPen.setWidth(1);
   dashPen.setCosmetic(true);
   lassoPath_->setPen(dashPen);
-  lassoPath_->setBrush(
-      QBrush(QColor(kLassoColorR, kLassoColorG, kLassoColorB, kLassoFillAlpha)));
+  lassoPath_->setBrush(QBrush(
+      QColor(kLassoColorR, kLassoColorG, kLassoColorB, kLassoFillAlpha)));
   lassoPath_->setZValue(1e9); // Always on top
   lassoPath_->setFlag(QGraphicsItem::ItemIsSelectable, false);
   lassoPath_->setFlag(QGraphicsItem::ItemIsMovable, false);

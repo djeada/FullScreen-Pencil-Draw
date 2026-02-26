@@ -30,20 +30,26 @@ static QFrame *createBankSeparator(QWidget *parent) {
 
 QVector<ElementInfo> ElementBankPanel::defaultElements() {
   return {
-      {"client", "Client", ":/ui-icons/arch_client.svg", "Client application", "Architecture"},
-      {"load_balancer", "Load Bal.", ":/ui-icons/arch_load_balancer.svg", "Load balancer", "Architecture"},
-      {"api_gateway", "Gateway", ":/ui-icons/arch_gateway.svg", "API gateway", "Architecture"},
-      {"app_server", "App Server", ":/ui-icons/arch_app_server.svg", "Application server / microservice",
+      {"client", "Client", ":/ui-icons/arch_client.svg", "Client application",
        "Architecture"},
-      {"cache", "Cache", ":/ui-icons/arch_cache.svg", "Cache (Redis, Memcached)", "Architecture"},
-      {"message_queue", "Queue", ":/ui-icons/arch_queue.svg", "Message queue / broker", "Architecture"},
-      {"database", "Database", ":/ui-icons/arch_database.svg", "Database", "Architecture"},
-      {"object_storage", "Storage", ":/ui-icons/arch_storage.svg", "Object / file storage",
+      {"load_balancer", "Load Bal.", ":/ui-icons/arch_load_balancer.svg",
+       "Load balancer", "Architecture"},
+      {"api_gateway", "Gateway", ":/ui-icons/arch_gateway.svg", "API gateway",
        "Architecture"},
-      {"auth", "Auth", ":/ui-icons/arch_auth.svg", "Authentication / identity service",
+      {"app_server", "App Server", ":/ui-icons/arch_app_server.svg",
+       "Application server / microservice", "Architecture"},
+      {"cache", "Cache", ":/ui-icons/arch_cache.svg",
+       "Cache (Redis, Memcached)", "Architecture"},
+      {"message_queue", "Queue", ":/ui-icons/arch_queue.svg",
+       "Message queue / broker", "Architecture"},
+      {"database", "Database", ":/ui-icons/arch_database.svg", "Database",
        "Architecture"},
-      {"monitoring", "Monitor", ":/ui-icons/arch_monitor.svg", "Monitoring / logging system",
-       "Architecture"},
+      {"object_storage", "Storage", ":/ui-icons/arch_storage.svg",
+       "Object / file storage", "Architecture"},
+      {"auth", "Auth", ":/ui-icons/arch_auth.svg",
+       "Authentication / identity service", "Architecture"},
+      {"monitoring", "Monitor", ":/ui-icons/arch_monitor.svg",
+       "Monitoring / logging system", "Architecture"},
   };
 }
 

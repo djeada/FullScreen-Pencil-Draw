@@ -69,10 +69,10 @@ void BrushStrokeItem::rebuildImage() {
 
   // Guard against excessively large images
   static constexpr int MAX_BUFFER_DIM = 16384;
-  int w = qMax(1, static_cast<int>(qCeil(qMin(bounds_.width(),
-                                               static_cast<qreal>(MAX_BUFFER_DIM)))));
-  int h = qMax(1, static_cast<int>(qCeil(qMin(bounds_.height(),
-                                               static_cast<qreal>(MAX_BUFFER_DIM)))));
+  int w = qMax(1, static_cast<int>(qCeil(qMin(
+                      bounds_.width(), static_cast<qreal>(MAX_BUFFER_DIM)))));
+  int h = qMax(1, static_cast<int>(qCeil(qMin(
+                      bounds_.height(), static_cast<qreal>(MAX_BUFFER_DIM)))));
 
   buffer_ = QImage(w, h, QImage::Format_ARGB32_Premultiplied);
   buffer_.fill(Qt::transparent);

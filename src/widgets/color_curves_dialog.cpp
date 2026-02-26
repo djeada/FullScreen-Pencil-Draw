@@ -12,8 +12,8 @@
 
 // Helper: create a slider + label row and add it to a form layout.
 static QSlider *addSliderRow(QFormLayout *form, const QString &label,
-                             QLabel *&valueLabel, int min, int max,
-                             int initial, QWidget *parent) {
+                             QLabel *&valueLabel, int min, int max, int initial,
+                             QWidget *parent) {
   auto *slider = new QSlider(Qt::Horizontal, parent);
   slider->setRange(min, max);
   slider->setValue(initial);
@@ -50,8 +50,8 @@ ColorCurvesDialog::ColorCurvesDialog(bool hasSelection, QWidget *parent)
   // --- Master levels ---
   auto *masterGroup = new QGroupBox("Master Levels", this);
   auto *masterForm = new QFormLayout(masterGroup);
-  inputBlackSlider_ =
-      addSliderRow(masterForm, "Input Black:", inputBlackLabel_, 0, 255, 0, this);
+  inputBlackSlider_ = addSliderRow(masterForm, "Input Black:", inputBlackLabel_,
+                                   0, 255, 0, this);
   inputWhiteSlider_ = addSliderRow(masterForm, "Input White:", inputWhiteLabel_,
                                    0, 255, 255, this);
   gammaSlider_ =
@@ -62,10 +62,10 @@ ColorCurvesDialog::ColorCurvesDialog(bool hasSelection, QWidget *parent)
   // --- Red channel ---
   auto *redGroup = new QGroupBox("Red Channel", this);
   auto *redForm = new QFormLayout(redGroup);
-  redInputBlackSlider_ = addSliderRow(redForm, "Input Black:",
-                                      redInputBlackLabel_, 0, 255, 0, this);
-  redInputWhiteSlider_ = addSliderRow(redForm, "Input White:",
-                                      redInputWhiteLabel_, 0, 255, 255, this);
+  redInputBlackSlider_ = addSliderRow(
+      redForm, "Input Black:", redInputBlackLabel_, 0, 255, 0, this);
+  redInputWhiteSlider_ = addSliderRow(
+      redForm, "Input White:", redInputWhiteLabel_, 0, 255, 255, this);
   redGammaSlider_ =
       addSliderRow(redForm, "Gamma:", redGammaLabel_, 10, 300, 100, this);
   redGammaLabel_->setText("1.00");
@@ -86,10 +86,10 @@ ColorCurvesDialog::ColorCurvesDialog(bool hasSelection, QWidget *parent)
   // --- Blue channel ---
   auto *blueGroup = new QGroupBox("Blue Channel", this);
   auto *blueForm = new QFormLayout(blueGroup);
-  blueInputBlackSlider_ = addSliderRow(blueForm, "Input Black:",
-                                       blueInputBlackLabel_, 0, 255, 0, this);
-  blueInputWhiteSlider_ = addSliderRow(blueForm, "Input White:",
-                                       blueInputWhiteLabel_, 0, 255, 255, this);
+  blueInputBlackSlider_ = addSliderRow(
+      blueForm, "Input Black:", blueInputBlackLabel_, 0, 255, 0, this);
+  blueInputWhiteSlider_ = addSliderRow(
+      blueForm, "Input White:", blueInputWhiteLabel_, 0, 255, 255, this);
   blueGammaSlider_ =
       addSliderRow(blueForm, "Gamma:", blueGammaLabel_, 10, 300, 100, this);
   blueGammaLabel_->setText("1.00");
@@ -98,8 +98,8 @@ ColorCurvesDialog::ColorCurvesDialog(bool hasSelection, QWidget *parent)
   // --- Brightness / Contrast ---
   auto *bcGroup = new QGroupBox("Brightness / Contrast", this);
   auto *bcForm = new QFormLayout(bcGroup);
-  brightnessSlider_ = addSliderRow(bcForm, "Brightness:", brightnessLabel_,
-                                   -100, 100, 0, this);
+  brightnessSlider_ =
+      addSliderRow(bcForm, "Brightness:", brightnessLabel_, -100, 100, 0, this);
   contrastSlider_ =
       addSliderRow(bcForm, "Contrast:", contrastLabel_, -100, 100, 0, this);
   mainLayout->addWidget(bcGroup);
@@ -156,12 +156,8 @@ ColorCurvesDialog::Target ColorCurvesDialog::target() const {
   return static_cast<Target>(targetCombo_->currentData().toInt());
 }
 
-int ColorCurvesDialog::inputBlack() const {
-  return inputBlackSlider_->value();
-}
-int ColorCurvesDialog::inputWhite() const {
-  return inputWhiteSlider_->value();
-}
+int ColorCurvesDialog::inputBlack() const { return inputBlackSlider_->value(); }
+int ColorCurvesDialog::inputWhite() const { return inputWhiteSlider_->value(); }
 double ColorCurvesDialog::gamma() const {
   return gammaSlider_->value() / 100.0;
 }
@@ -196,12 +192,8 @@ double ColorCurvesDialog::blueGamma() const {
   return blueGammaSlider_->value() / 100.0;
 }
 
-int ColorCurvesDialog::brightness() const {
-  return brightnessSlider_->value();
-}
-int ColorCurvesDialog::contrast() const {
-  return contrastSlider_->value();
-}
+int ColorCurvesDialog::brightness() const { return brightnessSlider_->value(); }
+int ColorCurvesDialog::contrast() const { return contrastSlider_->value(); }
 
 // --- Slot helpers ---
 

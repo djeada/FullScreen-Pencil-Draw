@@ -228,8 +228,7 @@ void LayerPanel::setupUI() {
 
   duplicateButton_ = new QPushButton("", container);
   duplicateButton_->setToolTip("Duplicate layer");
-  applyLayerButtonIcon(duplicateButton_, ":/ui-icons/layer_duplicate.svg",
-                       "D");
+  applyLayerButtonIcon(duplicateButton_, ":/ui-icons/layer_duplicate.svg", "D");
   duplicateButton_->setFixedSize(40, 40);
   connect(duplicateButton_, &QPushButton::clicked, this,
           &LayerPanel::onDuplicateLayer);

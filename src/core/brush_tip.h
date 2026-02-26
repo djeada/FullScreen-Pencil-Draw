@@ -90,8 +90,7 @@ public:
    * @param opacity 0.0 – 1.0
    * @return ARGB32-premultiplied image of the tip
    */
-  QImage renderTip(qreal size, const QColor &color,
-                   qreal opacity = 1.0) const;
+  QImage renderTip(qreal size, const QColor &color, qreal opacity = 1.0) const;
 
   /**
    * @brief Get a display name for a given shape
