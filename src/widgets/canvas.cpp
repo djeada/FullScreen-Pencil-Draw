@@ -4788,50 +4788,14 @@ void Canvas::alignSelectedItems() {
         }
       }
     }
-  } else if (mode == AlignmentMode::AlignParallel && selected.size() >= 2) {
-    // Match all items' rotation to the first item's rotation
-    qreal targetAngle = extractRotation(selected.first());
-
-    for (int i = 1; i < selected.size(); ++i) {
-      QGraphicsItem *item = selected[i];
-      QTransform oldTransform = item->transform();
-      QPointF oldPos = item->pos();
-
-      qreal currentAngle = extractRotation(item);
-      qreal delta = targetAngle - currentAngle;
-      if (qFuzzyIsNull(delta)) {
-        continue;
-      }
-
-      QRectF itemBounds =
-          item->mapToScene(item->boundingRect()).boundingRect();
-      QPointF center = itemBounds.center();
-      QPointF localCenter = item->mapFromScene(center);
-
-      QTransform rotateTransform;
-      rotateTransform.translate(localCenter.x(), localCenter.y());
-      rotateTransform.rotate(delta);
-      rotateTransform.translate(-localCenter.x(), -localCenter.y());
-
-      item->setTransform(oldTransform * rotateTransform);
-
-      QPointF newCenterPos = item->mapToScene(localCenter);
-      QPointF posAdjust = center - newCenterPos;
-      item->setPos(item->pos() + posAdjust);
-
-      if (sceneController_) {
-        ItemId id = sceneController_->idForItem(item);
-        if (id.isValid()) {
-          addAction(std::make_unique<TransformAction>(
-              id, sceneController_->itemStore(), oldTransform,
-              item->transform(), oldPos, item->pos()));
-        }
-      }
-    }
-  } else if (mode == AlignmentMode::AlignPerpendicular &&
+  } else if ((mode == AlignmentMode::AlignParallel ||
+              mode == AlignmentMode::AlignPerpendicular) &&
              selected.size() >= 2) {
-    // Rotate all other items to be 90° offset from the first item
-    qreal targetAngle = extractRotation(selected.first()) + 90.0;
+    // Compute target angle: same as first item (parallel) or +90° (perpendicular)
+    qreal targetAngle = extractRotation(selected.first());
+    if (mode == AlignmentMode::AlignPerpendicular) {
+      targetAngle += 90.0;
+    }
 
     for (int i = 1; i < selected.size(); ++i) {
       QGraphicsItem *item = selected[i];
