@@ -20,6 +20,8 @@
 #include <QLinearGradient>
 #include <QPainterPath>
 #include <QRadialGradient>
+#include "../widgets/latex_text_item.h"
+#include "../widgets/text_on_path_item.h"
 
 const QString ProjectSerializer::fileFilter() {
   return QStringLiteral("Project Files (*.fspd)");
@@ -243,6 +245,36 @@ QJsonObject ProjectSerializer::serializeItem(QGraphicsItem *item) {
     obj["fontSize"] = f.pointSize();
     obj["fontBold"] = f.bold();
     obj["fontItalic"] = f.italic();
+  } else if (auto *latexItem = dynamic_cast<LatexTextItem *>(item)) {
+    obj["type"] = "latexText";
+    obj["text"] = latexItem->text();
+    obj["textColor"] = latexItem->textColor().name(QColor::HexArgb);
+    QFont f = latexItem->font();
+    obj["fontFamily"] = f.family();
+    obj["fontSize"] = f.pointSize();
+    obj["fontBold"] = f.bold();
+    obj["fontItalic"] = f.italic();
+  } else if (auto *pathTextItem = dynamic_cast<TextOnPathItem *>(item)) {
+    obj["type"] = "textOnPath";
+    obj["text"] = pathTextItem->text();
+    obj["textColor"] = pathTextItem->textColor().name(QColor::HexArgb);
+    QFont f = pathTextItem->font();
+    obj["fontFamily"] = f.family();
+    obj["fontSize"] = f.pointSize();
+    obj["fontBold"] = f.bold();
+    obj["fontItalic"] = f.italic();
+    // Serialize the path
+    const QPainterPath &path = pathTextItem->path();
+    QJsonArray elements;
+    for (int i = 0; i < path.elementCount(); ++i) {
+      QPainterPath::Element e = path.elementAt(i);
+      QJsonObject el;
+      el["type"] = static_cast<int>(e.type);
+      el["x"] = e.x;
+      el["y"] = e.y;
+      elements.append(el);
+    }
+    obj["pathElements"] = elements;
   } else {
     // Unsupported item type - skip
     return QJsonObject();
@@ -336,6 +368,68 @@ QGraphicsItem *ProjectSerializer::deserializeItem(const QJsonObject &obj) {
     f.setItalic(obj["fontItalic"].toBool());
     textItem->setFont(f);
     item = textItem;
+  } else if (type == "latexText") {
+    auto *latexItem = new LatexTextItem();
+    latexItem->setText(obj["text"].toString());
+    latexItem->setTextColor(
+        QColor(obj["textColor"].toString("#ff000000")));
+    QFont f;
+    f.setFamily(obj["fontFamily"].toString());
+    f.setPointSize(obj["fontSize"].toInt(12));
+    f.setBold(obj["fontBold"].toBool());
+    f.setItalic(obj["fontItalic"].toBool());
+    latexItem->setFont(f);
+    item = latexItem;
+  } else if (type == "textOnPath") {
+    auto *pathTextItem = new TextOnPathItem();
+    pathTextItem->setText(obj["text"].toString());
+    pathTextItem->setTextColor(
+        QColor(obj["textColor"].toString("#ff000000")));
+    QFont f;
+    f.setFamily(obj["fontFamily"].toString());
+    f.setPointSize(obj["fontSize"].toInt(12));
+    f.setBold(obj["fontBold"].toBool());
+    f.setItalic(obj["fontItalic"].toBool());
+    pathTextItem->setFont(f);
+    // Deserialize the path
+    QPainterPath path;
+    QJsonArray elements = obj["pathElements"].toArray();
+    for (int i = 0; i < elements.size(); ++i) {
+      QJsonObject el = elements[i].toObject();
+      int elType = el["type"].toInt();
+      qreal ex = el["x"].toDouble();
+      qreal ey = el["y"].toDouble();
+      switch (elType) {
+      case QPainterPath::MoveToElement:
+        path.moveTo(ex, ey);
+        break;
+      case QPainterPath::LineToElement:
+        path.lineTo(ex, ey);
+        break;
+      case QPainterPath::CurveToElement: {
+        qreal c2x = ex, c2y = ey, epx = ex, epy = ey;
+        if (i + 1 < elements.size()) {
+          QJsonObject d1 = elements[i + 1].toObject();
+          c2x = d1["x"].toDouble();
+          c2y = d1["y"].toDouble();
+        }
+        if (i + 2 < elements.size()) {
+          QJsonObject d2 = elements[i + 2].toObject();
+          epx = d2["x"].toDouble();
+          epy = d2["y"].toDouble();
+        }
+        path.cubicTo(ex, ey, c2x, c2y, epx, epy);
+        i += 2;
+        break;
+      }
+      case QPainterPath::CurveToDataElement:
+        break;
+      default:
+        break;
+      }
+    }
+    pathTextItem->setPath(path);
+    item = pathTextItem;
   }
 
   if (!item)

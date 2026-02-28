@@ -16,6 +16,8 @@
 #include <QGraphicsPolygonItem>
 #include <QGraphicsRectItem>
 #include <QGraphicsTextItem>
+#include "latex_text_item.h"
+#include "text_on_path_item.h"
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -1136,6 +1138,14 @@ QString LayerPanel::itemDescription(const ItemId &id) const {
   }
   if (dynamic_cast<QGraphicsPolygonItem *>(item))
     return "Polygon";
+  if (auto *latexText = dynamic_cast<LatexTextItem *>(item)) {
+    QString t = latexText->text().left(20);
+    return t.isEmpty() ? "Text" : QString("Text: %1").arg(t);
+  }
+  if (auto *pathText = dynamic_cast<TextOnPathItem *>(item)) {
+    QString t = pathText->text().left(20);
+    return t.isEmpty() ? "Path Text" : QString("Path Text: %1").arg(t);
+  }
 
   return "Element";
 }
