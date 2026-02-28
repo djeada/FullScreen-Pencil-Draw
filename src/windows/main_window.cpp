@@ -491,6 +491,13 @@ void MainWindow::setupMenuBar() {
                QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_P), _canvas,
                SLOT(perspectiveTransformSelectedItems()));
 
+  // Edit menu - rotation and alignment
+  editMenu->addSeparator();
+  createAction(editMenu, "Rotate Selected &Items...",
+               QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_T), _canvas,
+               SLOT(rotateSelectedItems()));
+  editMenu->addAction("Align Items...", _canvas, SLOT(alignSelectedItems()));
+
   // Edit menu - canvas resize
   editMenu->addSeparator();
   editMenu->addAction("Resize &Canvas...", _canvas, SLOT(resizeCanvas()));

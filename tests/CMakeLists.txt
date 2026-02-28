@@ -211,10 +211,54 @@ set_target_properties(test_brush_tip PROPERTIES
 
 add_test(NAME TestBrushTip COMMAND test_brush_tip)
 
+# RotationDialog tests
+add_executable(test_rotation_dialog
+    test_rotation_dialog.cpp
+    ../src/widgets/rotation_dialog.cpp
+    ../src/widgets/rotation_dialog.h
+)
+
+target_include_directories(test_rotation_dialog PRIVATE
+    ../src/widgets
+)
+
+target_link_libraries(test_rotation_dialog PRIVATE
+    Qt${QT_VERSION_MAJOR}::Widgets
+    Qt${QT_VERSION_MAJOR}::Test
+)
+
+set_target_properties(test_rotation_dialog PROPERTIES
+    AUTOMOC ON
+)
+
+add_test(NAME TestRotationDialog COMMAND test_rotation_dialog)
+
+# AlignmentDialog tests
+add_executable(test_alignment_dialog
+    test_alignment_dialog.cpp
+    ../src/widgets/alignment_dialog.cpp
+    ../src/widgets/alignment_dialog.h
+)
+
+target_include_directories(test_alignment_dialog PRIVATE
+    ../src/widgets
+)
+
+target_link_libraries(test_alignment_dialog PRIVATE
+    Qt${QT_VERSION_MAJOR}::Widgets
+    Qt${QT_VERSION_MAJOR}::Test
+)
+
+set_target_properties(test_alignment_dialog PROPERTIES
+    AUTOMOC ON
+)
+
+add_test(NAME TestAlignmentDialog COMMAND test_alignment_dialog)
+
 # Add custom target to run all tests
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
     DEPENDS test_item_store test_project_serializer test_image_filters test_perspective_transform test_snap_engine test_text_whitespace test_latex_unicode test_busy_spinner_overlay
-    DEPENDS test_item_store test_project_serializer test_image_filters test_perspective_transform test_snap_engine test_text_whitespace test_latex_unicode test_brush_tip
+    DEPENDS test_item_store test_project_serializer test_image_filters test_perspective_transform test_snap_engine test_text_whitespace test_latex_unicode test_brush_tip test_rotation_dialog test_alignment_dialog
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
