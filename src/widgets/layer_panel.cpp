@@ -25,6 +25,7 @@
 #include <QInputDialog>
 #include <QMenu>
 #include <QMessageBox>
+#include <QTimer>
 #include <QVBoxLayout>
 
 static void applyLayerButtonIcon(QPushButton *button, const QString &iconPath,
@@ -179,7 +180,24 @@ void LayerPanel::setCanvas(Canvas *canvas) {
   }
 }
 
-void LayerPanel::setItemStore(ItemStore *store) { itemStore_ = store; }
+void LayerPanel::setItemStore(ItemStore *store) {
+  // Disconnect from the previous store if any
+  if (itemStore_) {
+    disconnect(itemStore_, nullptr, this, nullptr);
+  }
+  itemStore_ = store;
+  if (store) {
+    // Refresh the layer tree when items are restored or deleted directly
+    // through ItemStore (e.g. during undo/redo which bypasses SceneController).
+    // Use QTimer::singleShot to defer until all action callbacks complete.
+    connect(store, &ItemStore::itemRestored, this, [this]() {
+      QTimer::singleShot(0, this, &LayerPanel::refreshLayerList);
+    });
+    connect(store, &ItemStore::itemAboutToBeDeleted, this, [this]() {
+      QTimer::singleShot(0, this, &LayerPanel::refreshLayerList);
+    });
+  }
+}
 
 void LayerPanel::setupUI() {
   QWidget *container = new QWidget(this);
