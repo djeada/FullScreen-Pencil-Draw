@@ -15,6 +15,8 @@
 #include "../src/core/layer.h"
 #include "../src/core/project_serializer.h"
 #include "../src/core/scene_controller.h"
+#include "../src/widgets/latex_text_item.h"
+#include "../src/widgets/text_on_path_item.h"
 #include <QDir>
 #include <QFile>
 #include <QGraphicsEllipseItem>
@@ -573,6 +575,109 @@ private slots:
     QVERIFY(loadedRect2);
     QCOMPARE(loadedRect2->brush().style(), Qt::CrossPattern);
     QCOMPARE(loadedRect2->brush().color(), QColor(Qt::cyan));
+  }
+
+  void testSaveAndLoadLatexTextItem() {
+    QTemporaryDir tmpDir;
+    QVERIFY(tmpDir.isValid());
+    QString filePath = tmpDir.path() + "/test_latex.fspd";
+
+    QGraphicsScene scene;
+    ItemStore store(&scene);
+    LayerManager manager(&scene);
+    manager.setItemStore(&store);
+
+    auto *latexItem = new LatexTextItem();
+    latexItem->setText("Hello $x^2$");
+    latexItem->setTextColor(QColor(Qt::blue));
+    latexItem->setFont(QFont("Arial", 16));
+    latexItem->setPos(50, 75);
+    ItemId id = store.registerItem(latexItem);
+    manager.activeLayer()->addItem(id, &store);
+
+    QRectF sceneRect(0, 0, 800, 600);
+    QColor bgColor(Qt::white);
+
+    bool saved = ProjectSerializer::saveProject(filePath, &scene, &store,
+                                                &manager, sceneRect, bgColor);
+    QVERIFY(saved);
+
+    QGraphicsScene scene2;
+    ItemStore store2(&scene2);
+    LayerManager manager2(&scene2);
+    manager2.setItemStore(&store2);
+    QRectF loadedRect;
+    QColor loadedBg;
+
+    bool loaded = ProjectSerializer::loadProject(
+        filePath, &scene2, &store2, &manager2, loadedRect, loadedBg);
+    QVERIFY(loaded);
+
+    Layer *layer = manager2.layer(0);
+    QVERIFY(layer);
+    QCOMPARE(layer->itemCount(), 1);
+
+    auto *loadedLatex = dynamic_cast<LatexTextItem *>(
+        store2.item(layer->itemIds().first()));
+    QVERIFY(loadedLatex);
+    QCOMPARE(loadedLatex->text(), "Hello $x^2$");
+    QCOMPARE(loadedLatex->textColor(), QColor(Qt::blue));
+    QCOMPARE(loadedLatex->pos(), QPointF(50, 75));
+    QCOMPARE(loadedLatex->font().pointSize(), 16);
+  }
+
+  void testSaveAndLoadTextOnPathItem() {
+    QTemporaryDir tmpDir;
+    QVERIFY(tmpDir.isValid());
+    QString filePath = tmpDir.path() + "/test_pathtext.fspd";
+
+    QGraphicsScene scene;
+    ItemStore store(&scene);
+    LayerManager manager(&scene);
+    manager.setItemStore(&store);
+
+    auto *pathTextItem = new TextOnPathItem();
+    pathTextItem->setText("Curved Text");
+    pathTextItem->setTextColor(QColor(Qt::red));
+    pathTextItem->setFont(QFont("Helvetica", 20));
+    QPainterPath path;
+    path.moveTo(0, 100);
+    path.cubicTo(50, 0, 150, 0, 200, 100);
+    pathTextItem->setPath(path);
+    pathTextItem->setPos(10, 20);
+    ItemId id = store.registerItem(pathTextItem);
+    manager.activeLayer()->addItem(id, &store);
+
+    QRectF sceneRect(0, 0, 800, 600);
+    QColor bgColor(Qt::white);
+
+    bool saved = ProjectSerializer::saveProject(filePath, &scene, &store,
+                                                &manager, sceneRect, bgColor);
+    QVERIFY(saved);
+
+    QGraphicsScene scene2;
+    ItemStore store2(&scene2);
+    LayerManager manager2(&scene2);
+    manager2.setItemStore(&store2);
+    QRectF loadedRect;
+    QColor loadedBg;
+
+    bool loaded = ProjectSerializer::loadProject(
+        filePath, &scene2, &store2, &manager2, loadedRect, loadedBg);
+    QVERIFY(loaded);
+
+    Layer *layer = manager2.layer(0);
+    QVERIFY(layer);
+    QCOMPARE(layer->itemCount(), 1);
+
+    auto *loadedPathText = dynamic_cast<TextOnPathItem *>(
+        store2.item(layer->itemIds().first()));
+    QVERIFY(loadedPathText);
+    QCOMPARE(loadedPathText->text(), "Curved Text");
+    QCOMPARE(loadedPathText->textColor(), QColor(Qt::red));
+    QCOMPARE(loadedPathText->pos(), QPointF(10, 20));
+    QCOMPARE(loadedPathText->font().pointSize(), 20);
+    QVERIFY(loadedPathText->path().elementCount() > 0);
   }
 };
 

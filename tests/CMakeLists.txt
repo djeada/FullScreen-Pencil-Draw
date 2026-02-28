@@ -29,10 +29,15 @@ add_executable(test_item_store
     test_item_store.cpp
     ${CORE_SOURCES}
     ${CORE_HEADERS}
+    ../src/widgets/latex_text_item.cpp
+    ../src/widgets/latex_text_item.h
+    ../src/widgets/text_on_path_item.cpp
+    ../src/widgets/text_on_path_item.h
 )
 
 target_include_directories(test_item_store PRIVATE
     ../src/core
+    ../src/widgets
 )
 
 target_link_libraries(test_item_store PRIVATE
@@ -53,10 +58,15 @@ add_executable(test_project_serializer
     test_project_serializer.cpp
     ${CORE_SOURCES}
     ${CORE_HEADERS}
+    ../src/widgets/latex_text_item.cpp
+    ../src/widgets/latex_text_item.h
+    ../src/widgets/text_on_path_item.cpp
+    ../src/widgets/text_on_path_item.h
 )
 
 target_include_directories(test_project_serializer PRIVATE
     ../src/core
+    ../src/widgets
 )
 
 target_link_libraries(test_project_serializer PRIVATE
