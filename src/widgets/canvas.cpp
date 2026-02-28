@@ -21,6 +21,8 @@
 #include "resize_canvas_dialog.h"
 #include "scale_dialog.h"
 #include "scan_document_dialog.h"
+#include "rotation_dialog.h"
+#include "alignment_dialog.h"
 #include "transform_handle_item.h"
 #include <QApplication>
 #include <QClipboard>
@@ -4032,6 +4034,14 @@ void Canvas::contextMenuEvent(QContextMenuEvent *event) {
         contextMenu.addAction("Perspective Transform...");
     connect(perspectiveAction, &QAction::triggered, this,
             &Canvas::perspectiveTransformSelectedItems);
+
+    QAction *rotateAction = contextMenu.addAction("Rotate...");
+    connect(rotateAction, &QAction::triggered, this,
+            &Canvas::rotateSelectedItems);
+
+    QAction *alignAction = contextMenu.addAction("Align Items...");
+    connect(alignAction, &QAction::triggered, this,
+            &Canvas::alignSelectedItems);
   }
 
   if (hasActiveColorSelection()) {
@@ -4648,6 +4658,179 @@ void Canvas::scaleSelectedItems() {
         addAction(std::make_unique<TransformAction>(
             id, sceneController_->itemStore(), oldTransform, item->transform(),
             oldPos, item->pos()));
+      }
+    }
+  }
+
+  updateTransformHandles();
+  emit canvasModified();
+}
+
+void Canvas::rotateSelectedItems() {
+  if (!scene_) {
+    return;
+  }
+
+  QList<QGraphicsItem *> selected = scene_->selectedItems();
+  if (selected.isEmpty()) {
+    return;
+  }
+
+  RotationDialog dialog(this);
+  if (dialog.exec() != QDialog::Accepted) {
+    return;
+  }
+
+  double angle = dialog.angle();
+  if (qFuzzyIsNull(angle)) {
+    return;
+  }
+
+  // Compute combined bounding center
+  QRectF bounds;
+  for (QGraphicsItem *item : selected) {
+    bounds =
+        bounds.united(item->mapToScene(item->boundingRect()).boundingRect());
+  }
+  QPointF center = bounds.center();
+
+  for (QGraphicsItem *item : selected) {
+    QTransform oldTransform = item->transform();
+    QPointF oldPos = item->pos();
+
+    // Rotate around the combined center
+    QPointF localCenter = item->mapFromScene(center);
+
+    QTransform rotateTransform;
+    rotateTransform.translate(localCenter.x(), localCenter.y());
+    rotateTransform.rotate(angle);
+    rotateTransform.translate(-localCenter.x(), -localCenter.y());
+
+    item->setTransform(oldTransform * rotateTransform);
+
+    // Keep the center fixed in scene space
+    QPointF newCenterPos = item->mapToScene(localCenter);
+    QPointF posAdjust = center - newCenterPos;
+    item->setPos(item->pos() + posAdjust);
+
+    // Record undo action
+    if (sceneController_) {
+      ItemId id = sceneController_->idForItem(item);
+      if (id.isValid()) {
+        addAction(std::make_unique<TransformAction>(
+            id, sceneController_->itemStore(), oldTransform, item->transform(),
+            oldPos, item->pos()));
+      }
+    }
+  }
+
+  updateTransformHandles();
+  emit canvasModified();
+}
+
+void Canvas::alignSelectedItems() {
+  if (!scene_) {
+    return;
+  }
+
+  QList<QGraphicsItem *> selected = scene_->selectedItems();
+  if (selected.isEmpty()) {
+    return;
+  }
+
+  AlignmentDialog dialog(selected.size(), this);
+  if (dialog.exec() != QDialog::Accepted) {
+    return;
+  }
+
+  AlignmentMode mode = dialog.alignmentMode();
+
+  // Helper to extract the current rotation angle from an item's transform
+  auto extractRotation = [](QGraphicsItem *item) -> qreal {
+    QTransform t = item->transform();
+    return qRadiansToDegrees(qAtan2(t.m12(), t.m11()));
+  };
+
+  if (mode == AlignmentMode::AlignToAxes) {
+    // Reset each item's rotation to 0 while keeping its center position
+    for (QGraphicsItem *item : selected) {
+      QTransform oldTransform = item->transform();
+      QPointF oldPos = item->pos();
+
+      qreal currentAngle = extractRotation(item);
+      if (qFuzzyIsNull(currentAngle)) {
+        continue;
+      }
+
+      QRectF itemBounds =
+          item->mapToScene(item->boundingRect()).boundingRect();
+      QPointF center = itemBounds.center();
+      QPointF localCenter = item->mapFromScene(center);
+
+      // Rotate by the negative of the current angle to reset to 0
+      QTransform rotateTransform;
+      rotateTransform.translate(localCenter.x(), localCenter.y());
+      rotateTransform.rotate(-currentAngle);
+      rotateTransform.translate(-localCenter.x(), -localCenter.y());
+
+      item->setTransform(oldTransform * rotateTransform);
+
+      QPointF newCenterPos = item->mapToScene(localCenter);
+      QPointF posAdjust = center - newCenterPos;
+      item->setPos(item->pos() + posAdjust);
+
+      if (sceneController_) {
+        ItemId id = sceneController_->idForItem(item);
+        if (id.isValid()) {
+          addAction(std::make_unique<TransformAction>(
+              id, sceneController_->itemStore(), oldTransform,
+              item->transform(), oldPos, item->pos()));
+        }
+      }
+    }
+  } else if ((mode == AlignmentMode::AlignParallel ||
+              mode == AlignmentMode::AlignPerpendicular) &&
+             selected.size() >= 2) {
+    // Compute target angle: same as first item (parallel) or +90° (perpendicular)
+    qreal targetAngle = extractRotation(selected.first());
+    if (mode == AlignmentMode::AlignPerpendicular) {
+      targetAngle += 90.0;
+    }
+
+    for (int i = 1; i < selected.size(); ++i) {
+      QGraphicsItem *item = selected[i];
+      QTransform oldTransform = item->transform();
+      QPointF oldPos = item->pos();
+
+      qreal currentAngle = extractRotation(item);
+      qreal delta = targetAngle - currentAngle;
+      if (qFuzzyIsNull(delta)) {
+        continue;
+      }
+
+      QRectF itemBounds =
+          item->mapToScene(item->boundingRect()).boundingRect();
+      QPointF center = itemBounds.center();
+      QPointF localCenter = item->mapFromScene(center);
+
+      QTransform rotateTransform;
+      rotateTransform.translate(localCenter.x(), localCenter.y());
+      rotateTransform.rotate(delta);
+      rotateTransform.translate(-localCenter.x(), -localCenter.y());
+
+      item->setTransform(oldTransform * rotateTransform);
+
+      QPointF newCenterPos = item->mapToScene(localCenter);
+      QPointF posAdjust = center - newCenterPos;
+      item->setPos(item->pos() + posAdjust);
+
+      if (sceneController_) {
+        ItemId id = sceneController_->idForItem(item);
+        if (id.isValid()) {
+          addAction(std::make_unique<TransformAction>(
+              id, sceneController_->itemStore(), oldTransform,
+              item->transform(), oldPos, item->pos()));
+        }
       }
     }
   }
