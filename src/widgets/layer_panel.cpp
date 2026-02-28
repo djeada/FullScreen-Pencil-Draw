@@ -179,6 +179,10 @@ void LayerPanel::setCanvas(Canvas *canvas) {
 }
 
 void LayerPanel::setItemStore(ItemStore *store) {
+  // Disconnect from the previous store if any
+  if (itemStore_) {
+    disconnect(itemStore_, nullptr, this, nullptr);
+  }
   itemStore_ = store;
   if (store) {
     // Refresh the layer tree when items are restored or deleted directly
