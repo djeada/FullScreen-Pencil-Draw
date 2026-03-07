@@ -3167,6 +3167,11 @@ void Canvas::copySelectedItems() {
   auto sel = scene_->selectedItems();
   if (sel.isEmpty())
     return;
+  // Sort by z-value so paste preserves the relative stacking order.
+  std::sort(sel.begin(), sel.end(),
+            [](const QGraphicsItem *a, const QGraphicsItem *b) {
+              return a->zValue() < b->zValue();
+            });
   auto md = new QMimeData();
   QByteArray ba;
   QDataStream ds(&ba, QIODevice::WriteOnly);
