@@ -3208,13 +3208,17 @@ static void serializeOneItem(QDataStream &ds, QGraphicsItem *item,
 // Returns the newly created item, or nullptr on failure.
 // The caller is responsible for setting position offsets, flags,
 // adding to the scene, and registering draw actions.
+static constexpr qint32 MAX_GROUP_CHILDREN = 10000;
+
 static QGraphicsItem *deserializeOneItem(QDataStream &ds, const QString &type) {
   if (type == "GroupT") {
     QPointF pos;
     QTransform tr;
     qint32 count;
     ds >> pos >> tr >> count;
-    auto *group = new QGraphicsItemGroup();
+    if (count < 0 || count > MAX_GROUP_CHILDREN)
+      return nullptr;
+    std::unique_ptr<QGraphicsItemGroup> group(new QGraphicsItemGroup());
     group->setPos(pos);
     group->setTransform(tr);
     for (qint32 i = 0; i < count; ++i) {
@@ -3226,7 +3230,7 @@ static QGraphicsItem *deserializeOneItem(QDataStream &ds, const QString &type) {
       if (child)
         group->addToGroup(child);
     }
-    return group;
+    return group.release();
   } else if (type == "RectangleT") {
     QRectF r;
     QPointF p;
