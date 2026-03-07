@@ -1809,18 +1809,20 @@ void Canvas::duplicateSelectedItems() {
     if (auto g = dynamic_cast<QGraphicsItemGroup *>(item)) {
       // Duplicate entire group
       QGraphicsItemGroup *newGroup = new QGraphicsItemGroup();
-      QPointF groupOffset = (snapToGrid_ || snapToObject_)
-                                ? snapPoint(g->pos() + offset)
-                                : g->pos() + offset;
-      newGroup->setPos(groupOffset);
 
-      // Duplicate each child item and add to new group
+      // Add children BEFORE setting position so addToGroup() sees
+      // the group at the origin and preserves group-local coords.
       for (QGraphicsItem *child : g->childItems()) {
         QGraphicsItem *newChild = cloneItem(child, eraserPreview_);
         if (newChild) {
           newGroup->addToGroup(newChild);
         }
       }
+
+      QPointF groupOffset = (snapToGrid_ || snapToObject_)
+                                ? snapPoint(g->pos() + offset)
+                                : g->pos() + offset;
+      newGroup->setPos(groupOffset);
 
       scene_->addItem(newGroup);
       newGroup->setFlags(QGraphicsItem::ItemIsSelectable |
@@ -3253,8 +3255,12 @@ static QGraphicsItem *deserializeOneItem(QDataStream &ds, const QString &type) {
     if (count < 0 || count > MAX_GROUP_CHILDREN)
       return nullptr;
     std::unique_ptr<QGraphicsItemGroup> group(new QGraphicsItemGroup());
-    group->setPos(pos);
-    group->setTransform(tr);
+    // Add children BEFORE setting the group's pos/transform so that
+    // addToGroup() sees the group at the origin with an identity
+    // transform.  The serialized child positions are in group-local
+    // coordinates, and when the group is at the origin this equals
+    // scene coordinates, so addToGroup()'s scene-to-group mapping
+    // is the identity and the child positions are preserved as-is.
     for (qint32 i = 0; i < count; ++i) {
       if (ds.atEnd())
         break;
@@ -3264,6 +3270,8 @@ static QGraphicsItem *deserializeOneItem(QDataStream &ds, const QString &type) {
       if (child)
         group->addToGroup(child);
     }
+    group->setPos(pos);
+    group->setTransform(tr);
     return group.release();
   } else if (type == "RectangleT") {
     QRectF r;

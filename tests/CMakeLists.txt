@@ -298,9 +298,25 @@ set_target_properties(test_transform_action PROPERTIES
 
 add_test(NAME TestTransformAction COMMAND test_transform_action)
 
+# Group clipboard round-trip tests
+add_executable(test_group_clipboard
+    test_group_clipboard.cpp
+)
+
+target_link_libraries(test_group_clipboard PRIVATE
+    Qt${QT_VERSION_MAJOR}::Widgets
+    Qt${QT_VERSION_MAJOR}::Test
+)
+
+set_target_properties(test_group_clipboard PROPERTIES
+    AUTOMOC ON
+)
+
+add_test(NAME TestGroupClipboard COMMAND test_group_clipboard)
+
 # Add custom target to run all tests
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-    DEPENDS test_item_store test_project_serializer test_image_filters test_perspective_transform test_snap_engine test_text_whitespace test_latex_unicode test_busy_spinner_overlay test_brush_tip test_rotation_dialog test_alignment_dialog test_transform_action
+    DEPENDS test_item_store test_project_serializer test_image_filters test_perspective_transform test_snap_engine test_text_whitespace test_latex_unicode test_busy_spinner_overlay test_brush_tip test_rotation_dialog test_alignment_dialog test_transform_action test_group_clipboard
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
