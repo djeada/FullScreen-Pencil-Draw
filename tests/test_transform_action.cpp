@@ -257,6 +257,59 @@ private slots:
     QCOMPARE(textItem->pos(), newTextP);
   }
 
+  void testCompositeRotationAction() {
+    QGraphicsScene scene;
+    ItemStore store(&scene);
+
+    auto *rect1 = new QGraphicsRectItem(0, 0, 100, 100);
+    auto *rect2 = new QGraphicsRectItem(0, 0, 50, 50);
+    scene.addItem(rect1);
+    scene.addItem(rect2);
+    ItemId id1 = store.registerItem(rect1);
+    ItemId id2 = store.registerItem(rect2);
+
+    QTransform oldT1, oldT2;
+    QPointF oldP1(0, 0), oldP2(200, 200);
+    rect1->setPos(oldP1);
+    rect2->setPos(oldP2);
+
+    // Apply 45-degree rotation to both items
+    QTransform newT1;
+    newT1.rotate(45);
+    QPointF newP1(10, 5);
+    rect1->setTransform(newT1);
+    rect1->setPos(newP1);
+
+    QTransform newT2;
+    newT2.rotate(45);
+    QPointF newP2(205, 195);
+    rect2->setTransform(newT2);
+    rect2->setPos(newP2);
+
+    // Create composite action with both rotation transforms
+    auto composite = std::make_unique<CompositeAction>();
+    composite->addAction(std::make_unique<TransformAction>(id1, &store, oldT1,
+                                                           newT1, oldP1,
+                                                           newP1));
+    composite->addAction(std::make_unique<TransformAction>(id2, &store, oldT2,
+                                                           newT2, oldP2,
+                                                           newP2));
+
+    // Single undo should revert BOTH items atomically
+    composite->undo();
+    QCOMPARE(rect1->transform(), oldT1);
+    QCOMPARE(rect1->pos(), oldP1);
+    QCOMPARE(rect2->transform(), oldT2);
+    QCOMPARE(rect2->pos(), oldP2);
+
+    // Single redo should restore BOTH items atomically
+    composite->redo();
+    QCOMPARE(rect1->transform(), newT1);
+    QCOMPARE(rect1->pos(), newP1);
+    QCOMPARE(rect2->transform(), newT2);
+    QCOMPARE(rect2->pos(), newP2);
+  }
+
   void testTransformActionDescription() {
     QGraphicsScene scene;
     ItemStore store(&scene);
