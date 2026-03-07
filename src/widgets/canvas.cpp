@@ -399,8 +399,8 @@ std::unique_ptr<DrawAction> Canvas::prepareDrawAction(QGraphicsItem *item) {
   } else {
     qWarning() << "Cannot create DrawAction without ItemStore";
   }
-  // Add item to active layer
-  if (layerManager_) {
+  // Add item to active layer only when properly tracked
+  if (action && layerManager_) {
     layerManager_->addItemToActiveLayer(item);
   }
   return action;
