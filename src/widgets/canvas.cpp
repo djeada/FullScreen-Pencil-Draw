@@ -24,6 +24,7 @@
 #include "rotation_dialog.h"
 #include "alignment_dialog.h"
 #include "transform_handle_item.h"
+#include "text_on_path_item.h"
 #include <QApplication>
 #include <QClipboard>
 #include <QColorDialog>
@@ -4088,6 +4089,10 @@ void Canvas::contextMenuEvent(QContextMenuEvent *event) {
     QAction *alignAction = contextMenu.addAction("Align Items...");
     connect(alignAction, &QAction::triggered, this,
             &Canvas::alignSelectedItems);
+
+    QAction *changeColorAction = contextMenu.addAction("Change Color...");
+    connect(changeColorAction, &QAction::triggered, this,
+            &Canvas::changeColorOfSelectedItems);
   }
 
   if (hasActiveColorSelection()) {
@@ -4969,6 +4974,133 @@ void Canvas::alignSelectedItems() {
         }
       }
     }
+  }
+
+  updateTransformHandles();
+  emit canvasModified();
+}
+
+void Canvas::changeColorOfSelectedItems() {
+  if (!scene_)
+    return;
+
+  QList<QGraphicsItem *> selected = scene_->selectedItems();
+  if (selected.isEmpty())
+    return;
+
+  // Try to detect the current color from the first selected item
+  QColor defaultColor = currentPen_.color();
+  for (QGraphicsItem *item : selected) {
+    if (auto *latex = dynamic_cast<LatexTextItem *>(item)) {
+      defaultColor = latex->textColor();
+      break;
+    } else if (auto *text = dynamic_cast<QGraphicsTextItem *>(item)) {
+      defaultColor = text->defaultTextColor();
+      break;
+    } else if (auto *textOnPath = dynamic_cast<TextOnPathItem *>(item)) {
+      defaultColor = textOnPath->textColor();
+      break;
+    } else if (auto *shape = dynamic_cast<QAbstractGraphicsShapeItem *>(item)) {
+      defaultColor = shape->pen().color();
+      break;
+    } else if (auto *line = dynamic_cast<QGraphicsLineItem *>(item)) {
+      defaultColor = line->pen().color();
+      break;
+    }
+  }
+
+  QColor newColor =
+      QColorDialog::getColor(defaultColor, this, "Change Color",
+                             QColorDialog::ShowAlphaChannel);
+  if (!newColor.isValid())
+    return;
+
+  ItemStore *store = itemStore();
+  if (!store)
+    return;
+
+  auto composite = std::make_unique<CompositeAction>();
+
+  for (QGraphicsItem *item : selected) {
+    if (!item)
+      continue;
+    if (item == eraserPreview_ || item == backgroundImage_ ||
+        item == colorSelectionOverlay_)
+      continue;
+    if (item->type() == TransformHandleItem::Type)
+      continue;
+
+    ItemId id = store->idForItem(item);
+    if (!id.isValid())
+      continue;
+
+    // Text items
+    if (auto *latex = dynamic_cast<LatexTextItem *>(item)) {
+      QColor oldColor = latex->textColor();
+      composite->addAction(
+          std::make_unique<FillAction>(id, store, oldColor, newColor));
+    } else if (auto *text = dynamic_cast<QGraphicsTextItem *>(item)) {
+      QColor oldColor = text->defaultTextColor();
+      composite->addAction(
+          std::make_unique<FillAction>(id, store, oldColor, newColor));
+    } else if (auto *textOnPath = dynamic_cast<TextOnPathItem *>(item)) {
+      QColor oldColor = textOnPath->textColor();
+      composite->addAction(
+          std::make_unique<FillAction>(id, store, oldColor, newColor));
+    }
+    // Shape items (rect, ellipse, polygon, path)
+    else if (auto *shape = dynamic_cast<QAbstractGraphicsShapeItem *>(item)) {
+      QPen oldPen = shape->pen();
+      QPen newPen = oldPen;
+      newPen.setColor(newColor);
+      composite->addAction(
+          std::make_unique<FillAction>(id, store, oldPen, newPen));
+
+      QBrush oldBrush = shape->brush();
+      if (oldBrush.style() != Qt::NoBrush) {
+        QBrush newBrush = oldBrush;
+        newBrush.setColor(newColor);
+        composite->addAction(
+            std::make_unique<FillAction>(id, store, oldBrush, newBrush));
+      }
+    }
+    // Line items
+    else if (auto *line = dynamic_cast<QGraphicsLineItem *>(item)) {
+      QPen oldPen = line->pen();
+      QPen newPen = oldPen;
+      newPen.setColor(newColor);
+      composite->addAction(
+          std::make_unique<FillAction>(id, store, oldPen, newPen));
+    }
+    // Groups (e.g., arrows): apply to children
+    else if (auto *group = dynamic_cast<QGraphicsItemGroup *>(item)) {
+      for (QGraphicsItem *child : group->childItems()) {
+        if (auto *childShape =
+                dynamic_cast<QAbstractGraphicsShapeItem *>(child)) {
+          QPen oldPen = childShape->pen();
+          QPen newPen = oldPen;
+          newPen.setColor(newColor);
+          childShape->setPen(newPen);
+
+          QBrush oldBrush = childShape->brush();
+          if (oldBrush.style() != Qt::NoBrush) {
+            QBrush newBrush = oldBrush;
+            newBrush.setColor(newColor);
+            childShape->setBrush(newBrush);
+          }
+        } else if (auto *childLine =
+                       dynamic_cast<QGraphicsLineItem *>(child)) {
+          QPen oldPen = childLine->pen();
+          QPen newPen = oldPen;
+          newPen.setColor(newColor);
+          childLine->setPen(newPen);
+        }
+      }
+    }
+  }
+
+  if (!composite->isEmpty()) {
+    addAction(std::move(composite));
   }
 
   updateTransformHandles();
