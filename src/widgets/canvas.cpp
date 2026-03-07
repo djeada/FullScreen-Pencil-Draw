@@ -3161,6 +3161,262 @@ void Canvas::hideEraserPreview() {
     eraserPreview_->hide();
 }
 
+// Serialize a single graphics item (including groups) into the data stream.
+static void serializeOneItem(QDataStream &ds, QGraphicsItem *item,
+                             QGraphicsEllipseItem *eraserPreview,
+                             QGraphicsPixmapItem *backgroundImage) {
+  if (!item)
+    return;
+  if (auto g = dynamic_cast<QGraphicsItemGroup *>(item)) {
+    auto children = g->childItems();
+    ds << QString("GroupT") << g->pos() << g->transform()
+       << static_cast<qint32>(children.size());
+    for (auto *child : children)
+      serializeOneItem(ds, child, eraserPreview, backgroundImage);
+  } else if (auto r = dynamic_cast<QGraphicsRectItem *>(item)) {
+    ds << QString("RectangleT") << r->rect() << r->pos() << r->pen()
+       << r->brush() << r->transform();
+  } else if (auto e = dynamic_cast<QGraphicsEllipseItem *>(item)) {
+    if (e == eraserPreview)
+      return;
+    ds << QString("EllipseT") << e->rect() << e->pos() << e->pen()
+       << e->brush() << e->transform();
+  } else if (auto l = dynamic_cast<QGraphicsLineItem *>(item)) {
+    ds << QString("LineT") << l->line() << l->pos() << l->pen()
+       << l->transform();
+  } else if (auto p = dynamic_cast<QGraphicsPathItem *>(item)) {
+    ds << QString("PathV3") << p->path() << p->pos() << p->pen() << p->brush()
+       << p->transform();
+  } else if (auto lt = dynamic_cast<LatexTextItem *>(item)) {
+    ds << QString("LatexTextT") << lt->text() << lt->pos() << lt->font()
+       << lt->textColor() << lt->transform();
+  } else if (auto t = dynamic_cast<QGraphicsTextItem *>(item)) {
+    ds << QString("TextT") << t->toPlainText() << t->pos() << t->font()
+       << t->defaultTextColor() << t->transform();
+  } else if (auto pg = dynamic_cast<QGraphicsPolygonItem *>(item)) {
+    ds << QString("PolygonT") << pg->polygon() << pg->pos() << pg->pen()
+       << pg->brush() << pg->transform();
+  } else if (auto px = dynamic_cast<QGraphicsPixmapItem *>(item)) {
+    if (px != backgroundImage) {
+      ds << QString("PixmapT") << px->pixmap().toImage() << px->pos()
+         << px->transform();
+    }
+  }
+}
+
+// Deserialize one item (including groups) from the data stream.
+// Returns the newly created item, or nullptr on failure.
+// The caller is responsible for setting position offsets, flags,
+// adding to the scene, and registering draw actions.
+static QGraphicsItem *deserializeOneItem(QDataStream &ds, const QString &type) {
+  if (type == "GroupT") {
+    QPointF pos;
+    QTransform tr;
+    qint32 count;
+    ds >> pos >> tr >> count;
+    auto *group = new QGraphicsItemGroup();
+    group->setPos(pos);
+    group->setTransform(tr);
+    for (qint32 i = 0; i < count; ++i) {
+      if (ds.atEnd())
+        break;
+      QString childType;
+      ds >> childType;
+      QGraphicsItem *child = deserializeOneItem(ds, childType);
+      if (child)
+        group->addToGroup(child);
+    }
+    return group;
+  } else if (type == "RectangleT") {
+    QRectF r;
+    QPointF p;
+    QPen pn;
+    QBrush b;
+    QTransform tr;
+    ds >> r >> p >> pn >> b >> tr;
+    auto n = new QGraphicsRectItem(r);
+    n->setPen(pn);
+    n->setBrush(b);
+    n->setPos(p);
+    n->setTransform(tr);
+    return n;
+  } else if (type == "Rectangle") {
+    QRectF r;
+    QPointF p;
+    QPen pn;
+    QBrush b;
+    ds >> r >> p >> pn >> b;
+    auto n = new QGraphicsRectItem(r);
+    n->setPen(pn);
+    n->setBrush(b);
+    n->setPos(p);
+    return n;
+  } else if (type == "EllipseT") {
+    QRectF r;
+    QPointF p;
+    QPen pn;
+    QBrush b;
+    QTransform tr;
+    ds >> r >> p >> pn >> b >> tr;
+    auto n = new QGraphicsEllipseItem(r);
+    n->setPen(pn);
+    n->setBrush(b);
+    n->setPos(p);
+    n->setTransform(tr);
+    return n;
+  } else if (type == "Ellipse") {
+    QRectF r;
+    QPointF p;
+    QPen pn;
+    QBrush b;
+    ds >> r >> p >> pn >> b;
+    auto n = new QGraphicsEllipseItem(r);
+    n->setPen(pn);
+    n->setBrush(b);
+    n->setPos(p);
+    return n;
+  } else if (type == "LineT") {
+    QLineF l;
+    QPointF p;
+    QPen pn;
+    QTransform tr;
+    ds >> l >> p >> pn >> tr;
+    auto n = new QGraphicsLineItem(l);
+    n->setPen(pn);
+    n->setPos(p);
+    n->setTransform(tr);
+    return n;
+  } else if (type == "Line") {
+    QLineF l;
+    QPointF p;
+    QPen pn;
+    ds >> l >> p >> pn;
+    auto n = new QGraphicsLineItem(l);
+    n->setPen(pn);
+    n->setPos(p);
+    return n;
+  } else if (type == "PathV3") {
+    QPainterPath pp;
+    QPointF p;
+    QPen pn;
+    QBrush b;
+    QTransform tr;
+    ds >> pp >> p >> pn >> b >> tr;
+    auto n = new QGraphicsPathItem(pp);
+    n->setPen(pn);
+    n->setBrush(b);
+    n->setPos(p);
+    n->setTransform(tr);
+    return n;
+  } else if (type == "PathV2") {
+    QPainterPath pp;
+    QPointF p;
+    QPen pn;
+    QBrush b;
+    ds >> pp >> p >> pn >> b;
+    auto n = new QGraphicsPathItem(pp);
+    n->setPen(pn);
+    n->setBrush(b);
+    n->setPos(p);
+    return n;
+  } else if (type == "Path") {
+    QPainterPath pp;
+    QPointF p;
+    QPen pn;
+    ds >> pp >> p >> pn;
+    auto n = new QGraphicsPathItem(pp);
+    n->setPen(pn);
+    n->setPos(p);
+    return n;
+  } else if (type == "LatexTextT") {
+    QString tx;
+    QPointF p;
+    QFont f;
+    QColor c;
+    QTransform tr;
+    ds >> tx >> p >> f >> c >> tr;
+    auto n = new LatexTextItem();
+    n->setText(tx);
+    n->setFont(f);
+    n->setTextColor(c);
+    n->setPos(p);
+    n->setTransform(tr);
+    return n;
+  } else if (type == "LatexText") {
+    QString tx;
+    QPointF p;
+    QFont f;
+    QColor c;
+    ds >> tx >> p >> f >> c;
+    auto n = new LatexTextItem();
+    n->setText(tx);
+    n->setFont(f);
+    n->setTextColor(c);
+    n->setPos(p);
+    return n;
+  } else if (type == "TextT") {
+    QString tx;
+    QPointF p;
+    QFont f;
+    QColor c;
+    QTransform tr;
+    ds >> tx >> p >> f >> c >> tr;
+    auto n = new QGraphicsTextItem(tx);
+    n->setFont(f);
+    n->setDefaultTextColor(c);
+    n->setPos(p);
+    n->setTransform(tr);
+    return n;
+  } else if (type == "Text") {
+    QString tx;
+    QPointF p;
+    QFont f;
+    QColor c;
+    ds >> tx >> p >> f >> c;
+    auto n = new QGraphicsTextItem(tx);
+    n->setFont(f);
+    n->setDefaultTextColor(c);
+    n->setPos(p);
+    return n;
+  } else if (type == "PolygonT") {
+    QPolygonF pg;
+    QPointF p;
+    QPen pn;
+    QBrush b;
+    QTransform tr;
+    ds >> pg >> p >> pn >> b >> tr;
+    auto n = new QGraphicsPolygonItem(pg);
+    n->setPen(pn);
+    n->setBrush(b);
+    n->setPos(p);
+    n->setTransform(tr);
+    return n;
+  } else if (type == "Polygon") {
+    QPolygonF pg;
+    QPointF p;
+    QPen pn;
+    QBrush b;
+    ds >> pg >> p >> pn >> b;
+    auto n = new QGraphicsPolygonItem(pg);
+    n->setPen(pn);
+    n->setBrush(b);
+    n->setPos(p);
+    return n;
+  } else if (type == "PixmapT") {
+    QImage img;
+    QPointF p;
+    QTransform tr;
+    ds >> img >> p >> tr;
+    if (!img.isNull()) {
+      auto n = new QGraphicsPixmapItem(QPixmap::fromImage(img));
+      n->setPos(p);
+      n->setTransform(tr);
+      return n;
+    }
+  }
+  return nullptr;
+}
+
 void Canvas::copySelectedItems() {
   if (!scene_)
     return;
@@ -3178,35 +3434,7 @@ void Canvas::copySelectedItems() {
   for (auto item : sel) {
     if (!item)
       continue;
-    if (auto r = dynamic_cast<QGraphicsRectItem *>(item)) {
-      ds << QString("RectangleT") << r->rect() << r->pos() << r->pen()
-         << r->brush() << r->transform();
-    } else if (auto e = dynamic_cast<QGraphicsEllipseItem *>(item)) {
-      if (item == eraserPreview_)
-        continue;
-      ds << QString("EllipseT") << e->rect() << e->pos() << e->pen()
-         << e->brush() << e->transform();
-    } else if (auto l = dynamic_cast<QGraphicsLineItem *>(item)) {
-      ds << QString("LineT") << l->line() << l->pos() << l->pen()
-         << l->transform();
-    } else if (auto p = dynamic_cast<QGraphicsPathItem *>(item)) {
-      ds << QString("PathV3") << p->path() << p->pos() << p->pen() << p->brush()
-         << p->transform();
-    } else if (auto lt = dynamic_cast<LatexTextItem *>(item)) {
-      ds << QString("LatexTextT") << lt->text() << lt->pos() << lt->font()
-         << lt->textColor() << lt->transform();
-    } else if (auto t = dynamic_cast<QGraphicsTextItem *>(item)) {
-      ds << QString("TextT") << t->toPlainText() << t->pos() << t->font()
-         << t->defaultTextColor() << t->transform();
-    } else if (auto pg = dynamic_cast<QGraphicsPolygonItem *>(item)) {
-      ds << QString("PolygonT") << pg->polygon() << pg->pos() << pg->pen()
-         << pg->brush() << pg->transform();
-    } else if (auto px = dynamic_cast<QGraphicsPixmapItem *>(item)) {
-      if (px != backgroundImage_) {
-        ds << QString("PixmapT") << px->pixmap().toImage() << px->pos()
-           << px->transform();
-      }
-    }
+    serializeOneItem(ds, item, eraserPreview_, backgroundImage_);
   }
   md->setData("application/x-canvas-items", ba);
   QApplication::clipboard()->setMimeData(md);
@@ -3250,253 +3478,14 @@ void Canvas::pasteItems() {
     while (!ds.atEnd()) {
       QString t;
       ds >> t;
-      if (t == "RectangleT") {
-        QRectF r;
-        QPointF p;
-        QPen pn;
-        QBrush b;
-        QTransform tr;
-        ds >> r >> p >> pn >> b >> tr;
-        auto n = new QGraphicsRectItem(r);
-        n->setPen(pn);
-        n->setBrush(b);
-        n->setPos(p + QPointF(20, 20));
-        n->setTransform(tr);
+      QGraphicsItem *n = deserializeOneItem(ds, t);
+      if (n) {
+        n->setPos(n->pos() + QPointF(20, 20));
         n->setFlags(QGraphicsItem::ItemIsSelectable |
                     QGraphicsItem::ItemIsMovable);
         scene_->addItem(n);
         pi.append(n);
         addDrawAction(n);
-      } else if (t == "Rectangle") {
-        QRectF r;
-        QPointF p;
-        QPen pn;
-        QBrush b;
-        ds >> r >> p >> pn >> b;
-        auto n = new QGraphicsRectItem(r);
-        n->setPen(pn);
-        n->setBrush(b);
-        n->setPos(p + QPointF(20, 20));
-        n->setFlags(QGraphicsItem::ItemIsSelectable |
-                    QGraphicsItem::ItemIsMovable);
-        scene_->addItem(n);
-        pi.append(n);
-        addDrawAction(n);
-      } else if (t == "EllipseT") {
-        QRectF r;
-        QPointF p;
-        QPen pn;
-        QBrush b;
-        QTransform tr;
-        ds >> r >> p >> pn >> b >> tr;
-        auto n = new QGraphicsEllipseItem(r);
-        n->setPen(pn);
-        n->setBrush(b);
-        n->setPos(p + QPointF(20, 20));
-        n->setTransform(tr);
-        n->setFlags(QGraphicsItem::ItemIsSelectable |
-                    QGraphicsItem::ItemIsMovable);
-        scene_->addItem(n);
-        pi.append(n);
-        addDrawAction(n);
-      } else if (t == "Ellipse") {
-        QRectF r;
-        QPointF p;
-        QPen pn;
-        QBrush b;
-        ds >> r >> p >> pn >> b;
-        auto n = new QGraphicsEllipseItem(r);
-        n->setPen(pn);
-        n->setBrush(b);
-        n->setPos(p + QPointF(20, 20));
-        n->setFlags(QGraphicsItem::ItemIsSelectable |
-                    QGraphicsItem::ItemIsMovable);
-        scene_->addItem(n);
-        pi.append(n);
-        addDrawAction(n);
-      } else if (t == "LineT") {
-        QLineF l;
-        QPointF p;
-        QPen pn;
-        QTransform tr;
-        ds >> l >> p >> pn >> tr;
-        auto n = new QGraphicsLineItem(l);
-        n->setPen(pn);
-        n->setPos(p + QPointF(20, 20));
-        n->setTransform(tr);
-        n->setFlags(QGraphicsItem::ItemIsSelectable |
-                    QGraphicsItem::ItemIsMovable);
-        scene_->addItem(n);
-        pi.append(n);
-        addDrawAction(n);
-      } else if (t == "Line") {
-        QLineF l;
-        QPointF p;
-        QPen pn;
-        ds >> l >> p >> pn;
-        auto n = new QGraphicsLineItem(l);
-        n->setPen(pn);
-        n->setPos(p + QPointF(20, 20));
-        n->setFlags(QGraphicsItem::ItemIsSelectable |
-                    QGraphicsItem::ItemIsMovable);
-        scene_->addItem(n);
-        pi.append(n);
-        addDrawAction(n);
-      } else if (t == "PathV3") {
-        QPainterPath pp;
-        QPointF p;
-        QPen pn;
-        QBrush b;
-        QTransform tr;
-        ds >> pp >> p >> pn >> b >> tr;
-        auto n = new QGraphicsPathItem(pp);
-        n->setPen(pn);
-        n->setBrush(b);
-        n->setPos(p + QPointF(20, 20));
-        n->setTransform(tr);
-        n->setFlags(QGraphicsItem::ItemIsSelectable |
-                    QGraphicsItem::ItemIsMovable);
-        scene_->addItem(n);
-        pi.append(n);
-        addDrawAction(n);
-      } else if (t == "PathV2") {
-        QPainterPath pp;
-        QPointF p;
-        QPen pn;
-        QBrush b;
-        ds >> pp >> p >> pn >> b;
-        auto n = new QGraphicsPathItem(pp);
-        n->setPen(pn);
-        n->setBrush(b);
-        n->setPos(p + QPointF(20, 20));
-        n->setFlags(QGraphicsItem::ItemIsSelectable |
-                    QGraphicsItem::ItemIsMovable);
-        scene_->addItem(n);
-        pi.append(n);
-        addDrawAction(n);
-      } else if (t == "Path") {
-        // Backward compatibility with clipboard data from older versions.
-        QPainterPath pp;
-        QPointF p;
-        QPen pn;
-        ds >> pp >> p >> pn;
-        auto n = new QGraphicsPathItem(pp);
-        n->setPen(pn);
-        n->setPos(p + QPointF(20, 20));
-        n->setFlags(QGraphicsItem::ItemIsSelectable |
-                    QGraphicsItem::ItemIsMovable);
-        scene_->addItem(n);
-        pi.append(n);
-        addDrawAction(n);
-      } else if (t == "LatexTextT") {
-        QString tx;
-        QPointF p;
-        QFont f;
-        QColor c;
-        QTransform tr;
-        ds >> tx >> p >> f >> c >> tr;
-        auto n = new LatexTextItem();
-        n->setText(tx);
-        n->setFont(f);
-        n->setTextColor(c);
-        n->setPos(p + QPointF(20, 20));
-        n->setTransform(tr);
-        scene_->addItem(n);
-        pi.append(n);
-        addDrawAction(n);
-      } else if (t == "LatexText") {
-        QString tx;
-        QPointF p;
-        QFont f;
-        QColor c;
-        ds >> tx >> p >> f >> c;
-        auto n = new LatexTextItem();
-        n->setText(tx);
-        n->setFont(f);
-        n->setTextColor(c);
-        n->setPos(p + QPointF(20, 20));
-        scene_->addItem(n);
-        pi.append(n);
-        addDrawAction(n);
-      } else if (t == "TextT") {
-        QString tx;
-        QPointF p;
-        QFont f;
-        QColor c;
-        QTransform tr;
-        ds >> tx >> p >> f >> c >> tr;
-        auto n = new QGraphicsTextItem(tx);
-        n->setFont(f);
-        n->setDefaultTextColor(c);
-        n->setPos(p + QPointF(20, 20));
-        n->setTransform(tr);
-        n->setFlags(QGraphicsItem::ItemIsSelectable |
-                    QGraphicsItem::ItemIsMovable);
-        scene_->addItem(n);
-        pi.append(n);
-        addDrawAction(n);
-      } else if (t == "Text") {
-        QString tx;
-        QPointF p;
-        QFont f;
-        QColor c;
-        ds >> tx >> p >> f >> c;
-        auto n = new QGraphicsTextItem(tx);
-        n->setFont(f);
-        n->setDefaultTextColor(c);
-        n->setPos(p + QPointF(20, 20));
-        n->setFlags(QGraphicsItem::ItemIsSelectable |
-                    QGraphicsItem::ItemIsMovable);
-        scene_->addItem(n);
-        pi.append(n);
-        addDrawAction(n);
-      } else if (t == "PolygonT") {
-        QPolygonF pg;
-        QPointF p;
-        QPen pn;
-        QBrush b;
-        QTransform tr;
-        ds >> pg >> p >> pn >> b >> tr;
-        auto n = new QGraphicsPolygonItem(pg);
-        n->setPen(pn);
-        n->setBrush(b);
-        n->setPos(p + QPointF(20, 20));
-        n->setTransform(tr);
-        n->setFlags(QGraphicsItem::ItemIsSelectable |
-                    QGraphicsItem::ItemIsMovable);
-        scene_->addItem(n);
-        pi.append(n);
-        addDrawAction(n);
-      } else if (t == "Polygon") {
-        QPolygonF pg;
-        QPointF p;
-        QPen pn;
-        QBrush b;
-        ds >> pg >> p >> pn >> b;
-        auto n = new QGraphicsPolygonItem(pg);
-        n->setPen(pn);
-        n->setBrush(b);
-        n->setPos(p + QPointF(20, 20));
-        n->setFlags(QGraphicsItem::ItemIsSelectable |
-                    QGraphicsItem::ItemIsMovable);
-        scene_->addItem(n);
-        pi.append(n);
-        addDrawAction(n);
-      } else if (t == "PixmapT") {
-        QImage img;
-        QPointF p;
-        QTransform tr;
-        ds >> img >> p >> tr;
-        if (!img.isNull()) {
-          auto n = new QGraphicsPixmapItem(QPixmap::fromImage(img));
-          n->setPos(p + QPointF(20, 20));
-          n->setTransform(tr);
-          n->setFlags(QGraphicsItem::ItemIsSelectable |
-                      QGraphicsItem::ItemIsMovable);
-          scene_->addItem(n);
-          pi.append(n);
-          addDrawAction(n);
-        }
       }
     }
     scene_->clearSelection();
