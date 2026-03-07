@@ -4452,9 +4452,15 @@ void Canvas::updateTransformHandles() {
       scene_->addItem(handle);
       transformHandles_.append(handle);
 
-      // Connect to update handles when transform completes
+      // Connect to save pre-transform state when transform starts
+      connect(handle, &TransformHandleItem::transformStarted, this,
+              [this]() { savePreTransformStates(); });
+
+      // Connect to create undo actions and update handles when transform
+      // completes
       connect(handle, &TransformHandleItem::transformCompleted, this,
               [this, handle]() {
+                createTransformUndoActions();
                 if (handle)
                   handle->updateHandles();
                 emit canvasModified();
@@ -4608,6 +4614,85 @@ void Canvas::applyRotationToOtherItems(QGraphicsItem *sourceItem,
     if (handle)
       handle->updateHandles();
   }
+}
+
+void Canvas::savePreTransformStates() {
+  preTransformStates_.clear();
+  if (!scene_)
+    return;
+
+  ItemStore *store = itemStore();
+  if (!store)
+    return;
+
+  QList<QGraphicsItem *> selectedItems = scene_->selectedItems();
+  for (QGraphicsItem *item : selectedItems) {
+    if (!item)
+      continue;
+    if (item == eraserPreview_ || item == backgroundImage_ ||
+        item == colorSelectionOverlay_)
+      continue;
+    if (item->type() == TransformHandleItem::Type)
+      continue;
+
+    ItemId id = store->idForItem(item);
+    if (!id.isValid())
+      continue;
+
+    ItemPreTransformState state;
+    state.id = id;
+    state.transform = item->transform();
+    state.pos = item->pos();
+
+    if (auto *textItem = dynamic_cast<LatexTextItem *>(item)) {
+      state.isTextItem = true;
+      state.font = textItem->font();
+    }
+
+    preTransformStates_.append(state);
+  }
+}
+
+void Canvas::createTransformUndoActions() {
+  if (preTransformStates_.isEmpty())
+    return;
+
+  ItemStore *store = itemStore();
+  if (!store)
+    return;
+
+  auto composite = std::make_unique<CompositeAction>();
+
+  for (const ItemPreTransformState &state : preTransformStates_) {
+    QGraphicsItem *item = store->item(state.id);
+    if (!item)
+      continue;
+
+    if (state.isTextItem) {
+      auto *textItem = dynamic_cast<LatexTextItem *>(item);
+      if (textItem) {
+        QFont newFont = textItem->font();
+        QPointF newPos = textItem->pos();
+        if (newFont != state.font || newPos != state.pos) {
+          composite->addAction(std::make_unique<TextResizeAction>(
+              state.id, store, state.font, newFont, state.pos, newPos));
+        }
+      }
+    } else {
+      QTransform newTransform = item->transform();
+      QPointF newPos = item->pos();
+      if (newTransform != state.transform || newPos != state.pos) {
+        composite->addAction(std::make_unique<TransformAction>(
+            state.id, store, state.transform, newTransform, state.pos, newPos));
+      }
+    }
+  }
+
+  if (!composite->isEmpty()) {
+    addAction(std::move(composite));
+  }
+
+  preTransformStates_.clear();
 }
 
 void Canvas::scaleSelectedItems() {
