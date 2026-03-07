@@ -366,6 +366,8 @@ private:
                                  const QPointF &center);
   void savePreTransformStates();
   void createTransformUndoActions();
+  std::unique_ptr<DrawAction> prepareDrawAction(QGraphicsItem *item);
+  std::unique_ptr<DeleteAction> prepareDeleteAction(QGraphicsItem *item);
   bool hasNonNormalBlendModes() const;
   void importSvg(const QString &filePath, const QPointF &position = QPointF());
 
