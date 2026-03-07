@@ -354,6 +354,15 @@ ItemId Canvas::registerItem(QGraphicsItem *item) {
 
 // Action management methods
 void Canvas::addDrawAction(QGraphicsItem *item) {
+  auto action = prepareDrawAction(item);
+  if (action) {
+    undoStack_.push_back(std::move(action));
+  }
+  clearRedoStack();
+  emit canvasModified();
+}
+
+std::unique_ptr<DrawAction> Canvas::prepareDrawAction(QGraphicsItem *item) {
   ItemStore *store = itemStore();
   ItemId itemId;
   if (store && item) {
@@ -384,21 +393,28 @@ void Canvas::addDrawAction(QGraphicsItem *item) {
 
   auto onRemove = [this](QGraphicsItem *removed) { onItemRemoved(removed); };
 
+  std::unique_ptr<DrawAction> action;
   if (store && itemId.isValid()) {
-    undoStack_.push_back(
-        std::make_unique<DrawAction>(itemId, store, onAdd, onRemove));
+    action = std::make_unique<DrawAction>(itemId, store, onAdd, onRemove);
   } else {
     qWarning() << "Cannot create DrawAction without ItemStore";
   }
-  clearRedoStack();
-  // Add item to active layer
-  if (layerManager_) {
+  // Add item to active layer only when properly tracked
+  if (action && layerManager_) {
     layerManager_->addItemToActiveLayer(item);
   }
-  emit canvasModified();
+  return action;
 }
 
 void Canvas::addDeleteAction(QGraphicsItem *item) {
+  auto action = prepareDeleteAction(item);
+  if (action) {
+    undoStack_.push_back(std::move(action));
+  }
+  clearRedoStack();
+}
+
+std::unique_ptr<DeleteAction> Canvas::prepareDeleteAction(QGraphicsItem *item) {
   ItemStore *store = itemStore();
   ItemId itemId;
   if (store && item) {
@@ -429,13 +445,13 @@ void Canvas::addDeleteAction(QGraphicsItem *item) {
 
   auto onRemove = [this](QGraphicsItem *removed) { onItemRemoved(removed); };
 
+  std::unique_ptr<DeleteAction> action;
   if (store && itemId.isValid()) {
-    undoStack_.push_back(
-        std::make_unique<DeleteAction>(itemId, store, onAdd, onRemove));
+    action = std::make_unique<DeleteAction>(itemId, store, onAdd, onRemove);
   } else {
     qWarning() << "Cannot create DeleteAction without ItemStore";
   }
-  clearRedoStack();
+  return action;
 }
 
 void Canvas::onItemRemoved(QGraphicsItem *item) {
@@ -1756,12 +1772,16 @@ void Canvas::deleteSelectedItems() {
   clearTransformHandles();
   // Copy the list to avoid modifying while iterating
   QList<QGraphicsItem *> selectedItems = scene_->selectedItems();
+  auto composite = std::make_unique<CompositeAction>();
   for (QGraphicsItem *item : selectedItems) {
     if (!item)
       continue;
     if (item != eraserPreview_ && item != backgroundImage_ &&
         item != colorSelectionOverlay_) {
-      addDeleteAction(item);
+      auto action = prepareDeleteAction(item);
+      if (action) {
+        composite->addAction(std::move(action));
+      }
       if (sceneController_) {
         sceneController_->removeItem(item, true);
       } else {
@@ -1769,6 +1789,9 @@ void Canvas::deleteSelectedItems() {
         onItemRemoved(item);
       }
     }
+  }
+  if (!composite->isEmpty()) {
+    addAction(std::move(composite));
   }
 }
 
@@ -1779,6 +1802,7 @@ void Canvas::duplicateSelectedItems() {
   QPointF offset = calculateSmartDuplicateOffset();
   // Copy the list to avoid issues with modification during iteration
   QList<QGraphicsItem *> selectedItems = scene_->selectedItems();
+  auto composite = std::make_unique<CompositeAction>();
   for (QGraphicsItem *item : selectedItems) {
     if (!item)
       continue;
@@ -1802,7 +1826,10 @@ void Canvas::duplicateSelectedItems() {
       newGroup->setFlags(QGraphicsItem::ItemIsSelectable |
                          QGraphicsItem::ItemIsMovable);
       newItems.append(newGroup);
-      addDrawAction(newGroup);
+      auto action = prepareDrawAction(newGroup);
+      if (action) {
+        composite->addAction(std::move(action));
+      }
     } else {
       // Clone individual item
       QGraphicsItem *newItem = cloneItem(item, eraserPreview_);
@@ -1815,9 +1842,16 @@ void Canvas::duplicateSelectedItems() {
                           QGraphicsItem::ItemIsMovable);
         scene_->addItem(newItem);
         newItems.append(newItem);
-        addDrawAction(newItem);
+        auto action = prepareDrawAction(newItem);
+        if (action) {
+          composite->addAction(std::move(action));
+        }
       }
     }
+  }
+  if (!composite->isEmpty()) {
+    addAction(std::move(composite));
+    emit canvasModified();
   }
   scene_->clearSelection();
   for (auto i : newItems)
@@ -3451,12 +3485,16 @@ void Canvas::cutSelectedItems() {
   if (sel.isEmpty())
     return;
   copySelectedItems();
+  auto composite = std::make_unique<CompositeAction>();
   for (auto item : sel) {
     if (!item)
       continue;
     if (item != eraserPreview_ && item != backgroundImage_ &&
         item != colorSelectionOverlay_) {
-      addDeleteAction(item);
+      auto action = prepareDeleteAction(item);
+      if (action) {
+        composite->addAction(std::move(action));
+      }
       if (sceneController_) {
         sceneController_->removeItem(item, true);
       } else {
@@ -3464,6 +3502,9 @@ void Canvas::cutSelectedItems() {
         onItemRemoved(item);
       }
     }
+  }
+  if (!composite->isEmpty()) {
+    addAction(std::move(composite));
   }
 }
 
@@ -3479,6 +3520,7 @@ void Canvas::pasteItems() {
     QByteArray ba = md->data("application/x-canvas-items");
     QDataStream ds(&ba, QIODevice::ReadOnly);
     QList<QGraphicsItem *> pi;
+    auto composite = std::make_unique<CompositeAction>();
     while (!ds.atEnd()) {
       QString t;
       ds >> t;
@@ -3489,8 +3531,14 @@ void Canvas::pasteItems() {
                     QGraphicsItem::ItemIsMovable);
         scene_->addItem(n);
         pi.append(n);
-        addDrawAction(n);
+        auto action = prepareDrawAction(n);
+        if (action)
+          composite->addAction(std::move(action));
       }
+    }
+    if (!composite->isEmpty()) {
+      addAction(std::move(composite));
+      emit canvasModified();
     }
     scene_->clearSelection();
     for (auto i : pi)
@@ -4450,9 +4498,15 @@ void Canvas::updateTransformHandles() {
       scene_->addItem(handle);
       transformHandles_.append(handle);
 
-      // Connect to update handles when transform completes
+      // Connect to save pre-transform state when transform starts
+      connect(handle, &TransformHandleItem::transformStarted, this,
+              [this]() { savePreTransformStates(); });
+
+      // Connect to create undo actions and update handles when transform
+      // completes
       connect(handle, &TransformHandleItem::transformCompleted, this,
               [this, handle]() {
+                createTransformUndoActions();
                 if (handle)
                   handle->updateHandles();
                 emit canvasModified();
@@ -4606,6 +4660,90 @@ void Canvas::applyRotationToOtherItems(QGraphicsItem *sourceItem,
     if (handle)
       handle->updateHandles();
   }
+}
+
+void Canvas::savePreTransformStates() {
+  preTransformStates_.clear();
+  if (!scene_)
+    return;
+
+  ItemStore *store = itemStore();
+  if (!store)
+    return;
+
+  QList<QGraphicsItem *> selectedItems = scene_->selectedItems();
+  for (QGraphicsItem *item : selectedItems) {
+    if (!item)
+      continue;
+    if (item == eraserPreview_ || item == backgroundImage_ ||
+        item == colorSelectionOverlay_)
+      continue;
+    if (item->type() == TransformHandleItem::Type)
+      continue;
+
+    ItemId id = store->idForItem(item);
+    if (!id.isValid())
+      continue;
+
+    ItemPreTransformState state;
+    state.id = id;
+    state.transform = item->transform();
+    state.pos = item->pos();
+
+    // Only LatexTextItem is handled here because it is the only text type
+    // whose resize changes font size instead of applying a scale transform.
+    if (auto *textItem = dynamic_cast<LatexTextItem *>(item)) {
+      state.isTextItem = true;
+      state.font = textItem->font();
+    }
+
+    preTransformStates_.append(state);
+  }
+}
+
+void Canvas::createTransformUndoActions() {
+  if (preTransformStates_.isEmpty())
+    return;
+
+  ItemStore *store = itemStore();
+  if (!store)
+    return;
+
+  auto composite = std::make_unique<CompositeAction>();
+
+  for (const ItemPreTransformState &state : preTransformStates_) {
+    QGraphicsItem *item = store->item(state.id);
+    if (!item)
+      continue;
+
+    if (state.isTextItem) {
+      // Re-verify the item is still a LatexTextItem (safety check)
+      auto *textItem = dynamic_cast<LatexTextItem *>(item);
+      if (textItem) {
+        QFont newFont = textItem->font();
+        QPointF newPos = textItem->pos();
+        // Compare point size specifically since resize only adjusts font size
+        if (newFont.pointSizeF() != state.font.pointSizeF() ||
+            newPos != state.pos) {
+          composite->addAction(std::make_unique<TextResizeAction>(
+              state.id, store, state.font, newFont, state.pos, newPos));
+        }
+      }
+    } else {
+      QTransform newTransform = item->transform();
+      QPointF newPos = item->pos();
+      if (newTransform != state.transform || newPos != state.pos) {
+        composite->addAction(std::make_unique<TransformAction>(
+            state.id, store, state.transform, newTransform, state.pos, newPos));
+      }
+    }
+  }
+
+  if (!composite->isEmpty()) {
+    addAction(std::move(composite));
+  }
+
+  preTransformStates_.clear();
 }
 
 void Canvas::scaleSelectedItems() {

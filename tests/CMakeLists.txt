@@ -265,9 +265,42 @@ set_target_properties(test_alignment_dialog PROPERTIES
 
 add_test(NAME TestAlignmentDialog COMMAND test_alignment_dialog)
 
+# TransformAction tests
+add_executable(test_transform_action
+    test_transform_action.cpp
+    ../src/core/transform_action.cpp
+    ../src/core/transform_action.h
+    ../src/core/action.cpp
+    ../src/core/action.h
+    ${CORE_SOURCES}
+    ${CORE_HEADERS}
+    ../src/widgets/latex_text_item.cpp
+    ../src/widgets/latex_text_item.h
+    ../src/widgets/mermaid_text_item.cpp
+    ../src/widgets/mermaid_text_item.h
+    ../src/widgets/text_on_path_item.cpp
+    ../src/widgets/text_on_path_item.h
+)
+
+target_include_directories(test_transform_action PRIVATE
+    ../src/core
+    ../src/widgets
+)
+
+target_link_libraries(test_transform_action PRIVATE
+    Qt${QT_VERSION_MAJOR}::Widgets
+    Qt${QT_VERSION_MAJOR}::Test
+)
+
+set_target_properties(test_transform_action PROPERTIES
+    AUTOMOC ON
+)
+
+add_test(NAME TestTransformAction COMMAND test_transform_action)
+
 # Add custom target to run all tests
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-    DEPENDS test_item_store test_project_serializer test_image_filters test_perspective_transform test_snap_engine test_text_whitespace test_latex_unicode test_busy_spinner_overlay test_brush_tip test_rotation_dialog test_alignment_dialog
+    DEPENDS test_item_store test_project_serializer test_image_filters test_perspective_transform test_snap_engine test_text_whitespace test_latex_unicode test_busy_spinner_overlay test_brush_tip test_rotation_dialog test_alignment_dialog test_transform_action
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )

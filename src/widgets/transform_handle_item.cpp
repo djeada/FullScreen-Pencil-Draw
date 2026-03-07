@@ -401,6 +401,8 @@ void TransformHandleItem::mousePressEvent(QGraphicsSceneMouseEvent *event) {
     wasSelectable_ = target->flags() & QGraphicsItem::ItemIsSelectable;
     target->setFlag(QGraphicsItem::ItemIsMovable, false);
   }
+
+  emit transformStarted();
 }
 
 void TransformHandleItem::mouseMoveEvent(QGraphicsSceneMouseEvent *event) {
@@ -429,21 +431,9 @@ void TransformHandleItem::mouseReleaseEvent(QGraphicsSceneMouseEvent *event) {
 
   event->accept();
 
-  // Create undo action if transform changed
+  // Restore the item's original flags
   QGraphicsItem *target = resolveTargetItem();
-  if (target && renderer_) {
-    QTransform newTransform = target->transform();
-    QPointF newPos = target->pos();
-
-    if (newTransform != originalTransform_ || newPos != originalPos_) {
-      if (itemStore_ && targetItemId_.isValid()) {
-        renderer_->addAction(std::make_unique<TransformAction>(
-            targetItemId_, itemStore_, originalTransform_, newTransform,
-            originalPos_, newPos));
-      }
-    }
-
-    // Restore the item's original flags
+  if (target) {
     target->setFlag(QGraphicsItem::ItemIsMovable, wasMovable_);
   }
 
