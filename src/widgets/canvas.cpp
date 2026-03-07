@@ -5072,28 +5072,47 @@ void Canvas::changeColorOfSelectedItems() {
       composite->addAction(
           std::make_unique<FillAction>(id, store, oldPen, newPen));
     }
-    // Groups (e.g., arrows): apply to children
+    // Groups (e.g., arrows): apply to children.
+    // Group children are typically not individually registered in the
+    // ItemStore, so FillAction-based undo is attempted when possible
+    // but falls back to direct modification for unregistered children.
     else if (auto *group = dynamic_cast<QGraphicsItemGroup *>(item)) {
       for (QGraphicsItem *child : group->childItems()) {
+        ItemId childId = store->idForItem(child);
         if (auto *childShape =
                 dynamic_cast<QAbstractGraphicsShapeItem *>(child)) {
           QPen oldPen = childShape->pen();
           QPen newPen = oldPen;
           newPen.setColor(newColor);
-          childShape->setPen(newPen);
+          if (childId.isValid()) {
+            composite->addAction(
+                std::make_unique<FillAction>(childId, store, oldPen, newPen));
+          } else {
+            childShape->setPen(newPen);
+          }
 
           QBrush oldBrush = childShape->brush();
           if (oldBrush.style() != Qt::NoBrush) {
             QBrush newBrush = oldBrush;
             newBrush.setColor(newColor);
-            childShape->setBrush(newBrush);
+            if (childId.isValid()) {
+              composite->addAction(std::make_unique<FillAction>(
+                  childId, store, oldBrush, newBrush));
+            } else {
+              childShape->setBrush(newBrush);
+            }
           }
         } else if (auto *childLine =
                        dynamic_cast<QGraphicsLineItem *>(child)) {
           QPen oldPen = childLine->pen();
           QPen newPen = oldPen;
           newPen.setColor(newColor);
-          childLine->setPen(newPen);
+          if (childId.isValid()) {
+            composite->addAction(
+                std::make_unique<FillAction>(childId, store, oldPen, newPen));
+          } else {
+            childLine->setPen(newPen);
+          }
         }
       }
     }
