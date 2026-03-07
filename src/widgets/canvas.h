@@ -206,6 +206,7 @@ public slots:
   void scaleSelectedItems();
   void rotateSelectedItems();
   void alignSelectedItems();
+  void changeColorOfSelectedItems();
   void perspectiveTransformSelectedItems();
   void scaleActiveLayer();
   void resizeCanvas();

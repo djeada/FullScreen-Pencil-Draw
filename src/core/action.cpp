@@ -7,6 +7,7 @@
 #include "action.h"
 #include "../widgets/latex_text_item.h"
 #include "../widgets/mermaid_text_item.h"
+#include "../widgets/text_on_path_item.h"
 #include "item_store.h"
 #include "layer.h"
 #include <QAbstractGraphicsShapeItem>
@@ -199,6 +200,8 @@ void FillAction::applyTextColor(const QColor &color) {
     text->setDefaultTextColor(color);
   } else if (auto *latex = dynamic_cast<LatexTextItem *>(item)) {
     latex->setTextColor(color);
+  } else if (auto *textOnPath = dynamic_cast<TextOnPathItem *>(item)) {
+    textOnPath->setTextColor(color);
   }
 }
 
