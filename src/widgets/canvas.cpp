@@ -3515,6 +3515,13 @@ void Canvas::pasteItems() {
   if (!md)
     return;
 
+  // Determine paste target: use current mouse position if inside the
+  // viewport, otherwise fall back to the viewport centre.
+  QPoint viewPos = mapFromGlobal(QCursor::pos());
+  QPointF pasteCenter = viewport()->rect().contains(viewPos)
+                            ? mapToScene(viewPos)
+                            : mapToScene(viewport()->rect().center());
+
   // Handle canvas items format (internal copy/paste) - highest priority
   if (md->hasFormat("application/x-canvas-items")) {
     QByteArray ba = md->data("application/x-canvas-items");
@@ -3526,16 +3533,31 @@ void Canvas::pasteItems() {
       ds >> t;
       QGraphicsItem *n = deserializeOneItem(ds, t);
       if (n) {
-        n->setPos(n->pos() + QPointF(20, 20));
         n->setFlags(QGraphicsItem::ItemIsSelectable |
                     QGraphicsItem::ItemIsMovable);
-        scene_->addItem(n);
         pi.append(n);
-        auto action = prepareDrawAction(n);
+      }
+    }
+
+    // Compute bounding rect of all deserialized items at their original
+    // positions, then shift so the centre lands on the paste target.
+    if (!pi.isEmpty()) {
+      QRectF bounds;
+      for (auto *item : pi) {
+        QRectF r = item->boundingRect();
+        r.translate(item->pos());
+        bounds = bounds.isNull() ? r : bounds.united(r);
+      }
+      QPointF offset = pasteCenter - bounds.center();
+      for (auto *item : pi) {
+        item->setPos(item->pos() + offset);
+        scene_->addItem(item);
+        auto action = prepareDrawAction(item);
         if (action)
           composite->addAction(std::move(action));
       }
     }
+
     if (!composite->isEmpty()) {
       addAction(std::move(composite));
       emit canvasModified();
@@ -3551,10 +3573,9 @@ void Canvas::pasteItems() {
   if (md->hasImage()) {
     QImage image = qvariant_cast<QImage>(md->imageData());
     if (!image.isNull()) {
-      QPointF centerPos = mapToScene(viewport()->rect().center());
       QPixmap pixmap = QPixmap::fromImage(image);
       auto *pixmapItem = new QGraphicsPixmapItem(pixmap);
-      pixmapItem->setPos(centerPos -
+      pixmapItem->setPos(pasteCenter -
                          QPointF(pixmap.width() / 2.0, pixmap.height() / 2.0));
       pixmapItem->setFlags(QGraphicsItem::ItemIsSelectable |
                            QGraphicsItem::ItemIsMovable);
@@ -3580,9 +3601,8 @@ void Canvas::pasteItems() {
       QPixmap pixmap(filePath);
       if (pixmap.isNull())
         continue;
-      QPointF centerPos = mapToScene(viewport()->rect().center());
       auto *pixmapItem = new QGraphicsPixmapItem(pixmap);
-      pixmapItem->setPos(centerPos -
+      pixmapItem->setPos(pasteCenter -
                          QPointF(pixmap.width() / 2.0, pixmap.height() / 2.0));
       pixmapItem->setFlags(QGraphicsItem::ItemIsSelectable |
                            QGraphicsItem::ItemIsMovable);
@@ -3602,11 +3622,11 @@ void Canvas::pasteItems() {
       if (md->hasFormat(mimeType)) {
         QImage image;
         if (image.loadFromData(md->data(mimeType))) {
-          QPointF centerPos = mapToScene(viewport()->rect().center());
           QPixmap pixmap = QPixmap::fromImage(image);
           auto *pixmapItem = new QGraphicsPixmapItem(pixmap);
           pixmapItem->setPos(
-              centerPos - QPointF(pixmap.width() / 2.0, pixmap.height() / 2.0));
+              pasteCenter -
+              QPointF(pixmap.width() / 2.0, pixmap.height() / 2.0));
           pixmapItem->setFlags(QGraphicsItem::ItemIsSelectable |
                                QGraphicsItem::ItemIsMovable);
           scene_->addItem(pixmapItem);
@@ -3627,14 +3647,11 @@ void Canvas::pasteItems() {
     if (text.isEmpty())
       return;
 
-    // Create text item at center of visible area
-    QPointF centerPos = mapToScene(viewport()->rect().center());
-
     auto *textItem = new LatexTextItem();
     textItem->setText(text);
     textItem->setFont(QFont("Arial", qMax(12, currentPen_.width() * 3)));
     textItem->setTextColor(currentPen_.color());
-    textItem->setPos(centerPos);
+    textItem->setPos(pasteCenter);
     scene_->addItem(textItem);
     addDrawAction(textItem);
 
