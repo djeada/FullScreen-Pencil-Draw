@@ -4644,6 +4644,8 @@ void Canvas::savePreTransformStates() {
     state.transform = item->transform();
     state.pos = item->pos();
 
+    // Only LatexTextItem is handled here because it is the only text type
+    // whose resize changes font size instead of applying a scale transform.
     if (auto *textItem = dynamic_cast<LatexTextItem *>(item)) {
       state.isTextItem = true;
       state.font = textItem->font();
@@ -4669,11 +4671,14 @@ void Canvas::createTransformUndoActions() {
       continue;
 
     if (state.isTextItem) {
+      // Re-verify the item is still a LatexTextItem (safety check)
       auto *textItem = dynamic_cast<LatexTextItem *>(item);
       if (textItem) {
         QFont newFont = textItem->font();
         QPointF newPos = textItem->pos();
-        if (newFont != state.font || newPos != state.pos) {
+        // Compare point size specifically since resize only adjusts font size
+        if (newFont.pointSizeF() != state.font.pointSizeF() ||
+            newPos != state.pos) {
           composite->addAction(std::make_unique<TextResizeAction>(
               state.id, store, state.font, newFont, state.pos, newPos));
         }

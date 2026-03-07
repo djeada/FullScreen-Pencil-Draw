@@ -1,6 +1,8 @@
 /**
  * @file test_transform_action.cpp
- * @brief Tests for TransformAction and TextResizeAction undo/redo.
+ * @brief Tests for TransformAction and TextResizeAction undo/redo,
+ *        including single-item transforms, multi-item composite actions,
+ *        text resize font changes, and invalid item edge cases.
  */
 #include <QGraphicsRectItem>
 #include <QGraphicsScene>
