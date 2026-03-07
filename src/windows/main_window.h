@@ -16,6 +16,7 @@ class AutoSaveManager;
 class QLabel;
 class QAction;
 class QToolBar;
+class QCloseEvent;
 
 #ifdef HAVE_QT_PDF
 class PdfViewer;
@@ -31,6 +32,7 @@ public:
   ~MainWindow();
 
 protected:
+  void closeEvent(QCloseEvent *event) override;
   void keyPressEvent(QKeyEvent *event) override;
 
 private slots:

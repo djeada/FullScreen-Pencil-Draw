@@ -10,6 +10,7 @@
 #include "../widgets/layer_panel.h"
 #include "../widgets/tool_panel.h"
 #include <QApplication>
+#include <QCloseEvent>
 #include <QColorDialog>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -740,6 +741,19 @@ void MainWindow::onNewCanvas() {
   }
 }
 
+void MainWindow::closeEvent(QCloseEvent *event) {
+  QMessageBox::StandardButton response = QMessageBox::question(
+      this, "Confirm Exit", "Do you want to close the application?",
+      QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+
+  if (response == QMessageBox::Yes) {
+    event->accept();
+    QMainWindow::closeEvent(event);
+  } else {
+    event->ignore();
+  }
+}
+
 void MainWindow::keyPressEvent(QKeyEvent *event) {
   // Standard shortcuts
   if (event->matches(QKeySequence::Copy)) {
@@ -766,6 +780,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
     _canvas->extractColorSelectionToNewLayer();
   } else if (event->key() == Qt::Key_Escape) {
     this->close();
+    event->accept();
   } else if (event->key() == Qt::Key_Delete ||
              event->key() == Qt::Key_Backspace) {
     _canvas->deleteSelectedItems();
