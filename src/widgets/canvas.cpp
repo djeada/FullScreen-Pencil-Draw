@@ -3544,8 +3544,7 @@ void Canvas::pasteItems() {
     if (!pi.isEmpty()) {
       QRectF bounds;
       for (auto *item : pi) {
-        QRectF r = item->boundingRect();
-        r.translate(item->pos());
+        QRectF r = item->sceneBoundingRect();
         bounds = bounds.isNull() ? r : bounds.united(r);
       }
       QPointF offset = pasteCenter - bounds.center();
