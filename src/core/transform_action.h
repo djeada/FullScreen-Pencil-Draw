@@ -9,6 +9,7 @@
 
 #include "action.h"
 #include "item_id.h"
+#include <QFont>
 #include <QTransform>
 
 class ItemStore;
@@ -38,6 +39,34 @@ private:
   ItemStore *itemStore_;
   QTransform oldTransform_;
   QTransform newTransform_;
+  QPointF oldPos_;
+  QPointF newPos_;
+};
+
+/**
+ * @brief Action for undoing/redoing text item resize via font change.
+ *
+ * When text items are resized through transform handles, their font size
+ * is adjusted instead of their transform. This action records the old
+ * and new font along with the position so both can be restored.
+ */
+class TextResizeAction : public Action {
+public:
+  TextResizeAction(const ItemId &id, ItemStore *store, const QFont &oldFont,
+                   const QFont &newFont, const QPointF &oldPos,
+                   const QPointF &newPos);
+
+  ~TextResizeAction() override;
+
+  void undo() override;
+  void redo() override;
+  QString description() const override { return "Text Resize"; }
+
+private:
+  ItemId itemId_;
+  ItemStore *itemStore_;
+  QFont oldFont_;
+  QFont newFont_;
   QPointF oldPos_;
   QPointF newPos_;
 };

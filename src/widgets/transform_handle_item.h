@@ -104,6 +104,11 @@ public:
 
 signals:
   /**
+   * @brief Emitted when a transform operation begins (mouse press on handle)
+   */
+  void transformStarted();
+
+  /**
    * @brief Emitted when a transform operation is completed
    */
   void transformCompleted();

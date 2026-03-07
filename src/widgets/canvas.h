@@ -16,6 +16,7 @@
 #include <QDragLeaveEvent>
 #include <QDragMoveEvent>
 #include <QDropEvent>
+#include <QFont>
 #include <QGraphicsEllipseItem>
 #include <QGraphicsItem>
 #include <QGraphicsItemGroup>
@@ -41,6 +42,7 @@
 
 #include "../core/action.h"
 #include "../core/brush_tip.h"
+#include "../core/item_id.h"
 #include "../core/layer.h"
 #include "../core/scene_renderer.h"
 #include "../core/snap_engine.h"
@@ -362,8 +364,22 @@ private:
                                qreal scaleY, const QPointF &anchor);
   void applyRotationToOtherItems(QGraphicsItem *sourceItem, qreal angleDelta,
                                  const QPointF &center);
+  void savePreTransformStates();
+  void createTransformUndoActions();
+  std::unique_ptr<DrawAction> prepareDrawAction(QGraphicsItem *item);
+  std::unique_ptr<DeleteAction> prepareDeleteAction(QGraphicsItem *item);
   bool hasNonNormalBlendModes() const;
   void importSvg(const QString &filePath, const QPointF &position = QPointF());
+
+  // Pre-transform state for undo/redo of all selected items
+  struct ItemPreTransformState {
+    ItemId id;
+    QTransform transform;
+    QPointF pos;
+    QFont font;
+    bool isTextItem = false;
+  };
+  QList<ItemPreTransformState> preTransformStates_;
 
   // Snap engine and visual guides
   SnapEngine snapEngine_;
