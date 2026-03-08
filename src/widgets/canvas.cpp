@@ -4804,6 +4804,8 @@ void Canvas::scaleSelectedItems() {
   }
   QPointF center = bounds.center();
 
+  auto composite = std::make_unique<CompositeAction>();
+
   for (QGraphicsItem *item : selected) {
     QTransform oldTransform = item->transform();
     QPointF oldPos = item->pos();
@@ -4820,11 +4822,15 @@ void Canvas::scaleSelectedItems() {
     if (sceneController_) {
       ItemId id = sceneController_->idForItem(item);
       if (id.isValid()) {
-        addAction(std::make_unique<TransformAction>(
+        composite->addAction(std::make_unique<TransformAction>(
             id, sceneController_->itemStore(), oldTransform, item->transform(),
             oldPos, item->pos()));
       }
     }
+  }
+
+  if (!composite->isEmpty()) {
+    addAction(std::move(composite));
   }
 
   updateTransformHandles();
@@ -4859,6 +4865,8 @@ void Canvas::rotateSelectedItems() {
   }
   QPointF center = bounds.center();
 
+  auto composite = std::make_unique<CompositeAction>();
+
   for (QGraphicsItem *item : selected) {
     QTransform oldTransform = item->transform();
     QPointF oldPos = item->pos();
@@ -4882,11 +4890,15 @@ void Canvas::rotateSelectedItems() {
     if (sceneController_) {
       ItemId id = sceneController_->idForItem(item);
       if (id.isValid()) {
-        addAction(std::make_unique<TransformAction>(
+        composite->addAction(std::make_unique<TransformAction>(
             id, sceneController_->itemStore(), oldTransform, item->transform(),
             oldPos, item->pos()));
       }
     }
+  }
+
+  if (!composite->isEmpty()) {
+    addAction(std::move(composite));
   }
 
   updateTransformHandles();
@@ -4915,6 +4927,8 @@ void Canvas::alignSelectedItems() {
     QTransform t = item->transform();
     return qRadiansToDegrees(qAtan2(t.m12(), t.m11()));
   };
+
+  auto composite = std::make_unique<CompositeAction>();
 
   if (mode == AlignmentMode::AlignToAxes) {
     // Reset each item's rotation to 0 while keeping its center position
@@ -4947,7 +4961,7 @@ void Canvas::alignSelectedItems() {
       if (sceneController_) {
         ItemId id = sceneController_->idForItem(item);
         if (id.isValid()) {
-          addAction(std::make_unique<TransformAction>(
+          composite->addAction(std::make_unique<TransformAction>(
               id, sceneController_->itemStore(), oldTransform,
               item->transform(), oldPos, item->pos()));
         }
@@ -4992,12 +5006,16 @@ void Canvas::alignSelectedItems() {
       if (sceneController_) {
         ItemId id = sceneController_->idForItem(item);
         if (id.isValid()) {
-          addAction(std::make_unique<TransformAction>(
+          composite->addAction(std::make_unique<TransformAction>(
               id, sceneController_->itemStore(), oldTransform,
               item->transform(), oldPos, item->pos()));
         }
       }
     }
+  }
+
+  if (!composite->isEmpty()) {
+    addAction(std::move(composite));
   }
 
   updateTransformHandles();
@@ -5177,6 +5195,8 @@ void Canvas::perspectiveTransformSelectedItems() {
     return;
   }
 
+  auto composite = std::make_unique<CompositeAction>();
+
   for (QGraphicsItem *item : selected) {
     QTransform oldTransform = item->transform();
     QPointF oldPos = item->pos();
@@ -5214,11 +5234,15 @@ void Canvas::perspectiveTransformSelectedItems() {
     if (sceneController_) {
       ItemId id = sceneController_->idForItem(item);
       if (id.isValid()) {
-        addAction(std::make_unique<TransformAction>(
+        composite->addAction(std::make_unique<TransformAction>(
             id, sceneController_->itemStore(), oldTransform, item->transform(),
             oldPos, item->pos()));
       }
     }
+  }
+
+  if (!composite->isEmpty()) {
+    addAction(std::move(composite));
   }
 
   updateTransformHandles();
@@ -5263,13 +5287,18 @@ void Canvas::scaleActiveLayer() {
   sceneController_->scaleLayer(layer, sx, sy);
 
   // Record undo actions
+  auto composite = std::make_unique<CompositeAction>();
   for (const ItemState &state : oldStates) {
     QGraphicsItem *item = sceneController_->item(state.id);
     if (item) {
-      addAction(std::make_unique<TransformAction>(
+      composite->addAction(std::make_unique<TransformAction>(
           state.id, sceneController_->itemStore(), state.transform,
           item->transform(), state.pos, item->pos()));
     }
+  }
+
+  if (!composite->isEmpty()) {
+    addAction(std::move(composite));
   }
 
   updateTransformHandles();
