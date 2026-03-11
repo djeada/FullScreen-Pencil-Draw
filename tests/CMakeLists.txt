@@ -314,9 +314,31 @@ set_target_properties(test_group_clipboard PROPERTIES
 
 add_test(NAME TestGroupClipboard COMMAND test_group_clipboard)
 
+# SideTabBar tests
+add_executable(test_side_tab_bar
+    test_side_tab_bar.cpp
+    ../src/widgets/side_tab_bar.cpp
+    ../src/widgets/side_tab_bar.h
+)
+
+target_include_directories(test_side_tab_bar PRIVATE
+    ../src/widgets
+)
+
+target_link_libraries(test_side_tab_bar PRIVATE
+    Qt${QT_VERSION_MAJOR}::Widgets
+    Qt${QT_VERSION_MAJOR}::Test
+)
+
+set_target_properties(test_side_tab_bar PROPERTIES
+    AUTOMOC ON
+)
+
+add_test(NAME TestSideTabBar COMMAND test_side_tab_bar)
+
 # Add custom target to run all tests
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-    DEPENDS test_item_store test_project_serializer test_image_filters test_perspective_transform test_snap_engine test_text_whitespace test_latex_unicode test_busy_spinner_overlay test_brush_tip test_rotation_dialog test_alignment_dialog test_transform_action test_group_clipboard
+    DEPENDS test_item_store test_project_serializer test_image_filters test_perspective_transform test_snap_engine test_text_whitespace test_latex_unicode test_busy_spinner_overlay test_brush_tip test_rotation_dialog test_alignment_dialog test_transform_action test_group_clipboard test_side_tab_bar
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )

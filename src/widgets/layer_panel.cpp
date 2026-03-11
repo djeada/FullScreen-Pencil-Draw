@@ -139,6 +139,10 @@ void LayerTreeWidget::dropEvent(QDropEvent *event) {
 LayerPanel::LayerPanel(LayerManager *manager, QWidget *parent)
     : QDockWidget("Layers", parent), layerManager_(manager),
       itemStore_(nullptr), canvas_(nullptr), updatingSelection_(false) {
+  setObjectName("LayerPanel");
+  setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable |
+              QDockWidget::DockWidgetFloatable);
+  setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
   setupUI();
   refreshLayerList();
 
