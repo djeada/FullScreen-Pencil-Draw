@@ -23,7 +23,7 @@ void SideTabBar::trackDockWidget(QDockWidget *dock) {
 
   QAction *tabAction = addAction(dock->windowTitle());
   tabAction->setToolTip(
-      QString("Show %1 panel").arg(dock->windowTitle()));
+      QString("Show %1").arg(dock->windowTitle()));
   tabAction->setVisible(!dock->isVisible());
 
   // Restore the dock widget when the tab is clicked
