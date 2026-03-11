@@ -29,6 +29,7 @@ public:
    */
   enum class ToolType {
     Pen,
+    Highlighter,
     Eraser,
     Text,
     Fill,

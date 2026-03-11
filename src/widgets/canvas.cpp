@@ -10,6 +10,7 @@
 #include "../core/recent_files_manager.h"
 #include "../core/scene_controller.h"
 #include "../core/transform_action.h"
+#include "../core/undo_redo_manager.h"
 #include "../tools/lasso_selection_tool.h"
 #include "architecture_elements.h"
 #include "busy_spinner_overlay.h"
@@ -147,6 +148,22 @@ effectiveCurvedArrowModifiers(Qt::KeyboardModifiers rawModifiers,
     }
   }
   return modifiers;
+}
+
+QPen makeHighlighterPen(const QPen &basePen) {
+  constexpr int kHighlighterAlpha = 96;
+  constexpr qreal kMinimumHighlighterWidth = 12.0;
+  constexpr qreal kHighlighterWidthScale = 3.0;
+
+  QPen pen = basePen;
+  QColor color = pen.color();
+  color.setAlpha(qMin(color.alpha(), kHighlighterAlpha));
+  pen.setColor(color);
+  pen.setWidthF(qMax(kMinimumHighlighterWidth,
+                     pen.widthF() * kHighlighterWidthScale));
+  pen.setCapStyle(Qt::RoundCap);
+  pen.setJoinStyle(Qt::RoundJoin);
+  return pen;
 }
 
 constexpr int COLOR_SELECTION_MARK = 255;
@@ -310,8 +327,12 @@ Canvas::Canvas(QWidget *parent)
 Canvas::~Canvas() {
   resetColorSelection();
   clearTransformHandles();
-  undoStack_.clear();
-  redoStack_.clear();
+  if (undoRedoManager_) {
+    undoRedoManager_->clear();
+  } else {
+    undoStack_.clear();
+    redoStack_.clear();
+  }
 }
 
 int Canvas::getCurrentBrushSize() const { return currentPen_.width(); }
@@ -342,6 +363,10 @@ bool Canvas::hasActiveColorSelection() const {
              store->item(colorSelectionItemId_)) != nullptr;
 }
 
+void Canvas::setUndoRedoManager(UndoRedoManager *manager) {
+  undoRedoManager_ = manager;
+}
+
 ItemStore *Canvas::itemStore() const {
   return sceneController_ ? sceneController_->itemStore() : nullptr;
 }
@@ -357,9 +382,8 @@ ItemId Canvas::registerItem(QGraphicsItem *item) {
 void Canvas::addDrawAction(QGraphicsItem *item) {
   auto action = prepareDrawAction(item);
   if (action) {
-    undoStack_.push_back(std::move(action));
+    addAction(std::move(action));
   }
-  clearRedoStack();
   emit canvasModified();
 }
 
@@ -410,9 +434,8 @@ std::unique_ptr<DrawAction> Canvas::prepareDrawAction(QGraphicsItem *item) {
 void Canvas::addDeleteAction(QGraphicsItem *item) {
   auto action = prepareDeleteAction(item);
   if (action) {
-    undoStack_.push_back(std::move(action));
+    addAction(std::move(action));
   }
-  clearRedoStack();
 }
 
 std::unique_ptr<DeleteAction> Canvas::prepareDeleteAction(QGraphicsItem *item) {
@@ -506,11 +529,19 @@ void Canvas::onItemRemoved(QGraphicsItem *item) {
 }
 
 void Canvas::addAction(std::unique_ptr<Action> action) {
-  undoStack_.push_back(std::move(action));
-  clearRedoStack();
+  if (undoRedoManager_) {
+    undoRedoManager_->push(std::move(action));
+  } else {
+    undoStack_.push_back(std::move(action));
+    clearRedoStack();
+  }
 }
 
-void Canvas::clearRedoStack() { redoStack_.clear(); }
+void Canvas::clearRedoStack() {
+  if (!undoRedoManager_) {
+    redoStack_.clear();
+  }
+}
 
 bool Canvas::hasNonNormalBlendModes() const {
   if (!layerManager_) {
@@ -713,6 +744,19 @@ void Canvas::setShape(const QString &shapeType) {
 
 void Canvas::setPenTool() {
   currentShape_ = Pen;
+  tempShapeItem_ = nullptr;
+  this->setDragMode(QGraphicsView::NoDrag);
+  hideEraserPreview();
+  if (scene_)
+    scene_->clearSelection();
+  if (colorSelectionOverlay_)
+    colorSelectionOverlay_->hide();
+  setCursor(Qt::CrossCursor);
+  isPanning_ = false;
+}
+
+void Canvas::setHighlighterTool() {
+  currentShape_ = Highlighter;
   tempShapeItem_ = nullptr;
   this->setDragMode(QGraphicsView::NoDrag);
   hideEraserPreview();
@@ -938,9 +982,13 @@ void Canvas::clearCanvas() {
 
   clearTransformHandles();
 
-  // Clear undo/redo stacks first (they may hold references to items)
-  undoStack_.clear();
-  redoStack_.clear();
+  // Clear undo/redo history first (it may hold references to items)
+  if (undoRedoManager_) {
+    undoRedoManager_->clear();
+  } else {
+    undoStack_.clear();
+    redoStack_.clear();
+  }
 
   // Clear via sceneController if available (handles both store and scene)
   // Don't clear layerManager separately as it would double-delete items
@@ -984,7 +1032,9 @@ void Canvas::newCanvas(int width, int height, const QColor &bgColor) {
 }
 
 void Canvas::undoLastAction() {
-  if (!undoStack_.empty()) {
+  if (undoRedoManager_) {
+    undoRedoManager_->undo();
+  } else if (!undoStack_.empty()) {
     std::unique_ptr<Action> lastAction = std::move(undoStack_.back());
     undoStack_.pop_back();
     lastAction->undo();
@@ -993,7 +1043,9 @@ void Canvas::undoLastAction() {
 }
 
 void Canvas::redoLastAction() {
-  if (!redoStack_.empty()) {
+  if (undoRedoManager_) {
+    undoRedoManager_->redo();
+  } else if (!redoStack_.empty()) {
     std::unique_ptr<Action> nextAction = std::move(redoStack_.back());
     redoStack_.pop_back();
     nextAction->redo();
@@ -1406,8 +1458,7 @@ void Canvas::bringToFront() {
         layerManager_));
   }
   if (!composite->isEmpty()) {
-    undoStack_.push_back(std::move(composite));
-    clearRedoStack();
+    addAction(std::move(composite));
   }
   emit canvasModified();
 }
@@ -1460,8 +1511,7 @@ void Canvas::bringForward() {
         info.id, info.layer->id(), currentIdx, currentIdx + 1, layerManager_));
   }
   if (!composite->isEmpty()) {
-    undoStack_.push_back(std::move(composite));
-    clearRedoStack();
+    addAction(std::move(composite));
   }
   emit canvasModified();
 }
@@ -1514,8 +1564,7 @@ void Canvas::sendBackward() {
         info.id, info.layer->id(), currentIdx, currentIdx - 1, layerManager_));
   }
   if (!composite->isEmpty()) {
-    undoStack_.push_back(std::move(composite));
-    clearRedoStack();
+    addAction(std::move(composite));
   }
   emit canvasModified();
 }
@@ -1569,8 +1618,7 @@ void Canvas::sendToBack() {
         info.id, info.layer->id(), currentIdx, 0, layerManager_));
   }
   if (!composite->isEmpty()) {
-    undoStack_.push_back(std::move(composite));
-    clearRedoStack();
+    addAction(std::move(composite));
   }
   emit canvasModified();
 }
@@ -2833,6 +2881,20 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
     }
     addDrawAction(currentPath_);
   } break;
+  case Highlighter: {
+    currentPath_ = new QGraphicsPathItem();
+    currentPath_->setPen(makeHighlighterPen(currentPen_));
+    currentPath_->setFlags(QGraphicsItem::ItemIsSelectable |
+                           QGraphicsItem::ItemIsMovable);
+    QPainterPath p;
+    p.moveTo(sp);
+    currentPath_->setPath(p);
+    scene_->addItem(currentPath_);
+    pointBuffer_.clear();
+    pressureBuffer_.clear();
+    pointBuffer_.append(sp);
+    addDrawAction(currentPath_);
+  } break;
   case Rectangle: {
     auto ri = new QGraphicsRectItem(QRectF(startPoint_, startPoint_));
     ri->setPen(currentPen_);
@@ -2958,8 +3020,9 @@ void Canvas::mouseMoveEvent(QMouseEvent *event) {
   }
   switch (currentShape_) {
   case Pen:
+  case Highlighter:
     if (event->buttons() & Qt::LeftButton) {
-      if (pressureSensitive_ && tabletActive_)
+      if (currentShape_ == Pen && pressureSensitive_ && tabletActive_)
         addPressurePoint(cp, tabletPressure_);
       else
         addPoint(cp);
@@ -3145,9 +3208,10 @@ void Canvas::mouseReleaseEvent(QMouseEvent *event) {
     curvedArrowShiftWasDown_ = false;
     return;
   }
-  if (currentShape_ != Pen && currentShape_ != Eraser && tempShapeItem_)
+  if (currentShape_ != Pen && currentShape_ != Highlighter &&
+      currentShape_ != Eraser && tempShapeItem_)
     tempShapeItem_ = nullptr;
-  else if (currentShape_ == Pen) {
+  else if (currentShape_ == Pen || currentShape_ == Highlighter) {
     currentPath_ = nullptr;
     pointBuffer_.clear();
     pressureBuffer_.clear();

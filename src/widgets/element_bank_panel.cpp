@@ -3,6 +3,7 @@
  * @brief Implementation of the ElementBankPanel widget.
  */
 #include "element_bank_panel.h"
+#include "../core/theme_manager.h"
 #include <QFrame>
 #include <QGridLayout>
 #include <QIcon>
@@ -101,45 +102,105 @@ ElementBankPanel::ElementBankPanel(QWidget *parent)
   setMinimumWidth(220);
   setMaximumWidth(320);
 
-  // Styling – consistent with the existing ToolPanel dark theme.
-  setStyleSheet(R"(
-    QDockWidget {
-      background-color: #1a1a1e;
-      color: #f8f8fc;
-      font-weight: 500;
-    }
-    QDockWidget::title {
-      background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                                  stop:0 #2a2a30, stop:1 #242428);
-      padding: 12px 14px;
-      font-weight: 600;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    }
-    QScrollArea {
-      background-color: #1a1a1e;
-      border: none;
-    }
-    QToolButton {
-      background-color: rgba(255, 255, 255, 0.06);
-      color: #e0e0e6;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 8px;
-      padding: 4px 2px;
-      min-width: 58px;
-      min-height: 58px;
-      max-width: 58px;
-      max-height: 58px;
-      font-weight: 500;
-      font-size: 11px;
-    }
-    QToolButton:hover {
-      background-color: rgba(255, 255, 255, 0.1);
-      border: 1px solid rgba(59, 130, 246, 0.3);
-    }
-    QToolButton:pressed {
-      background-color: rgba(59, 130, 246, 0.25);
-    }
-  )");
+  connect(&ThemeManager::instance(), &ThemeManager::themeChanged, this,
+          [this]() { applyTheme(); });
+  applyTheme();
+}
+
+void ElementBankPanel::applyTheme() {
+  const bool darkTheme = ThemeManager::instance().isDarkTheme();
+
+  if (darkTheme) {
+    setStyleSheet(R"(
+      QDockWidget {
+        background-color: #1a1a1e;
+        color: #f8f8fc;
+        font-weight: 500;
+      }
+      QDockWidget::title {
+        background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                    stop:0 #2a2a30, stop:1 #242428);
+        padding: 12px 14px;
+        font-weight: 600;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      }
+      QScrollArea {
+        background-color: #1a1a1e;
+        border: none;
+      }
+      QLabel[categoryHeading="true"] {
+        color: #a0a0a8;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 2px 0px;
+      }
+      QToolButton {
+        background-color: rgba(255, 255, 255, 0.06);
+        color: #e0e0e6;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 8px;
+        padding: 4px 2px;
+        min-width: 58px;
+        min-height: 58px;
+        max-width: 58px;
+        max-height: 58px;
+        font-weight: 500;
+        font-size: 11px;
+      }
+      QToolButton:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(59, 130, 246, 0.3);
+      }
+      QToolButton:pressed {
+        background-color: rgba(59, 130, 246, 0.25);
+      }
+    )");
+  } else {
+    setStyleSheet(R"(
+      QDockWidget {
+        background-color: #f8f9fa;
+        color: #343a40;
+        font-weight: 500;
+      }
+      QDockWidget::title {
+        background: #e9ecef;
+        color: #343a40;
+        padding: 12px 14px;
+        font-weight: 600;
+        border-bottom: 1px solid #dee2e6;
+      }
+      QScrollArea {
+        background-color: #f8f9fa;
+        border: none;
+      }
+      QLabel[categoryHeading="true"] {
+        color: #6c757d;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 2px 0px;
+      }
+      QToolButton {
+        background-color: #ffffff;
+        color: #343a40;
+        border: 1px solid #ced4da;
+        border-radius: 8px;
+        padding: 4px 2px;
+        min-width: 58px;
+        min-height: 58px;
+        max-width: 58px;
+        max-height: 58px;
+        font-weight: 500;
+        font-size: 11px;
+      }
+      QToolButton:hover {
+        background-color: #f1f3f5;
+        border: 1px solid rgba(66, 133, 244, 0.35);
+      }
+      QToolButton:pressed {
+        background-color: #e9ecef;
+      }
+    )");
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -150,9 +211,7 @@ void ElementBankPanel::addCategory(QVBoxLayout *layout, const QString &category,
                                    const QVector<ElementInfo> &elements) {
   // Category heading
   auto *heading = new QLabel(category, this);
-  heading->setStyleSheet(
-      "QLabel { color: #a0a0a8; font-size: 11px; font-weight: 600; "
-      "padding: 2px 0px; }");
+  heading->setProperty("categoryHeading", true);
   heading->setAlignment(Qt::AlignLeft);
   layout->addWidget(heading);
 

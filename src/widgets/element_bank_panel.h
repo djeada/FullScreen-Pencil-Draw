@@ -53,6 +53,8 @@ private:
   /// Populate the built-in element library.
   static QVector<ElementInfo> defaultElements();
 
+  void applyTheme();
+
   /// Build the UI for one category inside the given layout.
   void addCategory(QVBoxLayout *layout, const QString &category,
                    const QVector<ElementInfo> &elements);

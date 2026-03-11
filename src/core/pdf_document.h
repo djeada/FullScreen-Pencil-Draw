@@ -226,6 +226,7 @@ private:
   Status status_;
 
   void setStatus(Status status);
+  QImage flattenPageBackground(const QImage &image) const;
   QImage invertImage(const QImage &image) const;
 };
 

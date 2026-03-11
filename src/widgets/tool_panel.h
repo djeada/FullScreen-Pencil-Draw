@@ -36,6 +36,7 @@ signals:
   void selectionSelected();
   void lassoSelectionSelected();
   void penSelected();
+  void highlighterSelected();
   void eraserSelected();
   void textSelected();
   void fillSelected();
@@ -78,6 +79,7 @@ private:
   QAction *actionSelection;
   QAction *actionLassoSelection;
   QAction *actionPen;
+  QAction *actionHighlighter;
   QAction *actionEraser;
   QAction *actionText;
   QAction *actionMermaid;
@@ -108,6 +110,8 @@ private:
   QLabel *zoomLabel;
   QLabel *opacityLabel;
   QLabel *positionLabel;
+  QLabel *brushTipTextLabel_;
+  QLabel *fillStyleTextLabel_;
   QSlider *opacitySlider;
   BrushPreview *brushPreview_;
   QCheckBox *pressureSensitivityCheckBox_;
@@ -115,6 +119,7 @@ private:
   QComboBox *brushTipCombo_;
   QColor currentColor_;
 
+  void applyTheme();
   void clearActiveToolStyles();
   bool eventFilter(QObject *obj, QEvent *event) override;
 
@@ -144,6 +149,7 @@ public slots:
   void onActionSelection();
   void onActionLassoSelection();
   void onActionPen();
+  void onActionHighlighter();
   void onActionEraser();
   void onActionText();
   void onActionMermaid();

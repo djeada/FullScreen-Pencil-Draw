@@ -7,6 +7,7 @@
 #ifdef HAVE_QT_PDF
 
 #include <QDebug>
+#include <QPainter>
 
 // --- PdfPageCache Implementation ---
 
@@ -169,6 +170,8 @@ QImage PdfDocument::renderPage(int pageIndex, int dpi, bool inverted) {
     return QImage();
   }
 
+  image = flattenPageBackground(image);
+
   // Cache the rendered image (only non-inverted)
   if (!inverted) {
     cache_->setPage(pageIndex, dpi, image);
@@ -180,6 +183,20 @@ QImage PdfDocument::renderPage(int pageIndex, int dpi, bool inverted) {
   }
 
   return image;
+}
+
+QImage PdfDocument::flattenPageBackground(const QImage &image) const {
+  if (image.isNull()) {
+    return QImage();
+  }
+
+  QImage flattened(image.size(), QImage::Format_RGB32);
+  flattened.fill(Qt::white);
+
+  QPainter painter(&flattened);
+  painter.drawImage(0, 0, image);
+
+  return flattened;
 }
 
 bool PdfDocument::isPageCached(int pageIndex, int dpi) const {

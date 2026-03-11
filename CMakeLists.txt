@@ -46,11 +46,11 @@ else()
 endif()
 
 # Explicitly specify source and header files
-file(GLOB_RECURSE PROJECT_SOURCES
+file(GLOB_RECURSE PROJECT_SOURCES CONFIGURE_DEPENDS
     src/*.cpp
 )
 
-file(GLOB_RECURSE PROJECT_HEADERS
+file(GLOB_RECURSE PROJECT_HEADERS CONFIGURE_DEPENDS
     src/*.h
 )
 
