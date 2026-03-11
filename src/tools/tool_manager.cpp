@@ -8,6 +8,7 @@
 #include "circle_tool.h"
 #include "eraser_tool.h"
 #include "fill_tool.h"
+#include "highlighter_tool.h"
 #include "lasso_selection_tool.h"
 #include "line_tool.h"
 #include "mermaid_tool.h"
@@ -30,6 +31,8 @@ ToolManager::~ToolManager() = default;
 
 void ToolManager::initializeTools() {
   registerTool(ToolType::Pen, std::make_unique<PenTool>(renderer_));
+  registerTool(ToolType::Highlighter,
+               std::make_unique<HighlighterTool>(renderer_));
   registerTool(ToolType::Eraser, std::make_unique<EraserTool>(renderer_));
   registerTool(ToolType::Text, std::make_unique<TextTool>(renderer_));
   registerTool(ToolType::Fill, std::make_unique<FillTool>(renderer_));

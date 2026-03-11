@@ -7,12 +7,14 @@
 #include <QMenu>
 #include <QSpinBox>
 #include <QSplitter>
+#include <memory>
 
 class Canvas;
 class ToolPanel;
 class LayerPanel;
 class ElementBankPanel;
 class AutoSaveManager;
+class UndoRedoManager;
 class QLabel;
 class QAction;
 class QToolBar;
@@ -66,6 +68,8 @@ private slots:
 #endif
 
 private:
+  enum class ActiveSurface { Canvas, Pdf };
+
   Canvas *_canvas;
   ToolPanel *_toolPanel;
   LayerPanel *_layerPanel;
@@ -79,6 +83,8 @@ private:
   QAction *_autoSaveAction;
   QAction *_rulerAction;
   QAction *_measurementAction;
+  std::unique_ptr<UndoRedoManager> _undoRedoManager;
+  ActiveSurface _activeSurface = ActiveSurface::Canvas;
 
 #ifdef HAVE_QT_PDF
   PdfViewer *_pdfViewer;
@@ -86,6 +92,7 @@ private:
   QSplitter *_centralSplitter;
   QFrame *_pdfPanel;
   QToolBar *_pdfToolBar;
+  QLabel *_pdfHeaderLabel;
   QLabel *_pdfPageLabel;
   QSpinBox *_pdfPageSpinBox;
   QComboBox *_pdfZoomCombo;
@@ -109,6 +116,9 @@ private:
   void setupMenuBar();
   void setupAutoSave();
   void updateRecentFilesMenu();
+  void applyTheme();
+  void performUndo();
+  void performRedo();
 };
 
 #endif // MAIN_WINDOW_H

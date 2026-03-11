@@ -26,6 +26,7 @@
 #include "../core/pdf_overlay.h"
 #include "../core/scene_controller.h"
 #include "../core/scene_renderer.h"
+#include "../core/undo_redo_manager.h"
 #include "../tools/tool_manager.h"
 
 /**
@@ -259,6 +260,12 @@ public:
   void zoomReset();
 
   /**
+   * @brief Set zoom to an explicit percentage
+   * @param zoomPercent Zoom percentage (100 = 100%)
+   */
+  void setZoomPercent(double zoomPercent);
+
+  /**
    * @brief Fit page width to view
    */
   void fitToWidth();
@@ -341,6 +348,8 @@ public:
    * @brief Redo the last undone action
    */
   void redo();
+
+  void setUndoRedoManager(UndoRedoManager *manager);
 
   /**
    * @brief Check if undo is available
@@ -540,6 +549,7 @@ private:
   // Document and overlay management
   std::unique_ptr<PdfDocument> document_;
   std::unique_ptr<PdfOverlayManager> overlayManager_;
+  UndoRedoManager *undoRedoManager_ = nullptr;
   PdfPageItem *pageItem_;
 
   // Scene and tool management
@@ -571,12 +581,14 @@ private:
   static constexpr double MAX_ZOOM = 10.0;
   static constexpr double MIN_ZOOM = 0.1;
   static constexpr int DEFAULT_DPI = 150;
+  static constexpr int MAX_RENDER_DPI = 1200;
 
   // Private methods
   void renderCurrentPage();
   void setupScene();
   void clearRedoStack();
   void applyZoom(double factor);
+  int effectiveRenderDpi() const;
   void captureScreenshot(const QRectF &rect);
 };
 

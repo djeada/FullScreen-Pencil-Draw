@@ -13,6 +13,7 @@
 #include <QWidget>
 
 class PdfViewer;
+class QLabel;
 
 /**
  * @brief A collapsible panel showing page thumbnails for PDF navigation.
@@ -70,6 +71,7 @@ private slots:
 
 private:
   PdfViewer *pdfViewer_;
+  QLabel *header_;
   QListWidget *thumbnailList_;
   QVBoxLayout *layout_;
 
@@ -77,6 +79,7 @@ private:
   static constexpr int THUMBNAIL_HEIGHT = 160;
 
   void setupUI();
+  void applyTheme();
   void generateThumbnails();
   QPixmap renderThumbnail(int pageIndex);
 };

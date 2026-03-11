@@ -53,6 +53,7 @@ class TransformHandleItem;
 class SceneController;
 class ItemStore;
 class BusySpinnerOverlay;
+class UndoRedoManager;
 
 /**
  * @brief The main drawing canvas widget.
@@ -109,6 +110,7 @@ public:
   void addDeleteAction(QGraphicsItem *item) override;
   void addAction(std::unique_ptr<Action> action) override;
   void onItemRemoved(QGraphicsItem *item) override;
+  void setUndoRedoManager(UndoRedoManager *manager);
 
   // SceneRenderer interface methods using QGraphicsView
   void setCursor(const QCursor &cursor) override {
@@ -143,6 +145,7 @@ signals:
 public slots:
   void setShape(const QString &shapeType);
   void setPenTool();
+  void setHighlighterTool();
   void setEraserTool();
   void setTextTool();
   void setMermaidTool();
@@ -240,6 +243,7 @@ private:
     Rectangle,
     Circle,
     Pen,
+    Highlighter,
     Eraser,
     Selection,
     LassoSelection,
@@ -329,6 +333,7 @@ private:
   // Undo/Redo stacks (using vector for move-only types)
   std::vector<std::unique_ptr<Action>> undoStack_;
   std::vector<std::unique_ptr<Action>> redoStack_;
+  UndoRedoManager *undoRedoManager_ = nullptr;
 
   // Private methods
   void updateEraserPreview(const QPointF &position);

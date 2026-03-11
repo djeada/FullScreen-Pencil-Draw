@@ -4,6 +4,7 @@
 #include "../core/layer.h"
 #include "../core/recent_files_manager.h"
 #include "../core/theme_manager.h"
+#include "../core/undo_redo_manager.h"
 #include "../tools/tool_manager.h"
 #include "../widgets/canvas.h"
 #include "../widgets/element_bank_panel.h"
@@ -48,16 +49,19 @@ MainWindow::MainWindow(QWidget *parent)
       _statusLabel(nullptr), _measurementLabel(nullptr),
       _recentFilesMenu(nullptr), _snapToGridAction(nullptr),
       _snapToObjectAction(nullptr), _autoSaveAction(nullptr),
-      _rulerAction(nullptr), _measurementAction(nullptr)
+      _rulerAction(nullptr), _measurementAction(nullptr),
+      _undoRedoManager(std::make_unique<UndoRedoManager>())
 #ifdef HAVE_QT_PDF
       ,
       _pdfViewer(nullptr), _thumbnailPanel(nullptr), _centralSplitter(nullptr),
-      _pdfPanel(nullptr), _pdfToolBar(nullptr), _pdfPageLabel(nullptr),
+      _pdfPanel(nullptr), _pdfToolBar(nullptr), _pdfHeaderLabel(nullptr),
+      _pdfPageLabel(nullptr),
       _pdfPageSpinBox(nullptr), _pdfZoomCombo(nullptr),
       _pdfDarkModeAction(nullptr), _thumbnailToggleAction(nullptr),
       _pdfPanelOnLeft(false) // PDF panel starts on the right by default
 #endif
 {
+  _canvas->setUndoRedoManager(_undoRedoManager.get());
 #ifdef HAVE_QT_PDF
   // Split ratio constants for canvas/PDF panel
   static constexpr double PDF_PANEL_SPLIT_RATIO =
@@ -105,6 +109,9 @@ MainWindow::MainWindow(QWidget *parent)
   _toolPanel->updateColorDisplay(_canvas->getCurrentColor());
   _toolPanel->updateZoomDisplay(_canvas->getCurrentZoom());
   _toolPanel->updateOpacityDisplay(_canvas->getCurrentOpacity());
+  connect(&ThemeManager::instance(), &ThemeManager::themeChanged, this,
+          [this]() { applyTheme(); });
+  applyTheme();
 
   // Add global shortcuts for delete (works regardless of focus)
   QShortcut *deleteShortcut = new QShortcut(QKeySequence(Qt::Key_Delete), this);
@@ -120,7 +127,7 @@ MainWindow::~MainWindow() {}
 
 void MainWindow::setupStatusBar() {
   _statusLabel =
-      new QLabel("✦ Ready | P:Pen E:Eraser T:Text F:Fill Q:ColorSelect "
+      new QLabel("✦ Ready | P:Pen I:Highlight E:Eraser T:Text F:Fill Q:ColorSelect "
                  "L:Line A:Arrow R:Rect C:Circle S:Select H:Pan | G:Grid "
                  "B:Filled | Ctrl+Scroll:Zoom",
                  this);
@@ -145,9 +152,236 @@ void MainWindow::setupStatusBar() {
   )");
 }
 
+void MainWindow::applyTheme() {
+  const bool darkTheme = ThemeManager::instance().isDarkTheme();
+
+  statusBar()->setStyleSheet(
+      darkTheme
+          ? R"(
+              QStatusBar {
+                background-color: #161618;
+                color: #a0a0a8;
+                border-top: 1px solid rgba(255, 255, 255, 0.06);
+                padding: 6px 12px;
+              }
+              QStatusBar::item {
+                border: none;
+              }
+              QLabel {
+                color: #a0a0a8;
+                font-size: 11px;
+                font-weight: 500;
+              }
+            )"
+          : R"(
+              QStatusBar {
+                background-color: #f8f9fa;
+                color: #6c757d;
+                border-top: 1px solid #dee2e6;
+                padding: 6px 12px;
+              }
+              QStatusBar::item {
+                border: none;
+              }
+              QLabel {
+                color: #6c757d;
+                font-size: 11px;
+                font-weight: 500;
+              }
+            )");
+
+#ifdef HAVE_QT_PDF
+  if (_pdfHeaderLabel) {
+    _pdfHeaderLabel->setStyleSheet(
+        darkTheme
+            ? "QLabel { background-color: #2a2a30; color: white; padding: 8px; font-weight: bold; }"
+            : "QLabel { background-color: #e9ecef; color: #343a40; padding: 8px; font-weight: bold; border-bottom: 1px solid #dee2e6; }");
+  }
+
+  if (_pdfPageSpinBox) {
+    _pdfPageSpinBox->setStyleSheet(
+        darkTheme
+            ? R"(
+                QSpinBox {
+                  background-color: #2a2a30;
+                  color: #f8f8fc;
+                  border: 1px solid rgba(255, 255, 255, 0.1);
+                  border-radius: 4px;
+                  padding: 4px 8px;
+                  min-height: 28px;
+                }
+                QSpinBox::up-button, QSpinBox::down-button {
+                  width: 0px;
+                }
+              )"
+            : R"(
+                QSpinBox {
+                  background-color: #ffffff;
+                  color: #343a40;
+                  border: 1px solid #ced4da;
+                  border-radius: 4px;
+                  padding: 4px 8px;
+                  min-height: 28px;
+                }
+                QSpinBox::up-button, QSpinBox::down-button {
+                  width: 0px;
+                }
+              )");
+  }
+
+  if (_pdfPageLabel) {
+    _pdfPageLabel->setStyleSheet(
+        darkTheme ? "QLabel { color: #a0a0a8; padding: 0 8px; }"
+                  : "QLabel { color: #6c757d; padding: 0 8px; }");
+  }
+
+  if (_pdfZoomCombo) {
+    _pdfZoomCombo->setStyleSheet(
+        darkTheme
+            ? R"(
+                QComboBox {
+                  background-color: #2a2a30;
+                  color: #f8f8fc;
+                  border: 1px solid rgba(255, 255, 255, 0.1);
+                  border-radius: 4px;
+                  padding: 4px 8px;
+                  min-height: 28px;
+                }
+                QComboBox::drop-down {
+                  border: none;
+                  width: 20px;
+                }
+                QComboBox::down-arrow {
+                  image: none;
+                  border-left: 4px solid transparent;
+                  border-right: 4px solid transparent;
+                  border-top: 5px solid #a0a0a8;
+                  margin-right: 5px;
+                }
+                QComboBox QAbstractItemView {
+                  background-color: #2a2a30;
+                  color: #f8f8fc;
+                  selection-background-color: #3b82f6;
+                }
+              )"
+            : R"(
+                QComboBox {
+                  background-color: #ffffff;
+                  color: #343a40;
+                  border: 1px solid #ced4da;
+                  border-radius: 4px;
+                  padding: 4px 8px;
+                  min-height: 28px;
+                }
+                QComboBox::drop-down {
+                  border: none;
+                  width: 20px;
+                }
+                QComboBox::down-arrow {
+                  image: none;
+                  border-left: 4px solid transparent;
+                  border-right: 4px solid transparent;
+                  border-top: 5px solid #6c757d;
+                  margin-right: 5px;
+                }
+                QComboBox QAbstractItemView {
+                  background-color: #ffffff;
+                  color: #343a40;
+                  selection-background-color: #4285f4;
+                }
+              )");
+  }
+
+  if (_pdfToolBar) {
+    _pdfToolBar->setStyleSheet(
+        darkTheme
+            ? R"(
+                QToolBar {
+                  background-color: #1e1e22;
+                  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+                  padding: 4px 8px;
+                  spacing: 4px;
+                }
+                QToolButton {
+                  background-color: transparent;
+                  color: #e0e0e6;
+                  border: none;
+                  border-radius: 6px;
+                  padding: 8px 12px;
+                  min-width: 32px;
+                  min-height: 32px;
+                  font-size: 16px;
+                }
+                QToolButton:hover {
+                  background-color: rgba(255, 255, 255, 0.08);
+                }
+                QToolButton:pressed {
+                  background-color: rgba(255, 255, 255, 0.12);
+                }
+                QToolButton:checked {
+                  background-color: #3b82f6;
+                  color: white;
+                }
+                QToolBar::separator {
+                  background-color: rgba(255, 255, 255, 0.1);
+                  width: 1px;
+                  margin: 6px 8px;
+                }
+              )"
+            : R"(
+                QToolBar {
+                  background-color: #f8f9fa;
+                  border-bottom: 1px solid #dee2e6;
+                  padding: 4px 8px;
+                  spacing: 4px;
+                }
+                QToolButton {
+                  background-color: transparent;
+                  color: #343a40;
+                  border: none;
+                  border-radius: 6px;
+                  padding: 8px 12px;
+                  min-width: 32px;
+                  min-height: 32px;
+                  font-size: 16px;
+                }
+                QToolButton:hover {
+                  background-color: #e9ecef;
+                }
+                QToolButton:pressed {
+                  background-color: #dee2e6;
+                }
+                QToolButton:checked {
+                  background-color: #4285f4;
+                  color: white;
+                }
+                QToolBar::separator {
+                  background-color: #dee2e6;
+                  width: 1px;
+                  margin: 6px 8px;
+                }
+              )");
+  }
+#endif
+}
+
+void MainWindow::performUndo() {
+  if (_undoRedoManager) {
+    _undoRedoManager->undo();
+  }
+}
+
+void MainWindow::performRedo() {
+  if (_undoRedoManager) {
+    _undoRedoManager->redo();
+  }
+}
+
 void MainWindow::setupConnections() {
   // Tool selections
   connect(_toolPanel, &ToolPanel::penSelected, _canvas, &Canvas::setPenTool);
+  connect(_toolPanel, &ToolPanel::highlighterSelected, _canvas,
+          &Canvas::setHighlighterTool);
   connect(_toolPanel, &ToolPanel::eraserSelected, _canvas,
           &Canvas::setEraserTool);
   connect(_toolPanel, &ToolPanel::textSelected, _canvas, &Canvas::setTextTool);
@@ -176,6 +410,9 @@ void MainWindow::setupConnections() {
     // Tool selections - route to PDF viewer so tools work on both renderers
     connect(_toolPanel, &ToolPanel::penSelected, this,
             [this]() { _pdfViewer->setToolType(ToolManager::ToolType::Pen); });
+    connect(_toolPanel, &ToolPanel::highlighterSelected, this, [this]() {
+      _pdfViewer->setToolType(ToolManager::ToolType::Highlighter);
+    });
     connect(_toolPanel, &ToolPanel::eraserSelected, this, [this]() {
       _pdfViewer->setToolType(ToolManager::ToolType::Eraser);
     });
@@ -262,11 +499,14 @@ void MainWindow::setupConnections() {
   connect(_canvas, &Canvas::opacityChanged, this,
           &MainWindow::onOpacityChanged);
   connect(_canvas, &Canvas::cursorPositionChanged, this,
-          &MainWindow::onCursorPositionChanged);
+          [this](const QPointF &pos) {
+            _activeSurface = ActiveSurface::Canvas;
+            onCursorPositionChanged(pos);
+          });
 
   // Undo/Redo
-  connect(_toolPanel, &ToolPanel::undoAction, _canvas, &Canvas::undoLastAction);
-  connect(_toolPanel, &ToolPanel::redoAction, _canvas, &Canvas::redoLastAction);
+  connect(_toolPanel, &ToolPanel::undoAction, this, &MainWindow::performUndo);
+  connect(_toolPanel, &ToolPanel::redoAction, this, &MainWindow::performRedo);
 
   // Zoom
   connect(_toolPanel, &ToolPanel::zoomInAction, _canvas, &Canvas::zoomIn);
@@ -369,10 +609,13 @@ void MainWindow::setupMenuBar() {
   // Edit menu
   QMenu *editMenu = menuBar->addMenu("&Edit");
 
-  createAction(editMenu, "&Undo", QKeySequence::Undo, _canvas,
-               SLOT(undoLastAction()));
-  createAction(editMenu, "&Redo", QKeySequence::Redo, _canvas,
-               SLOT(redoLastAction()));
+  QAction *undoEditAction = editMenu->addAction("&Undo");
+  undoEditAction->setShortcut(QKeySequence::Undo);
+  connect(undoEditAction, &QAction::triggered, this, &MainWindow::performUndo);
+
+  QAction *redoEditAction = editMenu->addAction("&Redo");
+  redoEditAction->setShortcut(QKeySequence::Redo);
+  connect(redoEditAction, &QAction::triggered, this, &MainWindow::performRedo);
   editMenu->addSeparator();
   createAction(editMenu, "Cu&t", QKeySequence::Cut, _canvas,
                SLOT(cutSelectedItems()));
@@ -763,9 +1006,9 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
   } else if (event->matches(QKeySequence::Paste)) {
     _canvas->pasteItems();
   } else if (event->matches(QKeySequence::Undo)) {
-    _canvas->undoLastAction();
+    performUndo();
   } else if (event->matches(QKeySequence::Redo)) {
-    _canvas->redoLastAction();
+    performRedo();
   } else if (event->matches(QKeySequence::Save)) {
     _canvas->saveToFile();
   } else if (event->matches(QKeySequence::Open)) {
@@ -797,6 +1040,8 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
   // Tool shortcuts
   else if (event->key() == Qt::Key_P) {
     _toolPanel->onActionPen();
+  } else if (event->key() == Qt::Key_I) {
+    _toolPanel->onActionHighlighter();
   } else if (event->key() == Qt::Key_E) {
     _toolPanel->onActionEraser();
   } else if (event->key() == Qt::Key_T &&
@@ -888,6 +1133,7 @@ void MainWindow::setupPdfViewer() {
 
   // Create PDF viewer widget first (needed for thumbnail panel)
   _pdfViewer = new PdfViewer(_pdfPanel);
+  _pdfViewer->setUndoRedoManager(_undoRedoManager.get());
 
   // Create thumbnail panel (collapsible, on the left of PDF viewer)
   _thumbnailPanel = new PageThumbnailPanel(_pdfViewer, _pdfPanel);
@@ -901,11 +1147,9 @@ void MainWindow::setupPdfViewer() {
   viewerLayout->setSpacing(0);
 
   // Create header label for PDF panel
-  QLabel *pdfHeader = new QLabel("PDF Viewer", viewerContainer);
-  pdfHeader->setAlignment(Qt::AlignCenter);
-  pdfHeader->setStyleSheet("QLabel { background-color: #2a2a30; color: white; "
-                           "padding: 8px; font-weight: bold; }");
-  viewerLayout->addWidget(pdfHeader);
+  _pdfHeaderLabel = new QLabel("PDF Viewer", viewerContainer);
+  _pdfHeaderLabel->setAlignment(Qt::AlignCenter);
+  viewerLayout->addWidget(_pdfHeaderLabel);
 
   viewerLayout->addWidget(_pdfViewer, 1);
   pdfHLayout->addWidget(viewerContainer, 1);
@@ -926,7 +1170,10 @@ void MainWindow::setupPdfViewer() {
   connect(_pdfViewer, &PdfViewer::darkModeChanged, this,
           &MainWindow::onPdfDarkModeChanged);
   connect(_pdfViewer, &PdfViewer::cursorPositionChanged, this,
-          &MainWindow::onCursorPositionChanged);
+          [this](const QPointF &pos) {
+            _activeSurface = ActiveSurface::Pdf;
+            onCursorPositionChanged(pos);
+          });
   connect(_pdfViewer, &PdfViewer::pdfLoaded, this,
           [this]() { showPdfPanel(); });
   connect(_pdfViewer, &PdfViewer::pdfClosed, this,
@@ -1081,11 +1328,7 @@ void MainWindow::setupPdfToolBar() {
     bool ok;
     int zoom = text.toInt(&ok);
     if (ok && zoom >= 10 && zoom <= 500 && _pdfViewer) {
-      double currentZoom = _pdfViewer->zoomLevel();
-      double factor = zoom / currentZoom;
-      // Apply zoom by scaling
-      _pdfViewer->resetTransform();
-      _pdfViewer->scale(zoom / 100.0, zoom / 100.0);
+      _pdfViewer->setZoomPercent(zoom);
     }
   });
   _pdfToolBar->addWidget(_pdfZoomCombo);
@@ -1227,11 +1470,7 @@ void MainWindow::onPdfPageSpinBoxChanged(int page) {
 void MainWindow::onPdfZoomComboChanged(int index) {
   static const int zoomLevels[] = {50, 75, 100, 125, 150, 200, 300};
   if (index >= 0 && index < 7 && _pdfViewer) {
-    int targetZoom = zoomLevels[index];
-    _pdfViewer->zoomReset();
-    if (targetZoom != 100) {
-      _pdfViewer->scale(targetZoom / 100.0, targetZoom / 100.0);
-    }
+    _pdfViewer->setZoomPercent(zoomLevels[index]);
   }
 }
 

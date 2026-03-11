@@ -132,6 +132,7 @@ private:
   bool updatingSelection_;
 
   void setupUI();
+  void applyTheme();
   void updateButtonStates();
   void updatePropertyControls();
   QString itemDescription(const ItemId &id) const;

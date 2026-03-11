@@ -1,4 +1,5 @@
 #include "tool_panel.h"
+#include "../core/theme_manager.h"
 #include "brush_preview.h"
 #include <QColorDialog>
 #include <QConicalGradient>
@@ -20,6 +21,7 @@ static QToolButton *createToolButton(QAction *action, QWidget *parent) {
   btn->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
   btn->setFixedSize(56, 56);
   btn->setIconSize(QSize(20, 20));
+  btn->setProperty("toolTile", true);
   return btn;
 }
 
@@ -34,7 +36,8 @@ static QFrame *createSeparator(QWidget *parent) {
 }
 
 ToolPanel::ToolPanel(QWidget *parent)
-    : QDockWidget("Tools", parent), brushPreview_(nullptr),
+    : QDockWidget("Tools", parent), brushTipTextLabel_(nullptr),
+      fillStyleTextLabel_(nullptr), brushPreview_(nullptr),
       fillStyleCombo_(nullptr), brushTipCombo_(nullptr),
       currentColor_(Qt::white) {
   setObjectName("ToolPanel");
@@ -60,6 +63,12 @@ ToolPanel::ToolPanel(QWidget *parent)
   actionPen->setCheckable(true);
   actionPen->setChecked(true);
   connect(actionPen, &QAction::triggered, this, &ToolPanel::onActionPen);
+
+  actionHighlighter = new QAction("▉ Highlight", this);
+  actionHighlighter->setToolTip("Highlight text and strokes (I)");
+  actionHighlighter->setCheckable(true);
+  connect(actionHighlighter, &QAction::triggered, this,
+          &ToolPanel::onActionHighlighter);
 
   actionEraser = new QAction("⌫ Eraser", this);
   actionEraser->setToolTip("Erase items (E)");
@@ -88,18 +97,20 @@ ToolPanel::ToolPanel(QWidget *parent)
   connect(actionColorSelect, &QAction::triggered, this,
           &ToolPanel::onActionColorSelect);
 
-  // Drawing tools grid (3x2) - wrapped for centering
+  // Drawing tools grid (4x2) - wrapped for centering
   QWidget *drawGridWidget = new QWidget(container);
   QGridLayout *drawGrid = new QGridLayout(drawGridWidget);
   drawGrid->setSpacing(4);
   drawGrid->setContentsMargins(0, 0, 0, 0);
   drawGrid->addWidget(createToolButton(actionPen, drawGridWidget), 0, 0);
-  drawGrid->addWidget(createToolButton(actionEraser, drawGridWidget), 0, 1);
-  drawGrid->addWidget(createToolButton(actionText, drawGridWidget), 1, 0);
-  drawGrid->addWidget(createToolButton(actionFill, drawGridWidget), 1, 1);
-  drawGrid->addWidget(createToolButton(actionMermaid, drawGridWidget), 2, 0);
-  drawGrid->addWidget(createToolButton(actionColorSelect, drawGridWidget), 2,
+  drawGrid->addWidget(createToolButton(actionHighlighter, drawGridWidget), 0,
                       1);
+  drawGrid->addWidget(createToolButton(actionEraser, drawGridWidget), 1, 0);
+  drawGrid->addWidget(createToolButton(actionText, drawGridWidget), 1, 1);
+  drawGrid->addWidget(createToolButton(actionFill, drawGridWidget), 2, 0);
+  drawGrid->addWidget(createToolButton(actionMermaid, drawGridWidget), 2, 1);
+  drawGrid->addWidget(createToolButton(actionColorSelect, drawGridWidget), 3,
+                      0);
   drawGridWidget->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
   mainLayout->addWidget(drawGridWidget, 0, Qt::AlignHCenter);
 
@@ -249,11 +260,9 @@ ToolPanel::ToolPanel(QWidget *parent)
   mainLayout->addLayout(brushPreviewLayout);
 
   // Brush tip selector
-  QLabel *brushTipLabel = new QLabel("Brush Tip", container);
-  brushTipLabel->setStyleSheet(
-      "QLabel { color: #a0a0a8; font-size: 11px; font-weight: 500; }");
-  brushTipLabel->setAlignment(Qt::AlignCenter);
-  mainLayout->addWidget(brushTipLabel);
+  brushTipTextLabel_ = new QLabel("Brush Tip", container);
+  brushTipTextLabel_->setAlignment(Qt::AlignCenter);
+  mainLayout->addWidget(brushTipTextLabel_);
 
   brushTipCombo_ = new QComboBox(container);
   brushTipCombo_->addItem("● Round", static_cast<int>(BrushTipShape::Round));
@@ -319,8 +328,6 @@ ToolPanel::ToolPanel(QWidget *parent)
 
   // Opacity slider - centered
   opacityLabel = new QLabel("Opacity", container);
-  opacityLabel->setStyleSheet(
-      "QLabel { color: #a0a0a8; font-size: 11px; font-weight: 500; }");
   opacityLabel->setAlignment(Qt::AlignCenter);
   mainLayout->addWidget(opacityLabel);
 
@@ -342,8 +349,6 @@ ToolPanel::ToolPanel(QWidget *parent)
   pressureSensitivityCheckBox_ = new QCheckBox("Pressure", container);
   pressureSensitivityCheckBox_->setToolTip(
       "Enable pressure sensitivity for stylus input");
-  pressureSensitivityCheckBox_->setStyleSheet(
-      "QCheckBox { color: #a0a0a8; font-size: 11px; }");
   connect(pressureSensitivityCheckBox_, &QCheckBox::toggled, this,
           &ToolPanel::pressureSensitivityToggled);
   mainLayout->addWidget(pressureSensitivityCheckBox_, 0, Qt::AlignCenter);
@@ -423,11 +428,9 @@ ToolPanel::ToolPanel(QWidget *parent)
   mainLayout->addWidget(toggleWidget, 0, Qt::AlignHCenter);
 
   // Fill style selector
-  QLabel *fillStyleLabel = new QLabel("Fill Style", container);
-  fillStyleLabel->setStyleSheet(
-      "QLabel { color: #a0a0a8; font-size: 11px; font-weight: 500; }");
-  fillStyleLabel->setAlignment(Qt::AlignCenter);
-  mainLayout->addWidget(fillStyleLabel);
+  fillStyleTextLabel_ = new QLabel("Fill Style", container);
+  fillStyleTextLabel_->setAlignment(Qt::AlignCenter);
+  mainLayout->addWidget(fillStyleTextLabel_);
 
   fillStyleCombo_ = new QComboBox(container);
   fillStyleCombo_->addItem("Solid", static_cast<int>(Qt::SolidPattern));
@@ -597,74 +600,265 @@ ToolPanel::ToolPanel(QWidget *parent)
   scrollArea->setWidget(container);
   setWidget(scrollArea);
 
-  // 2-column: 56+4+56 = 116, plus 8+8 margins = 132
-  // 3-column: 40+4+52+4+40 = 140, plus 8+8 margins = 156
-  setFixedWidth(224);
+  // Leave enough room for content plus the vertical scrollbar without
+  // clipping button rows when docked.
+  setMinimumWidth(236);
+  resize(236, height());
+  connect(&ThemeManager::instance(), &ThemeManager::themeChanged, this,
+          [this]() { applyTheme(); });
+  applyTheme();
+}
 
-  // Styling
-  setStyleSheet(R"(
-    QDockWidget {
-      background-color: #1a1a1e;
-      color: #f8f8fc;
-      font-weight: 500;
-    }
-    QDockWidget::title {
-      background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2a2a30, stop:1 #242428);
-      padding: 10px 12px;
-      font-weight: 600;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    }
-    QScrollArea {
-      background-color: #1a1a1e;
-      border: none;
-    }
-    QToolButton {
-      background-color: rgba(255, 255, 255, 0.06);
-      color: #e0e0e6;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 6px;
-      padding: 4px;
-      min-width: 56px;
-      min-height: 56px;
-      max-width: 56px;
-      max-height: 56px;
-      font-weight: 500;
-      font-size: 10px;
-    }
-    QToolButton:hover {
-      background-color: rgba(255, 255, 255, 0.1);
-      border: 1px solid rgba(59, 130, 246, 0.3);
-    }
-    QToolButton:pressed {
-      background-color: rgba(255, 255, 255, 0.04);
-    }
-    QToolButton:checked {
-      background-color: #3b82f6;
-      color: #ffffff;
-      border: 1px solid #60a5fa;
-    }
-    QSlider::groove:horizontal {
-      background: #28282e;
-      height: 6px;
-      border-radius: 3px;
-    }
-    QSlider::handle:horizontal {
-      background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #60a5fa, stop:1 #3b82f6);
-      width: 14px;
-      height: 14px;
-      margin: -4px 0;
-      border-radius: 7px;
-      border: 1px solid rgba(255, 255, 255, 0.15);
-    }
-    QSlider::sub-page:horizontal {
-      background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #3b82f6, stop:1 #60a5fa);
-      border-radius: 3px;
-    }
-  )");
+void ToolPanel::applyTheme() {
+  const bool darkTheme = ThemeManager::instance().isDarkTheme();
+
+  if (darkTheme) {
+    setStyleSheet(R"(
+      QDockWidget {
+        background-color: #1a1a1e;
+        color: #f8f8fc;
+        font-weight: 500;
+      }
+      QDockWidget::title {
+        background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2a2a30, stop:1 #242428);
+        padding: 10px 12px;
+        font-weight: 600;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      }
+      QScrollArea {
+        background-color: #1a1a1e;
+        border: none;
+      }
+      QToolButton {
+        background-color: rgba(255, 255, 255, 0.06);
+        color: #e0e0e6;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 6px;
+        padding: 4px;
+        font-weight: 500;
+      }
+      QToolButton[toolTile="true"] {
+        min-width: 56px;
+        min-height: 56px;
+        max-width: 56px;
+        max-height: 56px;
+        font-size: 10px;
+      }
+      QToolButton:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(59, 130, 246, 0.3);
+      }
+      QToolButton:pressed {
+        background-color: rgba(255, 255, 255, 0.04);
+      }
+      QToolButton:checked {
+        background-color: #3b82f6;
+        color: #ffffff;
+        border: 1px solid #60a5fa;
+      }
+      QSlider::groove:horizontal {
+        background: #28282e;
+        height: 6px;
+        border-radius: 3px;
+      }
+      QSlider::handle:horizontal {
+        background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #60a5fa, stop:1 #3b82f6);
+        width: 14px;
+        height: 14px;
+        margin: -4px 0;
+        border-radius: 7px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+      }
+      QSlider::sub-page:horizontal {
+        background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #3b82f6, stop:1 #60a5fa);
+        border-radius: 3px;
+      }
+    )");
+  } else {
+    setStyleSheet(R"(
+      QDockWidget {
+        background-color: #f8f9fa;
+        color: #343a40;
+        font-weight: 500;
+      }
+      QDockWidget::title {
+        background: #e9ecef;
+        color: #343a40;
+        padding: 10px 12px;
+        font-weight: 600;
+        border-bottom: 1px solid #dee2e6;
+      }
+      QScrollArea {
+        background-color: #f8f9fa;
+        border: none;
+      }
+      QToolButton {
+        background-color: #ffffff;
+        color: #343a40;
+        border: 1px solid #ced4da;
+        border-radius: 6px;
+        padding: 4px;
+        font-weight: 500;
+      }
+      QToolButton[toolTile="true"] {
+        min-width: 56px;
+        min-height: 56px;
+        max-width: 56px;
+        max-height: 56px;
+        font-size: 10px;
+      }
+      QToolButton:hover {
+        background-color: #f1f3f5;
+        border: 1px solid rgba(66, 133, 244, 0.35);
+      }
+      QToolButton:pressed {
+        background-color: #e9ecef;
+      }
+      QToolButton:checked {
+        background-color: #4285f4;
+        color: #ffffff;
+        border: 1px solid #5c9bff;
+      }
+      QSlider::groove:horizontal {
+        background: #dee2e6;
+        height: 6px;
+        border-radius: 3px;
+      }
+      QSlider::handle:horizontal {
+        background: #4285f4;
+        width: 14px;
+        height: 14px;
+        margin: -4px 0;
+        border-radius: 7px;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+      }
+      QSlider::sub-page:horizontal {
+        background: #4285f4;
+        border-radius: 3px;
+      }
+    )");
+  }
+
+  const QString subtleLabelStyle = darkTheme
+                                       ? "QLabel { color: #a0a0a8; font-size: 11px; font-weight: 500; }"
+                                       : "QLabel { color: #6c757d; font-size: 11px; font-weight: 500; }";
+  const QString valueLabelStyle =
+      darkTheme
+          ? R"(QLabel {
+               padding: 4px 6px;
+               background-color: rgba(255, 255, 255, 0.06);
+               color: #f8f8fc;
+               border-radius: 6px;
+               border: 1px solid rgba(255, 255, 255, 0.08);
+               font-weight: 500;
+             })"
+          : R"(QLabel {
+               padding: 4px 6px;
+               background-color: #ffffff;
+               color: #343a40;
+               border-radius: 6px;
+               border: 1px solid #ced4da;
+               font-weight: 500;
+             })";
+  const QString comboStyle =
+      darkTheme
+          ? R"(QComboBox {
+               background-color: rgba(255, 255, 255, 0.06);
+               color: #e0e0e6;
+               border: 1px solid rgba(255, 255, 255, 0.08);
+               border-radius: 6px;
+               padding: 4px 8px;
+               font-size: 11px;
+             }
+             QComboBox:hover {
+               border: 1px solid rgba(59, 130, 246, 0.3);
+             }
+             QComboBox::drop-down {
+               border: none;
+             }
+             QComboBox QAbstractItemView {
+               background-color: #2a2a30;
+               color: #e0e0e6;
+               selection-background-color: #3b82f6;
+               border: 1px solid rgba(255, 255, 255, 0.1);
+             })"
+          : R"(QComboBox {
+               background-color: #ffffff;
+               color: #343a40;
+               border: 1px solid #ced4da;
+               border-radius: 6px;
+               padding: 4px 8px;
+               font-size: 11px;
+             }
+             QComboBox:hover {
+               border: 1px solid rgba(66, 133, 244, 0.35);
+             }
+             QComboBox::drop-down {
+               border: none;
+             }
+             QComboBox QAbstractItemView {
+               background-color: #ffffff;
+               color: #343a40;
+               selection-background-color: #4285f4;
+               border: 1px solid #ced4da;
+             })";
+  const QString positionStyle =
+      darkTheme
+          ? R"(QLabel {
+               padding: 6px 10px;
+               background-color: rgba(0, 0, 0, 0.3);
+               color: #a0a0a8;
+               border-radius: 6px;
+               border: 1px solid rgba(255, 255, 255, 0.05);
+               font-size: 11px;
+               font-weight: 500;
+             })"
+          : R"(QLabel {
+               padding: 6px 10px;
+               background-color: #ffffff;
+               color: #6c757d;
+               border-radius: 6px;
+               border: 1px solid #dee2e6;
+               font-size: 11px;
+               font-weight: 500;
+             })";
+
+  if (brushSizeLabel) {
+    brushSizeLabel->setStyleSheet(valueLabelStyle);
+  }
+  if (zoomLabel) {
+    zoomLabel->setStyleSheet(valueLabelStyle);
+  }
+  if (brushTipTextLabel_) {
+    brushTipTextLabel_->setStyleSheet(subtleLabelStyle);
+  }
+  if (fillStyleTextLabel_) {
+    fillStyleTextLabel_->setStyleSheet(subtleLabelStyle);
+  }
+  if (opacityLabel) {
+    opacityLabel->setStyleSheet(subtleLabelStyle);
+  }
+  if (pressureSensitivityCheckBox_) {
+    pressureSensitivityCheckBox_->setStyleSheet(
+        darkTheme ? "QCheckBox { color: #a0a0a8; font-size: 11px; }"
+                  : "QCheckBox { color: #6c757d; font-size: 11px; }");
+  }
+  if (brushTipCombo_) {
+    brushTipCombo_->setStyleSheet(comboStyle);
+  }
+  if (fillStyleCombo_) {
+    fillStyleCombo_->setStyleSheet(comboStyle);
+  }
+  if (positionLabel) {
+    positionLabel->setStyleSheet(positionStyle);
+  }
+
+  updateColorDisplay(currentColor_);
 }
 
 void ToolPanel::clearActiveToolStyles() {
   actionPen->setChecked(false);
+  actionHighlighter->setChecked(false);
   actionEraser->setChecked(false);
   actionText->setChecked(false);
   actionMermaid->setChecked(false);
@@ -684,12 +878,12 @@ void ToolPanel::clearActiveToolStyles() {
 
 void ToolPanel::setActiveTool(const QString &toolName) {
   static const QHash<QString, QString> toolIcons = {
-      {"Pen", "✎"},         {"Eraser", "⌫"}, {"Text", "T"},
-      {"Mermaid", "⬡"},     {"Fill", "◉"},   {"ColorSelect", "◎"},
-      {"Line", "╱"},        {"Arrow", "➤"},  {"CurvedArrow", "↪"},
-      {"Rectangle", "▢"},   {"Circle", "◯"}, {"Select", "⬚"},
-      {"LassoSelect", "⛶"}, {"Pan", "☰"},    {"Bezier", "⌇"},
-      {"TextOnPath", "⌇T"}};
+      {"Pen", "✎"},         {"Highlighter", "▉"}, {"Eraser", "⌫"},
+      {"Text", "T"},        {"Mermaid", "⬡"},     {"Fill", "◉"},
+      {"ColorSelect", "◎"}, {"Line", "╱"},        {"Arrow", "➤"},
+      {"CurvedArrow", "↪"}, {"Rectangle", "▢"},   {"Circle", "◯"},
+      {"Select", "⬚"},      {"LassoSelect", "⛶"}, {"Pan", "☰"},
+      {"Bezier", "⌇"},      {"TextOnPath", "⌇T"}};
   QString icon = toolIcons.value(toolName, "•");
   activeToolLabel->setText(icon + " " + toolName);
 }
@@ -703,14 +897,17 @@ void ToolPanel::updateBrushSizeDisplay(int size) {
 
 void ToolPanel::updateColorDisplay(const QColor &color) {
   currentColor_ = color;
+  const bool darkTheme = ThemeManager::instance().isDarkTheme();
   colorPreview->setStyleSheet(QString(R"(
     QLabel { 
       background-color: %1; 
-      border: 2px solid rgba(255, 255, 255, 0.15); 
+      border: 2px solid %2; 
       border-radius: 6px; 
     }
   )")
-                                  .arg(color.name()));
+                                  .arg(color.name())
+                                  .arg(darkTheme ? "rgba(255, 255, 255, 0.15)"
+                                                 : "#ced4da"));
   if (brushPreview_) {
     brushPreview_->setBrushColor(color);
   }
@@ -738,6 +935,12 @@ void ToolPanel::onActionPen() {
   actionPen->setChecked(true);
   setActiveTool("Pen");
   emit penSelected();
+}
+void ToolPanel::onActionHighlighter() {
+  clearActiveToolStyles();
+  actionHighlighter->setChecked(true);
+  setActiveTool("Highlighter");
+  emit highlighterSelected();
 }
 void ToolPanel::onActionEraser() {
   clearActiveToolStyles();

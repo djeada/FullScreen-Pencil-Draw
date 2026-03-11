@@ -32,6 +32,7 @@ PdfPageItem::PdfPageItem(QGraphicsItem *parent)
   setFlag(QGraphicsItem::ItemIsSelectable, false);
   setFlag(QGraphicsItem::ItemIsMovable, false);
   setZValue(-1000); // Behind all other items
+  setTransformationMode(Qt::SmoothTransformation);
 }
 
 void PdfPageItem::setPageImage(const QImage &image) {
@@ -150,6 +151,9 @@ void PdfViewer::closePdf() {
   currentPage_ = 0;
   currentZoom_ = 1.0;
   resetTransform();
+  if (undoRedoManager_) {
+    undoRedoManager_->clear();
+  }
 
   emit pdfClosed();
 }
@@ -199,7 +203,8 @@ void PdfViewer::renderCurrentPage() {
     return;
   }
 
-  QImage pageImage = document_->renderPage(currentPage_, renderDpi_, false);
+  const int effectiveDpi = effectiveRenderDpi();
+  QImage pageImage = document_->renderPage(currentPage_, effectiveDpi, false);
   if (pageImage.isNull()) {
     emit errorOccurred(tr("Failed to render page %1").arg(currentPage_ + 1));
     return;
@@ -221,9 +226,14 @@ void PdfViewer::renderCurrentPage() {
 
   pageItem_->setPageImage(pageImage);
   pageItem_->setInverted(darkMode_);
+  pageItem_->setScale(static_cast<qreal>(renderDpi_) /
+                      static_cast<qreal>(effectiveDpi));
 
-  // Update scene rect to fit page
-  scene_->setSceneRect(0, 0, pageImage.width(), pageImage.height());
+  // Keep the scene in base-DPI coordinates so overlay items stay aligned
+  // while the page pixmap can be rerendered at higher DPI for zoomed-in views.
+  const qreal pageScale = pageItem_->scale();
+  scene_->setSceneRect(0, 0, pageImage.width() * pageScale,
+                       pageImage.height() * pageScale);
 }
 
 void PdfViewer::setToolType(ToolManager::ToolType toolType) {
@@ -273,6 +283,10 @@ void PdfViewer::setPenWidth(int width) {
   eraserPen_.setWidth(width * 2);
 }
 
+void PdfViewer::setUndoRedoManager(UndoRedoManager *manager) {
+  undoRedoManager_ = manager;
+}
+
 void PdfViewer::setFilledShapes(bool filled) { fillShapes_ = filled; }
 
 void PdfViewer::setDarkMode(bool enabled) {
@@ -310,7 +324,21 @@ void PdfViewer::zoomOut() { applyZoom(1.0 / ZOOM_FACTOR); }
 void PdfViewer::zoomReset() {
   resetTransform();
   currentZoom_ = 1.0;
+  renderCurrentPage();
   emit zoomChanged(100.0);
+}
+
+void PdfViewer::setZoomPercent(double zoomPercent) {
+  const double zoomFactor = zoomPercent / 100.0;
+  if (zoomFactor < MIN_ZOOM || zoomFactor > MAX_ZOOM) {
+    return;
+  }
+
+  currentZoom_ = zoomFactor;
+  resetTransform();
+  renderCurrentPage();
+  scale(currentZoom_, currentZoom_);
+  emit zoomChanged(currentZoom_ * 100.0);
 }
 
 void PdfViewer::fitToWidth() {
@@ -318,7 +346,7 @@ void PdfViewer::fitToWidth() {
     return;
   }
 
-  QRectF pageRect = pageItem_->boundingRect();
+  QRectF pageRect = pageItem_->sceneBoundingRect();
   if (pageRect.isEmpty()) {
     return;
   }
@@ -328,8 +356,9 @@ void PdfViewer::fitToWidth() {
   double scale = viewWidth / pageRect.width();
 
   resetTransform();
-  this->scale(scale, scale);
   currentZoom_ = scale;
+  renderCurrentPage();
+  this->scale(scale, scale);
   emit zoomChanged(currentZoom_ * 100.0);
 }
 
@@ -338,7 +367,7 @@ void PdfViewer::fitToPage() {
     return;
   }
 
-  QRectF pageRect = pageItem_->boundingRect();
+  QRectF pageRect = pageItem_->sceneBoundingRect();
   if (pageRect.isEmpty()) {
     return;
   }
@@ -351,8 +380,9 @@ void PdfViewer::fitToPage() {
   double scale = qMin(scaleX, scaleY);
 
   resetTransform();
-  this->scale(scale, scale);
   currentZoom_ = scale;
+  renderCurrentPage();
+  this->scale(scale, scale);
   emit zoomChanged(currentZoom_ * 100.0);
 }
 
@@ -393,8 +423,15 @@ void PdfViewer::applyZoom(double factor) {
     return;
   }
   currentZoom_ = newZoom;
+  renderCurrentPage();
   scale(factor, factor);
   emit zoomChanged(currentZoom_ * 100.0);
+}
+
+int PdfViewer::effectiveRenderDpi() const {
+  const double zoomMultiplier = qMax(1.0, currentZoom_);
+  const int dpi = static_cast<int>(std::ceil(renderDpi_ * zoomMultiplier));
+  return qBound(renderDpi_, dpi, MAX_RENDER_DPI);
 }
 
 void PdfViewer::toggleGrid() {
@@ -404,6 +441,11 @@ void PdfViewer::toggleGrid() {
 }
 
 void PdfViewer::undo() {
+  if (undoRedoManager_) {
+    undoRedoManager_->undo();
+    return;
+  }
+
   if (!hasPdf()) {
     return;
   }
@@ -420,6 +462,11 @@ void PdfViewer::undo() {
 }
 
 void PdfViewer::redo() {
+  if (undoRedoManager_) {
+    undoRedoManager_->redo();
+    return;
+  }
+
   if (!hasPdf()) {
     return;
   }
@@ -436,10 +483,16 @@ void PdfViewer::redo() {
 }
 
 bool PdfViewer::canUndo() const {
+  if (undoRedoManager_) {
+    return undoRedoManager_->canUndo();
+  }
   return hasPdf() && overlayManager_->canUndo(currentPage_);
 }
 
 bool PdfViewer::canRedo() const {
+  if (undoRedoManager_) {
+    return undoRedoManager_->canRedo();
+  }
   return hasPdf() && overlayManager_->canRedo(currentPage_);
 }
 
@@ -457,7 +510,6 @@ void PdfViewer::addDrawAction(QGraphicsItem *item) {
     }
   }
 
-  auto &undoStack = overlayManager_->undoStack(currentPage_);
   int pageIndex = currentPage_;
   auto onAdd = [this, pageIndex](QGraphicsItem *added) {
     if (!overlayManager_ || !added)
@@ -473,12 +525,10 @@ void PdfViewer::addDrawAction(QGraphicsItem *item) {
   };
 
   if (store && itemId.isValid()) {
-    undoStack.push_back(
-        std::make_unique<DrawAction>(itemId, store, onAdd, onRemove));
+    addAction(std::make_unique<DrawAction>(itemId, store, onAdd, onRemove));
   } else {
     qWarning() << "Cannot create DrawAction without ItemStore";
   }
-  clearRedoStack();
   overlayManager_->addItemToPage(currentPage_, item);
   emit documentModified();
 }
@@ -497,7 +547,6 @@ void PdfViewer::addDeleteAction(QGraphicsItem *item) {
     }
   }
 
-  auto &undoStack = overlayManager_->undoStack(currentPage_);
   int pageIndex = -1;
   if (overlayManager_) {
     pageIndex = overlayManager_->findPageForItem(item);
@@ -520,12 +569,10 @@ void PdfViewer::addDeleteAction(QGraphicsItem *item) {
   };
 
   if (store && itemId.isValid()) {
-    undoStack.push_back(
-        std::make_unique<DeleteAction>(itemId, store, onAdd, onRemove));
+    addAction(std::make_unique<DeleteAction>(itemId, store, onAdd, onRemove));
   } else {
     qWarning() << "Cannot create DeleteAction without ItemStore";
   }
-  clearRedoStack();
 }
 
 void PdfViewer::addAction(std::unique_ptr<Action> action) {
@@ -533,9 +580,13 @@ void PdfViewer::addAction(std::unique_ptr<Action> action) {
     return;
   }
 
-  auto &undoStack = overlayManager_->undoStack(currentPage_);
-  undoStack.push_back(std::move(action));
-  clearRedoStack();
+  if (undoRedoManager_) {
+    undoRedoManager_->push(std::move(action));
+  } else {
+    auto &undoStack = overlayManager_->undoStack(currentPage_);
+    undoStack.push_back(std::move(action));
+    clearRedoStack();
+  }
   emit documentModified();
 }
 
@@ -549,7 +600,7 @@ void PdfViewer::onItemRemoved(QGraphicsItem *item) {
 }
 
 void PdfViewer::clearRedoStack() {
-  if (hasPdf()) {
+  if (!undoRedoManager_ && hasPdf()) {
     overlayManager_->redoStack(currentPage_).clear();
   }
 }
@@ -641,7 +692,7 @@ void PdfViewer::drawBackground(QPainter *painter, const QRectF &rect) {
 
   // Draw subtle shadow around the PDF page for visual hierarchy
   if (pageItem_ && !pageItem_->pixmap().isNull()) {
-    QRectF pageRect = pageItem_->boundingRect();
+    QRectF pageRect = pageItem_->sceneBoundingRect();
 
     // Draw shadow layers for depth effect
     painter->save();
