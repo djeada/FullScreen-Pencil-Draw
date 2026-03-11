@@ -5837,6 +5837,34 @@ void Canvas::placeElement(const QString &elementId) {
     elem = new AuthElement();
   else if (elementId == "monitoring")
     elem = new MonitoringElement();
+  else if (elementId == "user")
+    elem = new UserElement();
+  else if (elementId == "user_group")
+    elem = new UserGroupElement();
+  else if (elementId == "cloud")
+    elem = new CloudElement();
+  else if (elementId == "cdn")
+    elem = new CDNElement();
+  else if (elementId == "dns")
+    elem = new DNSElement();
+  else if (elementId == "firewall")
+    elem = new FirewallElement();
+  else if (elementId == "container")
+    elem = new ContainerElement();
+  else if (elementId == "serverless")
+    elem = new ServerlessElement();
+  else if (elementId == "virtual_machine")
+    elem = new VirtualMachineElement();
+  else if (elementId == "microservice")
+    elem = new MicroserviceElement();
+  else if (elementId == "api")
+    elem = new APIElement();
+  else if (elementId == "notification")
+    elem = new NotificationElement();
+  else if (elementId == "search")
+    elem = new SearchElement();
+  else if (elementId == "logging")
+    elem = new LoggingElement();
 
   if (!elem)
     return;

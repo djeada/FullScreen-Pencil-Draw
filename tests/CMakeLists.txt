@@ -336,6 +336,28 @@ set_target_properties(test_side_tab_bar PROPERTIES
 
 add_test(NAME TestSideTabBar COMMAND test_side_tab_bar)
 
+# Architecture elements tests
+add_executable(test_architecture_elements
+    test_architecture_elements.cpp
+    ../src/widgets/architecture_elements.cpp
+    ../src/widgets/architecture_elements.h
+)
+
+target_include_directories(test_architecture_elements PRIVATE
+    ../src/widgets
+)
+
+target_link_libraries(test_architecture_elements PRIVATE
+    Qt${QT_VERSION_MAJOR}::Widgets
+    Qt${QT_VERSION_MAJOR}::Test
+)
+
+set_target_properties(test_architecture_elements PROPERTIES
+    AUTOMOC ON
+)
+
+add_test(NAME TestArchitectureElements COMMAND test_architecture_elements)
+
 # Add custom target to run all tests
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure

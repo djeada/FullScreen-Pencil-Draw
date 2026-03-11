@@ -32,26 +32,63 @@ static QFrame *createBankSeparator(QWidget *parent) {
 
 QVector<ElementInfo> ElementBankPanel::defaultElements() {
   return {
+      // People
+      {"user", "User", ":/ui-icons/arch_user.svg",
+       "Human / end user", "People"},
+      {"user_group", "Users", ":/ui-icons/arch_user_group.svg",
+       "Group of users", "People"},
       {"client", "Client", ":/ui-icons/arch_client.svg", "Client application",
-       "Architecture"},
+       "People"},
+
+      // Cloud & Network
+      {"cloud", "Cloud", ":/ui-icons/arch_cloud.svg",
+       "Cloud provider", "Cloud"},
+      {"cdn", "CDN", ":/ui-icons/arch_cdn.svg",
+       "Content delivery network", "Cloud"},
+      {"dns", "DNS", ":/ui-icons/arch_dns.svg",
+       "Domain name system", "Cloud"},
+      {"firewall", "Firewall", ":/ui-icons/arch_firewall.svg",
+       "Firewall / WAF", "Cloud"},
       {"load_balancer", "Load Bal.", ":/ui-icons/arch_load_balancer.svg",
-       "Load balancer", "Architecture"},
+       "Load balancer", "Cloud"},
       {"api_gateway", "Gateway", ":/ui-icons/arch_gateway.svg", "API gateway",
-       "Architecture"},
+       "Cloud"},
+
+      // Compute
       {"app_server", "App Server", ":/ui-icons/arch_app_server.svg",
-       "Application server / microservice", "Architecture"},
-      {"cache", "Cache", ":/ui-icons/arch_cache.svg",
-       "Cache (Redis, Memcached)", "Architecture"},
-      {"message_queue", "Queue", ":/ui-icons/arch_queue.svg",
-       "Message queue / broker", "Architecture"},
-      {"database", "Database", ":/ui-icons/arch_database.svg", "Database",
-       "Architecture"},
-      {"object_storage", "Storage", ":/ui-icons/arch_storage.svg",
-       "Object / file storage", "Architecture"},
+       "Application server / microservice", "Compute"},
+      {"container", "Container", ":/ui-icons/arch_container.svg",
+       "Container (Docker)", "Compute"},
+      {"serverless", "Serverless", ":/ui-icons/arch_serverless.svg",
+       "Serverless / FaaS (Lambda)", "Compute"},
+      {"virtual_machine", "VM", ":/ui-icons/arch_virtual_machine.svg",
+       "Virtual machine", "Compute"},
+      {"microservice", "Microservice", ":/ui-icons/arch_microservice.svg",
+       "Microservice", "Compute"},
+
+      // Backend Services
+      {"api", "API", ":/ui-icons/arch_api.svg",
+       "REST / GraphQL API", "Backend"},
       {"auth", "Auth", ":/ui-icons/arch_auth.svg",
-       "Authentication / identity service", "Architecture"},
+       "Authentication / identity service", "Backend"},
+      {"cache", "Cache", ":/ui-icons/arch_cache.svg",
+       "Cache (Redis, Memcached)", "Backend"},
+      {"message_queue", "Queue", ":/ui-icons/arch_queue.svg",
+       "Message queue / broker", "Backend"},
+      {"notification", "Notify", ":/ui-icons/arch_notification.svg",
+       "Notification / push service", "Backend"},
+      {"search", "Search", ":/ui-icons/arch_search.svg",
+       "Search engine (Elasticsearch)", "Backend"},
+
+      // Data & Observability
+      {"database", "Database", ":/ui-icons/arch_database.svg", "Database",
+       "Data"},
+      {"object_storage", "Storage", ":/ui-icons/arch_storage.svg",
+       "Object / file storage", "Data"},
+      {"logging", "Logging", ":/ui-icons/arch_logging.svg",
+       "Log aggregation", "Data"},
       {"monitoring", "Monitor", ":/ui-icons/arch_monitor.svg",
-       "Monitoring / logging system", "Architecture"},
+       "Monitoring / logging system", "Data"},
   };
 }
 
