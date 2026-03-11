@@ -75,7 +75,7 @@ QVector<ElementInfo> ElementBankPanel::defaultElements() {
        "Cache (Redis, Memcached)", "Backend"},
       {"message_queue", "Queue", ":/ui-icons/arch_queue.svg",
        "Message queue / broker", "Backend"},
-      {"notification", "Notify", ":/ui-icons/arch_notification.svg",
+      {"notification", "Notification", ":/ui-icons/arch_notification.svg",
        "Notification / push service", "Backend"},
       {"search", "Search", ":/ui-icons/arch_search.svg",
        "Search engine (Elasticsearch)", "Backend"},
