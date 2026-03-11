@@ -159,43 +159,86 @@ void MainWindow::applyTheme() {
       darkTheme
           ? R"(
               QStatusBar {
-                background-color: #161618;
-                color: #a0a0a8;
-                border-top: 1px solid rgba(255, 255, 255, 0.06);
-                padding: 6px 12px;
+                background-color: #10161d;
+                color: #d0c4b7;
+                border-top: 1px solid rgba(255, 244, 230, 0.08);
+                padding: 8px 14px;
               }
               QStatusBar::item {
                 border: none;
               }
               QLabel {
-                color: #a0a0a8;
+                color: #d0c4b7;
                 font-size: 11px;
-                font-weight: 500;
+                font-weight: 600;
               }
             )"
           : R"(
               QStatusBar {
-                background-color: #f8f9fa;
-                color: #6c757d;
-                border-top: 1px solid #dee2e6;
-                padding: 6px 12px;
+                background-color: #f5efe6;
+                color: #7a6858;
+                border-top: 1px solid #ddcfbc;
+                padding: 8px 14px;
               }
               QStatusBar::item {
                 border: none;
               }
               QLabel {
-                color: #6c757d;
+                color: #7a6858;
                 font-size: 11px;
-                font-weight: 500;
+                font-weight: 600;
               }
             )");
 
 #ifdef HAVE_QT_PDF
+  if (_centralSplitter) {
+    _centralSplitter->setStyleSheet(
+        darkTheme
+            ? R"(
+                QSplitter {
+                  background-color: #0d1217;
+                }
+                QSplitter::handle {
+                  background-color: #10161d;
+                  width: 10px;
+                }
+                QSplitter::handle:hover {
+                  background-color: rgba(249, 115, 22, 0.35);
+                }
+                QFrame#pdfPanel {
+                  background-color: #10161d;
+                  border-left: 1px solid rgba(255, 244, 230, 0.08);
+                }
+                QWidget#pdfViewerContainer {
+                  background-color: #10161d;
+                }
+              )"
+            : R"(
+                QSplitter {
+                  background-color: #efe5d8;
+                }
+                QSplitter::handle {
+                  background-color: #e6d9ca;
+                  width: 10px;
+                }
+                QSplitter::handle:hover {
+                  background-color: rgba(234, 88, 12, 0.22);
+                }
+                QFrame#pdfPanel {
+                  background-color: #f5efe6;
+                  border-left: 1px solid #ddcfbc;
+                }
+                QWidget#pdfViewerContainer {
+                  background-color: #f5efe6;
+                }
+              )");
+  }
+
   if (_pdfHeaderLabel) {
     _pdfHeaderLabel->setStyleSheet(
         darkTheme
-            ? "QLabel { background-color: #2a2a30; color: white; padding: 8px; font-weight: bold; }"
-            : "QLabel { background-color: #e9ecef; color: #343a40; padding: 8px; font-weight: bold; border-bottom: 1px solid #dee2e6; }");
+            ? "QLabel { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #17212b, stop:1 #10161d); color: #fff7ed; padding: 12px; font-weight: 700; letter-spacing: 0.8px; border-bottom: 1px solid rgba(255, 244, 230, 0.08); }"
+            : "QLabel { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #fff9f1, stop:1 #f1e5d5); color: #31261d; padding: 12px; font-weight: 700; letter-spacing: 0.8px; border-bottom: 1px solid #ddcfbc; }");
   }
 
   if (_pdfPageSpinBox) {
@@ -203,12 +246,13 @@ void MainWindow::applyTheme() {
         darkTheme
             ? R"(
                 QSpinBox {
-                  background-color: #2a2a30;
-                  color: #f8f8fc;
-                  border: 1px solid rgba(255, 255, 255, 0.1);
-                  border-radius: 4px;
+                  background-color: #17212b;
+                  color: #fff7ed;
+                  border: 1px solid rgba(255, 244, 230, 0.08);
+                  border-radius: 10px;
                   padding: 4px 8px;
                   min-height: 28px;
+                  font-weight: 600;
                 }
                 QSpinBox::up-button, QSpinBox::down-button {
                   width: 0px;
@@ -216,12 +260,13 @@ void MainWindow::applyTheme() {
               )"
             : R"(
                 QSpinBox {
-                  background-color: #ffffff;
-                  color: #343a40;
-                  border: 1px solid #ced4da;
-                  border-radius: 4px;
+                  background-color: #fff9f1;
+                  color: #31261d;
+                  border: 1px solid #ddcfbc;
+                  border-radius: 10px;
                   padding: 4px 8px;
                   min-height: 28px;
+                  font-weight: 600;
                 }
                 QSpinBox::up-button, QSpinBox::down-button {
                   width: 0px;
@@ -231,8 +276,8 @@ void MainWindow::applyTheme() {
 
   if (_pdfPageLabel) {
     _pdfPageLabel->setStyleSheet(
-        darkTheme ? "QLabel { color: #a0a0a8; padding: 0 8px; }"
-                  : "QLabel { color: #6c757d; padding: 0 8px; }");
+        darkTheme ? "QLabel { color: #d0c4b7; padding: 0 8px; font-weight: 600; }"
+                  : "QLabel { color: #7a6858; padding: 0 8px; font-weight: 600; }");
   }
 
   if (_pdfZoomCombo) {
@@ -240,12 +285,13 @@ void MainWindow::applyTheme() {
         darkTheme
             ? R"(
                 QComboBox {
-                  background-color: #2a2a30;
-                  color: #f8f8fc;
-                  border: 1px solid rgba(255, 255, 255, 0.1);
-                  border-radius: 4px;
+                  background-color: #17212b;
+                  color: #fff7ed;
+                  border: 1px solid rgba(255, 244, 230, 0.08);
+                  border-radius: 10px;
                   padding: 4px 8px;
                   min-height: 28px;
+                  font-weight: 600;
                 }
                 QComboBox::drop-down {
                   border: none;
@@ -255,23 +301,25 @@ void MainWindow::applyTheme() {
                   image: none;
                   border-left: 4px solid transparent;
                   border-right: 4px solid transparent;
-                  border-top: 5px solid #a0a0a8;
+                  border-top: 5px solid #d0c4b7;
                   margin-right: 5px;
                 }
                 QComboBox QAbstractItemView {
-                  background-color: #2a2a30;
-                  color: #f8f8fc;
-                  selection-background-color: #3b82f6;
+                  background-color: #17212b;
+                  color: #fff7ed;
+                  selection-background-color: #f97316;
+                  selection-color: #fffaf4;
                 }
               )"
             : R"(
                 QComboBox {
-                  background-color: #ffffff;
-                  color: #343a40;
-                  border: 1px solid #ced4da;
-                  border-radius: 4px;
+                  background-color: #fff9f1;
+                  color: #31261d;
+                  border: 1px solid #ddcfbc;
+                  border-radius: 10px;
                   padding: 4px 8px;
                   min-height: 28px;
+                  font-weight: 600;
                 }
                 QComboBox::drop-down {
                   border: none;
@@ -281,13 +329,14 @@ void MainWindow::applyTheme() {
                   image: none;
                   border-left: 4px solid transparent;
                   border-right: 4px solid transparent;
-                  border-top: 5px solid #6c757d;
+                  border-top: 5px solid #7a6858;
                   margin-right: 5px;
                 }
                 QComboBox QAbstractItemView {
-                  background-color: #ffffff;
-                  color: #343a40;
-                  selection-background-color: #4285f4;
+                  background-color: #fffaf4;
+                  color: #31261d;
+                  selection-background-color: #f97316;
+                  selection-color: #fffaf4;
                 }
               )");
   }
@@ -297,66 +346,72 @@ void MainWindow::applyTheme() {
         darkTheme
             ? R"(
                 QToolBar {
-                  background-color: #1e1e22;
-                  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-                  padding: 4px 8px;
-                  spacing: 4px;
+                  background-color: #10161d;
+                  border-bottom: 1px solid rgba(255, 244, 230, 0.08);
+                  padding: 8px 10px;
+                  spacing: 6px;
                 }
                 QToolButton {
-                  background-color: transparent;
-                  color: #e0e0e6;
-                  border: none;
-                  border-radius: 6px;
+                  background-color: #17212b;
+                  color: #fff7ed;
+                  border: 1px solid rgba(255, 244, 230, 0.08);
+                  border-radius: 12px;
                   padding: 8px 12px;
                   min-width: 32px;
                   min-height: 32px;
-                  font-size: 16px;
+                  font-size: 15px;
+                  font-weight: 600;
                 }
                 QToolButton:hover {
-                  background-color: rgba(255, 255, 255, 0.08);
+                  background-color: #1d2934;
+                  border: 1px solid rgba(249, 115, 22, 0.35);
                 }
                 QToolButton:pressed {
-                  background-color: rgba(255, 255, 255, 0.12);
+                  background-color: rgba(249, 115, 22, 0.14);
                 }
                 QToolButton:checked {
-                  background-color: #3b82f6;
-                  color: white;
+                  background-color: #f97316;
+                  color: #fffaf4;
+                  border: 1px solid rgba(255, 244, 230, 0.22);
                 }
                 QToolBar::separator {
-                  background-color: rgba(255, 255, 255, 0.1);
+                  background-color: rgba(249, 115, 22, 0.22);
                   width: 1px;
                   margin: 6px 8px;
                 }
               )"
             : R"(
                 QToolBar {
-                  background-color: #f8f9fa;
-                  border-bottom: 1px solid #dee2e6;
-                  padding: 4px 8px;
-                  spacing: 4px;
+                  background-color: #f5efe6;
+                  border-bottom: 1px solid #ddcfbc;
+                  padding: 8px 10px;
+                  spacing: 6px;
                 }
                 QToolButton {
-                  background-color: transparent;
-                  color: #343a40;
-                  border: none;
-                  border-radius: 6px;
+                  background-color: #fff9f1;
+                  color: #31261d;
+                  border: 1px solid #ddcfbc;
+                  border-radius: 12px;
                   padding: 8px 12px;
                   min-width: 32px;
                   min-height: 32px;
-                  font-size: 16px;
+                  font-size: 15px;
+                  font-weight: 600;
                 }
                 QToolButton:hover {
-                  background-color: #e9ecef;
+                  background-color: #fff4e7;
+                  border: 1px solid rgba(234, 88, 12, 0.28);
                 }
                 QToolButton:pressed {
-                  background-color: #dee2e6;
+                  background-color: #f6dfca;
                 }
                 QToolButton:checked {
-                  background-color: #4285f4;
-                  color: white;
+                  background-color: #f97316;
+                  color: #fffaf4;
+                  border: 1px solid rgba(117, 59, 19, 0.15);
                 }
                 QToolBar::separator {
-                  background-color: #dee2e6;
+                  background-color: rgba(234, 88, 12, 0.18);
                   width: 1px;
                   margin: 6px 8px;
                 }
@@ -1124,8 +1179,12 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
 void MainWindow::setupPdfViewer() {
   // Create PDF panel with its own layout (includes thumbnail rail + viewer)
   _pdfPanel = new QFrame(this);
+  _pdfPanel->setObjectName("pdfPanel");
   _pdfPanel->setFrameStyle(QFrame::StyledPanel | QFrame::Raised);
   _pdfPanel->setMinimumWidth(200);
+  _centralSplitter->setObjectName("workspaceSplitter");
+  _centralSplitter->setHandleWidth(10);
+  _canvas->setObjectName("canvasSurface");
 
   QHBoxLayout *pdfHLayout = new QHBoxLayout(_pdfPanel);
   pdfHLayout->setContentsMargins(0, 0, 0, 0);
@@ -1133,6 +1192,7 @@ void MainWindow::setupPdfViewer() {
 
   // Create PDF viewer widget first (needed for thumbnail panel)
   _pdfViewer = new PdfViewer(_pdfPanel);
+  _pdfViewer->setObjectName("pdfViewerSurface");
   _pdfViewer->setUndoRedoManager(_undoRedoManager.get());
 
   // Create thumbnail panel (collapsible, on the left of PDF viewer)
@@ -1142,6 +1202,7 @@ void MainWindow::setupPdfViewer() {
 
   // Create viewer container with header
   QWidget *viewerContainer = new QWidget(_pdfPanel);
+  viewerContainer->setObjectName("pdfViewerContainer");
   QVBoxLayout *viewerLayout = new QVBoxLayout(viewerContainer);
   viewerLayout->setContentsMargins(0, 0, 0, 0);
   viewerLayout->setSpacing(0);
@@ -1426,39 +1487,7 @@ void MainWindow::setupPdfToolBar() {
   redoAction->setToolTip("Redo (Ctrl+Y)");
 
   // Style the toolbar
-  _pdfToolBar->setStyleSheet(R"(
-    QToolBar {
-      background-color: #1e1e22;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-      padding: 4px 8px;
-      spacing: 4px;
-    }
-    QToolButton {
-      background-color: transparent;
-      color: #e0e0e6;
-      border: none;
-      border-radius: 6px;
-      padding: 8px 12px;
-      min-width: 32px;
-      min-height: 32px;
-      font-size: 16px;
-    }
-    QToolButton:hover {
-      background-color: rgba(255, 255, 255, 0.08);
-    }
-    QToolButton:pressed {
-      background-color: rgba(255, 255, 255, 0.12);
-    }
-    QToolButton:checked {
-      background-color: #3b82f6;
-      color: white;
-    }
-    QToolBar::separator {
-      background-color: rgba(255, 255, 255, 0.1);
-      width: 1px;
-      margin: 6px 8px;
-    }
-  )");
+  applyTheme();
 }
 
 void MainWindow::onPdfPageSpinBoxChanged(int page) {

@@ -79,7 +79,7 @@ void ThemeManager::applyDarkTheme() {
   QString styleSheet = R"(
     /* ===== GLOBAL STYLES ===== */
     * {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-family: "Aptos", "Segoe UI", "Noto Sans", sans-serif;
     }
 
     /* ===== TOOLTIPS ===== */
@@ -539,7 +539,7 @@ void ThemeManager::applyDarkTheme() {
 
     /* ===== MAIN WINDOW ===== */
     QMainWindow {
-      background-color: #121214;
+      background-color: #0d1217;
     }
     QMainWindow::separator {
       background-color: rgba(255, 255, 255, 0.08);
@@ -609,7 +609,7 @@ void ThemeManager::applyLightTheme() {
   QString styleSheet = R"(
     /* ===== GLOBAL STYLES ===== */
     * {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-family: "Aptos", "Segoe UI", "Noto Sans", sans-serif;
     }
 
     /* ===== TOOLTIPS ===== */
@@ -1052,7 +1052,7 @@ void ThemeManager::applyLightTheme() {
 
     /* ===== MAIN WINDOW ===== */
     QMainWindow {
-      background-color: #ffffff;
+      background-color: #efe5d8;
     }
     QMainWindow::separator {
       background-color: #e9ecef;
