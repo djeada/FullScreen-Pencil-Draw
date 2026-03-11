@@ -287,6 +287,342 @@ void drawMonitoringIcon(QPainter *p, const QRectF &r, const QColor &accent,
   p->drawEllipse(uv(r, 0.57, 0.43), stroke * 0.7, stroke * 0.7);
 }
 
+void drawUserIcon(QPainter *p, const QRectF &r, const QColor &accent,
+                  qreal stroke) {
+  p->setPen(QPen(accent, stroke, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+  p->setBrush(withAlpha(accent, 38));
+
+  // Head circle
+  p->drawEllipse(uv(r, 0.50, 0.28), r.width() * 0.17, r.height() * 0.17);
+
+  // Body / torso arc
+  QPainterPath body;
+  body.moveTo(uv(r, 0.22, 0.85));
+  body.quadTo(uv(r, 0.22, 0.55), uv(r, 0.50, 0.52));
+  body.quadTo(uv(r, 0.78, 0.55), uv(r, 0.78, 0.85));
+  body.closeSubpath();
+  p->drawPath(body);
+}
+
+void drawUserGroupIcon(QPainter *p, const QRectF &r, const QColor &accent,
+                       qreal stroke) {
+  p->setPen(QPen(accent, stroke, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+  p->setBrush(withAlpha(accent, 32));
+
+  // Back person (slightly offset right)
+  p->drawEllipse(uv(r, 0.62, 0.24), r.width() * 0.12, r.height() * 0.12);
+  QPainterPath backBody;
+  backBody.moveTo(uv(r, 0.44, 0.78));
+  backBody.quadTo(uv(r, 0.44, 0.52), uv(r, 0.62, 0.44));
+  backBody.quadTo(uv(r, 0.80, 0.52), uv(r, 0.80, 0.78));
+  backBody.closeSubpath();
+  p->drawPath(backBody);
+
+  // Front person (slightly offset left)
+  p->setBrush(withAlpha(accent, 48));
+  p->drawEllipse(uv(r, 0.38, 0.28), r.width() * 0.13, r.height() * 0.13);
+  QPainterPath frontBody;
+  frontBody.moveTo(uv(r, 0.18, 0.84));
+  frontBody.quadTo(uv(r, 0.18, 0.56), uv(r, 0.38, 0.48));
+  frontBody.quadTo(uv(r, 0.58, 0.56), uv(r, 0.58, 0.84));
+  frontBody.closeSubpath();
+  p->drawPath(frontBody);
+}
+
+void drawCloudIcon(QPainter *p, const QRectF &r, const QColor &accent,
+                   qreal stroke) {
+  p->setPen(QPen(accent, stroke, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+  p->setBrush(withAlpha(accent, 32));
+
+  QPainterPath cloud;
+  cloud.moveTo(uv(r, 0.25, 0.68));
+  cloud.quadTo(uv(r, 0.10, 0.68), uv(r, 0.12, 0.52));
+  cloud.quadTo(uv(r, 0.10, 0.38), uv(r, 0.28, 0.36));
+  cloud.quadTo(uv(r, 0.30, 0.18), uv(r, 0.50, 0.20));
+  cloud.quadTo(uv(r, 0.70, 0.14), uv(r, 0.74, 0.34));
+  cloud.quadTo(uv(r, 0.92, 0.34), uv(r, 0.88, 0.52));
+  cloud.quadTo(uv(r, 0.92, 0.68), uv(r, 0.75, 0.68));
+  cloud.closeSubpath();
+  p->drawPath(cloud);
+}
+
+void drawCDNIcon(QPainter *p, const QRectF &r, const QColor &accent,
+                 qreal stroke) {
+  p->setPen(QPen(accent, stroke, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+  p->setBrush(withAlpha(accent, 30));
+
+  // Globe circle
+  p->drawEllipse(uvRect(r, 0.22, 0.18, 0.56, 0.56));
+
+  // Horizontal latitude lines
+  p->setBrush(Qt::NoBrush);
+  p->drawLine(uv(r, 0.24, 0.46), uv(r, 0.76, 0.46));
+  p->drawLine(uv(r, 0.30, 0.33), uv(r, 0.70, 0.33));
+  p->drawLine(uv(r, 0.30, 0.59), uv(r, 0.70, 0.59));
+
+  // Vertical meridian
+  QPainterPath meridian;
+  meridian.moveTo(uv(r, 0.50, 0.18));
+  meridian.quadTo(uv(r, 0.36, 0.46), uv(r, 0.50, 0.74));
+  p->drawPath(meridian);
+  QPainterPath meridian2;
+  meridian2.moveTo(uv(r, 0.50, 0.18));
+  meridian2.quadTo(uv(r, 0.64, 0.46), uv(r, 0.50, 0.74));
+  p->drawPath(meridian2);
+
+  // Small scatter nodes around globe
+  p->setBrush(withAlpha(accent, 90));
+  p->drawEllipse(uv(r, 0.20, 0.80), stroke * 0.7, stroke * 0.7);
+  p->drawEllipse(uv(r, 0.50, 0.82), stroke * 0.7, stroke * 0.7);
+  p->drawEllipse(uv(r, 0.80, 0.80), stroke * 0.7, stroke * 0.7);
+}
+
+void drawDNSIcon(QPainter *p, const QRectF &r, const QColor &accent,
+                 qreal stroke) {
+  p->setPen(QPen(accent, stroke, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+  p->setBrush(withAlpha(accent, 30));
+
+  // Address book / card shape
+  p->drawRoundedRect(uvRect(r, 0.18, 0.20, 0.64, 0.60), stroke * 1.5,
+                     stroke * 1.5);
+
+  // Text lines representing domain names
+  p->setBrush(Qt::NoBrush);
+  p->drawLine(uv(r, 0.26, 0.36), uv(r, 0.54, 0.36));
+  p->drawLine(uv(r, 0.58, 0.36), uv(r, 0.74, 0.36));
+  p->drawLine(uv(r, 0.26, 0.50), uv(r, 0.48, 0.50));
+  p->drawLine(uv(r, 0.52, 0.50), uv(r, 0.74, 0.50));
+  p->drawLine(uv(r, 0.26, 0.64), uv(r, 0.50, 0.64));
+  p->drawLine(uv(r, 0.54, 0.64), uv(r, 0.74, 0.64));
+
+  // Arrow mapping symbol
+  const qreal head = stroke * 1.8;
+  drawArrow(p, uv(r, 0.36, 0.84), uv(r, 0.64, 0.84), head);
+}
+
+void drawFirewallIcon(QPainter *p, const QRectF &r, const QColor &accent,
+                      qreal stroke) {
+  p->setPen(QPen(accent, stroke, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+  p->setBrush(withAlpha(accent, 34));
+
+  // Brick wall pattern
+  const QRectF wall = uvRect(r, 0.16, 0.20, 0.68, 0.60);
+  p->drawRoundedRect(wall, stroke, stroke);
+
+  p->setBrush(Qt::NoBrush);
+  // Horizontal lines (rows of bricks)
+  p->drawLine(uv(r, 0.16, 0.40), uv(r, 0.84, 0.40));
+  p->drawLine(uv(r, 0.16, 0.60), uv(r, 0.84, 0.60));
+
+  // Vertical brick offsets - row 1
+  p->drawLine(uv(r, 0.38, 0.20), uv(r, 0.38, 0.40));
+  p->drawLine(uv(r, 0.62, 0.20), uv(r, 0.62, 0.40));
+
+  // Vertical brick offsets - row 2 (offset)
+  p->drawLine(uv(r, 0.27, 0.40), uv(r, 0.27, 0.60));
+  p->drawLine(uv(r, 0.50, 0.40), uv(r, 0.50, 0.60));
+  p->drawLine(uv(r, 0.73, 0.40), uv(r, 0.73, 0.60));
+
+  // Vertical brick offsets - row 3
+  p->drawLine(uv(r, 0.38, 0.60), uv(r, 0.38, 0.80));
+  p->drawLine(uv(r, 0.62, 0.60), uv(r, 0.62, 0.80));
+}
+
+void drawContainerIcon(QPainter *p, const QRectF &r, const QColor &accent,
+                       qreal stroke) {
+  p->setPen(QPen(accent, stroke, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+  p->setBrush(withAlpha(accent, 30));
+
+  // Container box (like a shipping container / Docker)
+  const QRectF box = uvRect(r, 0.20, 0.24, 0.60, 0.52);
+  p->drawRoundedRect(box, stroke * 1.2, stroke * 1.2);
+
+  // Vertical container segments
+  p->setBrush(Qt::NoBrush);
+  p->drawLine(uv(r, 0.35, 0.24), uv(r, 0.35, 0.76));
+  p->drawLine(uv(r, 0.50, 0.24), uv(r, 0.50, 0.76));
+  p->drawLine(uv(r, 0.65, 0.24), uv(r, 0.65, 0.76));
+
+  // Handle/lid at top
+  p->drawLine(uv(r, 0.28, 0.18), uv(r, 0.72, 0.18));
+  p->drawLine(uv(r, 0.28, 0.18), uv(r, 0.28, 0.24));
+  p->drawLine(uv(r, 0.72, 0.18), uv(r, 0.72, 0.24));
+}
+
+void drawServerlessIcon(QPainter *p, const QRectF &r, const QColor &accent,
+                        qreal stroke) {
+  p->setPen(QPen(accent, stroke, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+  p->setBrush(withAlpha(accent, 34));
+
+  // Lambda-like symbol inside a rounded frame
+  p->drawRoundedRect(uvRect(r, 0.22, 0.18, 0.56, 0.64), stroke * 1.6,
+                     stroke * 1.6);
+
+  // Lambda (λ) drawn as lines
+  p->setBrush(Qt::NoBrush);
+  QPen thickPen(accent, stroke * 1.3, Qt::SolidLine, Qt::RoundCap,
+                Qt::RoundJoin);
+  p->setPen(thickPen);
+  p->drawLine(uv(r, 0.34, 0.30), uv(r, 0.50, 0.62));
+  p->drawLine(uv(r, 0.50, 0.62), uv(r, 0.66, 0.30));
+  p->drawLine(uv(r, 0.42, 0.46), uv(r, 0.34, 0.72));
+}
+
+void drawVirtualMachineIcon(QPainter *p, const QRectF &r,
+                            const QColor &accent, qreal stroke) {
+  p->setPen(QPen(accent, stroke, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+  p->setBrush(withAlpha(accent, 28));
+
+  // Outer box (physical host)
+  p->drawRoundedRect(uvRect(r, 0.14, 0.16, 0.72, 0.68), stroke * 1.4,
+                     stroke * 1.4);
+
+  // Inner boxes (virtual machines)
+  p->setBrush(withAlpha(accent, 50));
+  p->drawRoundedRect(uvRect(r, 0.22, 0.26, 0.24, 0.22), stroke * 0.8,
+                     stroke * 0.8);
+  p->drawRoundedRect(uvRect(r, 0.54, 0.26, 0.24, 0.22), stroke * 0.8,
+                     stroke * 0.8);
+  p->drawRoundedRect(uvRect(r, 0.22, 0.54, 0.24, 0.22), stroke * 0.8,
+                     stroke * 0.8);
+  p->drawRoundedRect(uvRect(r, 0.54, 0.54, 0.24, 0.22), stroke * 0.8,
+                     stroke * 0.8);
+}
+
+void drawMicroserviceIcon(QPainter *p, const QRectF &r, const QColor &accent,
+                          qreal stroke) {
+  p->setPen(QPen(accent, stroke, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+  p->setBrush(withAlpha(accent, 36));
+
+  // Hexagon (microservice shape)
+  const QPointF center = uv(r, 0.50, 0.50);
+  const qreal rx = r.width() * 0.34;
+  const qreal ry = r.height() * 0.34;
+  QPolygonF hex;
+  for (int i = 0; i < 6; ++i) {
+    const qreal angle = M_PI / 6.0 + i * M_PI / 3.0;
+    hex << QPointF(center.x() + rx * std::cos(angle),
+                   center.y() + ry * std::sin(angle));
+  }
+  p->drawPolygon(hex);
+
+  // Gear-like inner detail
+  p->setBrush(Qt::NoBrush);
+  p->drawEllipse(center, rx * 0.32, ry * 0.32);
+  p->setBrush(accent);
+  p->drawEllipse(center, stroke * 0.7, stroke * 0.7);
+}
+
+void drawAPIIcon(QPainter *p, const QRectF &r, const QColor &accent,
+                 qreal stroke) {
+  p->setPen(QPen(accent, stroke, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+  p->setBrush(withAlpha(accent, 30));
+
+  // Bracket-like endpoints: { }
+  QPainterPath leftBracket;
+  leftBracket.moveTo(uv(r, 0.34, 0.18));
+  leftBracket.quadTo(uv(r, 0.20, 0.18), uv(r, 0.20, 0.35));
+  leftBracket.lineTo(uv(r, 0.20, 0.42));
+  leftBracket.quadTo(uv(r, 0.20, 0.50), uv(r, 0.12, 0.50));
+  leftBracket.quadTo(uv(r, 0.20, 0.50), uv(r, 0.20, 0.58));
+  leftBracket.lineTo(uv(r, 0.20, 0.65));
+  leftBracket.quadTo(uv(r, 0.20, 0.82), uv(r, 0.34, 0.82));
+  p->setBrush(Qt::NoBrush);
+  p->drawPath(leftBracket);
+
+  QPainterPath rightBracket;
+  rightBracket.moveTo(uv(r, 0.66, 0.18));
+  rightBracket.quadTo(uv(r, 0.80, 0.18), uv(r, 0.80, 0.35));
+  rightBracket.lineTo(uv(r, 0.80, 0.42));
+  rightBracket.quadTo(uv(r, 0.80, 0.50), uv(r, 0.88, 0.50));
+  rightBracket.quadTo(uv(r, 0.80, 0.50), uv(r, 0.80, 0.58));
+  rightBracket.lineTo(uv(r, 0.80, 0.65));
+  rightBracket.quadTo(uv(r, 0.80, 0.82), uv(r, 0.66, 0.82));
+  p->drawPath(rightBracket);
+
+  // Slash in the middle (representing /api)
+  QPen slashPen(accent, stroke * 1.2, Qt::SolidLine, Qt::RoundCap);
+  p->setPen(slashPen);
+  p->drawLine(uv(r, 0.55, 0.32), uv(r, 0.45, 0.68));
+}
+
+void drawNotificationIcon(QPainter *p, const QRectF &r, const QColor &accent,
+                          qreal stroke) {
+  p->setPen(QPen(accent, stroke, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+  p->setBrush(withAlpha(accent, 34));
+
+  // Bell shape
+  QPainterPath bell;
+  bell.moveTo(uv(r, 0.28, 0.62));
+  bell.quadTo(uv(r, 0.28, 0.30), uv(r, 0.50, 0.22));
+  bell.quadTo(uv(r, 0.72, 0.30), uv(r, 0.72, 0.62));
+  bell.lineTo(uv(r, 0.78, 0.68));
+  bell.lineTo(uv(r, 0.22, 0.68));
+  bell.closeSubpath();
+  p->drawPath(bell);
+
+  // Clapper
+  p->setBrush(accent);
+  p->drawEllipse(uv(r, 0.50, 0.76), stroke * 1.0, stroke * 0.8);
+
+  // Small ring at top
+  p->setBrush(Qt::NoBrush);
+  p->drawEllipse(uv(r, 0.50, 0.17), stroke * 0.7, stroke * 0.7);
+}
+
+void drawSearchIcon(QPainter *p, const QRectF &r, const QColor &accent,
+                    qreal stroke) {
+  p->setPen(QPen(accent, stroke, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+  p->setBrush(withAlpha(accent, 28));
+
+  // Magnifying glass circle
+  const QPointF glassCenter = uv(r, 0.44, 0.42);
+  const qreal glassR = r.width() * 0.24;
+  p->drawEllipse(glassCenter, glassR, glassR);
+
+  // Handle
+  QPen handlePen(accent, stroke * 1.5, Qt::SolidLine, Qt::RoundCap);
+  p->setPen(handlePen);
+  p->drawLine(uv(r, 0.60, 0.58), uv(r, 0.78, 0.78));
+
+  // Search lines inside lens
+  p->setPen(QPen(accent, stroke * 0.7, Qt::SolidLine, Qt::RoundCap));
+  p->drawLine(uv(r, 0.32, 0.38), uv(r, 0.52, 0.38));
+  p->drawLine(uv(r, 0.32, 0.46), uv(r, 0.48, 0.46));
+}
+
+void drawLoggingIcon(QPainter *p, const QRectF &r, const QColor &accent,
+                     qreal stroke) {
+  p->setPen(QPen(accent, stroke, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+  p->setBrush(withAlpha(accent, 28));
+
+  // Document/log file
+  QPainterPath doc;
+  doc.moveTo(uv(r, 0.24, 0.14));
+  doc.lineTo(uv(r, 0.62, 0.14));
+  doc.lineTo(uv(r, 0.76, 0.28));
+  doc.lineTo(uv(r, 0.76, 0.86));
+  doc.lineTo(uv(r, 0.24, 0.86));
+  doc.closeSubpath();
+  p->drawPath(doc);
+
+  // Folded corner
+  p->setBrush(withAlpha(accent, 60));
+  QPainterPath fold;
+  fold.moveTo(uv(r, 0.62, 0.14));
+  fold.lineTo(uv(r, 0.62, 0.28));
+  fold.lineTo(uv(r, 0.76, 0.28));
+  fold.closeSubpath();
+  p->drawPath(fold);
+
+  // Log text lines
+  p->setBrush(Qt::NoBrush);
+  p->drawLine(uv(r, 0.32, 0.40), uv(r, 0.68, 0.40));
+  p->drawLine(uv(r, 0.32, 0.52), uv(r, 0.68, 0.52));
+  p->drawLine(uv(r, 0.32, 0.64), uv(r, 0.56, 0.64));
+  p->drawLine(uv(r, 0.32, 0.76), uv(r, 0.62, 0.76));
+}
+
 } // namespace
 
 // ===========================================================================
@@ -416,6 +752,48 @@ void ArchitectureElementItem::paintIcon(QPainter *painter,
   case IconKind::Monitoring:
     drawMonitoringIcon(painter, rect, stroke, width);
     break;
+  case IconKind::User:
+    drawUserIcon(painter, rect, stroke, width);
+    break;
+  case IconKind::UserGroup:
+    drawUserGroupIcon(painter, rect, stroke, width);
+    break;
+  case IconKind::Cloud:
+    drawCloudIcon(painter, rect, stroke, width);
+    break;
+  case IconKind::CDN:
+    drawCDNIcon(painter, rect, stroke, width);
+    break;
+  case IconKind::DNS:
+    drawDNSIcon(painter, rect, stroke, width);
+    break;
+  case IconKind::Firewall:
+    drawFirewallIcon(painter, rect, stroke, width);
+    break;
+  case IconKind::Container:
+    drawContainerIcon(painter, rect, stroke, width);
+    break;
+  case IconKind::Serverless:
+    drawServerlessIcon(painter, rect, stroke, width);
+    break;
+  case IconKind::VirtualMachine:
+    drawVirtualMachineIcon(painter, rect, stroke, width);
+    break;
+  case IconKind::Microservice:
+    drawMicroserviceIcon(painter, rect, stroke, width);
+    break;
+  case IconKind::API:
+    drawAPIIcon(painter, rect, stroke, width);
+    break;
+  case IconKind::Notification:
+    drawNotificationIcon(painter, rect, stroke, width);
+    break;
+  case IconKind::Search:
+    drawSearchIcon(painter, rect, stroke, width);
+    break;
+  case IconKind::Logging:
+    drawLoggingIcon(painter, rect, stroke, width);
+    break;
   }
 }
 
@@ -462,3 +840,59 @@ AuthElement::AuthElement(QGraphicsItem *parent)
 MonitoringElement::MonitoringElement(QGraphicsItem *parent)
     : ArchitectureElementItem("Monitor", IconKind::Monitoring,
                               QColor("#14b8a6"), parent) {}
+
+UserElement::UserElement(QGraphicsItem *parent)
+    : ArchitectureElementItem("User", IconKind::User, QColor("#6366f1"),
+                              parent) {}
+
+UserGroupElement::UserGroupElement(QGraphicsItem *parent)
+    : ArchitectureElementItem("Users", IconKind::UserGroup, QColor("#818cf8"),
+                              parent) {}
+
+CloudElement::CloudElement(QGraphicsItem *parent)
+    : ArchitectureElementItem("Cloud", IconKind::Cloud, QColor("#0ea5e9"),
+                              parent) {}
+
+CDNElement::CDNElement(QGraphicsItem *parent)
+    : ArchitectureElementItem("CDN", IconKind::CDN, QColor("#38bdf8"),
+                              parent) {}
+
+DNSElement::DNSElement(QGraphicsItem *parent)
+    : ArchitectureElementItem("DNS", IconKind::DNS, QColor("#a78bfa"),
+                              parent) {}
+
+FirewallElement::FirewallElement(QGraphicsItem *parent)
+    : ArchitectureElementItem("Firewall", IconKind::Firewall,
+                              QColor("#f43f5e"), parent) {}
+
+ContainerElement::ContainerElement(QGraphicsItem *parent)
+    : ArchitectureElementItem("Container", IconKind::Container,
+                              QColor("#2dd4bf"), parent) {}
+
+ServerlessElement::ServerlessElement(QGraphicsItem *parent)
+    : ArchitectureElementItem("Serverless", IconKind::Serverless,
+                              QColor("#fb923c"), parent) {}
+
+VirtualMachineElement::VirtualMachineElement(QGraphicsItem *parent)
+    : ArchitectureElementItem("VM", IconKind::VirtualMachine,
+                              QColor("#a3e635"), parent) {}
+
+MicroserviceElement::MicroserviceElement(QGraphicsItem *parent)
+    : ArchitectureElementItem("Microservice", IconKind::Microservice,
+                              QColor("#34d399"), parent) {}
+
+APIElement::APIElement(QGraphicsItem *parent)
+    : ArchitectureElementItem("API", IconKind::API, QColor("#c084fc"),
+                              parent) {}
+
+NotificationElement::NotificationElement(QGraphicsItem *parent)
+    : ArchitectureElementItem("Notification", IconKind::Notification,
+                              QColor("#fb7185"), parent) {}
+
+SearchElement::SearchElement(QGraphicsItem *parent)
+    : ArchitectureElementItem("Search", IconKind::Search, QColor("#fbbf24"),
+                              parent) {}
+
+LoggingElement::LoggingElement(QGraphicsItem *parent)
+    : ArchitectureElementItem("Logging", IconKind::Logging, QColor("#94a3b8"),
+                              parent) {}

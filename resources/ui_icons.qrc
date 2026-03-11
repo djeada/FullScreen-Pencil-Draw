@@ -22,5 +22,19 @@
     <file alias="arch_storage.svg">ui_icons/arch_storage.svg</file>
     <file alias="arch_auth.svg">ui_icons/arch_auth.svg</file>
     <file alias="arch_monitor.svg">ui_icons/arch_monitor.svg</file>
+    <file alias="arch_user.svg">ui_icons/arch_user.svg</file>
+    <file alias="arch_user_group.svg">ui_icons/arch_user_group.svg</file>
+    <file alias="arch_cloud.svg">ui_icons/arch_cloud.svg</file>
+    <file alias="arch_cdn.svg">ui_icons/arch_cdn.svg</file>
+    <file alias="arch_dns.svg">ui_icons/arch_dns.svg</file>
+    <file alias="arch_firewall.svg">ui_icons/arch_firewall.svg</file>
+    <file alias="arch_container.svg">ui_icons/arch_container.svg</file>
+    <file alias="arch_serverless.svg">ui_icons/arch_serverless.svg</file>
+    <file alias="arch_virtual_machine.svg">ui_icons/arch_virtual_machine.svg</file>
+    <file alias="arch_microservice.svg">ui_icons/arch_microservice.svg</file>
+    <file alias="arch_api.svg">ui_icons/arch_api.svg</file>
+    <file alias="arch_notification.svg">ui_icons/arch_notification.svg</file>
+    <file alias="arch_search.svg">ui_icons/arch_search.svg</file>
+    <file alias="arch_logging.svg">ui_icons/arch_logging.svg</file>
   </qresource>
 </RCC>

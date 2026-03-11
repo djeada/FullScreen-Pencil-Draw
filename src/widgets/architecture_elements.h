@@ -32,7 +32,21 @@ public:
     Database,
     ObjectStorage,
     Auth,
-    Monitoring
+    Monitoring,
+    User,
+    UserGroup,
+    Cloud,
+    CDN,
+    DNS,
+    Firewall,
+    Container,
+    Serverless,
+    VirtualMachine,
+    Microservice,
+    API,
+    Notification,
+    Search,
+    Logging
   };
 
   explicit ArchitectureElementItem(const QString &label, IconKind iconKind,
@@ -112,6 +126,76 @@ public:
 class MonitoringElement : public ArchitectureElementItem {
 public:
   explicit MonitoringElement(QGraphicsItem *parent = nullptr);
+};
+
+class UserElement : public ArchitectureElementItem {
+public:
+  explicit UserElement(QGraphicsItem *parent = nullptr);
+};
+
+class UserGroupElement : public ArchitectureElementItem {
+public:
+  explicit UserGroupElement(QGraphicsItem *parent = nullptr);
+};
+
+class CloudElement : public ArchitectureElementItem {
+public:
+  explicit CloudElement(QGraphicsItem *parent = nullptr);
+};
+
+class CDNElement : public ArchitectureElementItem {
+public:
+  explicit CDNElement(QGraphicsItem *parent = nullptr);
+};
+
+class DNSElement : public ArchitectureElementItem {
+public:
+  explicit DNSElement(QGraphicsItem *parent = nullptr);
+};
+
+class FirewallElement : public ArchitectureElementItem {
+public:
+  explicit FirewallElement(QGraphicsItem *parent = nullptr);
+};
+
+class ContainerElement : public ArchitectureElementItem {
+public:
+  explicit ContainerElement(QGraphicsItem *parent = nullptr);
+};
+
+class ServerlessElement : public ArchitectureElementItem {
+public:
+  explicit ServerlessElement(QGraphicsItem *parent = nullptr);
+};
+
+class VirtualMachineElement : public ArchitectureElementItem {
+public:
+  explicit VirtualMachineElement(QGraphicsItem *parent = nullptr);
+};
+
+class MicroserviceElement : public ArchitectureElementItem {
+public:
+  explicit MicroserviceElement(QGraphicsItem *parent = nullptr);
+};
+
+class APIElement : public ArchitectureElementItem {
+public:
+  explicit APIElement(QGraphicsItem *parent = nullptr);
+};
+
+class NotificationElement : public ArchitectureElementItem {
+public:
+  explicit NotificationElement(QGraphicsItem *parent = nullptr);
+};
+
+class SearchElement : public ArchitectureElementItem {
+public:
+  explicit SearchElement(QGraphicsItem *parent = nullptr);
+};
+
+class LoggingElement : public ArchitectureElementItem {
+public:
+  explicit LoggingElement(QGraphicsItem *parent = nullptr);
 };
 
 #endif // ARCHITECTURE_ELEMENTS_H
