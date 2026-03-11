@@ -7,6 +7,7 @@
 #include "../core/layer.h"
 #include "../core/scene_controller.h"
 #include "../core/theme_manager.h"
+#include "animated_button.h"
 #include "canvas.h"
 #include <QDropEvent>
 #include <QGraphicsEllipseItem>
@@ -235,33 +236,41 @@ void LayerPanel::setupUI() {
   controlsRow1->setSpacing(6);
   controlsRow1->setAlignment(Qt::AlignHCenter);
 
-  addButton_ = new QPushButton("", container);
+  addButton_ = new AnimatedPushButton("", container);
   addButton_->setToolTip("Add new layer");
   applyLayerButtonIcon(addButton_, ":/ui-icons/layer_add.svg", "+");
   addButton_->setFixedSize(40, 40);
+  static_cast<AnimatedPushButton *>(addButton_)
+      ->setVariant(AnimatedButtonBase::Variant::Compact);
   connect(addButton_, &QPushButton::clicked, this, &LayerPanel::onAddLayer);
   controlsRow1->addWidget(addButton_);
 
-  deleteButton_ = new QPushButton("", container);
+  deleteButton_ = new AnimatedPushButton("", container);
   deleteButton_->setToolTip("Delete layer");
   applyLayerButtonIcon(deleteButton_, ":/ui-icons/layer_delete.svg", "-");
   deleteButton_->setFixedSize(40, 40);
+  static_cast<AnimatedPushButton *>(deleteButton_)
+      ->setVariant(AnimatedButtonBase::Variant::Compact);
   connect(deleteButton_, &QPushButton::clicked, this,
           &LayerPanel::onDeleteLayer);
   controlsRow1->addWidget(deleteButton_);
 
-  duplicateButton_ = new QPushButton("", container);
+  duplicateButton_ = new AnimatedPushButton("", container);
   duplicateButton_->setToolTip("Duplicate layer");
   applyLayerButtonIcon(duplicateButton_, ":/ui-icons/layer_duplicate.svg", "D");
   duplicateButton_->setFixedSize(40, 40);
+  static_cast<AnimatedPushButton *>(duplicateButton_)
+      ->setVariant(AnimatedButtonBase::Variant::Compact);
   connect(duplicateButton_, &QPushButton::clicked, this,
           &LayerPanel::onDuplicateLayer);
   controlsRow1->addWidget(duplicateButton_);
 
-  mergeButton_ = new QPushButton("", container);
+  mergeButton_ = new AnimatedPushButton("", container);
   mergeButton_->setToolTip("Merge with layer below");
   applyLayerButtonIcon(mergeButton_, ":/ui-icons/layer_merge_down.svg", "M");
   mergeButton_->setFixedSize(40, 40);
+  static_cast<AnimatedPushButton *>(mergeButton_)
+      ->setVariant(AnimatedButtonBase::Variant::Compact);
   connect(mergeButton_, &QPushButton::clicked, this, &LayerPanel::onMergeDown);
   controlsRow1->addWidget(mergeButton_);
 
@@ -272,37 +281,45 @@ void LayerPanel::setupUI() {
   controlsRow2->setSpacing(6);
   controlsRow2->setAlignment(Qt::AlignHCenter);
 
-  moveUpButton_ = new QPushButton("", container);
+  moveUpButton_ = new AnimatedPushButton("", container);
   moveUpButton_->setToolTip("Move layer up");
   applyLayerButtonIcon(moveUpButton_, ":/ui-icons/layer_move_up.svg", "U");
   moveUpButton_->setFixedSize(40, 40);
+  static_cast<AnimatedPushButton *>(moveUpButton_)
+      ->setVariant(AnimatedButtonBase::Variant::Compact);
   connect(moveUpButton_, &QPushButton::clicked, this,
           &LayerPanel::onMoveLayerUp);
   controlsRow2->addWidget(moveUpButton_);
 
-  moveDownButton_ = new QPushButton("", container);
+  moveDownButton_ = new AnimatedPushButton("", container);
   moveDownButton_->setToolTip("Move layer down");
   applyLayerButtonIcon(moveDownButton_, ":/ui-icons/layer_move_down.svg", "D");
   moveDownButton_->setFixedSize(40, 40);
+  static_cast<AnimatedPushButton *>(moveDownButton_)
+      ->setVariant(AnimatedButtonBase::Variant::Compact);
   connect(moveDownButton_, &QPushButton::clicked, this,
           &LayerPanel::onMoveLayerDown);
   controlsRow2->addWidget(moveDownButton_);
 
-  visibilityButton_ = new QPushButton("", container);
+  visibilityButton_ = new AnimatedPushButton("", container);
   visibilityButton_->setToolTip("Toggle visibility");
   applyLayerButtonIcon(visibilityButton_, ":/ui-icons/layer_visibility.svg",
                        "V");
   visibilityButton_->setFixedSize(40, 40);
   visibilityButton_->setCheckable(true);
+  static_cast<AnimatedPushButton *>(visibilityButton_)
+      ->setVariant(AnimatedButtonBase::Variant::Compact);
   connect(visibilityButton_, &QPushButton::clicked, this,
           &LayerPanel::onVisibilityToggled);
   controlsRow2->addWidget(visibilityButton_);
 
-  lockButton_ = new QPushButton("", container);
+  lockButton_ = new AnimatedPushButton("", container);
   lockButton_->setToolTip("Toggle lock");
   applyLayerButtonIcon(lockButton_, ":/ui-icons/layer_lock.svg", "L");
   lockButton_->setFixedSize(40, 40);
   lockButton_->setCheckable(true);
+  static_cast<AnimatedPushButton *>(lockButton_)
+      ->setVariant(AnimatedButtonBase::Variant::Compact);
   connect(lockButton_, &QPushButton::clicked, this, &LayerPanel::onLockToggled);
   controlsRow2->addWidget(lockButton_);
 
@@ -313,18 +330,22 @@ void LayerPanel::setupUI() {
   controlsRow3->setSpacing(6);
   controlsRow3->setAlignment(Qt::AlignHCenter);
 
-  mergeItemsButton_ = new QPushButton("Grp", container);
+  mergeItemsButton_ = new AnimatedPushButton("Grp", container);
   mergeItemsButton_->setToolTip("Merge selected items into group");
   applyLayerButtonIcon(mergeItemsButton_, ":/ui-icons/layer_group.svg", "G");
   mergeItemsButton_->setFixedSize(40, 40);
+  static_cast<AnimatedPushButton *>(mergeItemsButton_)
+      ->setVariant(AnimatedButtonBase::Variant::Compact);
   connect(mergeItemsButton_, &QPushButton::clicked, this,
           &LayerPanel::onMergeSelectedItems);
   controlsRow3->addWidget(mergeItemsButton_);
 
-  flattenButton_ = new QPushButton("Flat", container);
+  flattenButton_ = new AnimatedPushButton("Flat", container);
   flattenButton_->setToolTip("Flatten all layers into one");
   applyLayerButtonIcon(flattenButton_, ":/ui-icons/layer_flatten.svg", "F");
   flattenButton_->setFixedSize(40, 40);
+  static_cast<AnimatedPushButton *>(flattenButton_)
+      ->setVariant(AnimatedButtonBase::Variant::Compact);
   connect(flattenButton_, &QPushButton::clicked, this,
           &LayerPanel::onFlattenAll);
   controlsRow3->addWidget(flattenButton_);

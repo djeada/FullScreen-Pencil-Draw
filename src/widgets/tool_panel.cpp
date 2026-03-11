@@ -1,5 +1,6 @@
 #include "tool_panel.h"
 #include "../core/theme_manager.h"
+#include "animated_button.h"
 #include "brush_preview.h"
 #include <QColorDialog>
 #include <QConicalGradient>
@@ -15,13 +16,14 @@
 #include <QVBoxLayout>
 
 // Helper to create a tool button from an action
-static QToolButton *createToolButton(QAction *action, QWidget *parent) {
-  QToolButton *btn = new QToolButton(parent);
+static AnimatedToolButton *createToolButton(QAction *action, QWidget *parent) {
+  auto *btn = new AnimatedToolButton(parent);
   btn->setDefaultAction(action);
   btn->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
   btn->setFixedSize(56, 56);
   btn->setIconSize(QSize(20, 20));
   btn->setProperty("toolTile", true);
+  btn->setVariant(AnimatedButtonBase::Variant::PanelTile);
   return btn;
 }
 
@@ -223,12 +225,13 @@ ToolPanel::ToolPanel(QWidget *parent)
   brushSizeLayout->setSpacing(4);
   brushSizeLayout->setContentsMargins(0, 0, 0, 0);
 
-  QToolButton *decBtn = new QToolButton(brushSizeWidget);
+  auto *decBtn = new AnimatedToolButton(brushSizeWidget);
   decBtn->setDefaultAction(actionDecreaseBrush);
   decBtn->setFixedSize(40, 40);
+  decBtn->setVariant(AnimatedButtonBase::Variant::Compact);
   brushSizeLayout->addWidget(decBtn);
 
-  brushSizeLabel = new QLabel("Size: 3", brushSizeWidget);
+  brushSizeLabel = new QLabel("3", brushSizeWidget);
   brushSizeLabel->setStyleSheet(R"(
     QLabel { 
       padding: 4px 6px; 
@@ -240,12 +243,13 @@ ToolPanel::ToolPanel(QWidget *parent)
     }
   )");
   brushSizeLabel->setAlignment(Qt::AlignCenter);
-  brushSizeLabel->setFixedWidth(52);
+  brushSizeLabel->setFixedWidth(46);
   brushSizeLayout->addWidget(brushSizeLabel);
 
-  QToolButton *incBtn = new QToolButton(brushSizeWidget);
+  auto *incBtn = new AnimatedToolButton(brushSizeWidget);
   incBtn->setDefaultAction(actionIncreaseBrush);
   incBtn->setFixedSize(40, 40);
+  incBtn->setVariant(AnimatedButtonBase::Variant::Compact);
   brushSizeLayout->addWidget(incBtn);
 
   brushSizeWidget->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
@@ -375,9 +379,10 @@ ToolPanel::ToolPanel(QWidget *parent)
   zoomLayout->setSpacing(4);
   zoomLayout->setContentsMargins(0, 0, 0, 0);
 
-  QToolButton *zoomOutBtn = new QToolButton(zoomWidget);
+  auto *zoomOutBtn = new AnimatedToolButton(zoomWidget);
   zoomOutBtn->setDefaultAction(actionZoomOut);
   zoomOutBtn->setFixedSize(40, 40);
+  zoomOutBtn->setVariant(AnimatedButtonBase::Variant::Compact);
   zoomLayout->addWidget(zoomOutBtn);
 
   zoomLabel = new QLabel("100%", zoomWidget);
@@ -395,9 +400,10 @@ ToolPanel::ToolPanel(QWidget *parent)
   zoomLabel->setFixedWidth(52);
   zoomLayout->addWidget(zoomLabel);
 
-  QToolButton *zoomInBtn = new QToolButton(zoomWidget);
+  auto *zoomInBtn = new AnimatedToolButton(zoomWidget);
   zoomInBtn->setDefaultAction(actionZoomIn);
   zoomInBtn->setFixedSize(40, 40);
+  zoomInBtn->setVariant(AnimatedButtonBase::Variant::Compact);
   zoomLayout->addWidget(zoomInBtn);
 
   zoomWidget->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
@@ -931,7 +937,7 @@ void ToolPanel::setActiveTool(const QString &toolName) {
 }
 
 void ToolPanel::updateBrushSizeDisplay(int size) {
-  brushSizeLabel->setText(QString("Size: %1").arg(size));
+  brushSizeLabel->setText(QString::number(size));
   if (brushPreview_) {
     brushPreview_->setBrushSize(size);
   }

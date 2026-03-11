@@ -10,6 +10,7 @@
 #define SIDE_TAB_BAR_H
 
 #include <QDockWidget>
+#include <QEvent>
 #include <QToolBar>
 #include <QVector>
 
@@ -45,15 +46,24 @@ public:
    */
   int visibleTabCount() const;
 
-private:
-  /** Update the overall bar visibility based on tab states. */
-  void refreshVisibility();
+protected:
+  void changeEvent(QEvent *event) override;
 
+private:
   struct DockEntry {
     QDockWidget *dock;
     QAction *tabAction;
   };
+
+  void applyTheme();
+  void refreshEntry(const DockEntry &entry);
+  QString handleTextForDock(QDockWidget *dock) const;
+  /** Update the overall bar visibility based on tab states. */
+  void refreshVisibility();
   QVector<DockEntry> entries_;
+  bool applyingTheme_ = false;
+  bool hasAppliedTheme_ = false;
+  bool lastDarkTheme_ = true;
 };
 
 #endif // SIDE_TAB_BAR_H

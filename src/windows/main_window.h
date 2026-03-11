@@ -123,7 +123,6 @@ private:
   void performRedo();
 
   SideTabBar *_leftSideTabBar;
-  SideTabBar *_rightSideTabBar;
 };
 
 #endif // MAIN_WINDOW_H

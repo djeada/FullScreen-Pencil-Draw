@@ -7,6 +7,7 @@
 #include "../core/undo_redo_manager.h"
 #include "../tools/tool_manager.h"
 #include "../widgets/canvas.h"
+#include "../widgets/dock_title_bar.h"
 #include "../widgets/element_bank_panel.h"
 #include "../widgets/layer_panel.h"
 #include "../widgets/side_tab_bar.h"
@@ -43,6 +44,13 @@ static QAction *createAction(QMenu *menu, const QString &text,
   return action;
 }
 
+static void installDockTitleBar(QDockWidget *dock) {
+  if (!dock) {
+    return;
+  }
+  dock->setTitleBarWidget(new DockTitleBar(dock, dock));
+}
+
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), _canvas(new Canvas(this)),
       _toolPanel(new ToolPanel(this)), _layerPanel(nullptr),
@@ -52,7 +60,7 @@ MainWindow::MainWindow(QWidget *parent)
       _snapToObjectAction(nullptr), _autoSaveAction(nullptr),
       _rulerAction(nullptr), _measurementAction(nullptr),
       _undoRedoManager(std::make_unique<UndoRedoManager>()),
-      _leftSideTabBar(nullptr), _rightSideTabBar(nullptr)
+      _leftSideTabBar(nullptr)
 #ifdef HAVE_QT_PDF
       ,
       _pdfViewer(nullptr), _thumbnailPanel(nullptr), _centralSplitter(nullptr),
@@ -87,6 +95,8 @@ MainWindow::MainWindow(QWidget *parent)
 
   this->addDockWidget(Qt::LeftDockWidgetArea, _toolPanel);
   this->addDockWidget(Qt::RightDockWidgetArea, _elementBankPanel);
+  installDockTitleBar(_toolPanel);
+  installDockTitleBar(_elementBankPanel);
   this->setWindowTitle("FullScreen Pencil Draw - Professional Edition");
   this->resize(1400, 900);
 
@@ -926,6 +936,7 @@ void MainWindow::setupLayerPanel() {
     _layerPanel->setCanvas(_canvas);
     _layerPanel->setItemStore(_canvas->itemStore());
     addDockWidget(Qt::RightDockWidgetArea, _layerPanel);
+    installDockTitleBar(_layerPanel);
 
     // Add panel visibility actions to View menu now that both panels exist
     QMenuBar *menuBar = this->menuBar();
@@ -956,13 +967,11 @@ void MainWindow::setupSideTabBars() {
   _leftSideTabBar = new SideTabBar("Left Panel Tabs", this);
   addToolBar(Qt::LeftToolBarArea, _leftSideTabBar);
 
-  _rightSideTabBar = new SideTabBar("Right Panel Tabs", this);
-  addToolBar(Qt::RightToolBarArea, _rightSideTabBar);
-
   _leftSideTabBar->trackDockWidget(_toolPanel);
-  _rightSideTabBar->trackDockWidget(_elementBankPanel);
-  if (_layerPanel)
-    _rightSideTabBar->trackDockWidget(_layerPanel);
+  _leftSideTabBar->trackDockWidget(_elementBankPanel);
+  if (_layerPanel) {
+    _leftSideTabBar->trackDockWidget(_layerPanel);
+  }
 }
 
 void MainWindow::onBrushSizeChanged(int size) {

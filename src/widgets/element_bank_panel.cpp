@@ -4,6 +4,7 @@
  */
 #include "element_bank_panel.h"
 #include "../core/theme_manager.h"
+#include "animated_button.h"
 #include <QFrame>
 #include <QGridLayout>
 #include <QIcon>
@@ -245,7 +246,7 @@ void ElementBankPanel::addCategory(QVBoxLayout *layout, const QString &category,
   for (int i = 0; i < elements.size(); ++i) {
     const ElementInfo &info = elements[i];
 
-    auto *btn = new QToolButton(gridWidget);
+    auto *btn = new AnimatedToolButton(gridWidget);
     QIcon icon(info.icon);
     btn->setText(info.label);
     btn->setIcon(icon);
@@ -254,6 +255,7 @@ void ElementBankPanel::addCategory(QVBoxLayout *layout, const QString &category,
                                           : Qt::ToolButtonTextUnderIcon);
     btn->setFixedSize(58, 58);
     btn->setIconSize(QSize(18, 18));
+    btn->setVariant(AnimatedButtonBase::Variant::PanelTile);
 
     connect(btn, &QToolButton::clicked, this,
             [this, id = info.id]() { emit elementSelected(id); });
