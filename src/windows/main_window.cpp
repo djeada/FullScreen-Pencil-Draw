@@ -9,6 +9,7 @@
 #include "../widgets/canvas.h"
 #include "../widgets/element_bank_panel.h"
 #include "../widgets/layer_panel.h"
+#include "../widgets/side_tab_bar.h"
 #include "../widgets/tool_panel.h"
 #include <QApplication>
 #include <QCloseEvent>
@@ -50,7 +51,8 @@ MainWindow::MainWindow(QWidget *parent)
       _recentFilesMenu(nullptr), _snapToGridAction(nullptr),
       _snapToObjectAction(nullptr), _autoSaveAction(nullptr),
       _rulerAction(nullptr), _measurementAction(nullptr),
-      _undoRedoManager(std::make_unique<UndoRedoManager>())
+      _undoRedoManager(std::make_unique<UndoRedoManager>()),
+      _leftSideTabBar(nullptr), _rightSideTabBar(nullptr)
 #ifdef HAVE_QT_PDF
       ,
       _pdfViewer(nullptr), _thumbnailPanel(nullptr), _centralSplitter(nullptr),
@@ -91,6 +93,7 @@ MainWindow::MainWindow(QWidget *parent)
   setupMenuBar();
   setupStatusBar();
   setupLayerPanel();
+  setupSideTabBars();
   setupAutoSave();
   setupConnections();
 
@@ -758,7 +761,10 @@ void MainWindow::setupMenuBar() {
 
   // Panels
   viewMenu->addSeparator();
-  viewMenu->addAction(_elementBankPanel->toggleViewAction());
+  QAction *showElementsAction = _elementBankPanel->toggleViewAction();
+  showElementsAction->setText("Show &Elements Panel");
+  showElementsAction->setShortcut(QKeySequence(Qt::Key_F7));
+  viewMenu->addAction(showElementsAction);
 
   // Edit menu - add lock/unlock after other edit items
   editMenu->addSeparator();
@@ -944,6 +950,19 @@ void MainWindow::setupLayerPanel() {
       viewMenu->addAction(showLayersAction);
     }
   }
+}
+
+void MainWindow::setupSideTabBars() {
+  _leftSideTabBar = new SideTabBar("Left Panel Tabs", this);
+  addToolBar(Qt::LeftToolBarArea, _leftSideTabBar);
+
+  _rightSideTabBar = new SideTabBar("Right Panel Tabs", this);
+  addToolBar(Qt::RightToolBarArea, _rightSideTabBar);
+
+  _leftSideTabBar->trackDockWidget(_toolPanel);
+  _rightSideTabBar->trackDockWidget(_elementBankPanel);
+  if (_layerPanel)
+    _rightSideTabBar->trackDockWidget(_layerPanel);
 }
 
 void MainWindow::onBrushSizeChanged(int size) {

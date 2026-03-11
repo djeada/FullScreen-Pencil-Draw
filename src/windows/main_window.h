@@ -15,6 +15,7 @@ class LayerPanel;
 class ElementBankPanel;
 class AutoSaveManager;
 class UndoRedoManager;
+class SideTabBar;
 class QLabel;
 class QAction;
 class QToolBar;
@@ -115,10 +116,14 @@ private:
   void setupLayerPanel();
   void setupMenuBar();
   void setupAutoSave();
+  void setupSideTabBars();
   void updateRecentFilesMenu();
   void applyTheme();
   void performUndo();
   void performRedo();
+
+  SideTabBar *_leftSideTabBar;
+  SideTabBar *_rightSideTabBar;
 };
 
 #endif // MAIN_WINDOW_H
