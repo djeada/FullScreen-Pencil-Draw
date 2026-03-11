@@ -3,6 +3,7 @@
  * @brief Brush size preview widget implementation.
  */
 #include "brush_preview.h"
+#include "../core/theme_manager.h"
 #include <QPainter>
 #include <QPainterPath>
 
@@ -40,14 +41,17 @@ void BrushPreview::paintEvent(QPaintEvent * /*event*/) {
   QPainter painter(this);
   painter.setRenderHint(QPainter::Antialiasing);
 
-  // Draw modern flat background with subtle gradient
+  const bool darkTheme = ThemeManager::instance().isDarkTheme();
+
+  // Draw a theme-aware preview well that matches the panel cards.
   QLinearGradient bgGradient(0, 0, 0, height());
-  bgGradient.setColorAt(0, QColor(26, 26, 30));
-  bgGradient.setColorAt(1, QColor(22, 22, 26));
+  bgGradient.setColorAt(0, darkTheme ? QColor("#17212b") : QColor("#fff9f1"));
+  bgGradient.setColorAt(1, darkTheme ? QColor("#10161d") : QColor("#f0e3d3"));
   painter.fillRect(rect(), bgGradient);
 
-  // Draw subtle rounded border with glow
-  painter.setPen(QPen(QColor(55, 55, 62), 1));
+  painter.setPen(QPen(darkTheme ? QColor(255, 244, 230, 26)
+                                : QColor(117, 59, 19, 28),
+                    1));
   painter.setBrush(Qt::NoBrush);
   painter.drawRoundedRect(rect().adjusted(0, 0, -1, -1), 10, 10);
 
@@ -62,8 +66,8 @@ void BrushPreview::paintEvent(QPaintEvent * /*event*/) {
     scaleFactor = static_cast<qreal>(maxDisplaySize) / brushSize_;
   }
 
-  // Draw subtle crosshairs
-  painter.setPen(QPen(QColor(60, 60, 68), 1, Qt::DotLine));
+  painter.setPen(QPen(darkTheme ? QColor("#314150") : QColor("#d4b89e"), 1,
+                      Qt::DotLine));
   int centerX = width() / 2;
   int centerY = height() / 2;
   painter.drawLine(centerX, 6, centerX, height() - 6);
@@ -107,7 +111,7 @@ void BrushPreview::paintEvent(QPaintEvent * /*event*/) {
 
   // Draw actual size text if scaled
   if (brushSize_ > maxDisplaySize) {
-    painter.setPen(QColor(160, 160, 168));
+    painter.setPen(darkTheme ? QColor("#d0c4b7") : QColor("#7a6858"));
     QFont font = painter.font();
     font.setPointSize(9);
     font.setWeight(QFont::Medium);

@@ -50,12 +50,32 @@ private slots:
 
     QDockWidget dock("Panel", &window);
     window.addDockWidget(Qt::LeftDockWidgetArea, &dock);
+    dock.setProperty("restoreViaSideTab", true);
     dock.hide();
 
     bar.trackDockWidget(&dock);
     QCOMPARE(bar.trackedCount(), 1);
     QCOMPARE(bar.visibleTabCount(), 1);
     QVERIFY(bar.isVisible());
+  }
+
+  void hiddenDockWithoutCollapseShowsNoTab() {
+    QMainWindow window;
+    window.resize(800, 600);
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+
+    SideTabBar bar("Test", &window);
+    window.addToolBar(Qt::LeftToolBarArea, &bar);
+
+    QDockWidget dock("Panel", &window);
+    window.addDockWidget(Qt::LeftDockWidgetArea, &dock);
+    dock.hide();
+
+    bar.trackDockWidget(&dock);
+    QCOMPARE(bar.trackedCount(), 1);
+    QCOMPARE(bar.visibleTabCount(), 0);
+    QVERIFY(!bar.isVisible());
   }
 
   void hidingDockAddsTab() {
@@ -74,6 +94,7 @@ private slots:
     bar.trackDockWidget(&dock);
     QCOMPARE(bar.visibleTabCount(), 0);
 
+    dock.setProperty("restoreViaSideTab", true);
     dock.hide();
     QCOMPARE(bar.visibleTabCount(), 1);
     QVERIFY(bar.isVisible());
@@ -90,6 +111,7 @@ private slots:
 
     QDockWidget dock("Panel", &window);
     window.addDockWidget(Qt::LeftDockWidgetArea, &dock);
+    dock.setProperty("restoreViaSideTab", true);
     dock.hide();
 
     bar.trackDockWidget(&dock);
@@ -145,11 +167,13 @@ private slots:
     QCOMPARE(bar.visibleTabCount(), 0);
 
     // Hide one dock
+    dock1.setProperty("restoreViaSideTab", true);
     dock1.hide();
     QCOMPARE(bar.visibleTabCount(), 1);
     QVERIFY(bar.isVisible());
 
     // Hide both
+    dock2.setProperty("restoreViaSideTab", true);
     dock2.hide();
     QCOMPARE(bar.visibleTabCount(), 2);
 

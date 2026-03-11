@@ -64,16 +64,16 @@ public:
     QRect shadowRect = badgeRect.translated(0, 1);
     painter->setPen(Qt::NoPen);
     painter->setBrush(
-        darkTheme ? QColor(0, 0, 0, 90) : QColor(120, 120, 120, 55));
+        darkTheme ? QColor(0, 0, 0, 105) : QColor(143, 102, 65, 46));
     painter->drawRoundedRect(shadowRect, 10, 10);
 
-    painter->setBrush(darkTheme ? QColor(22, 22, 26, 210)
-                                : QColor(255, 255, 255, 235));
-    painter->setPen(darkTheme ? QColor(255, 255, 255, 40)
-                              : QColor(173, 181, 189, 220));
+    painter->setBrush(darkTheme ? QColor(17, 22, 28, 220)
+                                : QColor(255, 250, 244, 238));
+    painter->setPen(darkTheme ? QColor(249, 115, 22, 95)
+                              : QColor(234, 88, 12, 105));
     painter->drawRoundedRect(badgeRect, 10, 10);
 
-    painter->setPen(darkTheme ? QColor("#f8f8fc") : QColor("#343a40"));
+    painter->setPen(darkTheme ? QColor("#fff7ed") : QColor("#31261d"));
     painter->drawText(badgeRect, Qt::AlignCenter, pageText);
 
     painter->restore();
@@ -159,63 +159,67 @@ void PageThumbnailPanel::applyTheme() {
     header_->setStyleSheet(
         darkTheme
             ? R"(QLabel {
-                 background-color: #2a2a30;
-                 color: #f8f8fc;
-                 padding: 10px;
-                 font-weight: 600;
+                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                             stop:0 #17212b, stop:1 #10161d);
+                 color: #fff7ed;
+                 padding: 12px 10px;
+                 font-weight: 700;
                  font-size: 12px;
-                 border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+                 letter-spacing: 0.7px;
+                 border-bottom: 1px solid rgba(255, 244, 230, 0.08);
                })"
             : R"(QLabel {
-                 background-color: #e9ecef;
-                 color: #343a40;
-                 padding: 10px;
-                 font-weight: 600;
+                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                             stop:0 #fff9f1, stop:1 #f1e5d5);
+                 color: #31261d;
+                 padding: 12px 10px;
+                 font-weight: 700;
                  font-size: 12px;
-                 border-bottom: 1px solid #dee2e6;
+                 letter-spacing: 0.7px;
+                 border-bottom: 1px solid #ddcfbc;
                })");
   }
 
   if (darkTheme) {
     setStyleSheet(R"(
       PageThumbnailPanel {
-        background-color: #1a1a1e;
-        border-right: 1px solid rgba(255, 255, 255, 0.06);
+        background-color: #10161d;
+        border-right: 1px solid rgba(255, 244, 230, 0.06);
       }
       QListWidget {
-        background-color: #1a1a1e;
+        background-color: #10161d;
         border: none;
         outline: none;
-        color: #f8f8fc;
+        color: #fff7ed;
       }
       QListWidget::item {
-        background-color: #242428;
-        color: #f8f8fc;
+        background-color: #17212b;
+        color: #fff7ed;
         border: 2px solid transparent;
-        border-radius: 6px;
-        padding: 4px;
-        margin: 4px 8px;
+        border-radius: 12px;
+        padding: 6px;
+        margin: 6px 10px;
       }
       QListWidget::item:hover {
-        background-color: #2a2a30;
-        border: 2px solid rgba(59, 130, 246, 0.3);
+        background-color: #1d2934;
+        border: 2px solid rgba(249, 115, 22, 0.28);
       }
       QListWidget::item:selected {
-        background-color: #2a2a30;
-        border: 2px solid #3b82f6;
+        background-color: #22160d;
+        border: 2px solid #f97316;
       }
       QScrollBar:vertical {
-        background-color: #1a1a1e;
+        background-color: #10161d;
         width: 10px;
         border: none;
       }
       QScrollBar::handle:vertical {
-        background-color: #3a3a40;
+        background-color: rgba(249, 115, 22, 0.32);
         border-radius: 5px;
         min-height: 30px;
       }
       QScrollBar::handle:vertical:hover {
-        background-color: #4a4a50;
+        background-color: rgba(249, 115, 22, 0.48);
       }
       QScrollBar::add-line:vertical,
       QScrollBar::sub-line:vertical {
@@ -225,43 +229,43 @@ void PageThumbnailPanel::applyTheme() {
   } else {
     setStyleSheet(R"(
       PageThumbnailPanel {
-        background-color: #f8f9fa;
-        border-right: 1px solid #e9ecef;
+        background-color: #f5efe6;
+        border-right: 1px solid #ddcfbc;
       }
       QListWidget {
-        background-color: #f8f9fa;
+        background-color: #f5efe6;
         border: none;
         outline: none;
-        color: #343a40;
+        color: #31261d;
       }
       QListWidget::item {
-        background-color: #ffffff;
-        color: #343a40;
+        background-color: #fff9f1;
+        color: #31261d;
         border: 2px solid transparent;
-        border-radius: 6px;
-        padding: 4px;
-        margin: 4px 8px;
+        border-radius: 12px;
+        padding: 6px;
+        margin: 6px 10px;
       }
       QListWidget::item:hover {
-        background-color: #f1f3f5;
-        border: 2px solid rgba(66, 133, 244, 0.25);
+        background-color: #fff4e7;
+        border: 2px solid rgba(234, 88, 12, 0.22);
       }
       QListWidget::item:selected {
-        background-color: #ffffff;
-        border: 2px solid #4285f4;
+        background-color: #fff1df;
+        border: 2px solid #f97316;
       }
       QScrollBar:vertical {
-        background-color: #f8f9fa;
+        background-color: #f5efe6;
         width: 10px;
         border: none;
       }
       QScrollBar::handle:vertical {
-        background-color: #ced4da;
+        background-color: rgba(234, 88, 12, 0.28);
         border-radius: 5px;
         min-height: 30px;
       }
       QScrollBar::handle:vertical:hover {
-        background-color: #adb5bd;
+        background-color: rgba(234, 88, 12, 0.42);
       }
       QScrollBar::add-line:vertical,
       QScrollBar::sub-line:vertical {

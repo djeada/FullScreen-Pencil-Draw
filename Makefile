@@ -191,13 +191,25 @@ run: build
 	@echo "$(BOLD)$(BLUE)Running $(PROJECT_NAME)...$(RESET)"
 	@BIN="$(BUILD_DIR)/$(PROJECT_NAME)"; \
 	APP_BUNDLE="$(BUILD_DIR)/$(PROJECT_NAME).app/Contents/MacOS/$(PROJECT_NAME)"; \
+	RUNNER=""; \
 	if [ -x "$$BIN" ]; then \
-		"$$BIN"; \
+		RUNNER="$$BIN"; \
 	elif [ -x "$$APP_BUNDLE" ]; then \
-		"$$APP_BUNDLE"; \
+		RUNNER="$$APP_BUNDLE"; \
 	else \
 		echo "$(RED)Executable not found in $(BUILD_DIR).$(RESET)"; \
 		exit 127; \
+	fi; \
+	if [ -n "$$DISPLAY" ] && command -v xdpyinfo >/dev/null 2>&1 && xdpyinfo >/dev/null 2>&1; then \
+		"$$RUNNER"; \
+	elif [ -n "$$WAYLAND_DISPLAY" ]; then \
+		"$$RUNNER"; \
+	elif command -v xvfb-run >/dev/null 2>&1; then \
+		echo "$(YELLOW)No live display detected, falling back to xvfb-run.$(RESET)"; \
+		xvfb-run -s "-screen 0 1920x1080x24" "$$RUNNER"; \
+	else \
+		echo "$(YELLOW)No live display detected, falling back to Qt offscreen platform.$(RESET)"; \
+		QT_QPA_PLATFORM=offscreen "$$RUNNER"; \
 	fi
 
 .PHONY: run-headless

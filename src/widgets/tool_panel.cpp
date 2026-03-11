@@ -1,5 +1,6 @@
 #include "tool_panel.h"
 #include "../core/theme_manager.h"
+#include "animated_button.h"
 #include "brush_preview.h"
 #include <QColorDialog>
 #include <QConicalGradient>
@@ -15,13 +16,14 @@
 #include <QVBoxLayout>
 
 // Helper to create a tool button from an action
-static QToolButton *createToolButton(QAction *action, QWidget *parent) {
-  QToolButton *btn = new QToolButton(parent);
+static AnimatedToolButton *createToolButton(QAction *action, QWidget *parent) {
+  auto *btn = new AnimatedToolButton(parent);
   btn->setDefaultAction(action);
   btn->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
   btn->setFixedSize(56, 56);
   btn->setIconSize(QSize(20, 20));
   btn->setProperty("toolTile", true);
+  btn->setVariant(AnimatedButtonBase::Variant::PanelTile);
   return btn;
 }
 
@@ -30,8 +32,8 @@ static QFrame *createSeparator(QWidget *parent) {
   QFrame *line = new QFrame(parent);
   line->setFrameShape(QFrame::HLine);
   line->setFrameShadow(QFrame::Sunken);
-  line->setStyleSheet("QFrame { background-color: rgba(255, 255, 255, 0.1); "
-                      "max-height: 1px; margin: 4px 8px; }");
+  line->setObjectName("panelSeparator");
+  line->setFixedHeight(1);
   return line;
 }
 
@@ -223,12 +225,13 @@ ToolPanel::ToolPanel(QWidget *parent)
   brushSizeLayout->setSpacing(4);
   brushSizeLayout->setContentsMargins(0, 0, 0, 0);
 
-  QToolButton *decBtn = new QToolButton(brushSizeWidget);
+  auto *decBtn = new AnimatedToolButton(brushSizeWidget);
   decBtn->setDefaultAction(actionDecreaseBrush);
   decBtn->setFixedSize(40, 40);
+  decBtn->setVariant(AnimatedButtonBase::Variant::Compact);
   brushSizeLayout->addWidget(decBtn);
 
-  brushSizeLabel = new QLabel("Size: 3", brushSizeWidget);
+  brushSizeLabel = new QLabel("3", brushSizeWidget);
   brushSizeLabel->setStyleSheet(R"(
     QLabel { 
       padding: 4px 6px; 
@@ -240,12 +243,13 @@ ToolPanel::ToolPanel(QWidget *parent)
     }
   )");
   brushSizeLabel->setAlignment(Qt::AlignCenter);
-  brushSizeLabel->setFixedWidth(52);
+  brushSizeLabel->setFixedWidth(46);
   brushSizeLayout->addWidget(brushSizeLabel);
 
-  QToolButton *incBtn = new QToolButton(brushSizeWidget);
+  auto *incBtn = new AnimatedToolButton(brushSizeWidget);
   incBtn->setDefaultAction(actionIncreaseBrush);
   incBtn->setFixedSize(40, 40);
+  incBtn->setVariant(AnimatedButtonBase::Variant::Compact);
   brushSizeLayout->addWidget(incBtn);
 
   brushSizeWidget->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
@@ -375,9 +379,10 @@ ToolPanel::ToolPanel(QWidget *parent)
   zoomLayout->setSpacing(4);
   zoomLayout->setContentsMargins(0, 0, 0, 0);
 
-  QToolButton *zoomOutBtn = new QToolButton(zoomWidget);
+  auto *zoomOutBtn = new AnimatedToolButton(zoomWidget);
   zoomOutBtn->setDefaultAction(actionZoomOut);
   zoomOutBtn->setFixedSize(40, 40);
+  zoomOutBtn->setVariant(AnimatedButtonBase::Variant::Compact);
   zoomLayout->addWidget(zoomOutBtn);
 
   zoomLabel = new QLabel("100%", zoomWidget);
@@ -395,9 +400,10 @@ ToolPanel::ToolPanel(QWidget *parent)
   zoomLabel->setFixedWidth(52);
   zoomLayout->addWidget(zoomLabel);
 
-  QToolButton *zoomInBtn = new QToolButton(zoomWidget);
+  auto *zoomInBtn = new AnimatedToolButton(zoomWidget);
   zoomInBtn->setDefaultAction(actionZoomIn);
   zoomInBtn->setFixedSize(40, 40);
+  zoomInBtn->setVariant(AnimatedButtonBase::Variant::Compact);
   zoomLayout->addWidget(zoomInBtn);
 
   zoomWidget->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
@@ -615,27 +621,36 @@ void ToolPanel::applyTheme() {
   if (darkTheme) {
     setStyleSheet(R"(
       QDockWidget {
-        background-color: #1a1a1e;
-        color: #f8f8fc;
+        background-color: #10161d;
+        color: #f4efe8;
         font-weight: 500;
       }
       QDockWidget::title {
-        background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2a2a30, stop:1 #242428);
-        padding: 10px 12px;
-        font-weight: 600;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                    stop:0 #17212b, stop:0.55 #121922, stop:1 #10161d);
+        padding: 12px 14px;
+        font-weight: 700;
+        letter-spacing: 0.6px;
+        border-bottom: 1px solid rgba(255, 244, 230, 0.08);
       }
       QScrollArea {
-        background-color: #1a1a1e;
+        background-color: #10161d;
         border: none;
       }
+      QWidget {
+        background-color: #10161d;
+      }
+      QFrame#panelSeparator {
+        background-color: rgba(249, 115, 22, 0.22);
+        margin: 8px 10px;
+      }
       QToolButton {
-        background-color: rgba(255, 255, 255, 0.06);
-        color: #e0e0e6;
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 6px;
-        padding: 4px;
-        font-weight: 500;
+        background-color: rgba(255, 248, 240, 0.04);
+        color: #f4efe8;
+        border: 1px solid rgba(255, 244, 230, 0.08);
+        border-radius: 12px;
+        padding: 5px;
+        font-weight: 600;
       }
       QToolButton[toolTile="true"] {
         min-width: 56px;
@@ -643,62 +658,80 @@ void ToolPanel::applyTheme() {
         max-width: 56px;
         max-height: 56px;
         font-size: 10px;
+        background-color: #17212b;
+        border: 1px solid rgba(255, 244, 230, 0.08);
       }
       QToolButton:hover {
-        background-color: rgba(255, 255, 255, 0.1);
-        border: 1px solid rgba(59, 130, 246, 0.3);
+        background-color: #1d2934;
+        border: 1px solid rgba(249, 115, 22, 0.35);
       }
       QToolButton:pressed {
-        background-color: rgba(255, 255, 255, 0.04);
+        background-color: rgba(249, 115, 22, 0.14);
       }
       QToolButton:checked {
-        background-color: #3b82f6;
-        color: #ffffff;
-        border: 1px solid #60a5fa;
+        background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                                    stop:0 #fb923c, stop:1 #ea580c);
+        color: #fffaf4;
+        border: 1px solid rgba(255, 244, 230, 0.3);
+      }
+      QToolButton:checked:hover {
+        background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                                    stop:0 #fdba74, stop:1 #f97316);
       }
       QSlider::groove:horizontal {
-        background: #28282e;
+        background: #1c2630;
         height: 6px;
         border-radius: 3px;
       }
       QSlider::handle:horizontal {
-        background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #60a5fa, stop:1 #3b82f6);
+        background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                    stop:0 #fdba74, stop:1 #f97316);
         width: 14px;
         height: 14px;
         margin: -4px 0;
         border-radius: 7px;
-        border: 1px solid rgba(255, 255, 255, 0.15);
+        border: 1px solid rgba(255, 244, 230, 0.18);
       }
       QSlider::sub-page:horizontal {
-        background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #3b82f6, stop:1 #60a5fa);
+        background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                    stop:0 #f97316, stop:1 #fb923c);
         border-radius: 3px;
       }
     )");
   } else {
     setStyleSheet(R"(
       QDockWidget {
-        background-color: #f8f9fa;
-        color: #343a40;
+        background-color: #f5efe6;
+        color: #31261d;
         font-weight: 500;
       }
       QDockWidget::title {
-        background: #e9ecef;
-        color: #343a40;
-        padding: 10px 12px;
-        font-weight: 600;
-        border-bottom: 1px solid #dee2e6;
+        background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                    stop:0 #fff9f1, stop:0.55 #f7efe5, stop:1 #efe4d5);
+        color: #31261d;
+        padding: 12px 14px;
+        font-weight: 700;
+        letter-spacing: 0.6px;
+        border-bottom: 1px solid #ddcfbc;
       }
       QScrollArea {
-        background-color: #f8f9fa;
+        background-color: #f5efe6;
         border: none;
       }
+      QWidget {
+        background-color: #f5efe6;
+      }
+      QFrame#panelSeparator {
+        background-color: rgba(234, 88, 12, 0.18);
+        margin: 8px 10px;
+      }
       QToolButton {
-        background-color: #ffffff;
-        color: #343a40;
-        border: 1px solid #ced4da;
-        border-radius: 6px;
-        padding: 4px;
-        font-weight: 500;
+        background-color: rgba(255, 250, 244, 0.9);
+        color: #31261d;
+        border: 1px solid #ddcfbc;
+        border-radius: 12px;
+        padding: 5px;
+        font-weight: 600;
       }
       QToolButton[toolTile="true"] {
         min-width: 56px;
@@ -706,125 +739,140 @@ void ToolPanel::applyTheme() {
         max-width: 56px;
         max-height: 56px;
         font-size: 10px;
+        background-color: #fff9f1;
       }
       QToolButton:hover {
-        background-color: #f1f3f5;
-        border: 1px solid rgba(66, 133, 244, 0.35);
+        background-color: #fff4e7;
+        border: 1px solid rgba(234, 88, 12, 0.28);
       }
       QToolButton:pressed {
-        background-color: #e9ecef;
+        background-color: #f6dfca;
       }
       QToolButton:checked {
-        background-color: #4285f4;
-        color: #ffffff;
-        border: 1px solid #5c9bff;
+        background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                                    stop:0 #fb923c, stop:1 #ea580c);
+        color: #fffaf4;
+        border: 1px solid rgba(117, 59, 19, 0.15);
+      }
+      QToolButton:checked:hover {
+        background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                                    stop:0 #fdba74, stop:1 #f97316);
       }
       QSlider::groove:horizontal {
-        background: #dee2e6;
+        background: #e4d6c7;
         height: 6px;
         border-radius: 3px;
       }
       QSlider::handle:horizontal {
-        background: #4285f4;
+        background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                    stop:0 #fb923c, stop:1 #ea580c);
         width: 14px;
         height: 14px;
         margin: -4px 0;
         border-radius: 7px;
-        border: 1px solid rgba(0, 0, 0, 0.08);
+        border: 1px solid rgba(117, 59, 19, 0.15);
       }
       QSlider::sub-page:horizontal {
-        background: #4285f4;
+        background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                    stop:0 #f97316, stop:1 #fb923c);
         border-radius: 3px;
       }
     )");
   }
 
   const QString subtleLabelStyle = darkTheme
-                                       ? "QLabel { color: #a0a0a8; font-size: 11px; font-weight: 500; }"
-                                       : "QLabel { color: #6c757d; font-size: 11px; font-weight: 500; }";
+                                       ? "QLabel { color: #d0c4b7; font-size: 11px; font-weight: 500; }"
+                                       : "QLabel { color: #7a6858; font-size: 11px; font-weight: 600; letter-spacing: 0.3px; }";
   const QString valueLabelStyle =
       darkTheme
           ? R"(QLabel {
-               padding: 4px 6px;
-               background-color: rgba(255, 255, 255, 0.06);
-               color: #f8f8fc;
-               border-radius: 6px;
-               border: 1px solid rgba(255, 255, 255, 0.08);
-               font-weight: 500;
+               padding: 5px 8px;
+               background-color: #17212b;
+               color: #fff7ed;
+               border-radius: 8px;
+               border: 1px solid rgba(255, 244, 230, 0.08);
+               font-weight: 600;
              })"
           : R"(QLabel {
-               padding: 4px 6px;
-               background-color: #ffffff;
-               color: #343a40;
-               border-radius: 6px;
-               border: 1px solid #ced4da;
-               font-weight: 500;
+               padding: 5px 8px;
+               background-color: #fff9f1;
+               color: #31261d;
+               border-radius: 8px;
+               border: 1px solid #ddcfbc;
+               font-weight: 600;
              })";
   const QString comboStyle =
       darkTheme
           ? R"(QComboBox {
-               background-color: rgba(255, 255, 255, 0.06);
-               color: #e0e0e6;
-               border: 1px solid rgba(255, 255, 255, 0.08);
-               border-radius: 6px;
-               padding: 4px 8px;
+               background-color: #17212b;
+               color: #f4efe8;
+               border: 1px solid rgba(255, 244, 230, 0.08);
+               border-radius: 8px;
+               padding: 5px 8px;
                font-size: 11px;
+               font-weight: 600;
              }
              QComboBox:hover {
-               border: 1px solid rgba(59, 130, 246, 0.3);
+               border: 1px solid rgba(249, 115, 22, 0.35);
              }
              QComboBox::drop-down {
                border: none;
              }
              QComboBox QAbstractItemView {
-               background-color: #2a2a30;
-               color: #e0e0e6;
-               selection-background-color: #3b82f6;
-               border: 1px solid rgba(255, 255, 255, 0.1);
+               background-color: #17212b;
+               color: #f4efe8;
+               selection-background-color: #f97316;
+               selection-color: #fffaf4;
+               border: 1px solid rgba(255, 244, 230, 0.1);
              })"
           : R"(QComboBox {
-               background-color: #ffffff;
-               color: #343a40;
-               border: 1px solid #ced4da;
-               border-radius: 6px;
-               padding: 4px 8px;
+               background-color: #fff9f1;
+               color: #31261d;
+               border: 1px solid #ddcfbc;
+               border-radius: 8px;
+               padding: 5px 8px;
                font-size: 11px;
+               font-weight: 600;
              }
              QComboBox:hover {
-               border: 1px solid rgba(66, 133, 244, 0.35);
+               border: 1px solid rgba(234, 88, 12, 0.28);
              }
              QComboBox::drop-down {
                border: none;
              }
              QComboBox QAbstractItemView {
-               background-color: #ffffff;
-               color: #343a40;
-               selection-background-color: #4285f4;
-               border: 1px solid #ced4da;
+               background-color: #fffaf4;
+               color: #31261d;
+               selection-background-color: #f97316;
+               selection-color: #fffaf4;
+               border: 1px solid #ddcfbc;
              })";
   const QString positionStyle =
       darkTheme
           ? R"(QLabel {
                padding: 6px 10px;
-               background-color: rgba(0, 0, 0, 0.3);
-               color: #a0a0a8;
-               border-radius: 6px;
-               border: 1px solid rgba(255, 255, 255, 0.05);
+               background-color: #131b23;
+               color: #d0c4b7;
+               border-radius: 8px;
+               border: 1px solid rgba(255, 244, 230, 0.06);
                font-size: 11px;
-               font-weight: 500;
+               font-weight: 600;
              })"
           : R"(QLabel {
                padding: 6px 10px;
-               background-color: #ffffff;
-               color: #6c757d;
-               border-radius: 6px;
-               border: 1px solid #dee2e6;
+               background-color: #fff9f1;
+               color: #7a6858;
+               border-radius: 8px;
+               border: 1px solid #e3d5c6;
                font-size: 11px;
-               font-weight: 500;
+               font-weight: 600;
              })";
 
   if (brushSizeLabel) {
     brushSizeLabel->setStyleSheet(valueLabelStyle);
+  }
+  if (activeToolLabel) {
+    activeToolLabel->setStyleSheet(valueLabelStyle);
   }
   if (zoomLabel) {
     zoomLabel->setStyleSheet(valueLabelStyle);
@@ -840,8 +888,8 @@ void ToolPanel::applyTheme() {
   }
   if (pressureSensitivityCheckBox_) {
     pressureSensitivityCheckBox_->setStyleSheet(
-        darkTheme ? "QCheckBox { color: #a0a0a8; font-size: 11px; }"
-                  : "QCheckBox { color: #6c757d; font-size: 11px; }");
+        darkTheme ? "QCheckBox { color: #d0c4b7; font-size: 11px; font-weight: 600; }"
+                  : "QCheckBox { color: #7a6858; font-size: 11px; font-weight: 600; }");
   }
   if (brushTipCombo_) {
     brushTipCombo_->setStyleSheet(comboStyle);
@@ -889,7 +937,7 @@ void ToolPanel::setActiveTool(const QString &toolName) {
 }
 
 void ToolPanel::updateBrushSizeDisplay(int size) {
-  brushSizeLabel->setText(QString("Size: %1").arg(size));
+  brushSizeLabel->setText(QString::number(size));
   if (brushPreview_) {
     brushPreview_->setBrushSize(size);
   }
@@ -902,12 +950,12 @@ void ToolPanel::updateColorDisplay(const QColor &color) {
     QLabel { 
       background-color: %1; 
       border: 2px solid %2; 
-      border-radius: 6px; 
+      border-radius: 10px; 
     }
   )")
                                   .arg(color.name())
-                                  .arg(darkTheme ? "rgba(255, 255, 255, 0.15)"
-                                                 : "#ced4da"));
+                                  .arg(darkTheme ? "rgba(255, 244, 230, 0.16)"
+                                                 : "#ddcfbc"));
   if (brushPreview_) {
     brushPreview_->setBrushColor(color);
   }

@@ -4,6 +4,7 @@
  */
 #include "element_bank_panel.h"
 #include "../core/theme_manager.h"
+#include "animated_button.h"
 #include <QFrame>
 #include <QGridLayout>
 #include <QIcon>
@@ -20,8 +21,8 @@ static QFrame *createBankSeparator(QWidget *parent) {
   auto *line = new QFrame(parent);
   line->setFrameShape(QFrame::HLine);
   line->setFrameShadow(QFrame::Sunken);
-  line->setStyleSheet("QFrame { background-color: rgba(255, 255, 255, 0.1); "
-                      "max-height: 1px; margin: 4px 8px; }");
+  line->setObjectName("bankSeparator");
+  line->setFixedHeight(1);
   return line;
 }
 
@@ -99,8 +100,8 @@ ElementBankPanel::ElementBankPanel(QWidget *parent)
   mainLayout->addStretch();
   scrollArea->setWidget(container);
   setWidget(scrollArea);
-  setMinimumWidth(220);
-  setMaximumWidth(320);
+  setMinimumWidth(236);
+  setMaximumWidth(336);
 
   connect(&ThemeManager::instance(), &ThemeManager::themeChanged, this,
           [this]() { applyTheme(); });
@@ -113,91 +114,112 @@ void ElementBankPanel::applyTheme() {
   if (darkTheme) {
     setStyleSheet(R"(
       QDockWidget {
-        background-color: #1a1a1e;
-        color: #f8f8fc;
+        background-color: #10161d;
+        color: #f4efe8;
         font-weight: 500;
       }
       QDockWidget::title {
-        background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                                    stop:0 #2a2a30, stop:1 #242428);
+        background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                    stop:0 #17212b, stop:0.55 #121922, stop:1 #10161d);
         padding: 12px 14px;
-        font-weight: 600;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        font-weight: 700;
+        letter-spacing: 0.6px;
+        border-bottom: 1px solid rgba(255, 244, 230, 0.08);
       }
       QScrollArea {
-        background-color: #1a1a1e;
+        background-color: #10161d;
         border: none;
       }
+      QWidget {
+        background-color: #10161d;
+      }
+      QFrame#bankSeparator {
+        background-color: rgba(249, 115, 22, 0.2);
+        margin: 8px 10px;
+      }
       QLabel[categoryHeading="true"] {
-        color: #a0a0a8;
+        color: #d0c4b7;
         font-size: 11px;
-        font-weight: 600;
-        padding: 2px 0px;
+        font-weight: 700;
+        padding: 4px 2px;
+        letter-spacing: 0.8px;
+        text-transform: uppercase;
       }
       QToolButton {
-        background-color: rgba(255, 255, 255, 0.06);
-        color: #e0e0e6;
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 8px;
-        padding: 4px 2px;
+        background-color: #17212b;
+        color: #f4efe8;
+        border: 1px solid rgba(255, 244, 230, 0.08);
+        border-radius: 14px;
+        padding: 6px 4px;
         min-width: 58px;
         min-height: 58px;
         max-width: 58px;
         max-height: 58px;
-        font-weight: 500;
+        font-weight: 600;
         font-size: 11px;
       }
       QToolButton:hover {
-        background-color: rgba(255, 255, 255, 0.1);
-        border: 1px solid rgba(59, 130, 246, 0.3);
+        background-color: #1d2934;
+        border: 1px solid rgba(249, 115, 22, 0.35);
       }
       QToolButton:pressed {
-        background-color: rgba(59, 130, 246, 0.25);
+        background-color: rgba(249, 115, 22, 0.14);
       }
     )");
   } else {
     setStyleSheet(R"(
       QDockWidget {
-        background-color: #f8f9fa;
-        color: #343a40;
+        background-color: #f5efe6;
+        color: #31261d;
         font-weight: 500;
       }
       QDockWidget::title {
-        background: #e9ecef;
-        color: #343a40;
+        background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                    stop:0 #fff9f1, stop:0.55 #f7efe5, stop:1 #efe4d5);
+        color: #31261d;
         padding: 12px 14px;
-        font-weight: 600;
-        border-bottom: 1px solid #dee2e6;
+        font-weight: 700;
+        letter-spacing: 0.6px;
+        border-bottom: 1px solid #ddcfbc;
       }
       QScrollArea {
-        background-color: #f8f9fa;
+        background-color: #f5efe6;
         border: none;
       }
+      QWidget {
+        background-color: #f5efe6;
+      }
+      QFrame#bankSeparator {
+        background-color: rgba(234, 88, 12, 0.18);
+        margin: 8px 10px;
+      }
       QLabel[categoryHeading="true"] {
-        color: #6c757d;
+        color: #7a6858;
         font-size: 11px;
-        font-weight: 600;
-        padding: 2px 0px;
+        font-weight: 700;
+        padding: 4px 2px;
+        letter-spacing: 0.8px;
+        text-transform: uppercase;
       }
       QToolButton {
-        background-color: #ffffff;
-        color: #343a40;
-        border: 1px solid #ced4da;
-        border-radius: 8px;
-        padding: 4px 2px;
+        background-color: #fff9f1;
+        color: #31261d;
+        border: 1px solid #ddcfbc;
+        border-radius: 14px;
+        padding: 6px 4px;
         min-width: 58px;
         min-height: 58px;
         max-width: 58px;
         max-height: 58px;
-        font-weight: 500;
+        font-weight: 600;
         font-size: 11px;
       }
       QToolButton:hover {
-        background-color: #f1f3f5;
-        border: 1px solid rgba(66, 133, 244, 0.35);
+        background-color: #fff4e7;
+        border: 1px solid rgba(234, 88, 12, 0.28);
       }
       QToolButton:pressed {
-        background-color: #e9ecef;
+        background-color: #f6dfca;
       }
     )");
   }
@@ -224,7 +246,7 @@ void ElementBankPanel::addCategory(QVBoxLayout *layout, const QString &category,
   for (int i = 0; i < elements.size(); ++i) {
     const ElementInfo &info = elements[i];
 
-    auto *btn = new QToolButton(gridWidget);
+    auto *btn = new AnimatedToolButton(gridWidget);
     QIcon icon(info.icon);
     btn->setText(info.label);
     btn->setIcon(icon);
@@ -233,6 +255,7 @@ void ElementBankPanel::addCategory(QVBoxLayout *layout, const QString &category,
                                           : Qt::ToolButtonTextUnderIcon);
     btn->setFixedSize(58, 58);
     btn->setIconSize(QSize(18, 18));
+    btn->setVariant(AnimatedButtonBase::Variant::PanelTile);
 
     connect(btn, &QToolButton::clicked, this,
             [this, id = info.id]() { emit elementSelected(id); });
