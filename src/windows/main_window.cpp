@@ -1170,6 +1170,12 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
     _canvas->duplicateSelectedItems();
   }
 #ifdef HAVE_QT_PDF
+  // PDF search (Ctrl+F when PDF panel is visible)
+  else if (event->key() == Qt::Key_F &&
+           (event->modifiers() & Qt::ControlModifier) && _pdfPanel &&
+           _pdfPanel->isVisible() && _pdfViewer) {
+    _pdfViewer->openSearch();
+  }
   // PDF navigation shortcuts (only work when PDF panel is visible)
   else if (event->key() == Qt::Key_PageDown && _pdfPanel &&
            _pdfPanel->isVisible() && _pdfViewer) {

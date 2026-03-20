@@ -28,6 +28,9 @@
 #include "../core/scene_renderer.h"
 #include "../core/undo_redo_manager.h"
 #include "../tools/tool_manager.h"
+#include <QPdfSearchModel>
+
+class PdfSearchBar;
 
 /**
  * @brief Graphics item for displaying a PDF page as background.
@@ -338,6 +341,27 @@ public:
    */
   bool isGridVisible() const { return showGrid_; }
 
+  // Text search
+  /**
+   * @brief Open the search bar (Ctrl+F)
+   */
+  void openSearch();
+
+  /**
+   * @brief Close the search bar and clear highlights
+   */
+  void closeSearch();
+
+  /**
+   * @brief Navigate to the next search match
+   */
+  void findNext();
+
+  /**
+   * @brief Navigate to the previous search match
+   */
+  void findPrevious();
+
   // Undo/Redo
   /**
    * @brief Undo the last action
@@ -540,6 +564,8 @@ protected:
   void mouseReleaseEvent(QMouseEvent *event) override;
   void wheelEvent(QWheelEvent *event) override;
   void drawBackground(QPainter *painter, const QRectF &rect) override;
+  void drawForeground(QPainter *painter, const QRectF &rect) override;
+  void resizeEvent(QResizeEvent *event) override;
   void dragEnterEvent(QDragEnterEvent *event) override;
   void dragMoveEvent(QDragMoveEvent *event) override;
   void dragLeaveEvent(QDragLeaveEvent *event) override;
@@ -590,6 +616,19 @@ private:
   void applyZoom(double factor);
   int effectiveRenderDpi() const;
   void captureScreenshot(const QRectF &rect);
+
+  // Search
+  void performSearch(const QString &text);
+  void navigateToMatch(int index);
+  void updateSearchHighlights();
+
+  QPdfSearchModel *searchModel_;
+  PdfSearchBar *searchBar_;
+  int currentMatchIndex_;
+  int totalMatchCount_;
+  QList<QRectF> currentPageHighlights_;
+  int highlightedMatchPage_;
+  int highlightedMatchIndexOnPage_;
 };
 
 #endif // HAVE_QT_PDF
