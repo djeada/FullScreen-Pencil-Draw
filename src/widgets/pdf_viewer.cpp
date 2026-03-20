@@ -8,6 +8,7 @@
 
 #include "../tools/tool.h"
 #include "../tools/tool_manager.h"
+#include "pdf_search_bar.h"
 #include <QApplication>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -19,6 +20,7 @@
 #include <QMessageBox>
 #include <QMouseEvent>
 #include <QPdfWriter>
+#include <QPdfSearchModel>
 #include <QPointer>
 #include <QScrollBar>
 #include <QUrl>
@@ -73,7 +75,9 @@ PdfViewer::PdfViewer(QWidget *parent)
       pageRotation_(0), mode_(Mode::Annotate), darkMode_(false),
       showGrid_(false), fillShapes_(false), currentZoom_(1.0),
       currentPen_(Qt::white, 3), eraserPen_(Qt::black, 10),
-      screenshotSelectionRect_(nullptr) {
+      screenshotSelectionRect_(nullptr), searchModel_(nullptr),
+      searchBar_(nullptr), currentMatchIndex_(-1), totalMatchCount_(0),
+      highlightedMatchPage_(-1), highlightedMatchIndexOnPage_(-1) {
 
   setupScene();
 
@@ -94,6 +98,21 @@ PdfViewer::PdfViewer(QWidget *parent)
 
   connect(document_.get(), &PdfDocument::errorOccurred, this,
           &PdfViewer::errorOccurred);
+
+  // Initialize search model
+  searchModel_ = new QPdfSearchModel(this);
+  connect(document_.get(), &PdfDocument::documentLoaded, this, [this]() {
+    searchModel_->setDocument(document_->document());
+  });
+
+  // Initialize search bar
+  searchBar_ = new PdfSearchBar(viewport());
+  connect(searchBar_, &PdfSearchBar::searchTextChanged, this,
+          &PdfViewer::performSearch);
+  connect(searchBar_, &PdfSearchBar::findNext, this, &PdfViewer::findNext);
+  connect(searchBar_, &PdfSearchBar::findPrevious, this,
+          &PdfViewer::findPrevious);
+  connect(searchBar_, &PdfSearchBar::closed, this, &PdfViewer::closeSearch);
 }
 
 PdfViewer::~PdfViewer() = default;
@@ -180,6 +199,7 @@ void PdfViewer::goToPage(int pageIndex) {
   overlayManager_->showPage(currentPage_);
 
   emit pageChanged(currentPage_, pageCount());
+  updateSearchHighlights();
 }
 
 void PdfViewer::nextPage() {
@@ -951,6 +971,222 @@ void PdfViewer::captureScreenshot(const QRectF &rect) {
 
   // Emit the signal with the captured image
   emit screenshotCaptured(screenshot);
+}
+
+// --- Search Implementation ---
+
+void PdfViewer::openSearch() {
+  if (!hasPdf()) {
+    return;
+  }
+  searchBar_->activate();
+}
+
+void PdfViewer::closeSearch() {
+  searchBar_->deactivate();
+  searchModel_->setSearchString(QString());
+  currentMatchIndex_ = -1;
+  totalMatchCount_ = 0;
+  currentPageHighlights_.clear();
+  highlightedMatchPage_ = -1;
+  highlightedMatchIndexOnPage_ = -1;
+  viewport()->update();
+  scene_->invalidate(scene_->sceneRect(), QGraphicsScene::ForegroundLayer);
+}
+
+void PdfViewer::performSearch(const QString &text) {
+  if (text.isEmpty()) {
+    searchModel_->setSearchString(QString());
+    currentMatchIndex_ = -1;
+    totalMatchCount_ = 0;
+    currentPageHighlights_.clear();
+    highlightedMatchPage_ = -1;
+    highlightedMatchIndexOnPage_ = -1;
+    searchBar_->setMatchInfo(0, 0);
+    viewport()->update();
+    scene_->invalidate(scene_->sceneRect(), QGraphicsScene::ForegroundLayer);
+    return;
+  }
+
+  searchModel_->setSearchString(text);
+
+  // Count total matches across all pages
+  totalMatchCount_ = searchModel_->rowCount(QModelIndex());
+
+  if (totalMatchCount_ > 0) {
+    // Find the first match on or after the current page
+    currentMatchIndex_ = 0;
+    for (int i = 0; i < totalMatchCount_; ++i) {
+      QPdfLink link = searchModel_->resultAtIndex(i);
+      if (link.page() >= currentPage_) {
+        currentMatchIndex_ = i;
+        break;
+      }
+    }
+    navigateToMatch(currentMatchIndex_);
+  } else {
+    currentMatchIndex_ = -1;
+    currentPageHighlights_.clear();
+    highlightedMatchPage_ = -1;
+    highlightedMatchIndexOnPage_ = -1;
+    searchBar_->setMatchInfo(0, 0);
+    viewport()->update();
+    scene_->invalidate(scene_->sceneRect(), QGraphicsScene::ForegroundLayer);
+  }
+}
+
+void PdfViewer::findNext() {
+  if (totalMatchCount_ <= 0) {
+    return;
+  }
+  currentMatchIndex_ = (currentMatchIndex_ + 1) % totalMatchCount_;
+  navigateToMatch(currentMatchIndex_);
+}
+
+void PdfViewer::findPrevious() {
+  if (totalMatchCount_ <= 0) {
+    return;
+  }
+  currentMatchIndex_ =
+      (currentMatchIndex_ - 1 + totalMatchCount_) % totalMatchCount_;
+  navigateToMatch(currentMatchIndex_);
+}
+
+void PdfViewer::navigateToMatch(int index) {
+  if (index < 0 || index >= totalMatchCount_) {
+    return;
+  }
+
+  QPdfLink link = searchModel_->resultAtIndex(index);
+  int matchPage = link.page();
+
+  // Navigate to the page if different
+  if (matchPage != currentPage_) {
+    // goToPage will call updateSearchHighlights
+    goToPage(matchPage);
+  } else {
+    updateSearchHighlights();
+  }
+
+  // Track which match is the "active" one for distinct highlighting
+  highlightedMatchPage_ = matchPage;
+  // Determine the index-on-page for this match
+  QList<QPdfLink> pageResults = searchModel_->resultsOnPage(matchPage);
+  highlightedMatchIndexOnPage_ = -1;
+  for (int i = 0; i < pageResults.size(); ++i) {
+    if (pageResults[i].rectangles() == link.rectangles()) {
+      highlightedMatchIndexOnPage_ = i;
+      break;
+    }
+  }
+
+  searchBar_->setMatchInfo(index + 1, totalMatchCount_);
+
+  // Scroll to make the match visible: convert PDF-point rects to scene coords
+  QList<QRectF> rects = link.rectangles();
+  if (!rects.isEmpty()) {
+    QSizeF pageSizePt = document_->pageSize(matchPage);
+    if (!pageSizePt.isEmpty()) {
+      QRectF sceneRect = scene_->sceneRect();
+      double sx = sceneRect.width() / pageSizePt.width();
+      double sy = sceneRect.height() / pageSizePt.height();
+      QRectF firstRect = rects.first();
+      QRectF mapped(firstRect.x() * sx, firstRect.y() * sy,
+                    firstRect.width() * sx, firstRect.height() * sy);
+      // Add generous padding so the match isn't right at the edge
+      mapped.adjust(-30, -30, 30, 30);
+      ensureVisible(mapped, 50, 50);
+    }
+  }
+
+  viewport()->update();
+  scene_->invalidate(scene_->sceneRect(), QGraphicsScene::ForegroundLayer);
+}
+
+void PdfViewer::updateSearchHighlights() {
+  currentPageHighlights_.clear();
+  if (!hasPdf() || !searchModel_ ||
+      searchModel_->searchString().isEmpty()) {
+    return;
+  }
+
+  QList<QPdfLink> pageResults = searchModel_->resultsOnPage(currentPage_);
+  QSizeF pageSizePt = document_->pageSize(currentPage_);
+  if (pageSizePt.isEmpty()) {
+    return;
+  }
+
+  QRectF sceneRect = scene_->sceneRect();
+  double sx = sceneRect.width() / pageSizePt.width();
+  double sy = sceneRect.height() / pageSizePt.height();
+
+  for (const QPdfLink &link : pageResults) {
+    for (const QRectF &r : link.rectangles()) {
+      currentPageHighlights_.append(
+          QRectF(r.x() * sx, r.y() * sy, r.width() * sx, r.height() * sy));
+    }
+  }
+}
+
+void PdfViewer::drawForeground(QPainter *painter, const QRectF &rect) {
+  Q_UNUSED(rect);
+  if (currentPageHighlights_.isEmpty()) {
+    return;
+  }
+
+  painter->save();
+
+  // Determine active match rectangles for distinct highlighting
+  QList<QRectF> activeRects;
+  if (highlightedMatchPage_ == currentPage_ &&
+      highlightedMatchIndexOnPage_ >= 0) {
+    QList<QPdfLink> pageResults = searchModel_->resultsOnPage(currentPage_);
+    if (highlightedMatchIndexOnPage_ < pageResults.size()) {
+      QPdfLink activeLink = pageResults[highlightedMatchIndexOnPage_];
+      QSizeF pageSizePt = document_->pageSize(currentPage_);
+      if (!pageSizePt.isEmpty()) {
+        QRectF sr = scene_->sceneRect();
+        double sx = sr.width() / pageSizePt.width();
+        double sy = sr.height() / pageSizePt.height();
+        for (const QRectF &r : activeLink.rectangles()) {
+          activeRects.append(QRectF(r.x() * sx, r.y() * sy, r.width() * sx,
+                                    r.height() * sy));
+        }
+      }
+    }
+  }
+
+  // Draw all highlights (yellow, semi-transparent)
+  for (const QRectF &r : currentPageHighlights_) {
+    bool isActive = false;
+    for (const QRectF &ar : activeRects) {
+      if (qAbs(ar.x() - r.x()) < 1 && qAbs(ar.y() - r.y()) < 1) {
+        isActive = true;
+        break;
+      }
+    }
+
+    if (isActive) {
+      // Active match: orange highlight with border
+      painter->setPen(QPen(QColor(245, 130, 30), 2));
+      painter->setBrush(QColor(245, 160, 50, 100));
+    } else {
+      // Other matches: yellow highlight
+      painter->setPen(Qt::NoPen);
+      painter->setBrush(QColor(255, 230, 0, 80));
+    }
+    painter->drawRoundedRect(r, 2, 2);
+  }
+
+  painter->restore();
+}
+
+void PdfViewer::resizeEvent(QResizeEvent *event) {
+  QGraphicsView::resizeEvent(event);
+  // Reposition the search bar when the viewer is resized
+  if (searchBar_ && searchBar_->isVisible()) {
+    searchBar_->activate();
+  }
 }
 
 #endif // HAVE_QT_PDF
