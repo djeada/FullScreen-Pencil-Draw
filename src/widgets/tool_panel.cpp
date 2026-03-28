@@ -137,6 +137,11 @@ ToolPanel::ToolPanel(QWidget *parent)
   connect(actionCurvedArrow, &QAction::triggered, this,
           &ToolPanel::onActionCurvedArrow);
 
+  actionWire = new QAction("⏚ Wire", this);
+  actionWire->setToolTip("Draw wire between electronics pins (W)");
+  actionWire->setCheckable(true);
+  connect(actionWire, &QAction::triggered, this, &ToolPanel::onActionWire);
+
   actionRectangle = new QAction("▢ Rect", this);
   actionRectangle->setToolTip("Draw rectangle (R)");
   actionRectangle->setCheckable(true);
@@ -174,6 +179,7 @@ ToolPanel::ToolPanel(QWidget *parent)
   shapeGrid->addWidget(createToolButton(actionBezier, shapeGridWidget), 2, 1);
   shapeGrid->addWidget(createToolButton(actionTextOnPath, shapeGridWidget), 3,
                        0);
+  shapeGrid->addWidget(createToolButton(actionWire, shapeGridWidget), 3, 1);
   shapeGridWidget->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
   mainLayout->addWidget(shapeGridWidget, 0, Qt::AlignHCenter);
 
@@ -915,6 +921,7 @@ void ToolPanel::clearActiveToolStyles() {
   actionLine->setChecked(false);
   actionArrow->setChecked(false);
   actionCurvedArrow->setChecked(false);
+  actionWire->setChecked(false);
   actionRectangle->setChecked(false);
   actionCircle->setChecked(false);
   actionSelection->setChecked(false);
@@ -929,7 +936,7 @@ void ToolPanel::setActiveTool(const QString &toolName) {
       {"Pen", "✎"},         {"Highlighter", "▉"}, {"Eraser", "⌫"},
       {"Text", "T"},        {"Mermaid", "⬡"},     {"Fill", "◉"},
       {"ColorSelect", "◎"}, {"Line", "╱"},        {"Arrow", "➤"},
-      {"CurvedArrow", "↪"}, {"Rectangle", "▢"},   {"Circle", "◯"},
+      {"CurvedArrow", "↪"}, {"Wire", "⏚"},       {"Rectangle", "▢"},   {"Circle", "◯"},
       {"Select", "⬚"},      {"LassoSelect", "⛶"}, {"Pan", "☰"},
       {"Bezier", "⌇"},      {"TextOnPath", "⌇T"}};
   QString icon = toolIcons.value(toolName, "•");
@@ -1038,6 +1045,12 @@ void ToolPanel::onActionCurvedArrow() {
   actionCurvedArrow->setChecked(true);
   setActiveTool("CurvedArrow");
   emit curvedArrowSelected();
+}
+void ToolPanel::onActionWire() {
+  clearActiveToolStyles();
+  actionWire->setChecked(true);
+  setActiveTool("Wire");
+  emit wireSelected();
 }
 void ToolPanel::onActionRectangle() {
   clearActiveToolStyles();

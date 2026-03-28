@@ -87,8 +87,9 @@ private slots:
   }
 
   void allElementsBoundingRectConsistent() {
-    // All elements share the same card dimensions
-    const QRectF expected(0, 0, 142.0, 106.0);
+    // All elements share the same card dimensions plus pin margin.
+    const qreal m = ElectronicsElementItem::PIN_RADIUS + 1.0;
+    const QRectF expected(-m, -m, 142.0 + 2 * m, 106.0 + 2 * m);
 
     ResistorElement resistor;
     QCOMPARE(resistor.boundingRect(), expected);

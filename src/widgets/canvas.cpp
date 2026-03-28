@@ -14,6 +14,7 @@
 #include "../tools/lasso_selection_tool.h"
 #include "architecture_elements.h"
 #include "electronics_elements.h"
+#include "wire_item.h"
 #include "busy_spinner_overlay.h"
 #include "color_curves_dialog.h"
 #include "image_size_dialog.h"
@@ -848,6 +849,21 @@ void Canvas::setColorSelectTool() {
 void Canvas::setArrowTool() {
   currentShape_ = Arrow;
   tempShapeItem_ = nullptr;
+  this->setDragMode(QGraphicsView::NoDrag);
+  hideEraserPreview();
+  if (scene_)
+    scene_->clearSelection();
+  if (colorSelectionOverlay_)
+    colorSelectionOverlay_->hide();
+  setCursor(Qt::CrossCursor);
+  isPanning_ = false;
+}
+
+void Canvas::setWireTool() {
+  currentShape_ = Wire;
+  tempShapeItem_ = nullptr;
+  wireSrcElem_ = nullptr;
+  wireSrcPin_ = -1;
   this->setDragMode(QGraphicsView::NoDrag);
   hideEraserPreview();
   if (scene_)
@@ -2915,6 +2931,20 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
     scene_->addItem(li);
     tempShapeItem_ = li;
   } break;
+  case Wire: {
+    int pinIdx = -1;
+    ElectronicsElementItem *elem = findElectronicsElementNear(sp, pinIdx);
+    if (elem && pinIdx >= 0) {
+      wireSrcElem_ = elem;
+      wireSrcPin_ = pinIdx;
+      QPointF pinPos = elem->pinScenePos(pinIdx);
+      auto *tl = new QGraphicsLineItem(QLineF(pinPos, pinPos));
+      tl->setPen(QPen(QColor("#22d3ee"), 2.0, Qt::DashLine));
+      tl->setZValue(1e8);
+      scene_->addItem(tl);
+      wireTempLine_ = tl;
+    }
+  } break;
   case CurvedArrow: {
     curvedArrowManualFlip_ = (event->modifiers() & Qt::ShiftModifier);
     curvedArrowAutoBendEnabled_ = !curvedArrowManualFlip_;
@@ -3043,6 +3073,13 @@ void Canvas::mouseMoveEvent(QMouseEvent *event) {
     if (tempShapeItem_)
       static_cast<QGraphicsLineItem *>(tempShapeItem_)
           ->setLine(QLineF(startPoint_, cp));
+    break;
+  case Wire:
+    if (wireTempLine_) {
+      QLineF l = wireTempLine_->line();
+      l.setP2(cp);
+      wireTempLine_->setLine(l);
+    }
     break;
   case CurvedArrow:
     if (tempShapeItem_) {
@@ -3194,6 +3231,31 @@ void Canvas::mouseReleaseEvent(QMouseEvent *event) {
     delete tempShapeItem_;
     tempShapeItem_ = nullptr;
     drawArrow(startPoint_, ep);
+    return;
+  }
+  if (currentShape_ == Wire) {
+    // Remove the temporary preview line.
+    if (wireTempLine_) {
+      scene_->removeItem(wireTempLine_);
+      delete wireTempLine_;
+      wireTempLine_ = nullptr;
+    }
+    // If we started from a valid pin, try to find a destination pin.
+    if (wireSrcElem_ && wireSrcPin_ >= 0) {
+      int dstPinIdx = -1;
+      ElectronicsElementItem *dstElem =
+          findElectronicsElementNear(ep, dstPinIdx);
+      if (dstElem && dstPinIdx >= 0 &&
+          !(dstElem == wireSrcElem_ && dstPinIdx == wireSrcPin_)) {
+        auto *wire =
+            new WireItem(wireSrcElem_, wireSrcPin_, dstElem, dstPinIdx);
+        scene_->addItem(wire);
+        addDrawAction(wire);
+        emit canvasModified();
+      }
+    }
+    wireSrcElem_ = nullptr;
+    wireSrcPin_ = -1;
     return;
   }
   if (currentShape_ == CurvedArrow && tempShapeItem_) {
@@ -5810,6 +5872,41 @@ void Canvas::openSingleImage() {
   fitInView(scene_->sceneRect(), Qt::KeepAspectRatio);
 
   emit canvasModified();
+}
+
+// ---------------------------------------------------------------------------
+// Wire helper: find the nearest electronics-element pin to a scene position.
+// ---------------------------------------------------------------------------
+
+ElectronicsElementItem *
+Canvas::findElectronicsElementNear(const QPointF &scenePos,
+                                   int &pinIndex) const {
+  pinIndex = -1;
+  if (!scene_)
+    return nullptr;
+
+  ElectronicsElementItem *bestElem = nullptr;
+  int bestPin = -1;
+  qreal bestDist = 20.0; // max snap distance in scene units
+
+  const QList<QGraphicsItem *> items = scene_->items();
+  for (QGraphicsItem *item : items) {
+    auto *elem = dynamic_cast<ElectronicsElementItem *>(item);
+    if (!elem)
+      continue;
+    int idx = elem->nearestPin(scenePos, bestDist);
+    if (idx >= 0) {
+      qreal d = QLineF(elem->pinScenePos(idx), scenePos).length();
+      if (d < bestDist) {
+        bestDist = d;
+        bestElem = elem;
+        bestPin = idx;
+      }
+    }
+  }
+
+  pinIndex = bestPin;
+  return bestElem;
 }
 
 void Canvas::placeElement(const QString &elementId) {

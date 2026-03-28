@@ -462,6 +462,8 @@ void MainWindow::setupConnections() {
           &Canvas::setArrowTool);
   connect(_toolPanel, &ToolPanel::curvedArrowSelected, _canvas,
           &Canvas::setCurvedArrowTool);
+  connect(_toolPanel, &ToolPanel::wireSelected, _canvas,
+          &Canvas::setWireTool);
   connect(_toolPanel, &ToolPanel::panSelected, _canvas, &Canvas::setPanTool);
   connect(_toolPanel, &ToolPanel::bezierSelected, _canvas,
           &Canvas::setBezierTool);
