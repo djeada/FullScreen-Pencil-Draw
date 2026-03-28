@@ -54,6 +54,8 @@ class SceneController;
 class ItemStore;
 class BusySpinnerOverlay;
 class UndoRedoManager;
+class ElectronicsElementItem;
+class WireItem;
 
 /**
  * @brief The main drawing canvas widget.
@@ -156,6 +158,7 @@ public slots:
   void setBezierTool();
   void setTextOnPathTool();
   void setPanTool();
+  void setWireTool();
   void setPenColor(const QColor &color);
   void setOpacity(int opacity);
   void increaseBrushSize();
@@ -255,7 +258,8 @@ private:
     Pan,
     CurvedArrow,
     Bezier,
-    TextOnPath
+    TextOnPath,
+    Wire
   };
 
   // Member variables
@@ -396,6 +400,13 @@ private:
   BusySpinnerOverlay *busySpinner_ = nullptr;
   void showBusySpinner(const QString &text);
   void hideBusySpinner();
+
+  // Wire-drawing state
+  ElectronicsElementItem *wireSrcElem_ = nullptr;
+  int wireSrcPin_ = -1;
+  QGraphicsLineItem *wireTempLine_ = nullptr;
+  ElectronicsElementItem *findElectronicsElementNear(const QPointF &scenePos,
+                                                     int &pinIndex) const;
 };
 
 #endif // CANVAS_H

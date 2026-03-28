@@ -43,6 +43,7 @@ signals:
   void colorSelectSelected();
   void arrowSelected();
   void curvedArrowSelected();
+  void wireSelected();
   void panSelected();
   void mermaidSelected();
   void bezierSelected();
@@ -87,6 +88,7 @@ private:
   QAction *actionColorSelect;
   QAction *actionArrow;
   QAction *actionCurvedArrow;
+  QAction *actionWire;
   QAction *actionPan;
   QAction *actionBezier;
   QAction *actionTextOnPath;
@@ -157,6 +159,7 @@ public slots:
   void onActionColorSelect();
   void onActionArrow();
   void onActionCurvedArrow();
+  void onActionWire();
   void onActionPan();
   void onActionBezier();
   void onActionTextOnPath();

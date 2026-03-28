@@ -363,6 +363,8 @@ add_executable(test_electronics_elements
     test_electronics_elements.cpp
     ../src/widgets/electronics_elements.cpp
     ../src/widgets/electronics_elements.h
+    ../src/widgets/wire_item.cpp
+    ../src/widgets/wire_item.h
 )
 
 target_include_directories(test_electronics_elements PRIVATE
@@ -379,6 +381,30 @@ set_target_properties(test_electronics_elements PROPERTIES
 )
 
 add_test(NAME TestElectronicsElements COMMAND test_electronics_elements)
+
+# Wire item and pin tests
+add_executable(test_wire_item
+    test_wire_item.cpp
+    ../src/widgets/electronics_elements.cpp
+    ../src/widgets/electronics_elements.h
+    ../src/widgets/wire_item.cpp
+    ../src/widgets/wire_item.h
+)
+
+target_include_directories(test_wire_item PRIVATE
+    ../src/widgets
+)
+
+target_link_libraries(test_wire_item PRIVATE
+    Qt${QT_VERSION_MAJOR}::Widgets
+    Qt${QT_VERSION_MAJOR}::Test
+)
+
+set_target_properties(test_wire_item PROPERTIES
+    AUTOMOC ON
+)
+
+add_test(NAME TestWireItem COMMAND test_wire_item)
 
 # Add custom target to run all tests
 add_custom_target(run_tests

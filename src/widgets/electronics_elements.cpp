@@ -3,6 +3,7 @@
  * @brief Implementation of custom vector-drawn electronics schematic elements.
  */
 #include "electronics_elements.h"
+#include "wire_item.h"
 #include <QFont>
 #include <QLinearGradient>
 #include <QPainterPath>
@@ -785,10 +786,18 @@ ElectronicsElementItem::ElectronicsElementItem(const QString &label,
       accentColor_(accentColor) {
   setFlag(QGraphicsItem::ItemIsSelectable, true);
   setFlag(QGraphicsItem::ItemIsMovable, true);
+  setFlag(QGraphicsItem::ItemSendsGeometryChanges, true);
+  initPins();
+}
+
+ElectronicsElementItem::~ElectronicsElementItem() {
+  for (WireItem *w : connectedWires_)
+    w->detachElement(this);
 }
 
 QRectF ElectronicsElementItem::boundingRect() const {
-  return QRectF(0, 0, ELEM_W, ELEM_H);
+  const qreal m = PIN_RADIUS + 1.0;
+  return QRectF(-m, -m, ELEM_W + 2 * m, ELEM_H + 2 * m);
 }
 
 void ElectronicsElementItem::paint(QPainter *painter,
@@ -861,6 +870,13 @@ void ElectronicsElementItem::paint(QPainter *painter,
     painter->setBrush(Qt::NoBrush);
     painter->drawRoundedRect(cardRect.adjusted(1.5, 1.5, -1.5, -1.5),
                              CORNER - 1.5, CORNER - 1.5);
+  }
+
+  // Draw connection-pin indicators.
+  for (const ElectronicsPin &pin : pins_) {
+    painter->setPen(QPen(withAlpha(accent.lighter(170), 200), 1.2));
+    painter->setBrush(QColor(255, 255, 255, 180));
+    painter->drawEllipse(pin.offset, PIN_RADIUS, PIN_RADIUS);
   }
 }
 
@@ -941,6 +957,127 @@ void ElectronicsElementItem::paintIcon(QPainter *painter,
     break;
   case IconKind::Connector:
     drawConnectorIcon(painter, rect, stroke, width);
+    break;
+  }
+}
+
+// ===========================================================================
+// Pin / wire helpers
+// ===========================================================================
+
+QPointF ElectronicsElementItem::pinScenePos(int index) const {
+  if (index < 0 || index >= pins_.size())
+    return mapToScene(QPointF(ELEM_W / 2, ELEM_H / 2));
+  return mapToScene(pins_[index].offset);
+}
+
+int ElectronicsElementItem::nearestPin(const QPointF &scenePos,
+                                       qreal maxDist) const {
+  int best = -1;
+  qreal bestD = maxDist;
+  for (int i = 0; i < pins_.size(); ++i) {
+    const qreal d = QLineF(pinScenePos(i), scenePos).length();
+    if (d < bestD) {
+      bestD = d;
+      best = i;
+    }
+  }
+  return best;
+}
+
+void ElectronicsElementItem::addWire(WireItem *wire) {
+  if (wire && !connectedWires_.contains(wire))
+    connectedWires_.append(wire);
+}
+
+void ElectronicsElementItem::removeWire(WireItem *wire) {
+  connectedWires_.removeAll(wire);
+}
+
+QVariant ElectronicsElementItem::itemChange(GraphicsItemChange change,
+                                            const QVariant &value) {
+  if (change == ItemPositionHasChanged) {
+    for (WireItem *w : connectedWires_)
+      w->updatePath();
+  }
+  return QGraphicsItem::itemChange(change, value);
+}
+
+void ElectronicsElementItem::initPins() {
+  const qreal midY = ELEM_H / 2.0;
+  const qreal midX = ELEM_W / 2.0;
+
+  switch (iconKind_) {
+  // --- Two-terminal (left / right) ----------------------------------------
+  case IconKind::Resistor:
+  case IconKind::Capacitor:
+  case IconKind::Inductor:
+  case IconKind::Fuse:
+  case IconKind::Crystal:
+  case IconKind::Diode:
+  case IconKind::LED:
+  case IconKind::Switch:
+  case IconKind::Motor:
+  case IconKind::Speaker:
+  case IconKind::Connector:
+    pins_ = {{QStringLiteral("pin1"), {0.0, midY}},
+             {QStringLiteral("pin2"), {ELEM_W, midY}}};
+    break;
+
+  // --- Four-terminal (transformer, relay) ---------------------------------
+  case IconKind::Transformer:
+  case IconKind::Relay:
+    pins_ = {{QStringLiteral("pin1"), {0.0, midY - 18.0}},
+             {QStringLiteral("pin2"), {0.0, midY + 18.0}},
+             {QStringLiteral("pin3"), {ELEM_W, midY - 18.0}},
+             {QStringLiteral("pin4"), {ELEM_W, midY + 18.0}}};
+    break;
+
+  // --- Three-terminal (transistor, MOSFET, OpAmp, regulator) ---------------
+  case IconKind::Transistor:
+  case IconKind::MOSFET:
+    pins_ = {{QStringLiteral("base"), {0.0, midY}},
+             {QStringLiteral("collector"), {ELEM_W, midY - 18.0}},
+             {QStringLiteral("emitter"), {ELEM_W, midY + 18.0}}};
+    break;
+
+  case IconKind::OpAmp:
+    pins_ = {{QStringLiteral("+in"), {0.0, midY - 18.0}},
+             {QStringLiteral("-in"), {0.0, midY + 18.0}},
+             {QStringLiteral("out"), {ELEM_W, midY}}};
+    break;
+
+  case IconKind::VoltageRegulator:
+    pins_ = {{QStringLiteral("in"), {0.0, midY}},
+             {QStringLiteral("out"), {ELEM_W, midY}},
+             {QStringLiteral("gnd"), {midX, ELEM_H}}};
+    break;
+
+  // --- Battery / power supply (two terminals, top / bottom style) ----------
+  case IconKind::Battery:
+  case IconKind::PowerSupply:
+    pins_ = {{QStringLiteral("+"), {0.0, midY}},
+             {QStringLiteral("-"), {ELEM_W, midY}}};
+    break;
+
+  // --- Ground (single terminal) -------------------------------------------
+  case IconKind::Ground:
+    pins_ = {{QStringLiteral("gnd"), {midX, 0.0}}};
+    break;
+
+  // --- Antenna (single terminal) ------------------------------------------
+  case IconKind::Antenna:
+    pins_ = {{QStringLiteral("feed"), {midX, ELEM_H}}};
+    break;
+
+  // --- Multi-pin ICs / MCU / Sensor (four symmetric pins) ------------------
+  case IconKind::Microcontroller:
+  case IconKind::ICChip:
+  case IconKind::Sensor:
+    pins_ = {{QStringLiteral("pin1"), {0.0, midY - 18.0}},
+             {QStringLiteral("pin2"), {0.0, midY + 18.0}},
+             {QStringLiteral("pin3"), {ELEM_W, midY - 18.0}},
+             {QStringLiteral("pin4"), {ELEM_W, midY + 18.0}}};
     break;
   }
 }
