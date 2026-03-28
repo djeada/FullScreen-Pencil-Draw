@@ -936,9 +936,9 @@ void ToolPanel::setActiveTool(const QString &toolName) {
       {"Pen", "✎"},         {"Highlighter", "▉"}, {"Eraser", "⌫"},
       {"Text", "T"},        {"Mermaid", "⬡"},     {"Fill", "◉"},
       {"ColorSelect", "◎"}, {"Line", "╱"},        {"Arrow", "➤"},
-      {"CurvedArrow", "↪"}, {"Wire", "⏚"},       {"Rectangle", "▢"},   {"Circle", "◯"},
-      {"Select", "⬚"},      {"LassoSelect", "⛶"}, {"Pan", "☰"},
-      {"Bezier", "⌇"},      {"TextOnPath", "⌇T"}};
+      {"CurvedArrow", "↪"}, {"Wire", "⏚"},        {"Rectangle", "▢"},
+      {"Circle", "◯"},      {"Select", "⬚"},      {"LassoSelect", "⛶"},
+      {"Pan", "☰"},         {"Bezier", "⌇"},      {"TextOnPath", "⌇T"}};
   QString icon = toolIcons.value(toolName, "•");
   activeToolLabel->setText(icon + " " + toolName);
 }
