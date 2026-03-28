@@ -89,6 +89,62 @@ QVector<ElementInfo> ElementBankPanel::defaultElements() {
        "Log aggregation", "Data"},
       {"monitoring", "Monitor", ":/ui-icons/arch_monitor.svg",
        "Monitoring / logging system", "Data"},
+
+      // Electronics – Passive
+      {"resistor", "Resistor", ":/ui-icons/elec_resistor.svg",
+       "Resistor", "Passive"},
+      {"capacitor", "Capacitor", ":/ui-icons/elec_capacitor.svg",
+       "Capacitor", "Passive"},
+      {"inductor", "Inductor", ":/ui-icons/elec_inductor.svg",
+       "Inductor", "Passive"},
+      {"fuse", "Fuse", ":/ui-icons/elec_fuse.svg",
+       "Fuse", "Passive"},
+      {"crystal", "Crystal", ":/ui-icons/elec_crystal.svg",
+       "Crystal oscillator", "Passive"},
+      {"transformer", "Transformer", ":/ui-icons/elec_transformer.svg",
+       "Transformer", "Passive"},
+
+      // Electronics – Semiconductor
+      {"diode", "Diode", ":/ui-icons/elec_diode.svg",
+       "Diode", "Semiconductor"},
+      {"led", "LED", ":/ui-icons/elec_led.svg",
+       "Light-emitting diode", "Semiconductor"},
+      {"transistor", "Transistor", ":/ui-icons/elec_transistor.svg",
+       "Bipolar junction transistor", "Semiconductor"},
+      {"mosfet", "MOSFET", ":/ui-icons/elec_mosfet.svg",
+       "MOSFET", "Semiconductor"},
+      {"opamp", "Op-Amp", ":/ui-icons/elec_opamp.svg",
+       "Operational amplifier", "Semiconductor"},
+      {"voltage_regulator", "Regulator", ":/ui-icons/elec_voltage_regulator.svg",
+       "Voltage regulator", "Semiconductor"},
+
+      // Electronics – Power
+      {"battery", "Battery", ":/ui-icons/elec_battery.svg",
+       "Battery", "Power"},
+      {"ground", "Ground", ":/ui-icons/elec_ground.svg",
+       "Ground", "Power"},
+      {"elec_switch", "Switch", ":/ui-icons/elec_switch.svg",
+       "Switch (SPST)", "Power"},
+      {"relay", "Relay", ":/ui-icons/elec_relay.svg",
+       "Relay", "Power"},
+      {"motor", "Motor", ":/ui-icons/elec_motor.svg",
+       "DC motor", "Power"},
+      {"power_supply", "PSU", ":/ui-icons/elec_power_supply.svg",
+       "Power supply unit", "Power"},
+
+      // Electronics – IC & Module
+      {"microcontroller", "MCU", ":/ui-icons/elec_microcontroller.svg",
+       "Microcontroller", "IC & Module"},
+      {"ic_chip", "IC Chip", ":/ui-icons/elec_ic_chip.svg",
+       "Integrated circuit", "IC & Module"},
+      {"sensor", "Sensor", ":/ui-icons/elec_sensor.svg",
+       "Sensor", "IC & Module"},
+      {"antenna", "Antenna", ":/ui-icons/elec_antenna.svg",
+       "Antenna", "IC & Module"},
+      {"speaker", "Speaker", ":/ui-icons/elec_speaker.svg",
+       "Speaker", "IC & Module"},
+      {"connector", "Connector", ":/ui-icons/elec_connector.svg",
+       "Connector / header", "IC & Module"},
   };
 }
 

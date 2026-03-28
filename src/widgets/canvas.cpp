@@ -13,6 +13,7 @@
 #include "../core/undo_redo_manager.h"
 #include "../tools/lasso_selection_tool.h"
 #include "architecture_elements.h"
+#include "electronics_elements.h"
 #include "busy_spinner_overlay.h"
 #include "color_curves_dialog.h"
 #include "image_size_dialog.h"
@@ -5866,21 +5867,77 @@ void Canvas::placeElement(const QString &elementId) {
   else if (elementId == "logging")
     elem = new LoggingElement();
 
-  if (!elem)
+  // Electronics elements
+  ElectronicsElementItem *elecElem = nullptr;
+  if (!elem) {
+    if (elementId == "resistor")
+      elecElem = new ResistorElement();
+    else if (elementId == "capacitor")
+      elecElem = new CapacitorElement();
+    else if (elementId == "inductor")
+      elecElem = new InductorElement();
+    else if (elementId == "fuse")
+      elecElem = new FuseElement();
+    else if (elementId == "crystal")
+      elecElem = new CrystalElement();
+    else if (elementId == "transformer")
+      elecElem = new TransformerElement();
+    else if (elementId == "diode")
+      elecElem = new DiodeElement();
+    else if (elementId == "led")
+      elecElem = new LEDElement();
+    else if (elementId == "transistor")
+      elecElem = new TransistorElement();
+    else if (elementId == "mosfet")
+      elecElem = new MOSFETElement();
+    else if (elementId == "opamp")
+      elecElem = new OpAmpElement();
+    else if (elementId == "voltage_regulator")
+      elecElem = new VoltageRegulatorElement();
+    else if (elementId == "battery")
+      elecElem = new BatteryElement();
+    else if (elementId == "ground")
+      elecElem = new GroundElement();
+    else if (elementId == "elec_switch")
+      elecElem = new SwitchElement();
+    else if (elementId == "relay")
+      elecElem = new RelayElement();
+    else if (elementId == "motor")
+      elecElem = new MotorElement();
+    else if (elementId == "power_supply")
+      elecElem = new PowerSupplyElement();
+    else if (elementId == "microcontroller")
+      elecElem = new MicrocontrollerElement();
+    else if (elementId == "ic_chip")
+      elecElem = new ICChipElement();
+    else if (elementId == "sensor")
+      elecElem = new SensorElement();
+    else if (elementId == "antenna")
+      elecElem = new AntennaElement();
+    else if (elementId == "speaker")
+      elecElem = new SpeakerElement();
+    else if (elementId == "connector")
+      elecElem = new ConnectorElement();
+  }
+
+  // Determine which item to place
+  QGraphicsItem *item = elem ? static_cast<QGraphicsItem *>(elem)
+                             : static_cast<QGraphicsItem *>(elecElem);
+  if (!item)
     return;
 
   // Position at the centre of the visible viewport
-  QRectF br = elem->boundingRect();
+  QRectF br = item->boundingRect();
   QPointF center = mapToScene(viewport()->rect().center());
-  elem->setPos(center.x() - br.width() / 2.0, center.y() - br.height() / 2.0);
+  item->setPos(center.x() - br.width() / 2.0, center.y() - br.height() / 2.0);
 
   // Add to scene via SceneController
   if (sceneController_) {
-    sceneController_->addItem(elem);
+    sceneController_->addItem(item);
   } else {
-    scene_->addItem(elem);
+    scene_->addItem(item);
   }
-  addDrawAction(elem);
+  addDrawAction(item);
   emit canvasModified();
 }
 

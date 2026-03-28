@@ -358,6 +358,28 @@ set_target_properties(test_architecture_elements PROPERTIES
 
 add_test(NAME TestArchitectureElements COMMAND test_architecture_elements)
 
+# Electronics elements tests
+add_executable(test_electronics_elements
+    test_electronics_elements.cpp
+    ../src/widgets/electronics_elements.cpp
+    ../src/widgets/electronics_elements.h
+)
+
+target_include_directories(test_electronics_elements PRIVATE
+    ../src/widgets
+)
+
+target_link_libraries(test_electronics_elements PRIVATE
+    Qt${QT_VERSION_MAJOR}::Widgets
+    Qt${QT_VERSION_MAJOR}::Test
+)
+
+set_target_properties(test_electronics_elements PROPERTIES
+    AUTOMOC ON
+)
+
+add_test(NAME TestElectronicsElements COMMAND test_electronics_elements)
+
 # Add custom target to run all tests
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure

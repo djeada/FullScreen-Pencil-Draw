@@ -36,5 +36,30 @@
     <file alias="arch_notification.svg">ui_icons/arch_notification.svg</file>
     <file alias="arch_search.svg">ui_icons/arch_search.svg</file>
     <file alias="arch_logging.svg">ui_icons/arch_logging.svg</file>
+
+    <file alias="elec_resistor.svg">ui_icons/elec_resistor.svg</file>
+    <file alias="elec_capacitor.svg">ui_icons/elec_capacitor.svg</file>
+    <file alias="elec_inductor.svg">ui_icons/elec_inductor.svg</file>
+    <file alias="elec_fuse.svg">ui_icons/elec_fuse.svg</file>
+    <file alias="elec_crystal.svg">ui_icons/elec_crystal.svg</file>
+    <file alias="elec_transformer.svg">ui_icons/elec_transformer.svg</file>
+    <file alias="elec_diode.svg">ui_icons/elec_diode.svg</file>
+    <file alias="elec_led.svg">ui_icons/elec_led.svg</file>
+    <file alias="elec_transistor.svg">ui_icons/elec_transistor.svg</file>
+    <file alias="elec_mosfet.svg">ui_icons/elec_mosfet.svg</file>
+    <file alias="elec_opamp.svg">ui_icons/elec_opamp.svg</file>
+    <file alias="elec_voltage_regulator.svg">ui_icons/elec_voltage_regulator.svg</file>
+    <file alias="elec_battery.svg">ui_icons/elec_battery.svg</file>
+    <file alias="elec_ground.svg">ui_icons/elec_ground.svg</file>
+    <file alias="elec_switch.svg">ui_icons/elec_switch.svg</file>
+    <file alias="elec_relay.svg">ui_icons/elec_relay.svg</file>
+    <file alias="elec_motor.svg">ui_icons/elec_motor.svg</file>
+    <file alias="elec_power_supply.svg">ui_icons/elec_power_supply.svg</file>
+    <file alias="elec_microcontroller.svg">ui_icons/elec_microcontroller.svg</file>
+    <file alias="elec_ic_chip.svg">ui_icons/elec_ic_chip.svg</file>
+    <file alias="elec_sensor.svg">ui_icons/elec_sensor.svg</file>
+    <file alias="elec_antenna.svg">ui_icons/elec_antenna.svg</file>
+    <file alias="elec_speaker.svg">ui_icons/elec_speaker.svg</file>
+    <file alias="elec_connector.svg">ui_icons/elec_connector.svg</file>
   </qresource>
 </RCC>
