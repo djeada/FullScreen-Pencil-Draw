@@ -18,6 +18,9 @@
 // Helpers
 // ---------------------------------------------------------------------------
 
+/// Number of columns in the element button grid.
+static constexpr int kGridColumns = 2;
+
 static QFrame *createBankSeparator(QWidget *parent) {
   auto *line = new QFrame(parent);
   line->setFrameShape(QFrame::HLine);
@@ -383,7 +386,7 @@ void ElementBankPanel::addCategory(QVBoxLayout *layout, const QString &category,
     connect(btn, &QToolButton::clicked, this,
             [this, id = info.id]() { emit elementSelected(id); });
 
-    grid->addWidget(btn, i / 2, i % 2);
+    grid->addWidget(btn, i / kGridColumns, i % kGridColumns);
   }
 
   gridWidget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
