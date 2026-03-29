@@ -117,13 +117,8 @@ ElementCard::ElementCard(const ElementInfo &info, QWidget *parent)
   setToolTip(info.tooltip);
   setMouseTracking(true);
 
-  QIcon icon(info.icon);
-  if (!icon.isNull()) {
-    const qreal dpr = devicePixelRatioF();
-    iconPixmap_ = icon.pixmap(
-        QSize(kCardIconSize, kCardIconSize) * dpr);
-    iconPixmap_.setDevicePixelRatio(dpr);
-  }
+  icon_ = QIcon(info.icon);
+  rebuildIconPixmap();
 
   hoverAnim_.setDuration(160);
   hoverAnim_.setEasingCurve(QEasingCurve::OutCubic);
@@ -140,6 +135,22 @@ ElementCard::ElementCard(const ElementInfo &info, QWidget *parent)
             pressProgress_ = v.toReal();
             update();
           });
+}
+
+void ElementCard::rebuildIconPixmap() {
+  iconDpr_ = devicePixelRatioF();
+  iconDark_ = isDark();
+  if (icon_.isNull()) {
+    iconPixmap_ = QPixmap();
+    return;
+  }
+  const int px = qRound(kCardIconSize * iconDpr_);
+  iconPixmap_ = icon_.pixmap(QSize(px, px));
+  iconPixmap_.setDevicePixelRatio(iconDpr_);
+  // Tint to pure white (dark mode) or black (light mode).
+  QPainter tp(&iconPixmap_);
+  tp.setCompositionMode(QPainter::CompositionMode_SourceIn);
+  tp.fillRect(iconPixmap_.rect(), iconDark_ ? Qt::white : Qt::black);
 }
 
 void ElementCard::paintEvent(QPaintEvent *) {
@@ -181,9 +192,14 @@ void ElementCard::paintEvent(QPaintEvent *) {
   p.setBrush(fill);
   p.drawRoundedRect(body, kCardRadius, kCardRadius);
 
-  // -- icon --------------------------------------------------------------
+  // -- icon (re-rendered from SVG when DPR or theme changes) --------------
   const qreal iconY = body.top() + 12;
-  if (!iconPixmap_.isNull()) {
+  if (!icon_.isNull()) {
+    const qreal dpr = devicePixelRatioF();
+    const bool dark = isDark();
+    if (iconPixmap_.isNull() || iconDpr_ != dpr || iconDark_ != dark)
+      rebuildIconPixmap();
+
     const qreal iconW = kCardIconSize;
     const qreal iconX = body.center().x() - iconW / 2.0;
     p.drawPixmap(QPointF(iconX, iconY), iconPixmap_);

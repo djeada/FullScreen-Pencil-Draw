@@ -4,6 +4,7 @@
  *        electronics element pins.
  */
 #include "wire_item.h"
+#include "../core/theme_manager.h"
 #include "electronics_elements.h"
 #include <QPainterPath>
 #include <QtMath>
@@ -18,7 +19,9 @@ WireItem::WireItem(ElectronicsElementItem *srcElem, int srcPin,
     : QGraphicsPathItem(parent), srcElem_(srcElem), srcPin_(srcPin),
       dstElem_(dstElem), dstPin_(dstPin) {
   setFlags(QGraphicsItem::ItemIsSelectable);
-  setPen(QPen(QColor("#1a1a1a"), 1.2, Qt::SolidLine, Qt::SquareCap,
+  cachedDark_ = ThemeManager::instance().isDarkTheme();
+  const QColor wireColor = cachedDark_ ? Qt::white : Qt::black;
+  setPen(QPen(wireColor, 1.2, Qt::SolidLine, Qt::SquareCap,
               Qt::MiterJoin));
   setZValue(-1.0); // draw behind elements
 
@@ -66,4 +69,17 @@ void WireItem::updatePath() {
   pp.lineTo(p2);
 
   setPath(pp);
+}
+
+void WireItem::paint(QPainter *painter,
+                     const QStyleOptionGraphicsItem *option,
+                     QWidget *widget) {
+  const bool dark = ThemeManager::instance().isDarkTheme();
+  if (dark != cachedDark_) {
+    cachedDark_ = dark;
+    QPen p = pen();
+    p.setColor(dark ? Qt::white : Qt::black);
+    setPen(p);
+  }
+  QGraphicsPathItem::paint(painter, option, widget);
 }
