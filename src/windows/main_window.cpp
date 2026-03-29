@@ -54,8 +54,7 @@ static void installDockTitleBar(QDockWidget *dock) {
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), _canvas(new Canvas(this)),
       _toolPanel(new ToolPanel(this)), _layerPanel(nullptr),
-      _archBankPanel(new ElementBankPanel(ElementBankPanel::Domain::Architecture, this)),
-      _elecBankPanel(new ElementBankPanel(ElementBankPanel::Domain::Electronics, this)),
+      _elementBankPanel(new ElementBankPanel(this)),
       _autoSaveManager(nullptr),
       _statusLabel(nullptr), _measurementLabel(nullptr),
       _recentFilesMenu(nullptr), _snapToGridAction(nullptr),
@@ -96,13 +95,9 @@ MainWindow::MainWindow(QWidget *parent)
 #endif
 
   this->addDockWidget(Qt::LeftDockWidgetArea, _toolPanel);
-  this->addDockWidget(Qt::RightDockWidgetArea, _archBankPanel);
-  this->addDockWidget(Qt::RightDockWidgetArea, _elecBankPanel);
-  tabifyDockWidget(_archBankPanel, _elecBankPanel);
-  _archBankPanel->raise(); // Architecture tab active by default
+  this->addDockWidget(Qt::RightDockWidgetArea, _elementBankPanel);
   installDockTitleBar(_toolPanel);
-  installDockTitleBar(_archBankPanel);
-  installDockTitleBar(_elecBankPanel);
+  installDockTitleBar(_elementBankPanel);
   this->setWindowTitle("FullScreen Pencil Draw - Professional Edition");
   this->resize(1400, 900);
 
@@ -603,10 +598,8 @@ void MainWindow::setupConnections() {
   connect(_toolPanel, &ToolPanel::brushTipSelected, _canvas,
           &Canvas::setBrushTip);
 
-  // Element banks
-  connect(_archBankPanel, &ElementBankPanel::elementSelected, _canvas,
-          &Canvas::placeElement);
-  connect(_elecBankPanel, &ElementBankPanel::elementSelected, _canvas,
+  // Element bank
+  connect(_elementBankPanel, &ElementBankPanel::elementSelected, _canvas,
           &Canvas::placeElement);
 
   // Filled shapes feedback
@@ -781,15 +774,10 @@ void MainWindow::setupMenuBar() {
 
   // Panels
   viewMenu->addSeparator();
-  QAction *showArchAction = _archBankPanel->toggleViewAction();
-  showArchAction->setText("Show &Architecture Panel");
-  showArchAction->setShortcut(QKeySequence(Qt::Key_F7));
-  viewMenu->addAction(showArchAction);
-
-  QAction *showElecAction = _elecBankPanel->toggleViewAction();
-  showElecAction->setText("Show &Electronics Panel");
-  showElecAction->setShortcut(QKeySequence(Qt::Key_F8));
-  viewMenu->addAction(showElecAction);
+  QAction *showElementsAction = _elementBankPanel->toggleViewAction();
+  showElementsAction->setText("Show &Element Library");
+  showElementsAction->setShortcut(QKeySequence(Qt::Key_F7));
+  viewMenu->addAction(showElementsAction);
 
   // Edit menu - add lock/unlock after other edit items
   editMenu->addSeparator();
@@ -983,8 +971,7 @@ void MainWindow::setupSideTabBars() {
   addToolBar(Qt::LeftToolBarArea, _leftSideTabBar);
 
   _leftSideTabBar->trackDockWidget(_toolPanel);
-  _leftSideTabBar->trackDockWidget(_archBankPanel);
-  _leftSideTabBar->trackDockWidget(_elecBankPanel);
+  _leftSideTabBar->trackDockWidget(_elementBankPanel);
   if (_layerPanel) {
     _leftSideTabBar->trackDockWidget(_layerPanel);
   }
