@@ -996,6 +996,7 @@ QVariant ElectronicsElementItem::itemChange(GraphicsItemChange change,
 void ElectronicsElementItem::initPins() {
   const qreal midY = ELEM_H / 2.0;
   const qreal midX = ELEM_W / 2.0;
+  const qreal pinGap = 12.0; // vertical offset for multi-pin components
 
   switch (iconKind_) {
   // --- Two-terminal (left / right) ----------------------------------------
@@ -1017,23 +1018,23 @@ void ElectronicsElementItem::initPins() {
   // --- Four-terminal (transformer, relay) ---------------------------------
   case IconKind::Transformer:
   case IconKind::Relay:
-    pins_ = {{QStringLiteral("pin1"), {0.0, midY - 12.0}},
-             {QStringLiteral("pin2"), {0.0, midY + 12.0}},
-             {QStringLiteral("pin3"), {ELEM_W, midY - 12.0}},
-             {QStringLiteral("pin4"), {ELEM_W, midY + 12.0}}};
+    pins_ = {{QStringLiteral("pin1"), {0.0, midY - pinGap}},
+             {QStringLiteral("pin2"), {0.0, midY + pinGap}},
+             {QStringLiteral("pin3"), {ELEM_W, midY - pinGap}},
+             {QStringLiteral("pin4"), {ELEM_W, midY + pinGap}}};
     break;
 
   // --- Three-terminal (transistor, MOSFET) --------------------------------
   case IconKind::Transistor:
   case IconKind::MOSFET:
     pins_ = {{QStringLiteral("base"), {0.0, midY}},
-             {QStringLiteral("collector"), {ELEM_W, midY - 12.0}},
-             {QStringLiteral("emitter"), {ELEM_W, midY + 12.0}}};
+             {QStringLiteral("collector"), {ELEM_W, midY - pinGap}},
+             {QStringLiteral("emitter"), {ELEM_W, midY + pinGap}}};
     break;
 
   case IconKind::OpAmp:
-    pins_ = {{QStringLiteral("+in"), {0.0, midY - 12.0}},
-             {QStringLiteral("-in"), {0.0, midY + 12.0}},
+    pins_ = {{QStringLiteral("+in"), {0.0, midY - pinGap}},
+             {QStringLiteral("-in"), {0.0, midY + pinGap}},
              {QStringLiteral("out"), {ELEM_W, midY}}};
     break;
 
@@ -1064,10 +1065,10 @@ void ElectronicsElementItem::initPins() {
   case IconKind::Microcontroller:
   case IconKind::ICChip:
   case IconKind::Sensor:
-    pins_ = {{QStringLiteral("pin1"), {0.0, midY - 12.0}},
-             {QStringLiteral("pin2"), {0.0, midY + 12.0}},
-             {QStringLiteral("pin3"), {ELEM_W, midY - 12.0}},
-             {QStringLiteral("pin4"), {ELEM_W, midY + 12.0}}};
+    pins_ = {{QStringLiteral("pin1"), {0.0, midY - pinGap}},
+             {QStringLiteral("pin2"), {0.0, midY + pinGap}},
+             {QStringLiteral("pin3"), {ELEM_W, midY - pinGap}},
+             {QStringLiteral("pin4"), {ELEM_W, midY + pinGap}}};
     break;
   }
 }
