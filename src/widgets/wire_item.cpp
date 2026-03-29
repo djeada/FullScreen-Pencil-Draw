@@ -18,8 +18,8 @@ WireItem::WireItem(ElectronicsElementItem *srcElem, int srcPin,
     : QGraphicsPathItem(parent), srcElem_(srcElem), srcPin_(srcPin),
       dstElem_(dstElem), dstPin_(dstPin) {
   setFlags(QGraphicsItem::ItemIsSelectable);
-  setPen(QPen(QColor("#22d3ee"), 2.0, Qt::SolidLine, Qt::RoundCap,
-              Qt::RoundJoin));
+  setPen(QPen(QColor("#1a1a1a"), 1.2, Qt::SolidLine, Qt::SquareCap,
+              Qt::MiterJoin));
   setZValue(-1.0); // draw behind elements
 
   if (srcElem_)

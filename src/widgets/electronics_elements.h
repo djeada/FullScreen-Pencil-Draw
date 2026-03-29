@@ -3,8 +3,8 @@
  * @brief Custom vector-drawn QGraphicsItem subclasses for electronics
  *        schematic diagram elements.
  *
- * Each element renders a shared card style plus a vector icon, keeping
- * electronics nodes visually consistent and crisp during transform scaling.
+ * Each element renders a textbook-style schematic symbol (no card
+ * background), with a reference label placed outside the symbol.
  * Elements expose connection pins so that wires can snap to and follow them.
  */
 #ifndef ELECTRONICS_ELEMENTS_H
@@ -34,9 +34,9 @@ struct ElectronicsPin {
 /**
  * @brief Base class for all electronics diagram elements.
  *
- * Provides a common rounded-card background, a label, icon rendering,
- * selectable/movable flags, and connection-pin metadata so that wires
- * can attach to the element and follow it when it moves.
+ * Renders a compact, monochrome schematic symbol with an external
+ * reference label, selectable/movable flags, and connection-pin
+ * metadata so that wires can attach and follow on move.
  */
 class ElectronicsElementItem : public QGraphicsItem {
 public:
@@ -94,20 +94,21 @@ public:
   void addWire(WireItem *wire);
   void removeWire(WireItem *wire);
 
-  /// Radius used to draw pin indicators.
-  static constexpr qreal PIN_RADIUS = 4.5;
+  /// Radius used to draw pin terminal dots.
+  static constexpr qreal PIN_RADIUS = 3.0;
 
 protected:
   QVariant itemChange(GraphicsItemChange change,
                       const QVariant &value) override;
 
-  /// Draws the element icon in vector form for crisp scaling.
+  /// Draws the element symbol in vector form for crisp scaling.
   void paintIcon(QPainter *painter, const QRectF &rect) const;
 
-  static constexpr qreal ELEM_W = 142.0;
-  static constexpr qreal ELEM_H = 106.0;
-  static constexpr qreal CORNER = 13.0;
-  static constexpr qreal ICON_SIZE = 46.0;
+  /// Symbol body dimensions (compact, textbook-style).
+  static constexpr qreal ELEM_W = 64.0;
+  static constexpr qreal ELEM_H = 48.0;
+  /// Height reserved for the label below the symbol.
+  static constexpr qreal LABEL_H = 14.0;
 
   /// Subclasses populate this in their constructor.
   QVector<ElectronicsPin> pins_;
@@ -118,24 +119,12 @@ private:
   QColor accentColor_;
   QSet<WireItem *> connectedWires_;
 
-  // Pre-computed paint data (derived from accentColor_, set once in ctor).
-  struct CachedColors {
-    QColor bgTop, bgBottom;
-    QColor cardBorder;
-    QColor bandTop;
-    QColor badgeCenter, badgeMid, badgeEdge;
-    QColor badgeBorder;
-    QColor iconStroke;
-    QColor selectBorder;
-    QColor pinBorder;
-  } colors_;
-  QRectF cardRect_;
-  QRectF bandRect_;
-  QRectF badgeRect_;
-  QRectF iconRect_;
+  // Schematic styling (monochrome).
+  QColor strokeColor_;
+  QColor selectColor_;
+  qreal strokeWidth_;
+  QRectF symbolRect_;
   QRectF labelRect_;
-  QPainterPath cardPath_;
-  qreal iconStrokeWidth_;
   QPixmap cachedPixmap_;
   qreal cachedPixmapScale_ = 1.0;
 

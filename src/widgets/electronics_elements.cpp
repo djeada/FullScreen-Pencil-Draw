@@ -1,36 +1,25 @@
 /**
  * @file electronics_elements.cpp
- * @brief Implementation of custom vector-drawn electronics schematic elements.
+ * @brief Implementation of textbook-style electronics schematic elements.
+ *
+ * Elements are rendered as compact monochrome symbols (no card / badge /
+ * gradient) with reference labels placed outside the symbol body.
  */
 #include "electronics_elements.h"
 #include "wire_item.h"
 #include <QFont>
-#include <QLinearGradient>
 #include <QPainterPath>
 #include <QPixmap>
 #include <cmath>
 #include <QPolygonF>
-#include <QRadialGradient>
 #include <QtMath>
 
 namespace {
-
-QColor mixColor(const QColor &a, const QColor &b, qreal ratio) {
-  const qreal clamped = qBound(0.0, ratio, 1.0);
-  return QColor::fromRgbF(a.redF() * (1.0 - clamped) + b.redF() * clamped,
-                          a.greenF() * (1.0 - clamped) + b.greenF() * clamped,
-                          a.blueF() * (1.0 - clamped) + b.blueF() * clamped,
-                          a.alphaF() * (1.0 - clamped) + b.alphaF() * clamped);
-}
 
 QColor withAlpha(const QColor &color, int alpha) {
   QColor out = color;
   out.setAlpha(alpha);
   return out;
-}
-
-QPointF uv(const QRectF &r, qreal x, qreal y) {
-  return QPointF(r.left() + x * r.width(), r.top() + y * r.height());
 }
 
 QRectF uvRect(const QRectF &r, qreal x, qreal y, qreal w, qreal h) {
@@ -40,7 +29,7 @@ QRectF uvRect(const QRectF &r, qreal x, qreal y, qreal w, qreal h) {
 
 // -----------------------------------------------------------------------
 // Icon drawing helpers – each renders a recognizable electronics symbol
-// inside the normalized 26×26 icon rect.
+// inside the normalized icon rect.
 // -----------------------------------------------------------------------
 
 void drawResistorIcon(QPainter *p, const QRectF &r, const QColor &stroke,
@@ -800,41 +789,17 @@ ElectronicsElementItem::~ElectronicsElementItem() {
 
 QRectF ElectronicsElementItem::boundingRect() const {
   const qreal m = PIN_RADIUS + 1.0;
-  return QRectF(-m, -m, ELEM_W + 2 * m, ELEM_H + 2 * m);
+  return QRectF(-m, -m, ELEM_W + 2 * m, ELEM_H + LABEL_H + 2 * m);
 }
 
 void ElectronicsElementItem::initPaintCache() {
-  const QColor accent =
-      accentColor_.isValid() ? accentColor_ : QColor("#3b82f6");
+  // Monochrome schematic style – no card gradients.
+  strokeColor_ = QColor("#1a1a1a");
+  selectColor_ = QColor("#2563eb");
+  strokeWidth_ = 1.6;
 
-  const QColor topBase("#242a35");
-  const QColor bottomBase("#171c24");
-
-  colors_.bgTop = mixColor(topBase, accent, 0.18);
-  colors_.bgBottom = mixColor(bottomBase, accent, 0.08);
-  colors_.cardBorder = withAlpha(accent, 150);
-  colors_.bandTop = withAlpha(accent.lighter(135), 110);
-  colors_.badgeCenter = withAlpha(accent.lighter(145), 90);
-  colors_.badgeMid = withAlpha(accent.darker(140), 120);
-  colors_.badgeEdge = withAlpha(accent.darker(180), 140);
-  colors_.badgeBorder = withAlpha(accent.lighter(150), 180);
-  colors_.iconStroke = accent.lighter(225);
-  colors_.selectBorder = withAlpha(accent.lighter(150), 235);
-  colors_.pinBorder = withAlpha(accent.lighter(170), 200);
-
-  // Use the card area (0,0,ELEM_W,ELEM_H) — not boundingRect() which
-  // includes the pin margin.
-  cardRect_ = QRectF(0, 0, ELEM_W, ELEM_H).adjusted(1.0, 1.0, -1.0, -1.0);
-  bandRect_ = QRectF(cardRect_.x() + 1.0, cardRect_.y() + 1.0,
-                     cardRect_.width() - 2.0, 11.0);
-  badgeRect_ = QRectF((ELEM_W - ICON_SIZE) / 2.0, 12.0, ICON_SIZE, ICON_SIZE);
-  iconRect_ = badgeRect_.adjusted(10.0, 10.0, -10.0, -10.0);
-  labelRect_ = QRectF(8.0, ELEM_H - 30.0, ELEM_W - 16.0, 20.0);
-
-  cardPath_ = QPainterPath();
-  cardPath_.addRoundedRect(cardRect_, CORNER, CORNER);
-
-  iconStrokeWidth_ = qMax(1.25, iconRect_.width() * 0.09);
+  symbolRect_ = QRectF(4.0, 2.0, ELEM_W - 8.0, ELEM_H - 4.0);
+  labelRect_ = QRectF(0.0, ELEM_H, ELEM_W, LABEL_H);
 
   renderToPixmap();
 }
@@ -842,69 +807,38 @@ void ElectronicsElementItem::initPaintCache() {
 void ElectronicsElementItem::renderToPixmap(qreal scale) {
   cachedPixmapScale_ = scale;
   const qreal m = PIN_RADIUS + 1.0;
-  const int pmW = qMax(1, static_cast<int>(std::ceil((ELEM_W + 2 * m) * scale)));
-  const int pmH = qMax(1, static_cast<int>(std::ceil((ELEM_H + 2 * m) * scale)));
+  const qreal totalH = ELEM_H + LABEL_H;
+  const int pmW =
+      qMax(1, static_cast<int>(std::ceil((ELEM_W + 2 * m) * scale)));
+  const int pmH =
+      qMax(1, static_cast<int>(std::ceil((totalH + 2 * m) * scale)));
   QPixmap pm(pmW, pmH);
   pm.setDevicePixelRatio(scale);
   pm.fill(Qt::transparent);
   QPainter p(&pm);
   p.setRenderHint(QPainter::Antialiasing, true);
   p.setRenderHint(QPainter::TextAntialiasing, true);
-  // Offset painting by the pin margin so card is centred in the pixmap.
   p.translate(m, m);
 
-  // Shadow
-  p.setPen(Qt::NoPen);
-  p.setBrush(QColor(0, 0, 0, 55));
-  p.drawRoundedRect(cardRect_.translated(0.0, 2.0), CORNER, CORNER);
+  // --- Symbol -----------------------------------------------------------
+  paintIcon(&p, symbolRect_);
 
-  // Card fill
-  QLinearGradient bg(cardRect_.topLeft(), cardRect_.bottomLeft());
-  bg.setColorAt(0.0, colors_.bgTop);
-  bg.setColorAt(1.0, colors_.bgBottom);
-  p.setBrush(bg);
-  p.setPen(QPen(colors_.cardBorder, 1.35));
-  p.drawPath(cardPath_);
-
-  // Accent band
-  p.save();
-  p.setClipPath(cardPath_);
-  QLinearGradient band(bandRect_.topLeft(), bandRect_.bottomLeft());
-  band.setColorAt(0.0, colors_.bandTop);
-  band.setColorAt(1.0, QColor(0, 0, 0, 0));
-  p.setPen(Qt::NoPen);
-  p.setBrush(band);
-  p.drawRect(bandRect_);
-  p.restore();
-
-  // Badge
-  QRadialGradient badgeGrad(badgeRect_.center(), ICON_SIZE / 2.0);
-  badgeGrad.setColorAt(0.0, colors_.badgeCenter);
-  badgeGrad.setColorAt(0.9, colors_.badgeMid);
-  badgeGrad.setColorAt(1.0, colors_.badgeEdge);
-  p.setBrush(badgeGrad);
-  p.setPen(QPen(colors_.badgeBorder, 1.15));
-  p.drawEllipse(badgeRect_);
-
-  // Icon
-  paintIcon(&p, iconRect_);
-
-  // Label
-  static const QFont labelFont = []() {
-    QFont f("Segoe UI", 9, QFont::DemiBold);
-    f.setLetterSpacing(QFont::PercentageSpacing, 102);
-    return f;
-  }();
-  p.setPen(QColor("#ebeff7"));
-  p.setFont(labelFont);
-  p.drawText(labelRect_, Qt::AlignCenter, label_);
-
-  // Pin indicators
-  p.setPen(QPen(colors_.pinBorder, 1.2));
-  p.setBrush(QColor(255, 255, 255, 180));
+  // --- Pin terminal dots ------------------------------------------------
+  p.setPen(QPen(strokeColor_, 1.0));
+  p.setBrush(strokeColor_);
   for (const ElectronicsPin &pin : pins_) {
     p.drawEllipse(pin.offset, PIN_RADIUS, PIN_RADIUS);
   }
+
+  // --- Reference label below symbol ------------------------------------
+  static const QFont labelFont = []() {
+    QFont f("Segoe UI", 8);
+    f.setLetterSpacing(QFont::PercentageSpacing, 102);
+    return f;
+  }();
+  p.setPen(QColor("#333333"));
+  p.setFont(labelFont);
+  p.drawText(labelRect_, Qt::AlignHCenter | Qt::AlignTop, label_);
 
   p.end();
   cachedPixmap_ = pm;
@@ -913,8 +847,6 @@ void ElectronicsElementItem::renderToPixmap(qreal scale) {
 void ElectronicsElementItem::paint(QPainter *painter,
                                    const QStyleOptionGraphicsItem * /*option*/,
                                    QWidget * /*widget*/) {
-  // Re-render pixmap when the effective scale changes (e.g. after resize)
-  // so vector content stays crisp at any size.
   const QTransform &wt = painter->worldTransform();
   const qreal sx = std::hypot(wt.m11(), wt.m21());
   const qreal sy = std::hypot(wt.m12(), wt.m22());
@@ -929,19 +861,19 @@ void ElectronicsElementItem::paint(QPainter *painter,
 
   if (isSelected()) {
     painter->setRenderHint(QPainter::Antialiasing, true);
-    QPen selectPen(colors_.selectBorder, 1.8, Qt::DashLine);
-    selectPen.setDashPattern({3.0, 2.0});
+    QPen selectPen(selectColor_, 1.4, Qt::DashLine);
+    selectPen.setDashPattern({4.0, 2.0});
     painter->setPen(selectPen);
     painter->setBrush(Qt::NoBrush);
-    painter->drawRoundedRect(cardRect_.adjusted(1.5, 1.5, -1.5, -1.5),
-                             CORNER - 1.5, CORNER - 1.5);
+    painter->drawRect(
+        QRectF(0, 0, ELEM_W, ELEM_H + LABEL_H).adjusted(-1, -1, 1, 1));
   }
 }
 
 void ElectronicsElementItem::paintIcon(QPainter *painter,
                                        const QRectF &rect) const {
-  const QColor &stroke = colors_.iconStroke;
-  const qreal width = iconStrokeWidth_;
+  const QColor &stroke = strokeColor_;
+  const qreal width = strokeWidth_;
 
   switch (iconKind_) {
   case IconKind::Resistor:
@@ -1064,6 +996,7 @@ QVariant ElectronicsElementItem::itemChange(GraphicsItemChange change,
 void ElectronicsElementItem::initPins() {
   const qreal midY = ELEM_H / 2.0;
   const qreal midX = ELEM_W / 2.0;
+  const qreal pinGap = 12.0; // vertical offset for multi-pin components
 
   switch (iconKind_) {
   // --- Two-terminal (left / right) ----------------------------------------
@@ -1085,23 +1018,23 @@ void ElectronicsElementItem::initPins() {
   // --- Four-terminal (transformer, relay) ---------------------------------
   case IconKind::Transformer:
   case IconKind::Relay:
-    pins_ = {{QStringLiteral("pin1"), {0.0, midY - 18.0}},
-             {QStringLiteral("pin2"), {0.0, midY + 18.0}},
-             {QStringLiteral("pin3"), {ELEM_W, midY - 18.0}},
-             {QStringLiteral("pin4"), {ELEM_W, midY + 18.0}}};
+    pins_ = {{QStringLiteral("pin1"), {0.0, midY - pinGap}},
+             {QStringLiteral("pin2"), {0.0, midY + pinGap}},
+             {QStringLiteral("pin3"), {ELEM_W, midY - pinGap}},
+             {QStringLiteral("pin4"), {ELEM_W, midY + pinGap}}};
     break;
 
-  // --- Three-terminal (transistor, MOSFET, OpAmp, regulator) ---------------
+  // --- Three-terminal (transistor, MOSFET) --------------------------------
   case IconKind::Transistor:
   case IconKind::MOSFET:
     pins_ = {{QStringLiteral("base"), {0.0, midY}},
-             {QStringLiteral("collector"), {ELEM_W, midY - 18.0}},
-             {QStringLiteral("emitter"), {ELEM_W, midY + 18.0}}};
+             {QStringLiteral("collector"), {ELEM_W, midY - pinGap}},
+             {QStringLiteral("emitter"), {ELEM_W, midY + pinGap}}};
     break;
 
   case IconKind::OpAmp:
-    pins_ = {{QStringLiteral("+in"), {0.0, midY - 18.0}},
-             {QStringLiteral("-in"), {0.0, midY + 18.0}},
+    pins_ = {{QStringLiteral("+in"), {0.0, midY - pinGap}},
+             {QStringLiteral("-in"), {0.0, midY + pinGap}},
              {QStringLiteral("out"), {ELEM_W, midY}}};
     break;
 
@@ -1111,7 +1044,7 @@ void ElectronicsElementItem::initPins() {
              {QStringLiteral("gnd"), {midX, ELEM_H}}};
     break;
 
-  // --- Battery / power supply (two terminals, top / bottom style) ----------
+  // --- Battery / power supply (two terminals) -----------------------------
   case IconKind::Battery:
   case IconKind::PowerSupply:
     pins_ = {{QStringLiteral("+"), {0.0, midY}},
@@ -1128,14 +1061,14 @@ void ElectronicsElementItem::initPins() {
     pins_ = {{QStringLiteral("feed"), {midX, ELEM_H}}};
     break;
 
-  // --- Multi-pin ICs / MCU / Sensor (four symmetric pins) ------------------
+  // --- Multi-pin ICs / MCU / Sensor (four symmetric pins) -----------------
   case IconKind::Microcontroller:
   case IconKind::ICChip:
   case IconKind::Sensor:
-    pins_ = {{QStringLiteral("pin1"), {0.0, midY - 18.0}},
-             {QStringLiteral("pin2"), {0.0, midY + 18.0}},
-             {QStringLiteral("pin3"), {ELEM_W, midY - 18.0}},
-             {QStringLiteral("pin4"), {ELEM_W, midY + 18.0}}};
+    pins_ = {{QStringLiteral("pin1"), {0.0, midY - pinGap}},
+             {QStringLiteral("pin2"), {0.0, midY + pinGap}},
+             {QStringLiteral("pin3"), {ELEM_W, midY - pinGap}},
+             {QStringLiteral("pin4"), {ELEM_W, midY + pinGap}}};
     break;
   }
 }
@@ -1145,97 +1078,97 @@ void ElectronicsElementItem::initPins() {
 // ===========================================================================
 
 ResistorElement::ResistorElement(QGraphicsItem *parent)
-    : ElectronicsElementItem("Resistor", IconKind::Resistor, QColor("#e67e22"),
+    : ElectronicsElementItem("R", IconKind::Resistor, QColor("#1a1a1a"),
                              parent) {}
 
 CapacitorElement::CapacitorElement(QGraphicsItem *parent)
-    : ElectronicsElementItem("Capacitor", IconKind::Capacitor,
-                             QColor("#3498db"), parent) {}
+    : ElectronicsElementItem("C", IconKind::Capacitor, QColor("#1a1a1a"),
+                             parent) {}
 
 InductorElement::InductorElement(QGraphicsItem *parent)
-    : ElectronicsElementItem("Inductor", IconKind::Inductor, QColor("#9b59b6"),
+    : ElectronicsElementItem("L", IconKind::Inductor, QColor("#1a1a1a"),
                              parent) {}
 
 FuseElement::FuseElement(QGraphicsItem *parent)
-    : ElectronicsElementItem("Fuse", IconKind::Fuse, QColor("#e74c3c"),
+    : ElectronicsElementItem("F", IconKind::Fuse, QColor("#1a1a1a"),
                              parent) {}
 
 CrystalElement::CrystalElement(QGraphicsItem *parent)
-    : ElectronicsElementItem("Crystal", IconKind::Crystal, QColor("#1abc9c"),
+    : ElectronicsElementItem("Y", IconKind::Crystal, QColor("#1a1a1a"),
                              parent) {}
 
 TransformerElement::TransformerElement(QGraphicsItem *parent)
-    : ElectronicsElementItem("Transformer", IconKind::Transformer,
-                             QColor("#f39c12"), parent) {}
+    : ElectronicsElementItem("T", IconKind::Transformer, QColor("#1a1a1a"),
+                             parent) {}
 
 DiodeElement::DiodeElement(QGraphicsItem *parent)
-    : ElectronicsElementItem("Diode", IconKind::Diode, QColor("#2ecc71"),
+    : ElectronicsElementItem("D", IconKind::Diode, QColor("#1a1a1a"),
                              parent) {}
 
 LEDElement::LEDElement(QGraphicsItem *parent)
-    : ElectronicsElementItem("LED", IconKind::LED, QColor("#f1c40f"),
+    : ElectronicsElementItem("LED", IconKind::LED, QColor("#1a1a1a"),
                              parent) {}
 
 TransistorElement::TransistorElement(QGraphicsItem *parent)
-    : ElectronicsElementItem("Transistor", IconKind::Transistor,
-                             QColor("#e74c3c"), parent) {}
+    : ElectronicsElementItem("Q", IconKind::Transistor, QColor("#1a1a1a"),
+                             parent) {}
 
 MOSFETElement::MOSFETElement(QGraphicsItem *parent)
-    : ElectronicsElementItem("MOSFET", IconKind::MOSFET, QColor("#8e44ad"),
+    : ElectronicsElementItem("Q", IconKind::MOSFET, QColor("#1a1a1a"),
                              parent) {}
 
 OpAmpElement::OpAmpElement(QGraphicsItem *parent)
-    : ElectronicsElementItem("Op-Amp", IconKind::OpAmp, QColor("#2980b9"),
+    : ElectronicsElementItem("U", IconKind::OpAmp, QColor("#1a1a1a"),
                              parent) {}
 
 VoltageRegulatorElement::VoltageRegulatorElement(QGraphicsItem *parent)
-    : ElectronicsElementItem("Regulator", IconKind::VoltageRegulator,
-                             QColor("#27ae60"), parent) {}
+    : ElectronicsElementItem("U", IconKind::VoltageRegulator, QColor("#1a1a1a"),
+                             parent) {}
 
 BatteryElement::BatteryElement(QGraphicsItem *parent)
-    : ElectronicsElementItem("Battery", IconKind::Battery, QColor("#f39c12"),
+    : ElectronicsElementItem("BT", IconKind::Battery, QColor("#1a1a1a"),
                              parent) {}
 
 GroundElement::GroundElement(QGraphicsItem *parent)
-    : ElectronicsElementItem("Ground", IconKind::Ground, QColor("#7f8c8d"),
+    : ElectronicsElementItem("GND", IconKind::Ground, QColor("#1a1a1a"),
                              parent) {}
 
 SwitchElement::SwitchElement(QGraphicsItem *parent)
-    : ElectronicsElementItem("Switch", IconKind::Switch, QColor("#e67e22"),
+    : ElectronicsElementItem("SW", IconKind::Switch, QColor("#1a1a1a"),
                              parent) {}
 
 RelayElement::RelayElement(QGraphicsItem *parent)
-    : ElectronicsElementItem("Relay", IconKind::Relay, QColor("#d35400"),
+    : ElectronicsElementItem("K", IconKind::Relay, QColor("#1a1a1a"),
                              parent) {}
 
 MotorElement::MotorElement(QGraphicsItem *parent)
-    : ElectronicsElementItem("Motor", IconKind::Motor, QColor("#16a085"),
+    : ElectronicsElementItem("M", IconKind::Motor, QColor("#1a1a1a"),
                              parent) {}
 
 PowerSupplyElement::PowerSupplyElement(QGraphicsItem *parent)
-    : ElectronicsElementItem("PSU", IconKind::PowerSupply, QColor("#c0392b"),
+    : ElectronicsElementItem("PS", IconKind::PowerSupply, QColor("#1a1a1a"),
                              parent) {}
 
 MicrocontrollerElement::MicrocontrollerElement(QGraphicsItem *parent)
-    : ElectronicsElementItem("MCU", IconKind::Microcontroller,
-                             QColor("#2c3e50"), parent) {}
+    : ElectronicsElementItem("U", IconKind::Microcontroller, QColor("#1a1a1a"),
+                             parent) {}
 
 ICChipElement::ICChipElement(QGraphicsItem *parent)
-    : ElectronicsElementItem("IC Chip", IconKind::ICChip, QColor("#34495e"),
+    : ElectronicsElementItem("U", IconKind::ICChip, QColor("#1a1a1a"),
                              parent) {}
 
 SensorElement::SensorElement(QGraphicsItem *parent)
-    : ElectronicsElementItem("Sensor", IconKind::Sensor, QColor("#1abc9c"),
+    : ElectronicsElementItem("S", IconKind::Sensor, QColor("#1a1a1a"),
                              parent) {}
 
 AntennaElement::AntennaElement(QGraphicsItem *parent)
-    : ElectronicsElementItem("Antenna", IconKind::Antenna, QColor("#3498db"),
+    : ElectronicsElementItem("ANT", IconKind::Antenna, QColor("#1a1a1a"),
                              parent) {}
 
 SpeakerElement::SpeakerElement(QGraphicsItem *parent)
-    : ElectronicsElementItem("Speaker", IconKind::Speaker, QColor("#9b59b6"),
+    : ElectronicsElementItem("SP", IconKind::Speaker, QColor("#1a1a1a"),
                              parent) {}
 
 ConnectorElement::ConnectorElement(QGraphicsItem *parent)
-    : ElectronicsElementItem("Connector", IconKind::Connector,
-                             QColor("#95a5a6"), parent) {}
+    : ElectronicsElementItem("J", IconKind::Connector, QColor("#1a1a1a"),
+                             parent) {}
