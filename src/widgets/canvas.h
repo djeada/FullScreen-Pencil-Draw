@@ -244,6 +244,8 @@ private:
   QGraphicsItem *selectableCanvasItemAtViewportPos(const QPoint &viewPos) const;
   QGraphicsItem *selectableCanvasItemNearViewportPos(const QPoint &viewPos,
                                                      int radiusPx) const;
+  QGraphicsItem *movableCanvasItemNearViewportPos(const QPoint &viewPos,
+                                                  int radiusPx) const;
 
   // Enums
   enum ShapeType {

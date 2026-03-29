@@ -406,9 +406,121 @@ set_target_properties(test_wire_item PROPERTIES
 
 add_test(NAME TestWireItem COMMAND test_wire_item)
 
+# Canvas interaction tests
+set(CANVAS_TEST_SOURCES
+    ../src/core/action.cpp
+    ../src/core/auto_save_manager.cpp
+    ../src/core/brush_tip.cpp
+    ../src/core/fill_utils.cpp
+    ../src/core/image_filters.cpp
+    ../src/core/item_store.cpp
+    ../src/core/katex_renderer.cpp
+    ../src/core/layer.cpp
+    ../src/core/mermaid_renderer.cpp
+    ../src/core/pdf_document.cpp
+    ../src/core/pdf_overlay.cpp
+    ../src/core/project_serializer.cpp
+    ../src/core/recent_files_manager.cpp
+    ../src/core/scene_controller.cpp
+    ../src/core/snap_engine.cpp
+    ../src/core/theme_manager.cpp
+    ../src/core/transform_action.cpp
+    ../src/core/undo_redo_manager.cpp
+    ../src/widgets/alignment_dialog.cpp
+    ../src/widgets/animated_button.cpp
+    ../src/widgets/architecture_elements.cpp
+    ../src/widgets/busy_spinner_overlay.cpp
+    ../src/widgets/canvas.cpp
+    ../src/widgets/color_curves_dialog.cpp
+    ../src/widgets/dock_title_bar.cpp
+    ../src/widgets/electronics_elements.cpp
+    ../src/widgets/image_size_dialog.cpp
+    ../src/widgets/latex_text_item.cpp
+    ../src/widgets/layer_panel.cpp
+    ../src/widgets/page_thumbnail_panel.cpp
+    ../src/widgets/pdf_search_bar.cpp
+    ../src/widgets/pdf_viewer.cpp
+    ../src/widgets/mermaid_text_item.cpp
+    ../src/widgets/perspective_transform_dialog.cpp
+    ../src/widgets/resize_canvas_dialog.cpp
+    ../src/widgets/rotation_dialog.cpp
+    ../src/widgets/scale_dialog.cpp
+    ../src/widgets/scan_document_dialog.cpp
+    ../src/widgets/side_tab_bar.cpp
+    ../src/widgets/text_on_path_item.cpp
+    ../src/widgets/transform_handle_item.cpp
+    ../src/widgets/wire_item.cpp
+    ../src/widgets/brush_preview.cpp
+    ../src/widgets/brush_stroke_item.cpp
+    ../src/widgets/element_bank_panel.cpp
+    ../src/widgets/tool_panel.cpp
+    ../src/windows/main_window.cpp
+    ../src/tools/arrow_tool.cpp
+    ../src/tools/bezier_tool.cpp
+    ../src/tools/circle_tool.cpp
+    ../src/tools/eraser_tool.cpp
+    ../src/tools/fill_tool.cpp
+    ../src/tools/highlighter_tool.cpp
+    ../src/tools/lasso_selection_tool.cpp
+    ../src/tools/line_tool.cpp
+    ../src/tools/mermaid_tool.cpp
+    ../src/tools/pan_tool.cpp
+    ../src/tools/pen_tool.cpp
+    ../src/tools/rectangle_tool.cpp
+    ../src/tools/selection_tool.cpp
+    ../src/tools/shape_tool.cpp
+    ../src/tools/text_on_path_tool.cpp
+    ../src/tools/text_tool.cpp
+    ../src/tools/tool.cpp
+    ../src/tools/tool_manager.cpp
+)
+
+add_executable(test_canvas_interaction
+    test_canvas_interaction.cpp
+    ${CANVAS_TEST_SOURCES}
+    ../resources/ui_icons.qrc
+    ../resources/resources.qrc
+)
+
+target_include_directories(test_canvas_interaction PRIVATE
+    ../src/core
+    ../src/widgets
+    ../src/tools
+    ../src/windows
+)
+
+target_link_libraries(test_canvas_interaction PRIVATE
+    Qt${QT_VERSION_MAJOR}::Widgets
+    Qt${QT_VERSION_MAJOR}::Test
+)
+
+if(HAVE_QT_SVG)
+    target_link_libraries(test_canvas_interaction PRIVATE
+        Qt${QT_VERSION_MAJOR}::Svg
+    )
+endif()
+
+if(Qt${QT_VERSION_MAJOR}Pdf_FOUND)
+    target_link_libraries(test_canvas_interaction PRIVATE
+        Qt${QT_VERSION_MAJOR}::Pdf
+    )
+endif()
+
+if(HAVE_QT_WEBENGINE)
+    target_link_libraries(test_canvas_interaction PRIVATE
+        Qt${QT_VERSION_MAJOR}::WebEngineWidgets
+    )
+endif()
+
+set_target_properties(test_canvas_interaction PROPERTIES
+    AUTOMOC ON
+)
+
+add_test(NAME TestCanvasInteraction COMMAND test_canvas_interaction)
+
 # Add custom target to run all tests
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-    DEPENDS test_item_store test_project_serializer test_image_filters test_perspective_transform test_snap_engine test_text_whitespace test_latex_unicode test_busy_spinner_overlay test_brush_tip test_rotation_dialog test_alignment_dialog test_transform_action test_group_clipboard test_side_tab_bar
+    DEPENDS test_item_store test_project_serializer test_image_filters test_perspective_transform test_snap_engine test_text_whitespace test_latex_unicode test_busy_spinner_overlay test_brush_tip test_rotation_dialog test_alignment_dialog test_transform_action test_group_clipboard test_side_tab_bar test_canvas_interaction
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )

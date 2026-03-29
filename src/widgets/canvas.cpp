@@ -83,7 +83,7 @@ constexpr qreal CURVED_ARROW_BASE_FACTOR = 0.28;
 constexpr qreal CURVED_ARROW_MIN_OFFSET = 12.0;
 constexpr qreal CURVED_ARROW_MAX_OFFSET = 240.0;
 constexpr qreal CURVED_ARROW_MIN_LENGTH = 2.0;
-constexpr int SELECTION_FALLBACK_RADIUS_PX = 6;
+constexpr int SELECTION_FALLBACK_RADIUS_PX = 10;
 
 qreal curvedArrowMagnitudeForModifiers(Qt::KeyboardModifiers modifiers) {
   qreal factor = CURVED_ARROW_BASE_FACTOR;
@@ -2809,6 +2809,21 @@ Canvas::selectableCanvasItemNearViewportPos(const QPoint &viewPos,
   return bestFallback;
 }
 
+QGraphicsItem *Canvas::movableCanvasItemNearViewportPos(const QPoint &viewPos,
+                                                        int radiusPx) const {
+  const QRect searchRect(viewPos.x() - radiusPx, viewPos.y() - radiusPx,
+                         radiusPx * 2 + 1, radiusPx * 2 + 1);
+  const QList<QGraphicsItem *> hitItems =
+      items(searchRect, Qt::IntersectsItemShape);
+  for (QGraphicsItem *item : hitItems) {
+    if (!isSelectableCanvasItem(item))
+      continue;
+    if (item->flags() & QGraphicsItem::ItemIsMovable)
+      return item;
+  }
+  return nullptr;
+}
+
 void Canvas::mousePressEvent(QMouseEvent *event) {
   if (!event)
     return;
@@ -2852,6 +2867,28 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
 
     if (clickedTransformHandle) {
       return;
+    }
+
+    auto selectedItemsAfterPress = scene_->selectedItems();
+    const bool hasMovableSelection =
+        std::any_of(selectedItemsAfterPress.cbegin(), selectedItemsAfterPress.cend(),
+                    [](QGraphicsItem *item) {
+                      return item &&
+                             (item->flags() & QGraphicsItem::ItemIsMovable);
+                    });
+    if (!hasMovableSelection) {
+      if (QGraphicsItem *movableFallback = movableCanvasItemNearViewportPos(
+              event->pos(), SELECTION_FALLBACK_RADIUS_PX)) {
+        const Qt::KeyboardModifiers modifiers = event->modifiers();
+        const bool preserveSelection =
+            modifiers.testFlag(Qt::ShiftModifier) ||
+            modifiers.testFlag(Qt::ControlModifier) ||
+            modifiers.testFlag(Qt::MetaModifier);
+        if (!preserveSelection) {
+          scene_->clearSelection();
+        }
+        movableFallback->setSelected(true);
+      }
     }
 
     if (!selectableCanvasItemAtViewportPos(event->pos())) {

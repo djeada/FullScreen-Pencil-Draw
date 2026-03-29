@@ -792,6 +792,15 @@ QRectF ElectronicsElementItem::boundingRect() const {
   return QRectF(-m, -m, ELEM_W + 2 * m, ELEM_H + LABEL_H + 2 * m);
 }
 
+QPainterPath ElectronicsElementItem::shape() const {
+  constexpr qreal kHitPadding = 12.0;
+  QPainterPath path;
+  path.addRect(QRectF(0, 0, ELEM_W, ELEM_H + LABEL_H)
+                   .adjusted(-kHitPadding, -kHitPadding, kHitPadding,
+                             kHitPadding));
+  return path;
+}
+
 void ElectronicsElementItem::initPaintCache() {
   // Monochrome schematic style – no card gradients.
   strokeColor_ = QColor("#1a1a1a");
