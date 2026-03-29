@@ -119,9 +119,9 @@ ElementCard::ElementCard(const ElementInfo &info, QWidget *parent)
 
   QIcon icon(info.icon);
   if (!icon.isNull()) {
-    const int dpr = 2;
-    iconPixmap_ =
-        icon.pixmap(QSize(kCardIconSize, kCardIconSize) * dpr);
+    const qreal dpr = devicePixelRatioF();
+    iconPixmap_ = icon.pixmap(
+        QSize(kCardIconSize, kCardIconSize) * dpr);
     iconPixmap_.setDevicePixelRatio(dpr);
   }
 
