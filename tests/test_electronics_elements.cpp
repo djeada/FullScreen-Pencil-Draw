@@ -12,84 +12,84 @@ class TestElectronicsElements : public QObject {
 private slots:
 
   void allElementsHaveCorrectLabel() {
-    // Verify each concrete element creates with the expected label
+    // Verify each concrete element creates with the expected reference label
     ResistorElement resistor;
-    QCOMPARE(resistor.label(), QString("Resistor"));
+    QCOMPARE(resistor.label(), QString("R"));
 
     CapacitorElement capacitor;
-    QCOMPARE(capacitor.label(), QString("Capacitor"));
+    QCOMPARE(capacitor.label(), QString("C"));
 
     InductorElement inductor;
-    QCOMPARE(inductor.label(), QString("Inductor"));
+    QCOMPARE(inductor.label(), QString("L"));
 
     FuseElement fuse;
-    QCOMPARE(fuse.label(), QString("Fuse"));
+    QCOMPARE(fuse.label(), QString("F"));
 
     CrystalElement crystal;
-    QCOMPARE(crystal.label(), QString("Crystal"));
+    QCOMPARE(crystal.label(), QString("Y"));
 
     TransformerElement transformer;
-    QCOMPARE(transformer.label(), QString("Transformer"));
+    QCOMPARE(transformer.label(), QString("T"));
 
     DiodeElement diode;
-    QCOMPARE(diode.label(), QString("Diode"));
+    QCOMPARE(diode.label(), QString("D"));
 
     LEDElement led;
     QCOMPARE(led.label(), QString("LED"));
 
     TransistorElement transistor;
-    QCOMPARE(transistor.label(), QString("Transistor"));
+    QCOMPARE(transistor.label(), QString("Q"));
 
     MOSFETElement mosfet;
-    QCOMPARE(mosfet.label(), QString("MOSFET"));
+    QCOMPARE(mosfet.label(), QString("Q"));
 
     OpAmpElement opamp;
-    QCOMPARE(opamp.label(), QString("Op-Amp"));
+    QCOMPARE(opamp.label(), QString("U"));
 
     VoltageRegulatorElement vreg;
-    QCOMPARE(vreg.label(), QString("Regulator"));
+    QCOMPARE(vreg.label(), QString("U"));
 
     BatteryElement battery;
-    QCOMPARE(battery.label(), QString("Battery"));
+    QCOMPARE(battery.label(), QString("BT"));
 
     GroundElement ground;
-    QCOMPARE(ground.label(), QString("Ground"));
+    QCOMPARE(ground.label(), QString("GND"));
 
     SwitchElement sw;
-    QCOMPARE(sw.label(), QString("Switch"));
+    QCOMPARE(sw.label(), QString("SW"));
 
     RelayElement relay;
-    QCOMPARE(relay.label(), QString("Relay"));
+    QCOMPARE(relay.label(), QString("K"));
 
     MotorElement motor;
-    QCOMPARE(motor.label(), QString("Motor"));
+    QCOMPARE(motor.label(), QString("M"));
 
     PowerSupplyElement psu;
-    QCOMPARE(psu.label(), QString("PSU"));
+    QCOMPARE(psu.label(), QString("PS"));
 
     MicrocontrollerElement mcu;
-    QCOMPARE(mcu.label(), QString("MCU"));
+    QCOMPARE(mcu.label(), QString("U"));
 
     ICChipElement ic;
-    QCOMPARE(ic.label(), QString("IC Chip"));
+    QCOMPARE(ic.label(), QString("U"));
 
     SensorElement sensor;
-    QCOMPARE(sensor.label(), QString("Sensor"));
+    QCOMPARE(sensor.label(), QString("S"));
 
     AntennaElement antenna;
-    QCOMPARE(antenna.label(), QString("Antenna"));
+    QCOMPARE(antenna.label(), QString("ANT"));
 
     SpeakerElement speaker;
-    QCOMPARE(speaker.label(), QString("Speaker"));
+    QCOMPARE(speaker.label(), QString("SP"));
 
     ConnectorElement connector;
-    QCOMPARE(connector.label(), QString("Connector"));
+    QCOMPARE(connector.label(), QString("J"));
   }
 
   void allElementsBoundingRectConsistent() {
-    // All elements share the same card dimensions plus pin margin.
+    // All elements share the same compact symbol dimensions plus pin margin.
     const qreal m = ElectronicsElementItem::PIN_RADIUS + 1.0;
-    const QRectF expected(-m, -m, 142.0 + 2 * m, 106.0 + 2 * m);
+    const QRectF expected(-m, -m, 64.0 + 2 * m, 48.0 + 14.0 + 2 * m);
 
     ResistorElement resistor;
     QCOMPARE(resistor.boundingRect(), expected);

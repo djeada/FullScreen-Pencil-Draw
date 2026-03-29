@@ -57,19 +57,19 @@ private slots:
     // Without a scene the item isn't part of a scene graph.
     // mapToScene still works - it maps through pos().
     QPointF p0 = r.pinScenePos(0);
-    // pin1 is at item-local (0, ELEM_H/2) == (0, 53)
-    QCOMPARE(p0, QPointF(100.0, 253.0));
+    // pin1 is at item-local (0, ELEM_H/2) == (0, 24)
+    QCOMPARE(p0, QPointF(100.0, 224.0));
   }
 
   void nearestPinFindsClosest() {
     ResistorElement r;
     r.setPos(0, 0);
-    // pin1 at (0, 53), pin2 at (142, 53)
+    // pin1 at (0, 24), pin2 at (64, 24)
     // Point near pin2
-    int idx = r.nearestPin(QPointF(140.0, 53.0));
+    int idx = r.nearestPin(QPointF(62.0, 24.0));
     QCOMPARE(idx, 1);
     // Point near pin1
-    idx = r.nearestPin(QPointF(2.0, 53.0));
+    idx = r.nearestPin(QPointF(2.0, 24.0));
     QCOMPARE(idx, 0);
     // Point too far from both
     idx = r.nearestPin(QPointF(500.0, 500.0));
