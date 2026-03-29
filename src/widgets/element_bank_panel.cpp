@@ -50,7 +50,7 @@ QVector<ElementInfo> ElementBankPanel::defaultElements() {
        "Domain name system", "Cloud"},
       {"firewall", "Firewall", ":/ui-icons/arch_firewall.svg",
        "Firewall / WAF", "Cloud"},
-      {"load_balancer", "Load Bal.", ":/ui-icons/arch_load_balancer.svg",
+      {"load_balancer", "Load Balancer", ":/ui-icons/arch_load_balancer.svg",
        "Load balancer", "Cloud"},
       {"api_gateway", "Gateway", ":/ui-icons/arch_gateway.svg", "API gateway",
        "Cloud"},
@@ -193,8 +193,8 @@ ElementBankPanel::ElementBankPanel(Domain domain, QWidget *parent)
 
   auto *container = new QWidget(scrollArea);
   auto *mainLayout = new QVBoxLayout(container);
-  mainLayout->setContentsMargins(10, 10, 10, 10);
-  mainLayout->setSpacing(8);
+  mainLayout->setContentsMargins(12, 14, 12, 14);
+  mainLayout->setSpacing(14);
   mainLayout->setAlignment(Qt::AlignTop);
 
   // Group elements by category, preserving insertion order.
@@ -219,8 +219,8 @@ ElementBankPanel::ElementBankPanel(Domain domain, QWidget *parent)
   mainLayout->addStretch();
   scrollArea->setWidget(container);
   setWidget(scrollArea);
-  setMinimumWidth(236);
-  setMaximumWidth(336);
+  setMinimumWidth(250);
+  setMaximumWidth(360);
 
   connect(&ThemeManager::instance(), &ThemeManager::themeChanged, this,
           [this]() { applyTheme(); });
@@ -253,36 +253,38 @@ void ElementBankPanel::applyTheme() {
         background-color: #10161d;
       }
       QFrame#bankSeparator {
-        background-color: rgba(249, 115, 22, 0.2);
-        margin: 8px 10px;
+        background-color: rgba(249, 115, 22, 0.25);
+        margin: 6px 8px;
       }
       QLabel[categoryHeading="true"] {
-        color: #d0c4b7;
-        font-size: 11px;
+        color: #e8ddd0;
+        font-size: 12px;
         font-weight: 700;
-        padding: 4px 2px;
-        letter-spacing: 0.8px;
+        padding: 6px 4px 2px 4px;
+        letter-spacing: 1.0px;
         text-transform: uppercase;
       }
       QToolButton {
         background-color: #17212b;
         color: #f4efe8;
-        border: 1px solid rgba(255, 244, 230, 0.08);
-        border-radius: 14px;
+        border: 1px solid rgba(255, 244, 230, 0.10);
+        border-radius: 10px;
         padding: 6px 4px;
-        min-width: 58px;
-        min-height: 58px;
-        max-width: 58px;
-        max-height: 58px;
+        min-width: 96px;
+        min-height: 56px;
+        max-width: 96px;
+        max-height: 56px;
         font-weight: 600;
         font-size: 11px;
       }
       QToolButton:hover {
         background-color: #1d2934;
-        border: 1px solid rgba(249, 115, 22, 0.35);
+        border: 1px solid rgba(249, 115, 22, 0.50);
+        color: #ffffff;
       }
       QToolButton:pressed {
-        background-color: rgba(249, 115, 22, 0.14);
+        background-color: rgba(249, 115, 22, 0.18);
+        border: 1px solid rgba(249, 115, 22, 0.60);
       }
     )");
   } else {
@@ -309,36 +311,38 @@ void ElementBankPanel::applyTheme() {
         background-color: #f5efe6;
       }
       QFrame#bankSeparator {
-        background-color: rgba(234, 88, 12, 0.18);
-        margin: 8px 10px;
+        background-color: rgba(234, 88, 12, 0.22);
+        margin: 6px 8px;
       }
       QLabel[categoryHeading="true"] {
-        color: #7a6858;
-        font-size: 11px;
+        color: #5a4a3a;
+        font-size: 12px;
         font-weight: 700;
-        padding: 4px 2px;
-        letter-spacing: 0.8px;
+        padding: 6px 4px 2px 4px;
+        letter-spacing: 1.0px;
         text-transform: uppercase;
       }
       QToolButton {
         background-color: #fff9f1;
         color: #31261d;
         border: 1px solid #ddcfbc;
-        border-radius: 14px;
+        border-radius: 10px;
         padding: 6px 4px;
-        min-width: 58px;
-        min-height: 58px;
-        max-width: 58px;
-        max-height: 58px;
+        min-width: 96px;
+        min-height: 56px;
+        max-width: 96px;
+        max-height: 56px;
         font-weight: 600;
         font-size: 11px;
       }
       QToolButton:hover {
         background-color: #fff4e7;
-        border: 1px solid rgba(234, 88, 12, 0.28);
+        border: 1px solid rgba(234, 88, 12, 0.45);
+        color: #1a1008;
       }
       QToolButton:pressed {
         background-color: #f6dfca;
+        border: 1px solid rgba(234, 88, 12, 0.55);
       }
     )");
   }
@@ -356,11 +360,11 @@ void ElementBankPanel::addCategory(QVBoxLayout *layout, const QString &category,
   heading->setAlignment(Qt::AlignLeft);
   layout->addWidget(heading);
 
-  // Grid of element buttons (3 columns)
+  // Grid of element buttons (2 columns for better readability)
   auto *gridWidget = new QWidget(this);
   auto *grid = new QGridLayout(gridWidget);
-  grid->setSpacing(6);
-  grid->setContentsMargins(0, 0, 0, 0);
+  grid->setSpacing(8);
+  grid->setContentsMargins(0, 2, 0, 4);
 
   for (int i = 0; i < elements.size(); ++i) {
     const ElementInfo &info = elements[i];
@@ -372,16 +376,16 @@ void ElementBankPanel::addCategory(QVBoxLayout *layout, const QString &category,
     btn->setToolTip(info.tooltip);
     btn->setToolButtonStyle(icon.isNull() ? Qt::ToolButtonTextOnly
                                           : Qt::ToolButtonTextUnderIcon);
-    btn->setFixedSize(58, 58);
-    btn->setIconSize(QSize(18, 18));
+    btn->setFixedSize(96, 56);
+    btn->setIconSize(QSize(20, 20));
     btn->setVariant(AnimatedButtonBase::Variant::PanelTile);
 
     connect(btn, &QToolButton::clicked, this,
             [this, id = info.id]() { emit elementSelected(id); });
 
-    grid->addWidget(btn, i / 3, i % 3);
+    grid->addWidget(btn, i / 2, i % 2);
   }
 
-  gridWidget->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+  gridWidget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
   layout->addWidget(gridWidget, 0, Qt::AlignHCenter);
 }
