@@ -17,8 +17,8 @@
  * @brief Alignment mode enum
  */
 enum class AlignmentMode {
-  AlignToAxes,   ///< Reset rotation to 0° (align with canvas axes)
-  AlignParallel, ///< Make all selected items share the same rotation
+  AlignToAxes,       ///< Reset rotation to 0° (align with canvas axes)
+  AlignParallel,     ///< Make all selected items share the same rotation
   AlignPerpendicular ///< Rotate items to be perpendicular to the first selected
 };
 

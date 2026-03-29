@@ -8,9 +8,9 @@
 #include <QPainterPath>
 #include <QPixmap>
 #include <QPolygonF>
-#include <cmath>
 #include <QRadialGradient>
 #include <QtMath>
+#include <cmath>
 
 namespace {
 
@@ -470,8 +470,8 @@ void drawServerlessIcon(QPainter *p, const QRectF &r, const QColor &accent,
   p->drawLine(uv(r, 0.42, 0.46), uv(r, 0.34, 0.72));
 }
 
-void drawVirtualMachineIcon(QPainter *p, const QRectF &r,
-                            const QColor &accent, qreal stroke) {
+void drawVirtualMachineIcon(QPainter *p, const QRectF &r, const QColor &accent,
+                            qreal stroke) {
   p->setPen(QPen(accent, stroke, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
   p->setBrush(withAlpha(accent, 28));
 
@@ -905,16 +905,16 @@ CloudElement::CloudElement(QGraphicsItem *parent)
                               parent) {}
 
 CDNElement::CDNElement(QGraphicsItem *parent)
-    : ArchitectureElementItem("CDN", IconKind::CDN, QColor("#38bdf8"),
-                              parent) {}
+    : ArchitectureElementItem("CDN", IconKind::CDN, QColor("#38bdf8"), parent) {
+}
 
 DNSElement::DNSElement(QGraphicsItem *parent)
-    : ArchitectureElementItem("DNS", IconKind::DNS, QColor("#a78bfa"),
-                              parent) {}
+    : ArchitectureElementItem("DNS", IconKind::DNS, QColor("#a78bfa"), parent) {
+}
 
 FirewallElement::FirewallElement(QGraphicsItem *parent)
-    : ArchitectureElementItem("Firewall", IconKind::Firewall,
-                              QColor("#f43f5e"), parent) {}
+    : ArchitectureElementItem("Firewall", IconKind::Firewall, QColor("#f43f5e"),
+                              parent) {}
 
 ContainerElement::ContainerElement(QGraphicsItem *parent)
     : ArchitectureElementItem("Container", IconKind::Container,
@@ -925,16 +925,16 @@ ServerlessElement::ServerlessElement(QGraphicsItem *parent)
                               QColor("#fb923c"), parent) {}
 
 VirtualMachineElement::VirtualMachineElement(QGraphicsItem *parent)
-    : ArchitectureElementItem("VM", IconKind::VirtualMachine,
-                              QColor("#a3e635"), parent) {}
+    : ArchitectureElementItem("VM", IconKind::VirtualMachine, QColor("#a3e635"),
+                              parent) {}
 
 MicroserviceElement::MicroserviceElement(QGraphicsItem *parent)
     : ArchitectureElementItem("Microservice", IconKind::Microservice,
                               QColor("#34d399"), parent) {}
 
 APIElement::APIElement(QGraphicsItem *parent)
-    : ArchitectureElementItem("API", IconKind::API, QColor("#c084fc"),
-                              parent) {}
+    : ArchitectureElementItem("API", IconKind::API, QColor("#c084fc"), parent) {
+}
 
 NotificationElement::NotificationElement(QGraphicsItem *parent)
     : ArchitectureElementItem("Notification", IconKind::Notification,

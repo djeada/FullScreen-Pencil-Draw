@@ -23,11 +23,13 @@
 #include <QLabel>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QPainter>
 #include <QShortcut>
 #include <QSpinBox>
 #include <QSplitter>
 #include <QStatusBar>
 #include <QToolBar>
+#include <QToolButton>
 #include <QVBoxLayout>
 
 #ifdef HAVE_QT_PDF
@@ -54,8 +56,7 @@ static void installDockTitleBar(QDockWidget *dock) {
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), _canvas(new Canvas(this)),
       _toolPanel(new ToolPanel(this)), _layerPanel(nullptr),
-      _elementBankPanel(new ElementBankPanel(this)),
-      _autoSaveManager(nullptr),
+      _elementBankPanel(new ElementBankPanel(this)), _autoSaveManager(nullptr),
       _statusLabel(nullptr), _measurementLabel(nullptr),
       _recentFilesMenu(nullptr), _snapToGridAction(nullptr),
       _snapToObjectAction(nullptr), _autoSaveAction(nullptr),
@@ -66,8 +67,7 @@ MainWindow::MainWindow(QWidget *parent)
       ,
       _pdfViewer(nullptr), _thumbnailPanel(nullptr), _centralSplitter(nullptr),
       _pdfPanel(nullptr), _pdfToolBar(nullptr), _pdfHeaderLabel(nullptr),
-      _pdfPageLabel(nullptr),
-      _pdfPageSpinBox(nullptr), _pdfZoomCombo(nullptr),
+      _pdfPageLabel(nullptr), _pdfPageSpinBox(nullptr), _pdfZoomCombo(nullptr),
       _pdfDarkModeAction(nullptr), _thumbnailToggleAction(nullptr),
       _pdfPanelOnLeft(false) // PDF panel starts on the right by default
 #endif
@@ -140,11 +140,11 @@ MainWindow::MainWindow(QWidget *parent)
 MainWindow::~MainWindow() {}
 
 void MainWindow::setupStatusBar() {
-  _statusLabel =
-      new QLabel("✦ Ready | P:Pen I:Highlight E:Eraser T:Text F:Fill Q:ColorSelect "
-                 "L:Line A:Arrow R:Rect C:Circle S:Select H:Pan | G:Grid "
-                 "B:Filled | Ctrl+Scroll:Zoom",
-                 this);
+  _statusLabel = new QLabel(
+      "✦ Ready | P:Pen I:Highlight E:Eraser T:Text F:Fill Q:ColorSelect "
+      "L:Line A:Arrow R:Rect C:Circle S:Select H:Pan | G:Grid "
+      "B:Filled | Ctrl+Scroll:Zoom",
+      this);
   _measurementLabel = new QLabel("", this);
   statusBar()->addWidget(_statusLabel);
   statusBar()->addPermanentWidget(_measurementLabel);
@@ -169,9 +169,7 @@ void MainWindow::setupStatusBar() {
 void MainWindow::applyTheme() {
   const bool darkTheme = ThemeManager::instance().isDarkTheme();
 
-  statusBar()->setStyleSheet(
-      darkTheme
-          ? R"(
+  statusBar()->setStyleSheet(darkTheme ? R"(
               QStatusBar {
                 background-color: #10161d;
                 color: #d0c4b7;
@@ -187,7 +185,7 @@ void MainWindow::applyTheme() {
                 font-weight: 600;
               }
             )"
-          : R"(
+                                       : R"(
               QStatusBar {
                 background-color: #f5efe6;
                 color: #7a6858;
@@ -206,9 +204,7 @@ void MainWindow::applyTheme() {
 
 #ifdef HAVE_QT_PDF
   if (_centralSplitter) {
-    _centralSplitter->setStyleSheet(
-        darkTheme
-            ? R"(
+    _centralSplitter->setStyleSheet(darkTheme ? R"(
                 QSplitter {
                   background-color: #0d1217;
                 }
@@ -227,7 +223,7 @@ void MainWindow::applyTheme() {
                   background-color: #10161d;
                 }
               )"
-            : R"(
+                                              : R"(
                 QSplitter {
                   background-color: #efe5d8;
                 }
@@ -250,15 +246,18 @@ void MainWindow::applyTheme() {
 
   if (_pdfHeaderLabel) {
     _pdfHeaderLabel->setStyleSheet(
-        darkTheme
-            ? "QLabel { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #17212b, stop:1 #10161d); color: #fff7ed; padding: 12px; font-weight: 700; letter-spacing: 0.8px; border-bottom: 1px solid rgba(255, 244, 230, 0.08); }"
-            : "QLabel { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #fff9f1, stop:1 #f1e5d5); color: #31261d; padding: 12px; font-weight: 700; letter-spacing: 0.8px; border-bottom: 1px solid #ddcfbc; }");
+        darkTheme ? "QLabel { background: qlineargradient(x1:0, y1:0, x2:1, "
+                    "y2:0, stop:0 #17212b, stop:1 #10161d); color: #fff7ed; "
+                    "padding: 12px; font-weight: 700; letter-spacing: 0.8px; "
+                    "border-bottom: 1px solid rgba(255, 244, 230, 0.08); }"
+                  : "QLabel { background: qlineargradient(x1:0, y1:0, x2:1, "
+                    "y2:0, stop:0 #fff9f1, stop:1 #f1e5d5); color: #31261d; "
+                    "padding: 12px; font-weight: 700; letter-spacing: 0.8px; "
+                    "border-bottom: 1px solid #ddcfbc; }");
   }
 
   if (_pdfPageSpinBox) {
-    _pdfPageSpinBox->setStyleSheet(
-        darkTheme
-            ? R"(
+    _pdfPageSpinBox->setStyleSheet(darkTheme ? R"(
                 QSpinBox {
                   background-color: #17212b;
                   color: #fff7ed;
@@ -272,7 +271,7 @@ void MainWindow::applyTheme() {
                   width: 0px;
                 }
               )"
-            : R"(
+                                             : R"(
                 QSpinBox {
                   background-color: #fff9f1;
                   color: #31261d;
@@ -290,14 +289,13 @@ void MainWindow::applyTheme() {
 
   if (_pdfPageLabel) {
     _pdfPageLabel->setStyleSheet(
-        darkTheme ? "QLabel { color: #d0c4b7; padding: 0 8px; font-weight: 600; }"
-                  : "QLabel { color: #7a6858; padding: 0 8px; font-weight: 600; }");
+        darkTheme
+            ? "QLabel { color: #d0c4b7; padding: 0 8px; font-weight: 600; }"
+            : "QLabel { color: #7a6858; padding: 0 8px; font-weight: 600; }");
   }
 
   if (_pdfZoomCombo) {
-    _pdfZoomCombo->setStyleSheet(
-        darkTheme
-            ? R"(
+    _pdfZoomCombo->setStyleSheet(darkTheme ? R"(
                 QComboBox {
                   background-color: #17212b;
                   color: #fff7ed;
@@ -325,7 +323,7 @@ void MainWindow::applyTheme() {
                   selection-color: #fffaf4;
                 }
               )"
-            : R"(
+                                           : R"(
                 QComboBox {
                   background-color: #fff9f1;
                   color: #31261d;
@@ -356,9 +354,7 @@ void MainWindow::applyTheme() {
   }
 
   if (_pdfToolBar) {
-    _pdfToolBar->setStyleSheet(
-        darkTheme
-            ? R"(
+    _pdfToolBar->setStyleSheet(darkTheme ? R"(
                 QToolBar {
                   background-color: #10161d;
                   border-bottom: 1px solid rgba(255, 244, 230, 0.08);
@@ -394,7 +390,7 @@ void MainWindow::applyTheme() {
                   margin: 6px 8px;
                 }
               )"
-            : R"(
+                                         : R"(
                 QToolBar {
                   background-color: #f5efe6;
                   border-bottom: 1px solid #ddcfbc;
@@ -430,6 +426,22 @@ void MainWindow::applyTheme() {
                   margin: 6px 8px;
                 }
               )");
+
+    // Re-tint all PDF toolbar action icons for the new theme.
+    const QColor tint = darkTheme ? Qt::white : Qt::black;
+    const qreal dpr = devicePixelRatioF();
+    for (QAction *action : _pdfToolBar->actions()) {
+      if (action->isSeparator() || action->icon().isNull())
+        continue;
+      const int px = qRound(22 * dpr);
+      QPixmap pm = action->icon().pixmap(QSize(px, px));
+      pm.setDevicePixelRatio(dpr);
+      QPainter p(&pm);
+      p.setCompositionMode(QPainter::CompositionMode_SourceIn);
+      p.fillRect(pm.rect(), tint);
+      p.end();
+      action->setIcon(QIcon(pm));
+    }
   }
 #endif
 }
@@ -463,8 +475,7 @@ void MainWindow::setupConnections() {
           &Canvas::setArrowTool);
   connect(_toolPanel, &ToolPanel::curvedArrowSelected, _canvas,
           &Canvas::setCurvedArrowTool);
-  connect(_toolPanel, &ToolPanel::wireSelected, _canvas,
-          &Canvas::setWireTool);
+  connect(_toolPanel, &ToolPanel::wireSelected, _canvas, &Canvas::setWireTool);
   connect(_toolPanel, &ToolPanel::panSelected, _canvas, &Canvas::setPanTool);
   connect(_toolPanel, &ToolPanel::bezierSelected, _canvas,
           &Canvas::setBezierTool);
@@ -1299,45 +1310,65 @@ void MainWindow::setupPdfViewer() {
 void MainWindow::setupPdfToolBar() {
   _pdfToolBar = new QToolBar("PDF Navigation", this);
   _pdfToolBar->setObjectName("pdfToolBar");
-  _pdfToolBar->setIconSize(QSize(24, 24));
+  _pdfToolBar->setIconSize(QSize(22, 22));
   _pdfToolBar->setToolButtonStyle(Qt::ToolButtonIconOnly);
   addToolBar(Qt::TopToolBarArea, _pdfToolBar);
   _pdfToolBar->hide(); // Hidden until PDF is loaded
 
+  // Helper: load an SVG icon and tint it for the current theme.
+  const bool dark = ThemeManager::instance().isDarkTheme();
+  const QColor tint = dark ? Qt::white : Qt::black;
+  auto makeIcon = [&](const QString &path) -> QIcon {
+    const int sz = 22;
+    const qreal dpr = devicePixelRatioF();
+    const int px = qRound(sz * dpr);
+    QIcon raw(path);
+    QPixmap pm = raw.pixmap(QSize(px, px));
+    pm.setDevicePixelRatio(dpr);
+    QPainter p(&pm);
+    p.setCompositionMode(QPainter::CompositionMode_SourceIn);
+    p.fillRect(pm.rect(), tint);
+    p.end();
+    return QIcon(pm);
+  };
+
   // === CLUSTER 1: Document Operations ===
-  // Thumbnail panel toggle
-  _thumbnailToggleAction = _pdfToolBar->addAction("☰", [this]() {
-    if (_thumbnailPanel) {
-      _thumbnailPanel->toggleVisibility();
-    }
-  });
+  _thumbnailToggleAction = _pdfToolBar->addAction(
+      makeIcon(":/ui-icons/pdf_thumbnails.svg"), "", [this]() {
+        if (_thumbnailPanel) {
+          _thumbnailPanel->toggleVisibility();
+        }
+      });
   _thumbnailToggleAction->setToolTip("Toggle Page Thumbnails");
   _thumbnailToggleAction->setCheckable(true);
   _thumbnailToggleAction->setChecked(true);
 
   _pdfToolBar->addSeparator();
 
-  QAction *openPdfAction =
-      _pdfToolBar->addAction("📂", this, &MainWindow::onOpenPdf);
+  QAction *openPdfAction = _pdfToolBar->addAction(
+      makeIcon(":/ui-icons/pdf_open.svg"), "", this, &MainWindow::onOpenPdf);
   openPdfAction->setToolTip("Open PDF (Ctrl+Shift+O)");
 
   QAction *exportAction =
-      _pdfToolBar->addAction("💾", this, &MainWindow::onExportAnnotatedPdf);
+      _pdfToolBar->addAction(makeIcon(":/ui-icons/pdf_save.svg"), "", this,
+                             &MainWindow::onExportAnnotatedPdf);
   exportAction->setToolTip("Export Annotated PDF");
 
-  QAction *closeAction =
-      _pdfToolBar->addAction("✕", this, &MainWindow::onClosePdf);
+  QAction *closeAction = _pdfToolBar->addAction(
+      makeIcon(":/ui-icons/pdf_close.svg"), "", this, &MainWindow::onClosePdf);
   closeAction->setToolTip("Close PDF");
 
   _pdfToolBar->addSeparator();
 
   // === CLUSTER 2: Navigation ===
   QAction *firstAction =
-      _pdfToolBar->addAction("⏮", _pdfViewer, &PdfViewer::firstPage);
+      _pdfToolBar->addAction(makeIcon(":/ui-icons/pdf_first_page.svg"), "",
+                             _pdfViewer, &PdfViewer::firstPage);
   firstAction->setToolTip("First Page (Home)");
 
   QAction *prevAction =
-      _pdfToolBar->addAction("◀", _pdfViewer, &PdfViewer::previousPage);
+      _pdfToolBar->addAction(makeIcon(":/ui-icons/pdf_prev_page.svg"), "",
+                             _pdfViewer, &PdfViewer::previousPage);
   prevAction->setToolTip("Previous Page (Page Up)");
 
   // Editable page number spinbox
@@ -1365,25 +1396,26 @@ void MainWindow::setupPdfToolBar() {
           &MainWindow::onPdfPageSpinBoxChanged);
   _pdfToolBar->addWidget(_pdfPageSpinBox);
 
-  // Page count label
   _pdfPageLabel = new QLabel(" / 0", this);
   _pdfPageLabel->setStyleSheet("QLabel { color: #a0a0a8; padding: 0 8px; }");
   _pdfToolBar->addWidget(_pdfPageLabel);
 
   QAction *nextAction =
-      _pdfToolBar->addAction("▶", _pdfViewer, &PdfViewer::nextPage);
+      _pdfToolBar->addAction(makeIcon(":/ui-icons/pdf_next_page.svg"), "",
+                             _pdfViewer, &PdfViewer::nextPage);
   nextAction->setToolTip("Next Page (Page Down)");
 
   QAction *lastAction =
-      _pdfToolBar->addAction("⏭", _pdfViewer, &PdfViewer::lastPage);
+      _pdfToolBar->addAction(makeIcon(":/ui-icons/pdf_last_page.svg"), "",
+                             _pdfViewer, &PdfViewer::lastPage);
   lastAction->setToolTip("Last Page (End)");
 
   _pdfToolBar->addSeparator();
 
   // === CLUSTER 3: View/Edit Controls ===
-  // Zoom controls with dropdown
   QAction *zoomOutAction =
-      _pdfToolBar->addAction("−", _pdfViewer, &PdfViewer::zoomOut);
+      _pdfToolBar->addAction(makeIcon(":/ui-icons/pdf_zoom_out.svg"), "",
+                             _pdfViewer, &PdfViewer::zoomOut);
   zoomOutAction->setToolTip("Zoom Out (-)");
 
   _pdfZoomCombo = new QComboBox(this);
@@ -1432,76 +1464,87 @@ void MainWindow::setupPdfToolBar() {
   _pdfToolBar->addWidget(_pdfZoomCombo);
 
   QAction *zoomInAction =
-      _pdfToolBar->addAction("+", _pdfViewer, &PdfViewer::zoomIn);
+      _pdfToolBar->addAction(makeIcon(":/ui-icons/pdf_zoom_in.svg"), "",
+                             _pdfViewer, &PdfViewer::zoomIn);
   zoomInAction->setToolTip("Zoom In (+)");
 
   _pdfToolBar->addSeparator();
 
   // Fit options
-  QAction *fitWidthAction = _pdfToolBar->addAction("↔", this, [this]() {
-    if (_pdfViewer && _pdfViewer->hasPdf()) {
-      _pdfViewer->fitToWidth();
-    }
-  });
+  QAction *fitWidthAction = _pdfToolBar->addAction(
+      makeIcon(":/ui-icons/pdf_fit_width.svg"), "", this, [this]() {
+        if (_pdfViewer && _pdfViewer->hasPdf()) {
+          _pdfViewer->fitToWidth();
+        }
+      });
   fitWidthAction->setToolTip("Fit to Width");
 
-  QAction *fitPageAction = _pdfToolBar->addAction("⬜", this, [this]() {
-    if (_pdfViewer && _pdfViewer->hasPdf()) {
-      _pdfViewer->fitToPage();
-    }
-  });
+  QAction *fitPageAction = _pdfToolBar->addAction(
+      makeIcon(":/ui-icons/pdf_fit_page.svg"), "", this, [this]() {
+        if (_pdfViewer && _pdfViewer->hasPdf()) {
+          _pdfViewer->fitToPage();
+        }
+      });
   fitPageAction->setToolTip("Fit to Page");
 
   _pdfToolBar->addSeparator();
 
   // Rotation
-  QAction *rotateLeftAction = _pdfToolBar->addAction("↺", this, [this]() {
-    if (_pdfViewer && _pdfViewer->hasPdf()) {
-      _pdfViewer->rotatePageLeft();
-    }
-  });
+  QAction *rotateLeftAction = _pdfToolBar->addAction(
+      makeIcon(":/ui-icons/pdf_rotate_left.svg"), "", this, [this]() {
+        if (_pdfViewer && _pdfViewer->hasPdf()) {
+          _pdfViewer->rotatePageLeft();
+        }
+      });
   rotateLeftAction->setToolTip("Rotate Left (90° CCW)");
 
-  QAction *rotateRightAction = _pdfToolBar->addAction("↻", this, [this]() {
-    if (_pdfViewer && _pdfViewer->hasPdf()) {
-      _pdfViewer->rotatePageRight();
-    }
-  });
+  QAction *rotateRightAction = _pdfToolBar->addAction(
+      makeIcon(":/ui-icons/pdf_rotate_right.svg"), "", this, [this]() {
+        if (_pdfViewer && _pdfViewer->hasPdf()) {
+          _pdfViewer->rotatePageRight();
+        }
+      });
   rotateRightAction->setToolTip("Rotate Right (90° CW)");
 
   _pdfToolBar->addSeparator();
 
   // Dark mode toggle
   _pdfDarkModeAction = _pdfToolBar->addAction(
-      "🌙", [this]() { _pdfViewer->setDarkMode(!_pdfViewer->darkMode()); });
+      makeIcon(":/ui-icons/pdf_dark_mode.svg"), "",
+      [this]() { _pdfViewer->setDarkMode(!_pdfViewer->darkMode()); });
   _pdfDarkModeAction->setToolTip("Toggle Dark Mode");
   _pdfDarkModeAction->setCheckable(true);
 
   _pdfToolBar->addSeparator();
 
   // Mode toggle: View vs Annotate
-  QAction *modeAction = _pdfToolBar->addAction("✏️ Annotate", [this]() {
-    if (_pdfViewer) {
-      if (_pdfViewer->isAnnotateMode()) {
-        _pdfViewer->setMode(PdfViewer::Mode::View);
-      } else {
-        _pdfViewer->setMode(PdfViewer::Mode::Annotate);
-      }
-    }
-  });
-  modeAction->setToolTip("Toggle View/Annotate mode");
-  modeAction->setCheckable(true);
-  modeAction->setChecked(true); // Start in Annotate mode
+  _pdfModeAction = _pdfToolBar->addAction(
+      makeIcon(":/ui-icons/pdf_annotate.svg"), "Annotate", [this]() {
+        if (_pdfViewer) {
+          if (_pdfViewer->isAnnotateMode()) {
+            _pdfViewer->setMode(PdfViewer::Mode::View);
+          } else {
+            _pdfViewer->setMode(PdfViewer::Mode::Annotate);
+          }
+        }
+      });
+  _pdfModeAction->setToolTip("Toggle View/Annotate mode");
+  _pdfModeAction->setCheckable(true);
+  _pdfModeAction->setChecked(true);
+  // Show label beside icon for this button.
+  if (auto *btn = qobject_cast<QToolButton *>(
+          _pdfToolBar->widgetForAction(_pdfModeAction)))
+    btn->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
 
   // Connect mode change to update button
   connect(_pdfViewer, &PdfViewer::modeChanged, this,
-          [modeAction](PdfViewer::Mode mode) {
+          [this](PdfViewer::Mode mode) {
             if (mode == PdfViewer::Mode::Annotate) {
-              modeAction->setText("✏️ Annotate");
-              modeAction->setChecked(true);
+              _pdfModeAction->setText("Annotate");
+              _pdfModeAction->setChecked(true);
             } else {
-              modeAction->setText("👁 View");
-              modeAction->setChecked(false);
+              _pdfModeAction->setText("View");
+              _pdfModeAction->setChecked(false);
             }
           });
 
@@ -1509,18 +1552,19 @@ void MainWindow::setupPdfToolBar() {
 
   // Screenshot tool
   QAction *screenshotAction = _pdfToolBar->addAction(
-      "📷", [this]() { _pdfViewer->setScreenshotSelectionMode(true); });
+      makeIcon(":/ui-icons/pdf_screenshot.svg"), "",
+      [this]() { _pdfViewer->setScreenshotSelectionMode(true); });
   screenshotAction->setToolTip("Screenshot Selection");
 
   _pdfToolBar->addSeparator();
 
   // Undo/Redo
-  QAction *undoAction =
-      _pdfToolBar->addAction("↶", _pdfViewer, &PdfViewer::undo);
+  QAction *undoAction = _pdfToolBar->addAction(
+      makeIcon(":/ui-icons/pdf_undo.svg"), "", _pdfViewer, &PdfViewer::undo);
   undoAction->setToolTip("Undo (Ctrl+Z)");
 
-  QAction *redoAction =
-      _pdfToolBar->addAction("↷", _pdfViewer, &PdfViewer::redo);
+  QAction *redoAction = _pdfToolBar->addAction(
+      makeIcon(":/ui-icons/pdf_redo.svg"), "", _pdfViewer, &PdfViewer::redo);
   redoAction->setToolTip("Redo (Ctrl+Y)");
 
   // Style the toolbar

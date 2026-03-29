@@ -10,7 +10,7 @@ namespace {
 constexpr int kHighlighterAlpha = 96;
 constexpr qreal kMinimumHighlighterWidth = 12.0;
 constexpr qreal kHighlighterWidthScale = 3.0;
-}
+} // namespace
 
 HighlighterTool::HighlighterTool(SceneRenderer *renderer)
     : Tool(renderer), currentPath_(nullptr), currentItemId_() {}
@@ -107,8 +107,8 @@ QPen HighlighterTool::highlighterPen() const {
   QColor color = pen.color();
   color.setAlpha(qMin(color.alpha(), kHighlighterAlpha));
   pen.setColor(color);
-  pen.setWidthF(qMax(kMinimumHighlighterWidth,
-                     pen.widthF() * kHighlighterWidthScale));
+  pen.setWidthF(
+      qMax(kMinimumHighlighterWidth, pen.widthF() * kHighlighterWidthScale));
   pen.setCapStyle(Qt::RoundCap);
   pen.setJoinStyle(Qt::RoundJoin);
   return pen;

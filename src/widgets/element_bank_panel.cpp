@@ -63,12 +63,13 @@ struct CardPalette {
 
 CardPalette cardPalette() {
   if (isDark())
-    return {QColor("#1e2c3c"), QColor("#263a4e"),  QColor("#2b1f15"),
-            QColor(255, 244, 230, 35), QColor(249, 115, 22, 140),
-            QColor("#f0e6da"), QColor("#a89888"), QColor(0, 0, 0, 60)};
-  return {QColor("#ffffff"), QColor("#fff4e7"),  QColor("#f6dfca"),
-          QColor("#d0c4b4"), QColor(234, 88, 12, 110),
-          QColor("#2c2016"), QColor("#7a6a58"), QColor(0, 0, 0, 22)};
+    return {QColor("#1e2c3c"),         QColor("#263a4e"),
+            QColor("#2b1f15"),         QColor(255, 244, 230, 35),
+            QColor(249, 115, 22, 140), QColor("#f0e6da"),
+            QColor("#a89888"),         QColor(0, 0, 0, 60)};
+  return {QColor("#ffffff"), QColor("#fff4e7"),        QColor("#f6dfca"),
+          QColor("#d0c4b4"), QColor(234, 88, 12, 110), QColor("#2c2016"),
+          QColor("#7a6a58"), QColor(0, 0, 0, 22)};
 }
 
 struct SwitcherPalette {
@@ -184,8 +185,8 @@ void ElementCard::paintEvent(QPaintEvent *) {
     glow.setAlphaF(0.10 + h * 0.10);
     p.setPen(Qt::NoPen);
     p.setBrush(glow);
-    p.drawRoundedRect(body.adjusted(-1.2, -1.2, 1.2, 1.2),
-                      kCardRadius + 1.2, kCardRadius + 1.2);
+    p.drawRoundedRect(body.adjusted(-1.2, -1.2, 1.2, 1.2), kCardRadius + 1.2,
+                      kCardRadius + 1.2);
   }
 
   p.setPen(QPen(border, 1.2));
@@ -212,8 +213,8 @@ void ElementCard::paintEvent(QPaintEvent *) {
   p.setFont(font);
   p.setPen(pal.text);
 
-  QRectF labelRect(body.left() + 4, iconY + kCardIconSize + 5,
-                   body.width() - 8, 16);
+  QRectF labelRect(body.left() + 4, iconY + kCardIconSize + 5, body.width() - 8,
+                   16);
   p.drawText(labelRect, Qt::AlignHCenter | Qt::AlignTop, info_.label);
 }
 
@@ -331,8 +332,8 @@ void CategorySection::paintEvent(QPaintEvent *) {
     chevron.moveTo(10, cy - 4);
     chevron.lineTo(14, cy + 2);
     chevron.lineTo(18, cy - 4);
-    p.setPen(QPen(pal.chevron, 1.8, Qt::SolidLine, Qt::RoundCap,
-                  Qt::RoundJoin));
+    p.setPen(
+        QPen(pal.chevron, 1.8, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
     p.setBrush(Qt::NoBrush);
     p.drawPath(chevron);
     p.restore();
@@ -439,8 +440,8 @@ void DomainSwitcher::paintEvent(QPaintEvent *) {
   }
 
   const qreal indPad = 3;
-  QRectF indRect(indicatorX_ + indPad, area.top() + indPad,
-                 segW - 2 * indPad, area.height() - 2 * indPad);
+  QRectF indRect(indicatorX_ + indPad, area.top() + indPad, segW - 2 * indPad,
+                 area.height() - 2 * indPad);
   p.setPen(Qt::NoPen);
   p.setBrush(pal.indicator);
   p.drawRoundedRect(indRect, kSwitcherIndicatorRadius,
@@ -453,8 +454,7 @@ void DomainSwitcher::paintEvent(QPaintEvent *) {
   p.setFont(font);
 
   for (int i = 0; i < labels_.size(); ++i) {
-    QRectF labelRect(area.left() + i * segW, area.top(), segW,
-                     area.height());
+    QRectF labelRect(area.left() + i * segW, area.top(), segW, area.height());
     p.setPen(i == currentIndex_ ? pal.textActive : pal.textInactive);
     p.drawText(labelRect, Qt::AlignCenter, labels_[i]);
   }
@@ -488,8 +488,8 @@ QVector<ElementInfo> ElementBankPanel::defaultElements() {
       {"cdn", "CDN", ":/ui-icons/arch_cdn.svg", "Content delivery network",
        "Cloud"},
       {"dns", "DNS", ":/ui-icons/arch_dns.svg", "Domain name system", "Cloud"},
-      {"firewall", "Firewall", ":/ui-icons/arch_firewall.svg",
-       "Firewall / WAF", "Cloud"},
+      {"firewall", "Firewall", ":/ui-icons/arch_firewall.svg", "Firewall / WAF",
+       "Cloud"},
       {"load_balancer", "Load Balancer", ":/ui-icons/arch_load_balancer.svg",
        "Load balancer", "Cloud"},
       {"api_gateway", "Gateway", ":/ui-icons/arch_gateway.svg", "API gateway",
@@ -545,23 +545,21 @@ QVector<ElementInfo> ElementBankPanel::defaultElements() {
        "Transformer", "Passive"},
 
       // Electronics – Semiconductor
-      {"diode", "Diode", ":/ui-icons/elec_diode.svg", "Diode",
-       "Semiconductor"},
+      {"diode", "Diode", ":/ui-icons/elec_diode.svg", "Diode", "Semiconductor"},
       {"led", "LED", ":/ui-icons/elec_led.svg", "Light-emitting diode",
        "Semiconductor"},
       {"transistor", "Transistor", ":/ui-icons/elec_transistor.svg",
        "Bipolar junction transistor", "Semiconductor"},
       {"mosfet", "MOSFET", ":/ui-icons/elec_mosfet.svg", "MOSFET",
        "Semiconductor"},
-      {"opamp", "Op-Amp", ":/ui-icons/elec_opamp.svg",
-       "Operational amplifier", "Semiconductor"},
+      {"opamp", "Op-Amp", ":/ui-icons/elec_opamp.svg", "Operational amplifier",
+       "Semiconductor"},
       {"voltage_regulator", "Regulator",
        ":/ui-icons/elec_voltage_regulator.svg", "Voltage regulator",
        "Semiconductor"},
 
       // Electronics – Power
-      {"battery", "Battery", ":/ui-icons/elec_battery.svg", "Battery",
-       "Power"},
+      {"battery", "Battery", ":/ui-icons/elec_battery.svg", "Battery", "Power"},
       {"ground", "Ground", ":/ui-icons/elec_ground.svg", "Ground", "Power"},
       {"elec_switch", "Switch", ":/ui-icons/elec_switch.svg", "Switch (SPST)",
        "Power"},
@@ -614,8 +612,7 @@ QVector<ElementInfo> ElementBankPanel::elementsForDomain(Domain domain) {
 ElementBankPanel::ElementBankPanel(QWidget *parent)
     : QDockWidget("Element Library", parent) {
   setObjectName("ElementBankPanel");
-  setFeatures(QDockWidget::DockWidgetClosable |
-              QDockWidget::DockWidgetMovable |
+  setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable |
               QDockWidget::DockWidgetFloatable);
   setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
 
@@ -663,8 +660,7 @@ ElementBankPanel::ElementBankPanel(QWidget *parent)
 }
 
 void ElementBankPanel::switchDomain(int index) {
-  Domain domain =
-      (index == 0) ? Domain::Architecture : Domain::Electronics;
+  Domain domain = (index == 0) ? Domain::Architecture : Domain::Electronics;
   if (domain == currentDomain_)
     return;
   currentDomain_ = domain;
@@ -691,8 +687,7 @@ void ElementBankPanel::buildDomainContent(Domain domain) {
   }
 
   for (const QString &cat : orderedCategories) {
-    auto *section =
-        new CategorySection(cat, groups[cat], contentWidget_);
+    auto *section = new CategorySection(cat, groups[cat], contentWidget_);
     connect(section, &CategorySection::elementClicked, this,
             &ElementBankPanel::elementSelected);
     contentLayout_->addWidget(section);

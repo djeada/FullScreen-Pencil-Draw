@@ -786,12 +786,12 @@ void ToolPanel::applyTheme() {
     )");
   }
 
-  const QString subtleLabelStyle = darkTheme
-                                       ? "QLabel { color: #d0c4b7; font-size: 11px; font-weight: 500; }"
-                                       : "QLabel { color: #7a6858; font-size: 11px; font-weight: 600; letter-spacing: 0.3px; }";
-  const QString valueLabelStyle =
+  const QString subtleLabelStyle =
       darkTheme
-          ? R"(QLabel {
+          ? "QLabel { color: #d0c4b7; font-size: 11px; font-weight: 500; }"
+          : "QLabel { color: #7a6858; font-size: 11px; font-weight: 600; "
+            "letter-spacing: 0.3px; }";
+  const QString valueLabelStyle = darkTheme ? R"(QLabel {
                padding: 5px 8px;
                background-color: #17212b;
                color: #fff7ed;
@@ -799,7 +799,7 @@ void ToolPanel::applyTheme() {
                border: 1px solid rgba(255, 244, 230, 0.08);
                font-weight: 600;
              })"
-          : R"(QLabel {
+                                            : R"(QLabel {
                padding: 5px 8px;
                background-color: #fff9f1;
                color: #31261d;
@@ -807,9 +807,7 @@ void ToolPanel::applyTheme() {
                border: 1px solid #ddcfbc;
                font-weight: 600;
              })";
-  const QString comboStyle =
-      darkTheme
-          ? R"(QComboBox {
+  const QString comboStyle = darkTheme ? R"(QComboBox {
                background-color: #17212b;
                color: #f4efe8;
                border: 1px solid rgba(255, 244, 230, 0.08);
@@ -831,7 +829,7 @@ void ToolPanel::applyTheme() {
                selection-color: #fffaf4;
                border: 1px solid rgba(255, 244, 230, 0.1);
              })"
-          : R"(QComboBox {
+                                       : R"(QComboBox {
                background-color: #fff9f1;
                color: #31261d;
                border: 1px solid #ddcfbc;
@@ -853,9 +851,7 @@ void ToolPanel::applyTheme() {
                selection-color: #fffaf4;
                border: 1px solid #ddcfbc;
              })";
-  const QString positionStyle =
-      darkTheme
-          ? R"(QLabel {
+  const QString positionStyle = darkTheme ? R"(QLabel {
                padding: 6px 10px;
                background-color: #131b23;
                color: #d0c4b7;
@@ -864,7 +860,7 @@ void ToolPanel::applyTheme() {
                font-size: 11px;
                font-weight: 600;
              })"
-          : R"(QLabel {
+                                          : R"(QLabel {
                padding: 6px 10px;
                background-color: #fff9f1;
                color: #7a6858;
@@ -894,8 +890,10 @@ void ToolPanel::applyTheme() {
   }
   if (pressureSensitivityCheckBox_) {
     pressureSensitivityCheckBox_->setStyleSheet(
-        darkTheme ? "QCheckBox { color: #d0c4b7; font-size: 11px; font-weight: 600; }"
-                  : "QCheckBox { color: #7a6858; font-size: 11px; font-weight: 600; }");
+        darkTheme
+            ? "QCheckBox { color: #d0c4b7; font-size: 11px; font-weight: 600; }"
+            : "QCheckBox { color: #7a6858; font-size: 11px; font-weight: 600; "
+              "}");
   }
   if (brushTipCombo_) {
     brushTipCombo_->setStyleSheet(comboStyle);
@@ -953,16 +951,16 @@ void ToolPanel::updateBrushSizeDisplay(int size) {
 void ToolPanel::updateColorDisplay(const QColor &color) {
   currentColor_ = color;
   const bool darkTheme = ThemeManager::instance().isDarkTheme();
-  colorPreview->setStyleSheet(QString(R"(
+  colorPreview->setStyleSheet(
+      QString(R"(
     QLabel { 
       background-color: %1; 
       border: 2px solid %2; 
       border-radius: 10px; 
     }
   )")
-                                  .arg(color.name())
-                                  .arg(darkTheme ? "rgba(255, 244, 230, 0.16)"
-                                                 : "#ddcfbc"));
+          .arg(color.name())
+          .arg(darkTheme ? "rgba(255, 244, 230, 0.16)" : "#ddcfbc"));
   if (brushPreview_) {
     brushPreview_->setBrushColor(color);
   }

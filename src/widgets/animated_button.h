@@ -11,12 +11,7 @@
 
 class AnimatedButtonBase {
 public:
-  enum class Variant {
-    PanelTile,
-    Compact,
-    SideHandle,
-    TitleBar
-  };
+  enum class Variant { PanelTile, Compact, SideHandle, TitleBar };
 
   explicit AnimatedButtonBase(QWidget *widget);
   virtual ~AnimatedButtonBase() = default;

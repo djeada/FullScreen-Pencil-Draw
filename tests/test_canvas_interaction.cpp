@@ -40,7 +40,8 @@ private slots:
     canvas.setShape("Selection");
     QApplication::processEvents();
 
-    const QPoint viewPos = canvas.mapFromScene(rect->sceneBoundingRect().center());
+    const QPoint viewPos =
+        canvas.mapFromScene(rect->sceneBoundingRect().center());
     QTest::mouseClick(canvas.viewport(), Qt::LeftButton, Qt::NoModifier,
                       viewPos);
 

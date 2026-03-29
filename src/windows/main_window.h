@@ -98,6 +98,7 @@ private:
   QSpinBox *_pdfPageSpinBox;
   QComboBox *_pdfZoomCombo;
   QAction *_pdfDarkModeAction;
+  QAction *_pdfModeAction;
   QAction *_thumbnailToggleAction;
   bool _pdfPanelOnLeft; // Track if PDF panel is on the left side
 

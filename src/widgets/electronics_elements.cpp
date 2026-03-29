@@ -11,9 +11,9 @@
 #include <QFont>
 #include <QPainterPath>
 #include <QPixmap>
-#include <cmath>
 #include <QPolygonF>
 #include <QtMath>
+#include <cmath>
 
 namespace {
 
@@ -109,8 +109,8 @@ void drawInductorIcon(QPainter *p, const QRectF &r, const QColor &stroke,
   path.moveTo(coilStart, y0);
   for (int i = 0; i < humps; ++i) {
     qreal sx = coilStart + i * humpW;
-    path.cubicTo(sx + humpW * 0.15, y0 - humpH, sx + humpW * 0.85,
-                 y0 - humpH, sx + humpW, y0);
+    path.cubicTo(sx + humpW * 0.15, y0 - humpH, sx + humpW * 0.85, y0 - humpH,
+                 sx + humpW, y0);
   }
   p->drawPath(path);
 }
@@ -131,9 +131,10 @@ void drawFuseIcon(QPainter *p, const QRectF &r, const QColor &stroke,
   // S-curve inside the body.
   QPainterPath s;
   s.moveTo(body.left() + body.width() * 0.25, body.top() + body.height() * 0.2);
-  s.cubicTo(body.left() + body.width() * 0.65, body.top() + body.height() * 0.15,
-            body.left() + body.width() * 0.35, body.top() + body.height() * 0.85,
-            body.left() + body.width() * 0.75, body.top() + body.height() * 0.8);
+  s.cubicTo(
+      body.left() + body.width() * 0.65, body.top() + body.height() * 0.15,
+      body.left() + body.width() * 0.35, body.top() + body.height() * 0.85,
+      body.left() + body.width() * 0.75, body.top() + body.height() * 0.8);
   p->drawPath(s);
 }
 
@@ -215,14 +216,12 @@ void drawDiodeIcon(QPainter *p, const QRectF &r, const QColor &stroke,
 
   // Triangle pointing right.
   QPolygonF tri;
-  tri << QPointF(triLeft, midY - triH)
-      << QPointF(triRight, midY)
+  tri << QPointF(triLeft, midY - triH) << QPointF(triRight, midY)
       << QPointF(triLeft, midY + triH);
   p->drawPolygon(tri);
 
   // Cathode bar.
-  p->drawLine(QPointF(triRight, midY - triH),
-              QPointF(triRight, midY + triH));
+  p->drawLine(QPointF(triRight, midY - triH), QPointF(triRight, midY + triH));
 
   // Terminal stubs.
   p->drawLine(QPointF(r.left(), midY), QPointF(triLeft, midY));
@@ -235,8 +234,8 @@ void drawLEDIcon(QPainter *p, const QRectF &r, const QColor &stroke,
   drawDiodeIcon(p, r, stroke, width);
 
   // Two small arrows pointing away (emission).
-  p->setPen(QPen(stroke, width * 0.75, Qt::SolidLine, Qt::RoundCap,
-                 Qt::RoundJoin));
+  p->setPen(
+      QPen(stroke, width * 0.75, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
   const qreal ax = r.left() + r.width() * 0.60;
   const qreal ay1 = r.top() + r.height() * 0.10;
   const qreal ay2 = r.top() + r.height() * 0.22;
@@ -248,12 +247,10 @@ void drawLEDIcon(QPainter *p, const QRectF &r, const QColor &stroke,
               QPointF(ax + arrowLen * 0.55, ay1 - arrowLen * 0.35));
   // Arrow 2.
   p->drawLine(QPointF(ax + r.width() * 0.08, ay2),
-              QPointF(ax + r.width() * 0.08 + arrowLen,
-                      ay2 - arrowLen * 0.5));
-  p->drawLine(QPointF(ax + r.width() * 0.08 + arrowLen,
-                       ay2 - arrowLen * 0.5),
-              QPointF(ax + r.width() * 0.08 + arrowLen * 0.55,
-                      ay2 - arrowLen * 0.35));
+              QPointF(ax + r.width() * 0.08 + arrowLen, ay2 - arrowLen * 0.5));
+  p->drawLine(
+      QPointF(ax + r.width() * 0.08 + arrowLen, ay2 - arrowLen * 0.5),
+      QPointF(ax + r.width() * 0.08 + arrowLen * 0.55, ay2 - arrowLen * 0.35));
 }
 
 void drawTransistorIcon(QPainter *p, const QRectF &r, const QColor &stroke,
@@ -271,13 +268,13 @@ void drawTransistorIcon(QPainter *p, const QRectF &r, const QColor &stroke,
               QPointF(bx, r.top() + r.height() * 0.72));
 
   // Collector (line from bar up-right).
-  p->drawLine(QPointF(bx, r.top() + r.height() * 0.36),
-              QPointF(r.left() + r.width() * 0.72, r.top() + r.height() * 0.15));
+  p->drawLine(
+      QPointF(bx, r.top() + r.height() * 0.36),
+      QPointF(r.left() + r.width() * 0.72, r.top() + r.height() * 0.15));
 
   // Emitter (line from bar down-right with arrow).
   const QPointF emBase(bx, r.top() + r.height() * 0.64);
-  const QPointF emTip(r.left() + r.width() * 0.72,
-                      r.top() + r.height() * 0.85);
+  const QPointF emTip(r.left() + r.width() * 0.72, r.top() + r.height() * 0.85);
   p->drawLine(emBase, emTip);
 
   // Small arrowhead on emitter.
@@ -327,12 +324,12 @@ void drawMOSFETIcon(QPainter *p, const QRectF &r, const QColor &stroke,
 
   // Drain (top terminal).
   const qreal drainY = r.top() + r.height() * 0.22 + segH * 0.5;
-  p->drawLine(QPointF(bodyX, drainY),
-              QPointF(r.right(), drainY));
+  p->drawLine(QPointF(bodyX, drainY), QPointF(r.right(), drainY));
   p->drawLine(QPointF(r.right(), r.top()), QPointF(r.right(), drainY));
 
   // Source (bottom terminal).
-  const qreal srcY = r.top() + r.height() * 0.22 + 2 * (segH + r.height() * 0.05) + segH * 0.5;
+  const qreal srcY =
+      r.top() + r.height() * 0.22 + 2 * (segH + r.height() * 0.05) + segH * 0.5;
   p->drawLine(QPointF(bodyX, srcY), QPointF(r.right(), srcY));
   p->drawLine(QPointF(r.right(), srcY), QPointF(r.right(), r.bottom()));
 
@@ -341,8 +338,7 @@ void drawMOSFETIcon(QPainter *p, const QRectF &r, const QColor &stroke,
   const qreal ax = bodyX + (r.right() - bodyX) * 0.3;
   const qreal ahs = r.width() * 0.08;
   QPolygonF arrow;
-  arrow << QPointF(bodyX + r.width() * 0.04, srcY)
-        << QPointF(ax, srcY - ahs)
+  arrow << QPointF(bodyX + r.width() * 0.04, srcY) << QPointF(ax, srcY - ahs)
         << QPointF(ax, srcY + ahs);
   p->drawPolygon(arrow);
   p->setBrush(Qt::NoBrush);
@@ -360,8 +356,7 @@ void drawOpAmpIcon(QPainter *p, const QRectF &r, const QColor &stroke,
   const qreal triH = r.height() * 0.45;
 
   QPolygonF tri;
-  tri << QPointF(triLeft, midY - triH)
-      << QPointF(triRight, midY)
+  tri << QPointF(triLeft, midY - triH) << QPointF(triRight, midY)
       << QPointF(triLeft, midY + triH);
   p->drawPolygon(tri);
 
@@ -487,10 +482,10 @@ void drawSwitchIcon(QPainter *p, const QRectF &r, const QColor &stroke,
   p->drawEllipse(QPointF(rightX, midY), dotR, dotR);
   p->setBrush(Qt::NoBrush);
 
-  // Hinged lever (open switch – angled line from left dot upward to near right).
+  // Hinged lever (open switch – angled line from left dot upward to near
+  // right).
   p->drawLine(QPointF(leftX, midY),
-              QPointF(rightX - r.width() * 0.05,
-                      midY - r.height() * 0.35));
+              QPointF(rightX - r.width() * 0.05, midY - r.height() * 0.35));
 }
 
 void drawRelayIcon(QPainter *p, const QRectF &r, const QColor &stroke,
@@ -528,8 +523,7 @@ void drawRelayIcon(QPainter *p, const QRectF &r, const QColor &stroke,
 
   // Lever between contacts.
   p->drawLine(QPointF(leftP, contactY),
-              QPointF(rightP - r.width() * 0.04,
-                      contactY - r.height() * 0.18));
+              QPointF(rightP - r.width() * 0.04, contactY - r.height() * 0.18));
 
   // Dashed line connecting coil to switch.
   QPen dashed(stroke, width * 0.6, Qt::DashLine);
@@ -582,8 +576,8 @@ void drawPowerSupplyIcon(QPainter *p, const QRectF &r, const QColor &stroke,
   p->drawText(body, Qt::AlignCenter, "AC~");
 }
 
-void drawMicrocontrollerIcon(QPainter *p, const QRectF &r,
-                             const QColor &stroke, qreal width) {
+void drawMicrocontrollerIcon(QPainter *p, const QRectF &r, const QColor &stroke,
+                             qreal width) {
   p->setPen(QPen(stroke, width, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
   p->setBrush(withAlpha(stroke, 22));
 
@@ -603,15 +597,13 @@ void drawMicrocontrollerIcon(QPainter *p, const QRectF &r,
   const qreal pinSpacing = body.height() / (pins + 1);
   for (int i = 1; i <= pins; ++i) {
     qreal py = body.top() + i * pinSpacing;
-    p->drawLine(QPointF(body.left(), py),
-                QPointF(body.left() - pinLen, py));
+    p->drawLine(QPointF(body.left(), py), QPointF(body.left() - pinLen, py));
   }
 
   // Pins on right side.
   for (int i = 1; i <= pins; ++i) {
     qreal py = body.top() + i * pinSpacing;
-    p->drawLine(QPointF(body.right(), py),
-                QPointF(body.right() + pinLen, py));
+    p->drawLine(QPointF(body.right(), py), QPointF(body.right() + pinLen, py));
   }
 }
 
@@ -645,11 +637,9 @@ void drawICChipIcon(QPainter *p, const QRectF &r, const QColor &stroke,
     p->drawLine(QPointF(px, body.bottom()),
                 QPointF(px, body.bottom() + pinLen));
     // Left pins.
-    p->drawLine(QPointF(body.left(), py),
-                QPointF(body.left() - pinLen, py));
+    p->drawLine(QPointF(body.left(), py), QPointF(body.left() - pinLen, py));
     // Right pins.
-    p->drawLine(QPointF(body.right(), py),
-                QPointF(body.right() + pinLen, py));
+    p->drawLine(QPointF(body.right(), py), QPointF(body.right() + pinLen, py));
   }
 }
 
@@ -680,14 +670,15 @@ void drawAntennaIcon(QPainter *p, const QRectF &r, const QColor &stroke,
   const qreal cx = r.left() + r.width() * 0.5;
 
   // Vertical mast.
-  p->drawLine(QPointF(cx, r.bottom()), QPointF(cx, r.top() + r.height() * 0.30));
+  p->drawLine(QPointF(cx, r.bottom()),
+              QPointF(cx, r.top() + r.height() * 0.30));
 
   // V-shaped antenna arms at top.
   const qreal tipY = r.top() + r.height() * 0.30;
-  p->drawLine(QPointF(cx, tipY),
-              QPointF(r.left() + r.width() * 0.15, r.top() + r.height() * 0.05));
-  p->drawLine(QPointF(cx, tipY),
-              QPointF(r.left() + r.width() * 0.85, r.top() + r.height() * 0.05));
+  p->drawLine(QPointF(cx, tipY), QPointF(r.left() + r.width() * 0.15,
+                                         r.top() + r.height() * 0.05));
+  p->drawLine(QPointF(cx, tipY), QPointF(r.left() + r.width() * 0.85,
+                                         r.top() + r.height() * 0.05));
 
   // Radiating arcs.
   for (int i = 1; i <= 2; ++i) {
@@ -715,18 +706,16 @@ void drawSpeakerIcon(QPainter *p, const QRectF &r, const QColor &stroke,
 
   // Cone (trapezoid).
   QPolygonF cone;
-  cone << QPointF(boxR, midY - boxH)
-       << QPointF(coneR, midY - coneH)
-       << QPointF(coneR, midY + coneH)
-       << QPointF(boxR, midY + boxH);
+  cone << QPointF(boxR, midY - boxH) << QPointF(coneR, midY - coneH)
+       << QPointF(coneR, midY + coneH) << QPointF(boxR, midY + boxH);
   p->drawPolygon(cone);
   p->setBrush(Qt::NoBrush);
 
   // Sound wave arcs.
   for (int i = 1; i <= 2; ++i) {
     qreal arcR = r.width() * (0.08 + i * 0.10);
-    QRectF arcRect(coneR + r.width() * 0.02 - arcR, midY - arcR,
-                   arcR * 2.0, arcR * 2.0);
+    QRectF arcRect(coneR + r.width() * 0.02 - arcR, midY - arcR, arcR * 2.0,
+                   arcR * 2.0);
     p->drawArc(arcRect, -40 * 16, 80 * 16);
   }
 }
@@ -751,16 +740,14 @@ void drawConnectorIcon(QPainter *p, const QRectF &r, const QColor &stroke,
   const qreal spacing = plug.height() / (pins + 1);
   for (int i = 1; i <= pins; ++i) {
     qreal py = plug.top() + i * spacing;
-    p->drawLine(QPointF(plug.right(), py),
-                QPointF(plug.right() + pinLen, py));
+    p->drawLine(QPointF(plug.right(), py), QPointF(plug.right() + pinLen, py));
   }
 
   // Socket holes (small circles inside socket aligned with pins).
   const qreal holeR = r.width() * 0.03;
   for (int i = 1; i <= pins; ++i) {
     qreal py = sock.top() + i * spacing;
-    p->drawEllipse(QPointF(sock.left() + sock.width() * 0.3, py), holeR,
-                   holeR);
+    p->drawEllipse(QPointF(sock.left() + sock.width() * 0.3, py), holeR, holeR);
   }
 }
 
@@ -796,9 +783,9 @@ QRectF ElectronicsElementItem::boundingRect() const {
 QPainterPath ElectronicsElementItem::shape() const {
   constexpr qreal kHitPadding = 12.0;
   QPainterPath path;
-  path.addRect(QRectF(0, 0, ELEM_W, ELEM_H + LABEL_H)
-                   .adjusted(-kHitPadding, -kHitPadding, kHitPadding,
-                             kHitPadding));
+  path.addRect(
+      QRectF(0, 0, ELEM_W, ELEM_H + LABEL_H)
+          .adjusted(-kHitPadding, -kHitPadding, kHitPadding, kHitPadding));
   return path;
 }
 
@@ -874,9 +861,8 @@ void ElectronicsElementItem::paint(QPainter *painter,
   const qreal sx = std::hypot(wt.m11(), wt.m21());
   const qreal sy = std::hypot(wt.m12(), wt.m22());
   const qreal effectiveScale = qBound(0.25, qMax(sx, sy), 8.0);
-  if (themeChanged ||
-      std::abs(effectiveScale - cachedPixmapScale_) >
-          cachedPixmapScale_ * 0.15) {
+  if (themeChanged || std::abs(effectiveScale - cachedPixmapScale_) >
+                          cachedPixmapScale_ * 0.15) {
     const_cast<ElectronicsElementItem *>(this)->renderToPixmap(effectiveScale);
   }
 
@@ -1114,8 +1100,7 @@ InductorElement::InductorElement(QGraphicsItem *parent)
                              parent) {}
 
 FuseElement::FuseElement(QGraphicsItem *parent)
-    : ElectronicsElementItem("F", IconKind::Fuse, QColor("#1a1a1a"),
-                             parent) {}
+    : ElectronicsElementItem("F", IconKind::Fuse, QColor("#1a1a1a"), parent) {}
 
 CrystalElement::CrystalElement(QGraphicsItem *parent)
     : ElectronicsElementItem("Y", IconKind::Crystal, QColor("#1a1a1a"),
@@ -1126,24 +1111,21 @@ TransformerElement::TransformerElement(QGraphicsItem *parent)
                              parent) {}
 
 DiodeElement::DiodeElement(QGraphicsItem *parent)
-    : ElectronicsElementItem("D", IconKind::Diode, QColor("#1a1a1a"),
-                             parent) {}
+    : ElectronicsElementItem("D", IconKind::Diode, QColor("#1a1a1a"), parent) {}
 
 LEDElement::LEDElement(QGraphicsItem *parent)
-    : ElectronicsElementItem("LED", IconKind::LED, QColor("#1a1a1a"),
-                             parent) {}
+    : ElectronicsElementItem("LED", IconKind::LED, QColor("#1a1a1a"), parent) {}
 
 TransistorElement::TransistorElement(QGraphicsItem *parent)
     : ElectronicsElementItem("Q", IconKind::Transistor, QColor("#1a1a1a"),
                              parent) {}
 
 MOSFETElement::MOSFETElement(QGraphicsItem *parent)
-    : ElectronicsElementItem("Q", IconKind::MOSFET, QColor("#1a1a1a"),
-                             parent) {}
+    : ElectronicsElementItem("Q", IconKind::MOSFET, QColor("#1a1a1a"), parent) {
+}
 
 OpAmpElement::OpAmpElement(QGraphicsItem *parent)
-    : ElectronicsElementItem("U", IconKind::OpAmp, QColor("#1a1a1a"),
-                             parent) {}
+    : ElectronicsElementItem("U", IconKind::OpAmp, QColor("#1a1a1a"), parent) {}
 
 VoltageRegulatorElement::VoltageRegulatorElement(QGraphicsItem *parent)
     : ElectronicsElementItem("U", IconKind::VoltageRegulator, QColor("#1a1a1a"),
@@ -1162,12 +1144,10 @@ SwitchElement::SwitchElement(QGraphicsItem *parent)
                              parent) {}
 
 RelayElement::RelayElement(QGraphicsItem *parent)
-    : ElectronicsElementItem("K", IconKind::Relay, QColor("#1a1a1a"),
-                             parent) {}
+    : ElectronicsElementItem("K", IconKind::Relay, QColor("#1a1a1a"), parent) {}
 
 MotorElement::MotorElement(QGraphicsItem *parent)
-    : ElectronicsElementItem("M", IconKind::Motor, QColor("#1a1a1a"),
-                             parent) {}
+    : ElectronicsElementItem("M", IconKind::Motor, QColor("#1a1a1a"), parent) {}
 
 PowerSupplyElement::PowerSupplyElement(QGraphicsItem *parent)
     : ElectronicsElementItem("PS", IconKind::PowerSupply, QColor("#1a1a1a"),
@@ -1178,12 +1158,12 @@ MicrocontrollerElement::MicrocontrollerElement(QGraphicsItem *parent)
                              parent) {}
 
 ICChipElement::ICChipElement(QGraphicsItem *parent)
-    : ElectronicsElementItem("U", IconKind::ICChip, QColor("#1a1a1a"),
-                             parent) {}
+    : ElectronicsElementItem("U", IconKind::ICChip, QColor("#1a1a1a"), parent) {
+}
 
 SensorElement::SensorElement(QGraphicsItem *parent)
-    : ElectronicsElementItem("S", IconKind::Sensor, QColor("#1a1a1a"),
-                             parent) {}
+    : ElectronicsElementItem("S", IconKind::Sensor, QColor("#1a1a1a"), parent) {
+}
 
 AntennaElement::AntennaElement(QGraphicsItem *parent)
     : ElectronicsElementItem("ANT", IconKind::Antenna, QColor("#1a1a1a"),

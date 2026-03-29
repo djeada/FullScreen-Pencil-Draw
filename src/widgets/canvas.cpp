@@ -12,22 +12,22 @@
 #include "../core/transform_action.h"
 #include "../core/undo_redo_manager.h"
 #include "../tools/lasso_selection_tool.h"
+#include "alignment_dialog.h"
 #include "architecture_elements.h"
-#include "electronics_elements.h"
-#include "wire_item.h"
 #include "busy_spinner_overlay.h"
 #include "color_curves_dialog.h"
+#include "electronics_elements.h"
 #include "image_size_dialog.h"
 #include "latex_text_item.h"
 #include "mermaid_text_item.h"
 #include "perspective_transform_dialog.h"
 #include "resize_canvas_dialog.h"
+#include "rotation_dialog.h"
 #include "scale_dialog.h"
 #include "scan_document_dialog.h"
-#include "rotation_dialog.h"
-#include "alignment_dialog.h"
-#include "transform_handle_item.h"
 #include "text_on_path_item.h"
+#include "transform_handle_item.h"
+#include "wire_item.h"
 #include <QApplication>
 #include <QClipboard>
 #include <QColorDialog>
@@ -162,8 +162,8 @@ QPen makeHighlighterPen(const QPen &basePen) {
   QColor color = pen.color();
   color.setAlpha(qMin(color.alpha(), kHighlighterAlpha));
   pen.setColor(color);
-  pen.setWidthF(qMax(kMinimumHighlighterWidth,
-                     pen.widthF() * kHighlighterWidthScale));
+  pen.setWidthF(
+      qMax(kMinimumHighlighterWidth, pen.widthF() * kHighlighterWidthScale));
   pen.setCapStyle(Qt::RoundCap);
   pen.setJoinStyle(Qt::RoundJoin);
   return pen;
@@ -2851,7 +2851,8 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
     trackingSelectionMove_ = false;
     selectionMoveStartPositions_.clear();
     const QList<QGraphicsItem *> exactHitItems = items(event->pos());
-    QGraphicsItem *interactionItem = selectableCanvasItemAtViewportPos(event->pos());
+    QGraphicsItem *interactionItem =
+        selectableCanvasItemAtViewportPos(event->pos());
     if (!interactionItem) {
       interactionItem = selectableCanvasItemNearViewportPos(
           event->pos(), SELECTION_FALLBACK_RADIUS_PX);
@@ -2870,12 +2871,11 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
     }
 
     auto selectedItemsAfterPress = scene_->selectedItems();
-    const bool hasMovableSelection =
-        std::any_of(selectedItemsAfterPress.cbegin(), selectedItemsAfterPress.cend(),
-                    [](QGraphicsItem *item) {
-                      return item &&
-                             (item->flags() & QGraphicsItem::ItemIsMovable);
-                    });
+    const bool hasMovableSelection = std::any_of(
+        selectedItemsAfterPress.cbegin(), selectedItemsAfterPress.cend(),
+        [](QGraphicsItem *item) {
+          return item && (item->flags() & QGraphicsItem::ItemIsMovable);
+        });
     if (!hasMovableSelection) {
       if (QGraphicsItem *movableFallback = movableCanvasItemNearViewportPos(
               event->pos(), SELECTION_FALLBACK_RADIUS_PX)) {
@@ -3460,8 +3460,8 @@ static void serializeOneItem(QDataStream &ds, QGraphicsItem *item,
   } else if (auto e = dynamic_cast<QGraphicsEllipseItem *>(item)) {
     if (e == eraserPreview)
       return;
-    ds << QString("EllipseT") << e->rect() << e->pos() << e->pen()
-       << e->brush() << e->transform();
+    ds << QString("EllipseT") << e->rect() << e->pos() << e->pen() << e->brush()
+       << e->transform();
   } else if (auto l = dynamic_cast<QGraphicsLineItem *>(item)) {
     ds << QString("LineT") << l->line() << l->pos() << l->pen()
        << l->transform();
@@ -3876,9 +3876,8 @@ void Canvas::pasteItems() {
         if (image.loadFromData(md->data(mimeType))) {
           QPixmap pixmap = QPixmap::fromImage(image);
           auto *pixmapItem = new QGraphicsPixmapItem(pixmap);
-          pixmapItem->setPos(
-              pasteCenter -
-              QPointF(pixmap.width() / 2.0, pixmap.height() / 2.0));
+          pixmapItem->setPos(pasteCenter - QPointF(pixmap.width() / 2.0,
+                                                   pixmap.height() / 2.0));
           pixmapItem->setFlags(QGraphicsItem::ItemIsSelectable |
                                QGraphicsItem::ItemIsMovable);
           scene_->addItem(pixmapItem);
@@ -4712,9 +4711,9 @@ void Canvas::updateTransformHandles() {
       continue;
     }
     const ItemId hid = handle->targetItemId();
-    bool stillSelected =
-        hid.isValid() ? selectedIds.contains(hid)
-                      : selectedItems.contains(handle->targetItem());
+    bool stillSelected = hid.isValid()
+                             ? selectedIds.contains(hid)
+                             : selectedItems.contains(handle->targetItem());
     if (!stillSelected) {
       if (scene_)
         scene_->removeItem(handle);
@@ -4776,12 +4775,11 @@ void Canvas::updateTransformHandles() {
             });
 
     // Connect to apply resize/rotation to other selected items
-    connect(
-        handle, &TransformHandleItem::resizeApplied, this,
-        [this, handle](qreal scaleX, qreal scaleY, const QPointF &anchor) {
-          applyResizeToOtherItems(handle->targetItem(), scaleX, scaleY,
-                                  anchor);
-        });
+    connect(handle, &TransformHandleItem::resizeApplied, this,
+            [this, handle](qreal scaleX, qreal scaleY, const QPointF &anchor) {
+              applyResizeToOtherItems(handle->targetItem(), scaleX, scaleY,
+                                      anchor);
+            });
     connect(handle, &TransformHandleItem::rotationApplied, this,
             [this, handle](qreal angleDelta, const QPointF &center) {
               applyRotationToOtherItems(handle->targetItem(), angleDelta,
@@ -5173,8 +5171,7 @@ void Canvas::alignSelectedItems() {
         continue;
       }
 
-      QRectF itemBounds =
-          item->mapToScene(item->boundingRect()).boundingRect();
+      QRectF itemBounds = item->mapToScene(item->boundingRect()).boundingRect();
       QPointF center = itemBounds.center();
       QPointF localCenter = item->mapFromScene(center);
 
@@ -5202,7 +5199,8 @@ void Canvas::alignSelectedItems() {
   } else if ((mode == AlignmentMode::AlignParallel ||
               mode == AlignmentMode::AlignPerpendicular) &&
              selected.size() >= 2) {
-    // Compute target angle: same as first item (parallel) or +90° (perpendicular)
+    // Compute target angle: same as first item (parallel) or +90°
+    // (perpendicular)
     qreal targetAngle = extractRotation(selected.first());
     if (mode == AlignmentMode::AlignPerpendicular) {
       targetAngle += 90.0;
@@ -5219,8 +5217,7 @@ void Canvas::alignSelectedItems() {
         continue;
       }
 
-      QRectF itemBounds =
-          item->mapToScene(item->boundingRect()).boundingRect();
+      QRectF itemBounds = item->mapToScene(item->boundingRect()).boundingRect();
       QPointF center = itemBounds.center();
       QPointF localCenter = item->mapFromScene(center);
 
@@ -5283,9 +5280,8 @@ void Canvas::changeColorOfSelectedItems() {
     }
   }
 
-  QColor newColor =
-      QColorDialog::getColor(defaultColor, this, "Change Color",
-                             QColorDialog::ShowAlphaChannel);
+  QColor newColor = QColorDialog::getColor(defaultColor, this, "Change Color",
+                                           QColorDialog::ShowAlphaChannel);
   if (!newColor.isValid())
     return;
 
@@ -5376,8 +5372,7 @@ void Canvas::changeColorOfSelectedItems() {
               childShape->setBrush(newBrush);
             }
           }
-        } else if (auto *childLine =
-                       dynamic_cast<QGraphicsLineItem *>(child)) {
+        } else if (auto *childLine = dynamic_cast<QGraphicsLineItem *>(child)) {
           QPen oldPen = childLine->pen();
           QPen newPen = oldPen;
           newPen.setColor(newColor);

@@ -49,9 +49,8 @@ void BrushPreview::paintEvent(QPaintEvent * /*event*/) {
   bgGradient.setColorAt(1, darkTheme ? QColor("#10161d") : QColor("#f0e3d3"));
   painter.fillRect(rect(), bgGradient);
 
-  painter.setPen(QPen(darkTheme ? QColor(255, 244, 230, 26)
-                                : QColor(117, 59, 19, 28),
-                    1));
+  painter.setPen(
+      QPen(darkTheme ? QColor(255, 244, 230, 26) : QColor(117, 59, 19, 28), 1));
   painter.setBrush(Qt::NoBrush);
   painter.drawRoundedRect(rect().adjusted(0, 0, -1, -1), 10, 10);
 
@@ -66,8 +65,8 @@ void BrushPreview::paintEvent(QPaintEvent * /*event*/) {
     scaleFactor = static_cast<qreal>(maxDisplaySize) / brushSize_;
   }
 
-  painter.setPen(QPen(darkTheme ? QColor("#314150") : QColor("#d4b89e"), 1,
-                      Qt::DotLine));
+  painter.setPen(
+      QPen(darkTheme ? QColor("#314150") : QColor("#d4b89e"), 1, Qt::DotLine));
   int centerX = width() / 2;
   int centerY = height() / 2;
   painter.drawLine(centerX, 6, centerX, height() - 6);
