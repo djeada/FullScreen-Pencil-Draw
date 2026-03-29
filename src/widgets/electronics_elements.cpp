@@ -7,6 +7,8 @@
 #include <QFont>
 #include <QLinearGradient>
 #include <QPainterPath>
+#include <QPixmap>
+#include <cmath>
 #include <QPolygonF>
 #include <QRadialGradient>
 #include <QtMath>
@@ -788,6 +790,7 @@ ElectronicsElementItem::ElectronicsElementItem(const QString &label,
   setFlag(QGraphicsItem::ItemIsMovable, true);
   setFlag(QGraphicsItem::ItemSendsGeometryChanges, true);
   initPins();
+  initPaintCache();
 }
 
 ElectronicsElementItem::~ElectronicsElementItem() {
@@ -800,90 +803,145 @@ QRectF ElectronicsElementItem::boundingRect() const {
   return QRectF(-m, -m, ELEM_W + 2 * m, ELEM_H + 2 * m);
 }
 
+void ElectronicsElementItem::initPaintCache() {
+  const QColor accent =
+      accentColor_.isValid() ? accentColor_ : QColor("#3b82f6");
+
+  const QColor topBase("#242a35");
+  const QColor bottomBase("#171c24");
+
+  colors_.bgTop = mixColor(topBase, accent, 0.18);
+  colors_.bgBottom = mixColor(bottomBase, accent, 0.08);
+  colors_.cardBorder = withAlpha(accent, 150);
+  colors_.bandTop = withAlpha(accent.lighter(135), 110);
+  colors_.badgeCenter = withAlpha(accent.lighter(145), 90);
+  colors_.badgeMid = withAlpha(accent.darker(140), 120);
+  colors_.badgeEdge = withAlpha(accent.darker(180), 140);
+  colors_.badgeBorder = withAlpha(accent.lighter(150), 180);
+  colors_.iconStroke = accent.lighter(225);
+  colors_.selectBorder = withAlpha(accent.lighter(150), 235);
+  colors_.pinBorder = withAlpha(accent.lighter(170), 200);
+
+  // Use the card area (0,0,ELEM_W,ELEM_H) — not boundingRect() which
+  // includes the pin margin.
+  cardRect_ = QRectF(0, 0, ELEM_W, ELEM_H).adjusted(1.0, 1.0, -1.0, -1.0);
+  bandRect_ = QRectF(cardRect_.x() + 1.0, cardRect_.y() + 1.0,
+                     cardRect_.width() - 2.0, 11.0);
+  badgeRect_ = QRectF((ELEM_W - ICON_SIZE) / 2.0, 12.0, ICON_SIZE, ICON_SIZE);
+  iconRect_ = badgeRect_.adjusted(10.0, 10.0, -10.0, -10.0);
+  labelRect_ = QRectF(8.0, ELEM_H - 30.0, ELEM_W - 16.0, 20.0);
+
+  cardPath_ = QPainterPath();
+  cardPath_.addRoundedRect(cardRect_, CORNER, CORNER);
+
+  iconStrokeWidth_ = qMax(1.25, iconRect_.width() * 0.09);
+
+  renderToPixmap();
+}
+
+void ElectronicsElementItem::renderToPixmap(qreal scale) {
+  cachedPixmapScale_ = scale;
+  const qreal m = PIN_RADIUS + 1.0;
+  const int pmW = qMax(1, static_cast<int>(std::ceil((ELEM_W + 2 * m) * scale)));
+  const int pmH = qMax(1, static_cast<int>(std::ceil((ELEM_H + 2 * m) * scale)));
+  QPixmap pm(pmW, pmH);
+  pm.setDevicePixelRatio(scale);
+  pm.fill(Qt::transparent);
+  QPainter p(&pm);
+  p.setRenderHint(QPainter::Antialiasing, true);
+  p.setRenderHint(QPainter::TextAntialiasing, true);
+  // Offset painting by the pin margin so card is centred in the pixmap.
+  p.translate(m, m);
+
+  // Shadow
+  p.setPen(Qt::NoPen);
+  p.setBrush(QColor(0, 0, 0, 55));
+  p.drawRoundedRect(cardRect_.translated(0.0, 2.0), CORNER, CORNER);
+
+  // Card fill
+  QLinearGradient bg(cardRect_.topLeft(), cardRect_.bottomLeft());
+  bg.setColorAt(0.0, colors_.bgTop);
+  bg.setColorAt(1.0, colors_.bgBottom);
+  p.setBrush(bg);
+  p.setPen(QPen(colors_.cardBorder, 1.35));
+  p.drawPath(cardPath_);
+
+  // Accent band
+  p.save();
+  p.setClipPath(cardPath_);
+  QLinearGradient band(bandRect_.topLeft(), bandRect_.bottomLeft());
+  band.setColorAt(0.0, colors_.bandTop);
+  band.setColorAt(1.0, QColor(0, 0, 0, 0));
+  p.setPen(Qt::NoPen);
+  p.setBrush(band);
+  p.drawRect(bandRect_);
+  p.restore();
+
+  // Badge
+  QRadialGradient badgeGrad(badgeRect_.center(), ICON_SIZE / 2.0);
+  badgeGrad.setColorAt(0.0, colors_.badgeCenter);
+  badgeGrad.setColorAt(0.9, colors_.badgeMid);
+  badgeGrad.setColorAt(1.0, colors_.badgeEdge);
+  p.setBrush(badgeGrad);
+  p.setPen(QPen(colors_.badgeBorder, 1.15));
+  p.drawEllipse(badgeRect_);
+
+  // Icon
+  paintIcon(&p, iconRect_);
+
+  // Label
+  static const QFont labelFont = []() {
+    QFont f("Segoe UI", 9, QFont::DemiBold);
+    f.setLetterSpacing(QFont::PercentageSpacing, 102);
+    return f;
+  }();
+  p.setPen(QColor("#ebeff7"));
+  p.setFont(labelFont);
+  p.drawText(labelRect_, Qt::AlignCenter, label_);
+
+  // Pin indicators
+  p.setPen(QPen(colors_.pinBorder, 1.2));
+  p.setBrush(QColor(255, 255, 255, 180));
+  for (const ElectronicsPin &pin : pins_) {
+    p.drawEllipse(pin.offset, PIN_RADIUS, PIN_RADIUS);
+  }
+
+  p.end();
+  cachedPixmap_ = pm;
+}
+
 void ElectronicsElementItem::paint(QPainter *painter,
                                    const QStyleOptionGraphicsItem * /*option*/,
                                    QWidget * /*widget*/) {
-  painter->setRenderHint(QPainter::Antialiasing, true);
-  painter->setRenderHint(QPainter::TextAntialiasing, true);
+  // Re-render pixmap when the effective scale changes (e.g. after resize)
+  // so vector content stays crisp at any size.
+  const QTransform &wt = painter->worldTransform();
+  const qreal sx = std::hypot(wt.m11(), wt.m21());
+  const qreal sy = std::hypot(wt.m12(), wt.m22());
+  const qreal effectiveScale = qBound(0.25, qMax(sx, sy), 8.0);
+  if (std::abs(effectiveScale - cachedPixmapScale_) >
+      cachedPixmapScale_ * 0.15) {
+    const_cast<ElectronicsElementItem *>(this)->renderToPixmap(effectiveScale);
+  }
 
-  const QColor accent =
-      accentColor_.isValid() ? accentColor_ : QColor("#3b82f6");
-  const QRectF cardRect = boundingRect().adjusted(1.0, 1.0, -1.0, -1.0);
-
-  // Soft shadow for depth.
-  painter->setPen(Qt::NoPen);
-  painter->setBrush(QColor(0, 0, 0, 55));
-  painter->drawRoundedRect(cardRect.translated(0.0, 2.0), CORNER, CORNER);
-
-  // Main card fill with a slight tint from the element accent color.
-  const QColor topBase("#242a35");
-  const QColor bottomBase("#171c24");
-  QLinearGradient bg(cardRect.topLeft(), cardRect.bottomLeft());
-  bg.setColorAt(0.0, mixColor(topBase, accent, 0.18));
-  bg.setColorAt(1.0, mixColor(bottomBase, accent, 0.08));
-
-  QPainterPath cardPath;
-  cardPath.addRoundedRect(cardRect, CORNER, CORNER);
-  painter->setBrush(bg);
-  painter->setPen(QPen(withAlpha(accent, 150), 1.35));
-  painter->drawPath(cardPath);
-
-  // Thin top accent band.
-  painter->save();
-  painter->setClipPath(cardPath);
-  const QRectF bandRect(cardRect.x() + 1.0, cardRect.y() + 1.0,
-                        cardRect.width() - 2.0, 11.0);
-  QLinearGradient band(bandRect.topLeft(), bandRect.bottomLeft());
-  band.setColorAt(0.0, withAlpha(accent.lighter(135), 110));
-  band.setColorAt(1.0, QColor(0, 0, 0, 0));
-  painter->setPen(Qt::NoPen);
-  painter->setBrush(band);
-  painter->drawRect(bandRect);
-  painter->restore();
-
-  // Icon badge.
-  const QRectF badgeRect((ELEM_W - ICON_SIZE) / 2.0, 12.0, ICON_SIZE,
-                         ICON_SIZE);
-  QRadialGradient badgeGrad(badgeRect.center(), ICON_SIZE / 2.0);
-  badgeGrad.setColorAt(0.0, withAlpha(accent.lighter(145), 90));
-  badgeGrad.setColorAt(0.9, withAlpha(accent.darker(140), 120));
-  badgeGrad.setColorAt(1.0, withAlpha(accent.darker(180), 140));
-  painter->setBrush(badgeGrad);
-  painter->setPen(QPen(withAlpha(accent.lighter(150), 180), 1.15));
-  painter->drawEllipse(badgeRect);
-
-  const QRectF iconRect = badgeRect.adjusted(10.0, 10.0, -10.0, -10.0);
-  paintIcon(painter, iconRect);
-
-  // Label.
-  painter->setPen(QColor("#ebeff7"));
-  QFont font("Segoe UI", 9, QFont::DemiBold);
-  font.setLetterSpacing(QFont::PercentageSpacing, 102);
-  painter->setFont(font);
-  painter->drawText(QRectF(8.0, ELEM_H - 30.0, ELEM_W - 16.0, 20.0),
-                    Qt::AlignCenter, label_);
+  const qreal m = PIN_RADIUS + 1.0;
+  painter->drawPixmap(QPointF(-m, -m), cachedPixmap_);
 
   if (isSelected()) {
-    QPen selectPen(withAlpha(accent.lighter(150), 235), 1.8, Qt::DashLine);
+    painter->setRenderHint(QPainter::Antialiasing, true);
+    QPen selectPen(colors_.selectBorder, 1.8, Qt::DashLine);
     selectPen.setDashPattern({3.0, 2.0});
     painter->setPen(selectPen);
     painter->setBrush(Qt::NoBrush);
-    painter->drawRoundedRect(cardRect.adjusted(1.5, 1.5, -1.5, -1.5),
+    painter->drawRoundedRect(cardRect_.adjusted(1.5, 1.5, -1.5, -1.5),
                              CORNER - 1.5, CORNER - 1.5);
-  }
-
-  // Draw connection-pin indicators.
-  for (const ElectronicsPin &pin : pins_) {
-    painter->setPen(QPen(withAlpha(accent.lighter(170), 200), 1.2));
-    painter->setBrush(QColor(255, 255, 255, 180));
-    painter->drawEllipse(pin.offset, PIN_RADIUS, PIN_RADIUS);
   }
 }
 
 void ElectronicsElementItem::paintIcon(QPainter *painter,
                                        const QRectF &rect) const {
-  const QColor stroke = accentColor_.lighter(225);
-  const qreal width = qMax(1.25, rect.width() * 0.09);
+  const QColor &stroke = colors_.iconStroke;
+  const qreal width = iconStrokeWidth_;
 
   switch (iconKind_) {
   case IconKind::Resistor:
@@ -986,12 +1044,12 @@ int ElectronicsElementItem::nearestPin(const QPointF &scenePos,
 }
 
 void ElectronicsElementItem::addWire(WireItem *wire) {
-  if (wire && !connectedWires_.contains(wire))
-    connectedWires_.append(wire);
+  if (wire)
+    connectedWires_.insert(wire);
 }
 
 void ElectronicsElementItem::removeWire(WireItem *wire) {
-  connectedWires_.removeAll(wire);
+  connectedWires_.remove(wire);
 }
 
 QVariant ElectronicsElementItem::itemChange(GraphicsItemChange change,

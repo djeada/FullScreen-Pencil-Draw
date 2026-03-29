@@ -10,6 +10,7 @@
 #include <QIcon>
 #include <QLabel>
 #include <QScrollArea>
+#include <QSet>
 #include <QToolButton>
 #include <QVBoxLayout>
 
@@ -149,12 +150,37 @@ QVector<ElementInfo> ElementBankPanel::defaultElements() {
 }
 
 // ---------------------------------------------------------------------------
+// Domain filter
+// ---------------------------------------------------------------------------
+
+QVector<ElementInfo>
+ElementBankPanel::elementsForDomain(Domain domain) {
+  static const QSet<QString> archCategories = {
+      "People", "Cloud", "Compute", "Backend", "Data"};
+  static const QSet<QString> elecCategories = {
+      "Passive", "Semiconductor", "Power", "IC & Module"};
+
+  const QSet<QString> &wanted =
+      (domain == Domain::Architecture) ? archCategories : elecCategories;
+
+  QVector<ElementInfo> result;
+  for (const auto &e : defaultElements()) {
+    if (wanted.contains(e.category))
+      result.append(e);
+  }
+  return result;
+}
+
+// ---------------------------------------------------------------------------
 // Construction
 // ---------------------------------------------------------------------------
 
-ElementBankPanel::ElementBankPanel(QWidget *parent)
-    : QDockWidget("Elements", parent) {
-  setObjectName("ElementBankPanel");
+ElementBankPanel::ElementBankPanel(Domain domain, QWidget *parent)
+    : QDockWidget(domain == Domain::Architecture ? "Architecture"
+                                                 : "Electronics",
+                  parent) {
+  setObjectName(domain == Domain::Architecture ? "ArchitectureBankPanel"
+                                               : "ElectronicsBankPanel");
   setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable |
               QDockWidget::DockWidgetFloatable);
   setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
@@ -172,7 +198,7 @@ ElementBankPanel::ElementBankPanel(QWidget *parent)
   mainLayout->setAlignment(Qt::AlignTop);
 
   // Group elements by category, preserving insertion order.
-  QVector<ElementInfo> all = defaultElements();
+  QVector<ElementInfo> all = elementsForDomain(domain);
   QVector<QString> orderedCategories;
   QHash<QString, QVector<ElementInfo>> groups;
   for (const auto &e : all) {

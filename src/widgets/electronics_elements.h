@@ -13,7 +13,10 @@
 #include <QColor>
 #include <QGraphicsItem>
 #include <QPainter>
+#include <QPainterPath>
 #include <QPen>
+#include <QPixmap>
+#include <QSet>
 #include <QVector>
 
 class WireItem;
@@ -113,7 +116,31 @@ private:
   QString label_;
   IconKind iconKind_;
   QColor accentColor_;
-  QVector<WireItem *> connectedWires_;
+  QSet<WireItem *> connectedWires_;
+
+  // Pre-computed paint data (derived from accentColor_, set once in ctor).
+  struct CachedColors {
+    QColor bgTop, bgBottom;
+    QColor cardBorder;
+    QColor bandTop;
+    QColor badgeCenter, badgeMid, badgeEdge;
+    QColor badgeBorder;
+    QColor iconStroke;
+    QColor selectBorder;
+    QColor pinBorder;
+  } colors_;
+  QRectF cardRect_;
+  QRectF bandRect_;
+  QRectF badgeRect_;
+  QRectF iconRect_;
+  QRectF labelRect_;
+  QPainterPath cardPath_;
+  qreal iconStrokeWidth_;
+  QPixmap cachedPixmap_;
+  qreal cachedPixmapScale_ = 1.0;
+
+  void initPaintCache();
+  void renderToPixmap(qreal scale = 1.0);
 
   /// Initialise default pin layout based on icon kind.
   void initPins();
