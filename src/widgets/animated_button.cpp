@@ -39,51 +39,55 @@ struct ButtonPaletteSet {
 
 ButtonPaletteSet paletteFor(const QWidget *widget,
                             AnimatedButtonBase::Variant variant) {
-  const bool dark = isDarkSurface(widget);
+  // Cache all 8 palette combinations (2 themes × 4 variants). Colors are
+  // pure constants per (theme, variant), so they never need invalidation.
+  static const ButtonPaletteSet kPalettes[2][4] = {
+      // Light theme -------------------------------------------------------
+      {
+          // PanelTile (0)
+          {QColor("#fff9f1"), QColor("#fff1e1"), QColor("#f6dfca"),
+           QColor("#f97316"), QColor("#ddcfbc"), QColor(234, 88, 12, 88),
+           QColor("#31261d"), QColor("#fffaf4"), 12.0},
+          // Compact (1)
+          {QColor("#fff9f1"), QColor("#fff1e1"), QColor("#f6dfca"),
+           QColor("#f97316"), QColor("#ddcfbc"), QColor(234, 88, 12, 82),
+           QColor("#31261d"), QColor("#fffaf4"), 10.0},
+          // SideHandle (2)
+          {QColor("#fff9f1"), QColor("#fff1e1"), QColor("#f6dfca"),
+           QColor("#fb923c"), QColor("#ddcfbc"), QColor(234, 88, 12, 92),
+           QColor("#31261d"), QColor("#fffaf4"), 12.0},
+          // TitleBar (3)
+          {QColor("#fff9f1"), QColor("#fff1e1"), QColor("#f6dfca"),
+           QColor("#f97316"), QColor("#ddcfbc"), QColor(234, 88, 12, 82),
+           QColor("#31261d"), QColor("#fffaf4"), 9.0},
+      },
+      // Dark theme --------------------------------------------------------
+      {
+          // PanelTile (0)
+          {QColor("#17212b"), QColor("#21303b"), QColor("#2b1f15"),
+           QColor("#f97316"), QColor(255, 244, 230, 20),
+           QColor(249, 115, 22, 110), QColor("#fff7ed"), QColor("#fffaf4"),
+           12.0},
+          // Compact (1)
+          {QColor("#17212b"), QColor("#22303c"), QColor("#2b1f15"),
+           QColor("#f97316"), QColor(255, 244, 230, 22),
+           QColor(249, 115, 22, 110), QColor("#fff7ed"), QColor("#fffaf4"),
+           10.0},
+          // SideHandle (2)
+          {QColor("#17212b"), QColor("#22303c"), QColor("#2b1f15"),
+           QColor("#fb923c"), QColor(255, 244, 230, 20),
+           QColor(249, 115, 22, 120), QColor("#fff7ed"), QColor("#fffaf4"),
+           12.0},
+          // TitleBar (3)
+          {QColor("#17212b"), QColor("#1f2b36"), QColor("#2b1f15"),
+           QColor("#f97316"), QColor(255, 244, 230, 20),
+           QColor(249, 115, 22, 110), QColor("#fff7ed"), QColor("#fffaf4"),
+           9.0},
+      },
+  };
 
-  switch (variant) {
-  case AnimatedButtonBase::Variant::Compact:
-    if (dark) {
-      return {QColor("#17212b"), QColor("#22303c"), QColor("#2b1f15"),
-              QColor("#f97316"), QColor(255, 244, 230, 22),
-              QColor(249, 115, 22, 110), QColor("#fff7ed"),
-              QColor("#fffaf4"), 10.0};
-    }
-    return {QColor("#fff9f1"), QColor("#fff1e1"), QColor("#f6dfca"),
-            QColor("#f97316"), QColor("#ddcfbc"), QColor(234, 88, 12, 82),
-            QColor("#31261d"), QColor("#fffaf4"), 10.0};
-  case AnimatedButtonBase::Variant::SideHandle:
-    if (dark) {
-      return {QColor("#17212b"), QColor("#22303c"), QColor("#2b1f15"),
-              QColor("#fb923c"), QColor(255, 244, 230, 20),
-              QColor(249, 115, 22, 120), QColor("#fff7ed"),
-              QColor("#fffaf4"), 12.0};
-    }
-    return {QColor("#fff9f1"), QColor("#fff1e1"), QColor("#f6dfca"),
-            QColor("#fb923c"), QColor("#ddcfbc"), QColor(234, 88, 12, 92),
-            QColor("#31261d"), QColor("#fffaf4"), 12.0};
-  case AnimatedButtonBase::Variant::TitleBar:
-    if (dark) {
-      return {QColor("#17212b"), QColor("#1f2b36"), QColor("#2b1f15"),
-              QColor("#f97316"), QColor(255, 244, 230, 20),
-              QColor(249, 115, 22, 110), QColor("#fff7ed"),
-              QColor("#fffaf4"), 9.0};
-    }
-    return {QColor("#fff9f1"), QColor("#fff1e1"), QColor("#f6dfca"),
-            QColor("#f97316"), QColor("#ddcfbc"), QColor(234, 88, 12, 82),
-            QColor("#31261d"), QColor("#fffaf4"), 9.0};
-  case AnimatedButtonBase::Variant::PanelTile:
-  default:
-    if (dark) {
-      return {QColor("#17212b"), QColor("#21303b"), QColor("#2b1f15"),
-              QColor("#f97316"), QColor(255, 244, 230, 20),
-              QColor(249, 115, 22, 110), QColor("#fff7ed"),
-              QColor("#fffaf4"), 12.0};
-    }
-    return {QColor("#fff9f1"), QColor("#fff1e1"), QColor("#f6dfca"),
-            QColor("#f97316"), QColor("#ddcfbc"), QColor(234, 88, 12, 88),
-            QColor("#31261d"), QColor("#fffaf4"), 12.0};
-  }
+  const bool dark = isDarkSurface(widget);
+  return kPalettes[dark ? 1 : 0][static_cast<int>(variant)];
 }
 
 void paintButtonSurface(QPainter &painter, QWidget *widget,

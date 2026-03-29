@@ -83,6 +83,7 @@ constexpr qreal CURVED_ARROW_BASE_FACTOR = 0.28;
 constexpr qreal CURVED_ARROW_MIN_OFFSET = 12.0;
 constexpr qreal CURVED_ARROW_MAX_OFFSET = 240.0;
 constexpr qreal CURVED_ARROW_MIN_LENGTH = 2.0;
+constexpr int SELECTION_FALLBACK_RADIUS_PX = 6;
 
 qreal curvedArrowMagnitudeForModifiers(Qt::KeyboardModifiers modifiers) {
   qreal factor = CURVED_ARROW_BASE_FACTOR;
@@ -309,7 +310,7 @@ Canvas::Canvas(QWidget *parent)
   eraserPreview_->hide();
 
   this->setMouseTracking(true);
-  // Use NoIndex to avoid potential issues with BSP tree and deleted items
+  // NoIndex avoids BSP re-indexing overhead during item drags.
   scene_->setItemIndexMethod(QGraphicsScene::NoIndex);
 
   // Enable drag and drop
@@ -2761,6 +2762,53 @@ void Canvas::drawCurvedArrow(const QPointF &start, const QPointF &end,
   addDrawAction(pathItem);
 }
 
+bool Canvas::isSelectableCanvasItem(const QGraphicsItem *item) const {
+  if (!item)
+    return false;
+  if (item == eraserPreview_ || item == backgroundImage_ ||
+      item == colorSelectionOverlay_)
+    return false;
+  if (item->type() == TransformHandleItem::Type)
+    return false;
+  if (!item->isVisible())
+    return false;
+  return item->flags() & QGraphicsItem::ItemIsSelectable;
+}
+
+QGraphicsItem *
+Canvas::selectableCanvasItemAtViewportPos(const QPoint &viewPos) const {
+  const QList<QGraphicsItem *> hitItems = items(viewPos);
+  QGraphicsItem *bestFallback = nullptr;
+  for (QGraphicsItem *item : hitItems) {
+    if (!isSelectableCanvasItem(item))
+      continue;
+    if (item->flags() & QGraphicsItem::ItemIsMovable)
+      return item;
+    if (!bestFallback)
+      bestFallback = item;
+  }
+  return bestFallback;
+}
+
+QGraphicsItem *
+Canvas::selectableCanvasItemNearViewportPos(const QPoint &viewPos,
+                                            int radiusPx) const {
+  const QRect searchRect(viewPos.x() - radiusPx, viewPos.y() - radiusPx,
+                         radiusPx * 2 + 1, radiusPx * 2 + 1);
+  const QList<QGraphicsItem *> hitItems =
+      items(searchRect, Qt::IntersectsItemShape);
+  QGraphicsItem *bestFallback = nullptr;
+  for (QGraphicsItem *item : hitItems) {
+    if (!isSelectableCanvasItem(item))
+      continue;
+    if (item->flags() & QGraphicsItem::ItemIsMovable)
+      return item;
+    if (!bestFallback)
+      bestFallback = item;
+  }
+  return bestFallback;
+}
+
 void Canvas::mousePressEvent(QMouseEvent *event) {
   if (!event)
     return;
@@ -2787,11 +2835,38 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
   if (currentShape_ == Selection) {
     trackingSelectionMove_ = false;
     selectionMoveStartPositions_.clear();
+    const QList<QGraphicsItem *> exactHitItems = items(event->pos());
+    QGraphicsItem *interactionItem = selectableCanvasItemAtViewportPos(event->pos());
+    if (!interactionItem) {
+      interactionItem = selectableCanvasItemNearViewportPos(
+          event->pos(), SELECTION_FALLBACK_RADIUS_PX);
+    }
+    const bool clickedTransformHandle =
+        !exactHitItems.isEmpty() &&
+        exactHitItems.first()->type() == TransformHandleItem::Type;
+    setDragMode((clickedTransformHandle || interactionItem)
+                    ? QGraphicsView::NoDrag
+                    : QGraphicsView::RubberBandDrag);
+
     QGraphicsView::mousePressEvent(event);
 
-    QGraphicsItem *clickedItem = scene_->itemAt(sp, QTransform());
-    if (clickedItem && clickedItem->type() == TransformHandleItem::Type) {
+    if (clickedTransformHandle) {
       return;
+    }
+
+    if (!selectableCanvasItemAtViewportPos(event->pos())) {
+      if (QGraphicsItem *fallbackItem = selectableCanvasItemNearViewportPos(
+              event->pos(), SELECTION_FALLBACK_RADIUS_PX)) {
+        const Qt::KeyboardModifiers modifiers = event->modifiers();
+        const bool preserveSelection =
+            modifiers.testFlag(Qt::ShiftModifier) ||
+            modifiers.testFlag(Qt::ControlModifier) ||
+            modifiers.testFlag(Qt::MetaModifier);
+        if (!preserveSelection) {
+          scene_->clearSelection();
+        }
+        fallbackItem->setSelected(true);
+      }
     }
 
     ItemStore *store = itemStore();
@@ -3034,6 +3109,9 @@ void Canvas::mouseMoveEvent(QMouseEvent *event) {
 
   if (currentShape_ == Selection) {
     QGraphicsView::mouseMoveEvent(event);
+    // Update handle positions AFTER Qt has moved the items (via
+    // QGraphicsView::mouseMoveEvent).  The sceneEventFilter alone is
+    // insufficient because it fires BEFORE the item position changes.
     if ((event->buttons() & Qt::LeftButton) && !transformHandles_.isEmpty()) {
       for (TransformHandleItem *handle : transformHandles_) {
         if (handle)
@@ -3181,6 +3259,8 @@ void Canvas::mouseReleaseEvent(QMouseEvent *event) {
   }
   if (currentShape_ == Selection) {
     QGraphicsView::mouseReleaseEvent(event);
+    setDragMode(QGraphicsView::RubberBandDrag);
+    // Final handle sync after drag completes.
     if (!transformHandles_.isEmpty()) {
       for (TransformHandleItem *handle : transformHandles_) {
         if (handle)
@@ -4569,6 +4649,23 @@ void Canvas::updateTransformHandles() {
   ItemStore *store = itemStore();
   QList<QGraphicsItem *> selectedItems = scene_->selectedItems();
 
+  // Build a set of selected ItemIds for O(1) lookup.
+  QSet<ItemId> selectedIds;
+  if (store) {
+    selectedIds.reserve(selectedItems.size());
+    for (QGraphicsItem *item : selectedItems) {
+      if (!item)
+        continue;
+      ItemId id = store->idForItem(item);
+      if (id.isValid())
+        selectedIds.insert(id);
+    }
+  }
+
+  // Build a map of existing handles for O(1) lookup.
+  QHash<ItemId, TransformHandleItem *> handleMap;
+  handleMap.reserve(transformHandles_.size());
+
   // Remove handles for items that are no longer selected
   QMutableListIterator<TransformHandleItem *> it(transformHandles_);
   while (it.hasNext()) {
@@ -4577,30 +4674,18 @@ void Canvas::updateTransformHandles() {
       it.remove();
       continue;
     }
-    bool stillSelected = false;
-    if (store && handle->targetItemId().isValid()) {
-      for (QGraphicsItem *item : selectedItems) {
-        if (!item)
-          continue;
-        ItemId id = store->idForItem(item);
-        if (id.isValid() && id == handle->targetItemId()) {
-          stillSelected = true;
-          break;
-        }
-      }
-    } else {
-      stillSelected = selectedItems.contains(handle->targetItem());
-    }
+    const ItemId hid = handle->targetItemId();
+    bool stillSelected =
+        hid.isValid() ? selectedIds.contains(hid)
+                      : selectedItems.contains(handle->targetItem());
     if (!stillSelected) {
-      if (handle) {
-        // Clear target item reference before deleting to avoid dangling pointer
-        // access
-        handle->clearTargetItem();
-        if (scene_)
-          scene_->removeItem(handle);
-        delete handle;
-      }
+      if (scene_)
+        scene_->removeItem(handle);
+      delete handle;
       it.remove();
+    } else {
+      if (hid.isValid())
+        handleMap.insert(hid, handle);
     }
   }
 
@@ -4617,79 +4702,62 @@ void Canvas::updateTransformHandles() {
     if (item->type() == TransformHandleItem::Type)
       continue;
 
-    // Check if handle already exists for this item
-    bool hasHandle = false;
-    for (TransformHandleItem *handle : transformHandles_) {
-      if (!handle)
-        continue;
-      if (store && handle->targetItemId().isValid()) {
-        ItemId id = store->idForItem(item);
-        if (id.isValid() && handle->targetItemId() == id) {
-          hasHandle = true;
-          handle->updateHandles();
-          break;
-        }
-      } else if (handle->targetItem() == item) {
-        hasHandle = true;
-        handle->updateHandles();
-        break;
-      }
+    // Check if handle already exists for this item (O(1) lookup)
+    ItemId id;
+    if (store) {
+      id = store->idForItem(item);
     }
+    if (id.isValid() && handleMap.contains(id))
+      continue;
 
-    if (!hasHandle) {
-      TransformHandleItem *handle = nullptr;
-      if (store) {
-        ItemId id = store->idForItem(item);
-        if (!id.isValid()) {
-          id = registerItem(item);
-        }
-        if (id.isValid()) {
-          handle = new TransformHandleItem(id, store, this);
-        }
-      }
-      if (!handle) {
-        qWarning() << "Cannot create TransformHandleItem without ItemStore";
-        continue;
-      }
-      scene_->addItem(handle);
-      transformHandles_.append(handle);
-
-      // Connect to save pre-transform state when transform starts
-      connect(handle, &TransformHandleItem::transformStarted, this,
-              [this]() { savePreTransformStates(); });
-
-      // Connect to create undo actions and update handles when transform
-      // completes
-      connect(handle, &TransformHandleItem::transformCompleted, this,
-              [this, handle]() {
-                createTransformUndoActions();
-                if (handle)
-                  handle->updateHandles();
-                emit canvasModified();
-              });
-
-      // Connect to apply resize/rotation to other selected items
-      connect(
-          handle, &TransformHandleItem::resizeApplied, this,
-          [this, handle](qreal scaleX, qreal scaleY, const QPointF &anchor) {
-            applyResizeToOtherItems(handle->targetItem(), scaleX, scaleY,
-                                    anchor);
-          });
-      connect(handle, &TransformHandleItem::rotationApplied, this,
-              [this, handle](qreal angleDelta, const QPointF &center) {
-                applyRotationToOtherItems(handle->targetItem(), angleDelta,
-                                          center);
-              });
+    if (!store) {
+      qWarning() << "Cannot create TransformHandleItem without ItemStore";
+      continue;
     }
+    if (!id.isValid()) {
+      id = registerItem(item);
+    }
+    if (!id.isValid())
+      continue;
+
+    auto *handle = new TransformHandleItem(id, store, this);
+    scene_->addItem(handle);
+    transformHandles_.append(handle);
+
+    // Connect to save pre-transform state when transform starts
+    connect(handle, &TransformHandleItem::transformStarted, this,
+            [this]() { savePreTransformStates(); });
+
+    // Connect to create undo actions and update handles when transform
+    // completes
+    connect(handle, &TransformHandleItem::transformCompleted, this,
+            [this, handle]() {
+              createTransformUndoActions();
+              if (handle)
+                handle->updateHandles();
+              emit canvasModified();
+            });
+
+    // Connect to apply resize/rotation to other selected items
+    connect(
+        handle, &TransformHandleItem::resizeApplied, this,
+        [this, handle](qreal scaleX, qreal scaleY, const QPointF &anchor) {
+          applyResizeToOtherItems(handle->targetItem(), scaleX, scaleY,
+                                  anchor);
+        });
+    connect(handle, &TransformHandleItem::rotationApplied, this,
+            [this, handle](qreal angleDelta, const QPointF &center) {
+              applyRotationToOtherItems(handle->targetItem(), angleDelta,
+                                        center);
+            });
   }
 }
 
 void Canvas::clearTransformHandles() {
   for (TransformHandleItem *handle : transformHandles_) {
     if (handle) {
-      // Clear target item reference before deleting to avoid dangling pointer
-      // access
-      handle->clearTargetItem();
+      // Deletion restores target flags (e.g. ItemIsMovable) via destructor,
+      // so delete BEFORE clearing the target reference.
       if (scene_)
         scene_->removeItem(handle);
       delete handle;

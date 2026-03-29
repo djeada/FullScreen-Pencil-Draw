@@ -12,7 +12,9 @@
 #include <QColor>
 #include <QGraphicsItem>
 #include <QPainter>
+#include <QPainterPath>
 #include <QPen>
+#include <QPixmap>
 
 /**
  * @brief Base class for all architecture diagram elements.
@@ -74,6 +76,29 @@ private:
   QString label_;
   IconKind iconKind_;
   QColor accentColor_;
+
+  // Pre-computed paint data (derived from accentColor_, set once in ctor).
+  struct CachedColors {
+    QColor bgTop, bgBottom;
+    QColor cardBorder;
+    QColor bandTop;
+    QColor badgeCenter, badgeMid, badgeEdge;
+    QColor badgeBorder;
+    QColor iconStroke;
+    QColor selectBorder;
+  } colors_;
+  QRectF cardRect_;
+  QRectF bandRect_;
+  QRectF badgeRect_;
+  QRectF iconRect_;
+  QRectF labelRect_;
+  QPainterPath cardPath_;
+  qreal iconStrokeWidth_;
+  QPixmap cachedPixmap_;
+  qreal cachedPixmapScale_ = 1.0;
+
+  void initPaintCache();
+  void renderToPixmap(qreal scale = 1.0);
 };
 
 // ----- Concrete element classes -----

@@ -1,11 +1,10 @@
 /**
  * @file element_bank_panel.h
- * @brief Panel providing a bank of common elements for computer science
- *        architecture diagrams.
+ * @brief Panel providing a bank of diagram elements.
  *
- * The ElementBankPanel displays categorized, pre-built diagram elements such
- * as servers, databases, clients, firewalls, and cloud components.  The user
- * clicks an element to place it on the canvas.
+ * The ElementBankPanel displays categorized, pre-built diagram elements.
+ * Two domains are supported — software-architecture icons and electronics
+ * schematic symbols.  Each domain is shown in its own dock widget.
  */
 #ifndef ELEMENT_BANK_PANEL_H
 #define ELEMENT_BANK_PANEL_H
@@ -29,8 +28,8 @@ struct ElementInfo {
 };
 
 /**
- * @brief Dock-widget panel that exposes a library of reusable CS architecture
- *        diagram elements.
+ * @brief Dock-widget panel that exposes a library of reusable diagram
+ *        elements for a single domain.
  *
  * Elements are organised into collapsible categories.  Clicking an element
  * emits the elementSelected() signal which the canvas uses to create the
@@ -40,7 +39,10 @@ class ElementBankPanel : public QDockWidget {
   Q_OBJECT
 
 public:
-  explicit ElementBankPanel(QWidget *parent = nullptr);
+  /// Which element domain this panel shows.
+  enum class Domain { Architecture, Electronics };
+
+  explicit ElementBankPanel(Domain domain, QWidget *parent = nullptr);
 
 signals:
   /**
@@ -52,6 +54,9 @@ signals:
 private:
   /// Populate the built-in element library.
   static QVector<ElementInfo> defaultElements();
+
+  /// Return only elements belonging to the given domain.
+  static QVector<ElementInfo> elementsForDomain(Domain domain);
 
   void applyTheme();
 

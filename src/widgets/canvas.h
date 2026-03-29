@@ -240,6 +240,11 @@ protected:
   void contextMenuEvent(QContextMenuEvent *event) override;
 
 private:
+  bool isSelectableCanvasItem(const QGraphicsItem *item) const;
+  QGraphicsItem *selectableCanvasItemAtViewportPos(const QPoint &viewPos) const;
+  QGraphicsItem *selectableCanvasItemNearViewportPos(const QPoint &viewPos,
+                                                     int radiusPx) const;
+
   // Enums
   enum ShapeType {
     Line,

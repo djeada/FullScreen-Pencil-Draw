@@ -22,6 +22,7 @@
 #include "text_on_path_item.h"
 #include <QGroupBox>
 #include <QHBoxLayout>
+#include <QHash>
 #include <QHeaderView>
 #include <QIcon>
 #include <QInputDialog>
@@ -809,26 +810,31 @@ void LayerPanel::onCanvasSelectionChanged() {
   // Clear tree selection
   layerTree_->clearSelection();
 
-  // Find and select tree items matching canvas selection
+  // Build hash map of tree children keyed by ItemId string for O(1) lookup.
+  QHash<QString, QTreeWidgetItem *> treeItemMap;
+  for (int i = 0; i < layerTree_->topLevelItemCount(); ++i) {
+    QTreeWidgetItem *layerItem = layerTree_->topLevelItem(i);
+    for (int j = 0; j < layerItem->childCount(); ++j) {
+      QTreeWidgetItem *child = layerItem->child(j);
+      treeItemMap.insert(child->data(0, ItemIdRole).toString(), child);
+    }
+  }
+
+  // Select matching tree items using O(1) lookup per selected canvas item.
+  QTreeWidgetItem *lastMatch = nullptr;
   QList<QGraphicsItem *> selected = canvas_->scene()->selectedItems();
   for (QGraphicsItem *gItem : selected) {
     ItemId id = itemStore_->idForItem(gItem);
     if (!id.isValid())
       continue;
-
-    QString idStr = id.toString();
-    // Search all child items in tree
-    for (int i = 0; i < layerTree_->topLevelItemCount(); ++i) {
-      QTreeWidgetItem *layerItem = layerTree_->topLevelItem(i);
-      for (int j = 0; j < layerItem->childCount(); ++j) {
-        QTreeWidgetItem *child = layerItem->child(j);
-        if (child->data(0, ItemIdRole).toString() == idStr) {
-          child->setSelected(true);
-          layerTree_->scrollToItem(child);
-        }
-      }
+    QTreeWidgetItem *child = treeItemMap.value(id.toString());
+    if (child) {
+      child->setSelected(true);
+      lastMatch = child;
     }
   }
+  if (lastMatch)
+    layerTree_->scrollToItem(lastMatch);
 
   layerTree_->blockSignals(false);
   updatingSelection_ = false;

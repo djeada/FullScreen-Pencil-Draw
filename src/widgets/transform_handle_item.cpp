@@ -75,16 +75,30 @@ QGraphicsItem *TransformHandleItem::resolveTargetItem() const {
 
 TransformHandleItem::~TransformHandleItem() {
   QGraphicsItem *target = resolveTargetItem();
-  if (target && sceneEventFilterInstalled_) {
-    target->removeSceneEventFilter(this);
+  if (target) {
+    // Restore flags that may have been temporarily disabled during a transform.
+    if (isTransforming_) {
+      target->setFlag(QGraphicsItem::ItemIsMovable, wasMovable_);
+    }
+    if (sceneEventFilterInstalled_) {
+      target->removeSceneEventFilter(this);
+    }
   }
 }
 
 void TransformHandleItem::clearTargetItem() {
   QGraphicsItem *target = resolveTargetItem();
-  if (target && sceneEventFilterInstalled_) {
-    target->removeSceneEventFilter(this);
-    sceneEventFilterInstalled_ = false;
+  if (target) {
+    // Restore flags that may have been temporarily disabled during a transform.
+    if (isTransforming_) {
+      target->setFlag(QGraphicsItem::ItemIsMovable, wasMovable_);
+      isTransforming_ = false;
+      activeHandle_ = HandleType::None;
+    }
+    if (sceneEventFilterInstalled_) {
+      target->removeSceneEventFilter(this);
+      sceneEventFilterInstalled_ = false;
+    }
   }
   targetItemId_ = ItemId();
 }
@@ -229,15 +243,12 @@ void TransformHandleItem::paint(QPainter *painter,
 void TransformHandleItem::updateHandles() {
   QRectF newBounds = targetBoundsInScene();
 
-  // Store the current cached bounds as previous bounds before updating.
-  // This allows boundingRect() to include the old region for proper repainting,
-  // which clears the old anchor positions when the item moves.
+  // Always sync previousTargetBounds_ so that boundingRect() "heals"
+  // after one frame (previous == current → no union → minimal rect).
   previousTargetBounds_ = cachedTargetBounds_;
 
-  if (newBounds == cachedTargetBounds_) {
-    update();
+  if (newBounds == cachedTargetBounds_)
     return;
-  }
 
   // Notify the scene that geometry is about to change.
   // At this point, boundingRect() will return a union of old and new bounds
@@ -246,10 +257,6 @@ void TransformHandleItem::updateHandles() {
 
   // Update the cached bounds to the new position
   cachedTargetBounds_ = newBounds;
-
-  // Note: We don't clear previousTargetBounds_ here because
-  // prepareGeometryChange() has already captured the bounding rect. The
-  // previous bounds will be updated on the next call to updateHandles().
 
   update();
 }
@@ -356,6 +363,10 @@ bool TransformHandleItem::sceneEventFilter(QGraphicsItem *watched,
                                            QEvent *event) {
   QGraphicsItem *target = resolveTargetItem();
   if (watched == target) {
+    // GraphicsSceneMove is only dispatched for QGraphicsWidget subclasses.
+    // Regular items (rects, ellipses, paths, element items) only receive
+    // GraphicsSceneMouseMove during drag and GraphicsSceneMouseRelease.
+    // We must handle all three to keep handles in sync for all item types.
     QEvent::Type eventType = event->type();
     if (eventType == QEvent::GraphicsSceneMove ||
         eventType == QEvent::GraphicsSceneMouseMove ||
