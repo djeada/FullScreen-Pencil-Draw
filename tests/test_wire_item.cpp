@@ -152,17 +152,16 @@ private slots:
              << new TransistorElement() << new MOSFETElement()
              << new OpAmpElement() << new VoltageRegulatorElement()
              << new BatteryElement() << new GroundElement()
-             << new SwitchElement() << new RelayElement()
-             << new MotorElement() << new PowerSupplyElement()
-             << new MicrocontrollerElement() << new ICChipElement()
-             << new SensorElement() << new AntennaElement()
-             << new SpeakerElement() << new ConnectorElement();
+             << new SwitchElement() << new RelayElement() << new MotorElement()
+             << new PowerSupplyElement() << new MicrocontrollerElement()
+             << new ICChipElement() << new SensorElement()
+             << new AntennaElement() << new SpeakerElement()
+             << new ConnectorElement();
 
     QGraphicsScene scene;
     for (auto *e : elements) {
       scene.addItem(e);
-      QVERIFY2(e->pins().size() >= 1,
-               qPrintable(e->label() + " has no pins"));
+      QVERIFY2(e->pins().size() >= 1, qPrintable(e->label() + " has no pins"));
     }
   }
 };

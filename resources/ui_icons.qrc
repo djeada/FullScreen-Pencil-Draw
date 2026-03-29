@@ -61,5 +61,26 @@
     <file alias="elec_antenna.svg">ui_icons/elec_antenna.svg</file>
     <file alias="elec_speaker.svg">ui_icons/elec_speaker.svg</file>
     <file alias="elec_connector.svg">ui_icons/elec_connector.svg</file>
+
+    <file alias="pdf_thumbnails.svg">ui_icons/pdf_thumbnails.svg</file>
+    <file alias="pdf_open.svg">ui_icons/pdf_open.svg</file>
+    <file alias="pdf_save.svg">ui_icons/pdf_save.svg</file>
+    <file alias="pdf_close.svg">ui_icons/pdf_close.svg</file>
+    <file alias="pdf_first_page.svg">ui_icons/pdf_first_page.svg</file>
+    <file alias="pdf_prev_page.svg">ui_icons/pdf_prev_page.svg</file>
+    <file alias="pdf_next_page.svg">ui_icons/pdf_next_page.svg</file>
+    <file alias="pdf_last_page.svg">ui_icons/pdf_last_page.svg</file>
+    <file alias="pdf_zoom_out.svg">ui_icons/pdf_zoom_out.svg</file>
+    <file alias="pdf_zoom_in.svg">ui_icons/pdf_zoom_in.svg</file>
+    <file alias="pdf_fit_width.svg">ui_icons/pdf_fit_width.svg</file>
+    <file alias="pdf_fit_page.svg">ui_icons/pdf_fit_page.svg</file>
+    <file alias="pdf_rotate_left.svg">ui_icons/pdf_rotate_left.svg</file>
+    <file alias="pdf_rotate_right.svg">ui_icons/pdf_rotate_right.svg</file>
+    <file alias="pdf_dark_mode.svg">ui_icons/pdf_dark_mode.svg</file>
+    <file alias="pdf_annotate.svg">ui_icons/pdf_annotate.svg</file>
+    <file alias="pdf_view.svg">ui_icons/pdf_view.svg</file>
+    <file alias="pdf_screenshot.svg">ui_icons/pdf_screenshot.svg</file>
+    <file alias="pdf_undo.svg">ui_icons/pdf_undo.svg</file>
+    <file alias="pdf_redo.svg">ui_icons/pdf_redo.svg</file>
   </qresource>
 </RCC>

@@ -190,8 +190,7 @@ bool PdfSearchBar::eventFilter(QObject *obj, QEvent *event) {
       deactivate();
       return true;
     }
-    if (keyEvent->key() == Qt::Key_Return ||
-        keyEvent->key() == Qt::Key_Enter) {
+    if (keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter) {
       if (keyEvent->modifiers() & Qt::ShiftModifier) {
         emit findPrevious();
       } else {

@@ -3,6 +3,8 @@
  * @brief Implementation of the native project file serializer.
  */
 #include "project_serializer.h"
+#include "../widgets/latex_text_item.h"
+#include "../widgets/text_on_path_item.h"
 #include "item_store.h"
 #include "layer.h"
 #include <QBuffer>
@@ -20,8 +22,6 @@
 #include <QLinearGradient>
 #include <QPainterPath>
 #include <QRadialGradient>
-#include "../widgets/latex_text_item.h"
-#include "../widgets/text_on_path_item.h"
 
 const QString ProjectSerializer::fileFilter() {
   return QStringLiteral("Project Files (*.fspd)");
@@ -371,8 +371,7 @@ QGraphicsItem *ProjectSerializer::deserializeItem(const QJsonObject &obj) {
   } else if (type == "latexText") {
     auto *latexItem = new LatexTextItem();
     latexItem->setText(obj["text"].toString());
-    latexItem->setTextColor(
-        QColor(obj["textColor"].toString("#ff000000")));
+    latexItem->setTextColor(QColor(obj["textColor"].toString("#ff000000")));
     QFont f;
     f.setFamily(obj["fontFamily"].toString());
     f.setPointSize(obj["fontSize"].toInt(12));
@@ -383,8 +382,7 @@ QGraphicsItem *ProjectSerializer::deserializeItem(const QJsonObject &obj) {
   } else if (type == "textOnPath") {
     auto *pathTextItem = new TextOnPathItem();
     pathTextItem->setText(obj["text"].toString());
-    pathTextItem->setTextColor(
-        QColor(obj["textColor"].toString("#ff000000")));
+    pathTextItem->setTextColor(QColor(obj["textColor"].toString("#ff000000")));
     QFont f;
     f.setFamily(obj["fontFamily"].toString());
     f.setPointSize(obj["fontSize"].toInt(12));

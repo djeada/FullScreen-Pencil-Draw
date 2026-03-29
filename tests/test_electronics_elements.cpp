@@ -151,11 +151,11 @@ private slots:
              << new TransistorElement() << new MOSFETElement()
              << new OpAmpElement() << new VoltageRegulatorElement()
              << new BatteryElement() << new GroundElement()
-             << new SwitchElement() << new RelayElement()
-             << new MotorElement() << new PowerSupplyElement()
-             << new MicrocontrollerElement() << new ICChipElement()
-             << new SensorElement() << new AntennaElement()
-             << new SpeakerElement() << new ConnectorElement();
+             << new SwitchElement() << new RelayElement() << new MotorElement()
+             << new PowerSupplyElement() << new MicrocontrollerElement()
+             << new ICChipElement() << new SensorElement()
+             << new AntennaElement() << new SpeakerElement()
+             << new ConnectorElement();
 
     QCOMPARE(elements.size(), 24);
 

@@ -100,9 +100,7 @@ void SideTabBar::applyTheme() {
   }
 
   applyingTheme_ = true;
-  setStyleSheet(
-      darkTheme
-          ? R"(
+  setStyleSheet(darkTheme ? R"(
               QToolBar {
                 background-color: transparent;
                 border: none;
@@ -126,7 +124,7 @@ void SideTabBar::applyTheme() {
                 background-color: rgba(249, 115, 22, 0.14);
               }
             )"
-          : R"(
+                          : R"(
               QToolBar {
                 background-color: transparent;
                 border: none;
@@ -161,7 +159,8 @@ void SideTabBar::refreshEntry(const DockEntry &entry) {
   }
 
   entry.tabAction->setText(handleTextForDock(entry.dock));
-  entry.tabAction->setToolTip(QString("Restore %1").arg(entry.dock->windowTitle()));
+  entry.tabAction->setToolTip(
+      QString("Restore %1").arg(entry.dock->windowTitle()));
   entry.tabAction->setVisible(shouldShowSideTab(entry.dock));
 }
 

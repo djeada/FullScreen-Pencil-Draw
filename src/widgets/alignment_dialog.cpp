@@ -23,13 +23,13 @@ AlignmentDialog::AlignmentDialog(int selectedCount, QWidget *parent)
   QVBoxLayout *groupLayout = new QVBoxLayout(group);
   groupLayout->setSpacing(12);
 
-  alignToAxesRadio_ = new QRadioButton(
-      "Align with axes (reset rotation to 0°)", group);
+  alignToAxesRadio_ =
+      new QRadioButton("Align with axes (reset rotation to 0°)", group);
   alignToAxesRadio_->setChecked(true);
   groupLayout->addWidget(alignToAxesRadio_);
 
-  alignParallelRadio_ = new QRadioButton(
-      "Make parallel (match rotation of first item)", group);
+  alignParallelRadio_ =
+      new QRadioButton("Make parallel (match rotation of first item)", group);
   groupLayout->addWidget(alignParallelRadio_);
 
   alignPerpendicularRadio_ = new QRadioButton(

@@ -11,8 +11,8 @@
 #include "pdf_viewer.h"
 #include <QApplication>
 #include <QLabel>
-#include <QPalette>
 #include <QPainter>
+#include <QPalette>
 #include <QScrollBar>
 #include <QStyledItemDelegate>
 
@@ -63,8 +63,8 @@ public:
 
     QRect shadowRect = badgeRect.translated(0, 1);
     painter->setPen(Qt::NoPen);
-    painter->setBrush(
-        darkTheme ? QColor(0, 0, 0, 105) : QColor(143, 102, 65, 46));
+    painter->setBrush(darkTheme ? QColor(0, 0, 0, 105)
+                                : QColor(143, 102, 65, 46));
     painter->drawRoundedRect(shadowRect, 10, 10);
 
     painter->setBrush(darkTheme ? QColor(17, 22, 28, 220)
@@ -96,8 +96,7 @@ public:
 
 PageThumbnailPanel::PageThumbnailPanel(PdfViewer *viewer, QWidget *parent)
     : QWidget(parent), pdfViewer_(viewer), header_(nullptr),
-      thumbnailList_(nullptr),
-      layout_(nullptr) {
+      thumbnailList_(nullptr), layout_(nullptr) {
   setupUI();
 
   if (pdfViewer_) {
@@ -156,9 +155,7 @@ void PageThumbnailPanel::applyTheme() {
   const bool darkTheme = ThemeManager::instance().isDarkTheme();
 
   if (header_) {
-    header_->setStyleSheet(
-        darkTheme
-            ? R"(QLabel {
+    header_->setStyleSheet(darkTheme ? R"(QLabel {
                  background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
                                              stop:0 #17212b, stop:1 #10161d);
                  color: #fff7ed;
@@ -168,7 +165,7 @@ void PageThumbnailPanel::applyTheme() {
                  letter-spacing: 0.7px;
                  border-bottom: 1px solid rgba(255, 244, 230, 0.08);
                })"
-            : R"(QLabel {
+                                     : R"(QLabel {
                  background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
                                              stop:0 #fff9f1, stop:1 #f1e5d5);
                  color: #31261d;

@@ -617,8 +617,8 @@ private slots:
     QVERIFY(layer);
     QCOMPARE(layer->itemCount(), 1);
 
-    auto *loadedLatex = dynamic_cast<LatexTextItem *>(
-        store2.item(layer->itemIds().first()));
+    auto *loadedLatex =
+        dynamic_cast<LatexTextItem *>(store2.item(layer->itemIds().first()));
     QVERIFY(loadedLatex);
     QCOMPARE(loadedLatex->text(), "Hello $x^2$");
     QCOMPARE(loadedLatex->textColor(), QColor(Qt::blue));
@@ -670,8 +670,8 @@ private slots:
     QVERIFY(layer);
     QCOMPARE(layer->itemCount(), 1);
 
-    auto *loadedPathText = dynamic_cast<TextOnPathItem *>(
-        store2.item(layer->itemIds().first()));
+    auto *loadedPathText =
+        dynamic_cast<TextOnPathItem *>(store2.item(layer->itemIds().first()));
     QVERIFY(loadedPathText);
     QCOMPARE(loadedPathText->text(), "Curved Text");
     QCOMPARE(loadedPathText->textColor(), QColor(Qt::red));

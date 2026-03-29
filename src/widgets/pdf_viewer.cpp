@@ -19,8 +19,8 @@
 #include <QInputDialog>
 #include <QMessageBox>
 #include <QMouseEvent>
-#include <QPdfWriter>
 #include <QPdfSearchModel>
+#include <QPdfWriter>
 #include <QPointer>
 #include <QScrollBar>
 #include <QUrl>
@@ -101,9 +101,8 @@ PdfViewer::PdfViewer(QWidget *parent)
 
   // Initialize search model
   searchModel_ = new QPdfSearchModel(this);
-  connect(document_.get(), &PdfDocument::documentLoaded, this, [this]() {
-    searchModel_->setDocument(document_->document());
-  });
+  connect(document_.get(), &PdfDocument::documentLoaded, this,
+          [this]() { searchModel_->setDocument(document_->document()); });
 
   // Initialize search bar
   searchBar_ = new PdfSearchBar(viewport());
@@ -1105,8 +1104,7 @@ void PdfViewer::navigateToMatch(int index) {
 
 void PdfViewer::updateSearchHighlights() {
   currentPageHighlights_.clear();
-  if (!hasPdf() || !searchModel_ ||
-      searchModel_->searchString().isEmpty()) {
+  if (!hasPdf() || !searchModel_ || searchModel_->searchString().isEmpty()) {
     return;
   }
 
@@ -1149,8 +1147,8 @@ void PdfViewer::drawForeground(QPainter *painter, const QRectF &rect) {
         double sx = sr.width() / pageSizePt.width();
         double sy = sr.height() / pageSizePt.height();
         for (const QRectF &r : activeLink.rectangles()) {
-          activeRects.append(QRectF(r.x() * sx, r.y() * sy, r.width() * sx,
-                                    r.height() * sy));
+          activeRects.append(
+              QRectF(r.x() * sx, r.y() * sy, r.width() * sx, r.height() * sy));
         }
       }
     }

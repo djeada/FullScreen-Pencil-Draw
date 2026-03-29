@@ -21,8 +21,7 @@ WireItem::WireItem(ElectronicsElementItem *srcElem, int srcPin,
   setFlags(QGraphicsItem::ItemIsSelectable);
   cachedDark_ = ThemeManager::instance().isDarkTheme();
   const QColor wireColor = cachedDark_ ? Qt::white : Qt::black;
-  setPen(QPen(wireColor, 1.2, Qt::SolidLine, Qt::SquareCap,
-              Qt::MiterJoin));
+  setPen(QPen(wireColor, 1.2, Qt::SolidLine, Qt::SquareCap, Qt::MiterJoin));
   setZValue(-1.0); // draw behind elements
 
   if (srcElem_)
@@ -71,8 +70,7 @@ void WireItem::updatePath() {
   setPath(pp);
 }
 
-void WireItem::paint(QPainter *painter,
-                     const QStyleOptionGraphicsItem *option,
+void WireItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
                      QWidget *widget) {
   const bool dark = ThemeManager::instance().isDarkTheme();
   if (dark != cachedDark_) {

@@ -95,7 +95,8 @@ void paintButtonSurface(QPainter &painter, QWidget *widget,
                         qreal press, bool checked, bool enabled) {
   const ButtonPaletteSet palette = paletteFor(widget, variant);
 
-  QColor fill = checked ? palette.checked : blend(palette.base, palette.hover, hover);
+  QColor fill =
+      checked ? palette.checked : blend(palette.base, palette.hover, hover);
   fill = blend(fill, palette.pressed, press);
   QColor border = blend(palette.border, palette.borderHover, hover);
   border = checked ? palette.borderHover : border;
@@ -134,10 +135,12 @@ void paintToolButtonLabel(QPainter &painter, AnimatedToolButton *button,
   opt.state &= ~QStyle::State_MouseOver;
   opt.state &= ~QStyle::State_Sunken;
   opt.state &= ~QStyle::State_Raised;
-  opt.palette.setColor(QPalette::ButtonText,
-                       button->isChecked() ? palette.textChecked : palette.text);
-  opt.palette.setColor(QPalette::WindowText,
-                       button->isChecked() ? palette.textChecked : palette.text);
+  opt.palette.setColor(QPalette::ButtonText, button->isChecked()
+                                                 ? palette.textChecked
+                                                 : palette.text);
+  opt.palette.setColor(QPalette::WindowText, button->isChecked()
+                                                 ? palette.textChecked
+                                                 : palette.text);
 
   painter.save();
   painter.translate(0.0, press * 1.0);
@@ -162,10 +165,12 @@ void paintPushButtonLabel(QPainter &painter, AnimatedPushButton *button,
   opt.iconSize = button->iconSize();
 
   const ButtonPaletteSet palette = paletteFor(button, variant);
-  opt.palette.setColor(QPalette::ButtonText,
-                       button->isChecked() ? palette.textChecked : palette.text);
-  opt.palette.setColor(QPalette::WindowText,
-                       button->isChecked() ? palette.textChecked : palette.text);
+  opt.palette.setColor(QPalette::ButtonText, button->isChecked()
+                                                 ? palette.textChecked
+                                                 : palette.text);
+  opt.palette.setColor(QPalette::WindowText, button->isChecked()
+                                                 ? palette.textChecked
+                                                 : palette.text);
 
   painter.save();
   painter.translate(0.0, press * 1.0);
@@ -223,8 +228,9 @@ void AnimatedButtonBase::updateForCheckedState(bool) {
 
 void AnimatedButtonBase::animateTo(QVariantAnimation &animation, qreal target) {
   animation.stop();
-  animation.setStartValue(animation.currentValue().isValid() ? animation.currentValue()
-                                                             : QVariant(target));
+  animation.setStartValue(animation.currentValue().isValid()
+                              ? animation.currentValue()
+                              : QVariant(target));
   animation.setEndValue(target);
   animation.start();
 }

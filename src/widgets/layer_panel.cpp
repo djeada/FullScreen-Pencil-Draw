@@ -9,6 +9,8 @@
 #include "../core/theme_manager.h"
 #include "animated_button.h"
 #include "canvas.h"
+#include "latex_text_item.h"
+#include "text_on_path_item.h"
 #include <QDropEvent>
 #include <QGraphicsEllipseItem>
 #include <QGraphicsItemGroup>
@@ -18,8 +20,6 @@
 #include <QGraphicsPolygonItem>
 #include <QGraphicsRectItem>
 #include <QGraphicsTextItem>
-#include "latex_text_item.h"
-#include "text_on_path_item.h"
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHash>

@@ -45,8 +45,7 @@ static void serializeOneItem(QDataStream &ds, QGraphicsItem *item) {
 
 static constexpr qint32 MAX_GROUP_CHILDREN = 10000;
 
-static QGraphicsItem *deserializeOneItem(QDataStream &ds,
-                                         const QString &type) {
+static QGraphicsItem *deserializeOneItem(QDataStream &ds, const QString &type) {
   if (type == "GroupT") {
     QPointF pos;
     QTransform tr;
@@ -181,9 +180,8 @@ static QGraphicsItem *deserializeOneItemBuggy(QDataStream &ds,
 // ---------------------------------------------------------------------------
 // Helper: build an arrow group (line + arrowhead polygon) like Canvas does.
 // ---------------------------------------------------------------------------
-static QGraphicsItemGroup *createArrowGroup(const QPointF &start,
-                                            const QPointF &end,
-                                            const QPen &pen) {
+static QGraphicsItemGroup *
+createArrowGroup(const QPointF &start, const QPointF &end, const QPen &pen) {
   auto *line = new QGraphicsLineItem(QLineF(start, end));
   line->setPen(pen);
 
@@ -294,13 +292,12 @@ private slots:
       QVERIFY2(
           qAbs(newChildren[i]->pos().x() - origChildPos[i].x()) < 0.01 &&
               qAbs(newChildren[i]->pos().y() - origChildPos[i].y()) < 0.01,
-          qPrintable(
-              QString("Child %1 pos mismatch: orig(%2,%3) vs new(%4,%5)")
-                  .arg(i)
-                  .arg(origChildPos[i].x())
-                  .arg(origChildPos[i].y())
-                  .arg(newChildren[i]->pos().x())
-                  .arg(newChildren[i]->pos().y())));
+          qPrintable(QString("Child %1 pos mismatch: orig(%2,%3) vs new(%4,%5)")
+                         .arg(i)
+                         .arg(origChildPos[i].x())
+                         .arg(origChildPos[i].y())
+                         .arg(newChildren[i]->pos().x())
+                         .arg(newChildren[i]->pos().y())));
     }
   }
 
@@ -446,14 +443,13 @@ private slots:
           qAbs(newChildren[i]->pos().x() - origChildPositions[i].x()) < 0.01 &&
               qAbs(newChildren[i]->pos().y() - origChildPositions[i].y()) <
                   0.01,
-          qPrintable(
-              QString("Cloned child %1 pos mismatch: orig(%2,%3) vs "
-                      "new(%4,%5)")
-                  .arg(i)
-                  .arg(origChildPositions[i].x())
-                  .arg(origChildPositions[i].y())
-                  .arg(newChildren[i]->pos().x())
-                  .arg(newChildren[i]->pos().y())));
+          qPrintable(QString("Cloned child %1 pos mismatch: orig(%2,%3) vs "
+                             "new(%4,%5)")
+                         .arg(i)
+                         .arg(origChildPositions[i].x())
+                         .arg(origChildPositions[i].y())
+                         .arg(newChildren[i]->pos().x())
+                         .arg(newChildren[i]->pos().y())));
     }
   }
 };

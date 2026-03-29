@@ -180,12 +180,10 @@ private slots:
 
     // Create composite action with both transforms
     auto composite = std::make_unique<CompositeAction>();
-    composite->addAction(std::make_unique<TransformAction>(id1, &store, oldT1,
-                                                           newT1, oldP1,
-                                                           newP1));
-    composite->addAction(std::make_unique<TransformAction>(id2, &store, oldT2,
-                                                           newT2, oldP2,
-                                                           newP2));
+    composite->addAction(std::make_unique<TransformAction>(
+        id1, &store, oldT1, newT1, oldP1, newP1));
+    composite->addAction(std::make_unique<TransformAction>(
+        id2, &store, oldT2, newT2, oldP2, newP2));
 
     // Undo composite should revert both items
     composite->undo();
@@ -288,12 +286,10 @@ private slots:
 
     // Create composite action with both rotation transforms
     auto composite = std::make_unique<CompositeAction>();
-    composite->addAction(std::make_unique<TransformAction>(id1, &store, oldT1,
-                                                           newT1, oldP1,
-                                                           newP1));
-    composite->addAction(std::make_unique<TransformAction>(id2, &store, oldT2,
-                                                           newT2, oldP2,
-                                                           newP2));
+    composite->addAction(std::make_unique<TransformAction>(
+        id1, &store, oldT1, newT1, oldP1, newP1));
+    composite->addAction(std::make_unique<TransformAction>(
+        id2, &store, oldT2, newT2, oldP2, newP2));
 
     // Single undo should revert BOTH items atomically
     composite->undo();

@@ -109,9 +109,7 @@ void DockTitleBar::mouseDoubleClickEvent(QMouseEvent *event) {
 
 void DockTitleBar::applyTheme() {
   const bool darkTheme = ThemeManager::instance().isDarkTheme();
-  setStyleSheet(
-      darkTheme
-          ? R"(
+  setStyleSheet(darkTheme ? R"(
               #dockTitleBar {
                 background-color: #0f1822;
                 border-bottom: 1px solid rgba(255, 244, 230, 0.06);
@@ -149,7 +147,7 @@ void DockTitleBar::applyTheme() {
                 border: 1px solid rgba(249, 115, 22, 0.38);
               }
             )"
-          : R"(
+                          : R"(
               #dockTitleBar {
                 background-color: #f6efe6;
                 border-bottom: 1px solid #dfd1c2;
@@ -195,7 +193,8 @@ void DockTitleBar::updateButtons() {
   }
 
   const auto features = dock_->features();
-  collapseButton_->setVisible(features.testFlag(QDockWidget::DockWidgetClosable));
+  collapseButton_->setVisible(
+      features.testFlag(QDockWidget::DockWidgetClosable));
   closeButton_->setVisible(features.testFlag(QDockWidget::DockWidgetClosable));
   floatButton_->setVisible(features.testFlag(QDockWidget::DockWidgetFloatable));
   floatButton_->setChecked(dock_->isFloating());
