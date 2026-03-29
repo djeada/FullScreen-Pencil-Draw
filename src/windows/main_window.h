@@ -74,8 +74,7 @@ private:
   Canvas *_canvas;
   ToolPanel *_toolPanel;
   LayerPanel *_layerPanel;
-  ElementBankPanel *_archBankPanel;
-  ElementBankPanel *_elecBankPanel;
+  ElementBankPanel *_elementBankPanel;
   AutoSaveManager *_autoSaveManager;
   QLabel *_statusLabel;
   QLabel *_measurementLabel;
