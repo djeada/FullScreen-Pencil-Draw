@@ -365,10 +365,12 @@ add_executable(test_electronics_elements
     ../src/widgets/electronics_elements.h
     ../src/widgets/wire_item.cpp
     ../src/widgets/wire_item.h
+    ../src/core/theme_manager.cpp
 )
 
 target_include_directories(test_electronics_elements PRIVATE
     ../src/widgets
+    ../src
 )
 
 target_link_libraries(test_electronics_elements PRIVATE
@@ -389,10 +391,12 @@ add_executable(test_wire_item
     ../src/widgets/electronics_elements.h
     ../src/widgets/wire_item.cpp
     ../src/widgets/wire_item.h
+    ../src/core/theme_manager.cpp
 )
 
 target_include_directories(test_wire_item PRIVATE
     ../src/widgets
+    ../src
 )
 
 target_link_libraries(test_wire_item PRIVATE

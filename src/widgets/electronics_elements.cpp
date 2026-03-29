@@ -6,6 +6,7 @@
  * gradient) with reference labels placed outside the symbol body.
  */
 #include "electronics_elements.h"
+#include "../core/theme_manager.h"
 #include "wire_item.h"
 #include <QFont>
 #include <QPainterPath>
@@ -802,10 +803,13 @@ QPainterPath ElectronicsElementItem::shape() const {
 }
 
 void ElectronicsElementItem::initPaintCache() {
-  // Monochrome schematic style – no card gradients.
-  strokeColor_ = QColor("#1a1a1a");
+  // Monochrome schematic style – adapts to dark/light theme.
+  const bool dark = ThemeManager::instance().isDarkTheme();
+  strokeColor_ = dark ? Qt::white : Qt::black;
+  labelColor_ = dark ? Qt::white : Qt::black;
   selectColor_ = QColor("#2563eb");
   strokeWidth_ = 1.6;
+  cachedDark_ = dark;
 
   symbolRect_ = QRectF(4.0, 2.0, ELEM_W - 8.0, ELEM_H - 4.0);
   labelRect_ = QRectF(0.0, ELEM_H, ELEM_W, LABEL_H);
@@ -845,7 +849,7 @@ void ElectronicsElementItem::renderToPixmap(qreal scale) {
     f.setLetterSpacing(QFont::PercentageSpacing, 102);
     return f;
   }();
-  p.setPen(QColor("#333333"));
+  p.setPen(labelColor_);
   p.setFont(labelFont);
   p.drawText(labelRect_, Qt::AlignHCenter | Qt::AlignTop, label_);
 
@@ -856,12 +860,23 @@ void ElectronicsElementItem::renderToPixmap(qreal scale) {
 void ElectronicsElementItem::paint(QPainter *painter,
                                    const QStyleOptionGraphicsItem * /*option*/,
                                    QWidget * /*widget*/) {
+  // Detect theme change.
+  const bool dark = ThemeManager::instance().isDarkTheme();
+  bool themeChanged = false;
+  if (dark != cachedDark_) {
+    cachedDark_ = dark;
+    strokeColor_ = dark ? Qt::white : Qt::black;
+    labelColor_ = dark ? Qt::white : Qt::black;
+    themeChanged = true;
+  }
+
   const QTransform &wt = painter->worldTransform();
   const qreal sx = std::hypot(wt.m11(), wt.m21());
   const qreal sy = std::hypot(wt.m12(), wt.m22());
   const qreal effectiveScale = qBound(0.25, qMax(sx, sy), 8.0);
-  if (std::abs(effectiveScale - cachedPixmapScale_) >
-      cachedPixmapScale_ * 0.15) {
+  if (themeChanged ||
+      std::abs(effectiveScale - cachedPixmapScale_) >
+          cachedPixmapScale_ * 0.15) {
     const_cast<ElectronicsElementItem *>(this)->renderToPixmap(effectiveScale);
   }
 

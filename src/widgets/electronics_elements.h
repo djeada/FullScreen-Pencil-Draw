@@ -120,14 +120,16 @@ private:
   QColor accentColor_;
   QSet<WireItem *> connectedWires_;
 
-  // Schematic styling (monochrome).
+  // Schematic styling (monochrome, theme-aware).
   QColor strokeColor_;
+  QColor labelColor_;
   QColor selectColor_;
   qreal strokeWidth_;
   QRectF symbolRect_;
   QRectF labelRect_;
   QPixmap cachedPixmap_;
   qreal cachedPixmapScale_ = 1.0;
+  bool cachedDark_ = false;
 
   void initPaintCache();
   void renderToPixmap(qreal scale = 1.0);

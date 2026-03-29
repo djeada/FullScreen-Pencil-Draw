@@ -9,6 +9,7 @@
 #define WIRE_ITEM_H
 
 #include <QGraphicsPathItem>
+#include <QPainter>
 #include <QPen>
 
 class ElectronicsElementItem;
@@ -52,11 +53,16 @@ public:
   enum { Type = UserType + 200 };
   int type() const override { return Type; }
 
+protected:
+  void paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
+             QWidget *widget) override;
+
 private:
   ElectronicsElementItem *srcElem_;
   int srcPin_;
   ElectronicsElementItem *dstElem_;
   int dstPin_;
+  bool cachedDark_ = false;
 };
 
 #endif // WIRE_ITEM_H

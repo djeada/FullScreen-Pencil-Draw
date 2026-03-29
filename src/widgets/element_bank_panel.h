@@ -59,8 +59,13 @@ protected:
   void mouseReleaseEvent(QMouseEvent *event) override;
 
 private:
+  void rebuildIconPixmap();
+
   ElementInfo info_;
+  QIcon icon_;
   QPixmap iconPixmap_;
+  qreal iconDpr_ = 1.0;
+  bool iconDark_ = false;
   QVariantAnimation hoverAnim_;
   QVariantAnimation pressAnim_;
   qreal hoverProgress_ = 0.0;
