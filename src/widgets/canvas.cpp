@@ -2966,6 +2966,27 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
       selectionMoveStartPositions_.insert(id, item->pos());
     }
 
+    // Also track unselected elements connected via selected wires (for undo).
+    for (QGraphicsItem *item : selectedItems) {
+      auto *wire = qgraphicsitem_cast<WireItem *>(item);
+      if (!wire)
+        continue;
+      auto trackElem = [&](ElectronicsElementItem *elem) {
+        if (!elem || elem->isSelected())
+          return;
+        auto *gi = static_cast<QGraphicsItem *>(elem);
+        ItemId eid = store->idForItem(gi);
+        if (!eid.isValid())
+          eid = registerItem(gi);
+        if (!eid.isValid())
+          return;
+        if (!selectionMoveStartPositions_.contains(eid))
+          selectionMoveStartPositions_.insert(eid, elem->pos());
+      };
+      trackElem(wire->sourceElement());
+      trackElem(wire->destElement());
+    }
+
     trackingSelectionMove_ = !selectionMoveStartPositions_.isEmpty();
     return;
   }
@@ -3179,6 +3200,7 @@ void Canvas::mouseMoveEvent(QMouseEvent *event) {
   }
 
   if (currentShape_ == Selection) {
+    WireItem::clearDragMoved();
     QGraphicsView::mouseMoveEvent(event);
     // Update handle positions AFTER Qt has moved the items (via
     // QGraphicsView::mouseMoveEvent).  The sceneEventFilter alone is
@@ -4804,6 +4826,11 @@ void Canvas::updateTransformHandles() {
     if (item->type() == TransformHandleItem::Type)
       continue;
 
+    // Skip wires – they have no meaningful resize/rotate handles
+    // (transforms are applied to connected elements instead).
+    if (item->type() == WireItem::Type)
+      continue;
+
     // Check if handle already exists for this item (O(1) lookup)
     ItemId id;
     if (store) {
@@ -5071,12 +5098,35 @@ void Canvas::createTransformUndoActions() {
   preTransformStates_.clear();
 }
 
+// ---------------------------------------------------------------------------
+// Wire-aware selection expansion for transforms
+// ---------------------------------------------------------------------------
+// Replace selected WireItems with their connected elements so that
+// transforms are applied to elements (wires auto-update via updatePath).
+static QList<QGraphicsItem *>
+expandWireSelection(const QList<QGraphicsItem *> &selected) {
+  QSet<QGraphicsItem *> result;
+  for (QGraphicsItem *item : selected) {
+    auto *wire = qgraphicsitem_cast<WireItem *>(item);
+    if (wire) {
+      if (wire->sourceElement())
+        result.insert(wire->sourceElement());
+      if (wire->destElement())
+        result.insert(wire->destElement());
+    } else {
+      result.insert(item);
+    }
+  }
+  return result.values();
+}
+
 void Canvas::scaleSelectedItems() {
   if (!scene_) {
     return;
   }
 
-  QList<QGraphicsItem *> selected = scene_->selectedItems();
+  QList<QGraphicsItem *> selected =
+      expandWireSelection(scene_->selectedItems());
   if (selected.isEmpty()) {
     return;
   }
@@ -5138,7 +5188,8 @@ void Canvas::rotateSelectedItems() {
     return;
   }
 
-  QList<QGraphicsItem *> selected = scene_->selectedItems();
+  QList<QGraphicsItem *> selected =
+      expandWireSelection(scene_->selectedItems());
   if (selected.isEmpty()) {
     return;
   }
@@ -5206,7 +5257,8 @@ void Canvas::alignSelectedItems() {
     return;
   }
 
-  QList<QGraphicsItem *> selected = scene_->selectedItems();
+  QList<QGraphicsItem *> selected =
+      expandWireSelection(scene_->selectedItems());
   if (selected.isEmpty()) {
     return;
   }
@@ -5466,7 +5518,8 @@ void Canvas::perspectiveTransformSelectedItems() {
     return;
   }
 
-  QList<QGraphicsItem *> selected = scene_->selectedItems();
+  QList<QGraphicsItem *> selected =
+      expandWireSelection(scene_->selectedItems());
   if (selected.isEmpty()) {
     return;
   }

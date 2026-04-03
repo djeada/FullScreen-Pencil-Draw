@@ -7,7 +7,16 @@
 #include "../core/theme_manager.h"
 #include "electronics_elements.h"
 #include <QPainterPath>
+#include <QPainterPathStroker>
 #include <QtMath>
+
+// ---------------------------------------------------------------------------
+// Static members
+// ---------------------------------------------------------------------------
+
+QSet<ElectronicsElementItem *> WireItem::s_dragMovedElems_;
+
+void WireItem::clearDragMoved() { s_dragMovedElems_.clear(); }
 
 // ---------------------------------------------------------------------------
 // Routing helpers
@@ -40,7 +49,8 @@ WireItem::WireItem(ElectronicsElementItem *srcElem, int srcPin,
                    QGraphicsItem *parent)
     : QGraphicsPathItem(parent), srcElem_(srcElem), srcPin_(srcPin),
       dstElem_(dstElem), dstPin_(dstPin) {
-  setFlags(QGraphicsItem::ItemIsSelectable);
+  setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable |
+           QGraphicsItem::ItemSendsGeometryChanges);
   cachedDark_ = ThemeManager::instance().isDarkTheme();
   const QColor wireColor = cachedDark_ ? Qt::white : Qt::black;
   setPen(QPen(wireColor, 1.2, Qt::SolidLine, Qt::SquareCap, Qt::MiterJoin));
@@ -66,6 +76,43 @@ void WireItem::detachElement(ElectronicsElementItem *elem) {
     srcElem_ = nullptr;
   if (dstElem_ == elem)
     dstElem_ = nullptr;
+}
+
+// ---------------------------------------------------------------------------
+// Interaction: make wire draggable (delegates movement to elements)
+// ---------------------------------------------------------------------------
+
+QVariant WireItem::itemChange(GraphicsItemChange change,
+                              const QVariant &value) {
+  if (change == ItemPositionChange) {
+    // Qt proposes a new pos. Since we always return (0,0), the proposed
+    // value IS the per-frame drag delta.
+    const QPointF delta = value.toPointF() - pos();
+    if (!delta.isNull()) {
+      // Move unselected connected elements. s_dragMovedElems_ prevents
+      // double-moves when multiple selected wires share an element.
+      auto moveElem = [&](ElectronicsElementItem *elem) {
+        if (elem && !elem->isSelected() &&
+            !s_dragMovedElems_.contains(elem)) {
+          s_dragMovedElems_.insert(elem);
+          elem->moveBy(delta.x(), delta.y());
+        }
+      };
+      moveElem(srcElem_);
+      moveElem(dstElem_);
+    }
+    // Wire stays at origin – path is recalculated from element positions
+    // via updatePath(), triggered by the elements' itemChange.
+    return QPointF(0, 0);
+  }
+  return QGraphicsPathItem::itemChange(change, value);
+}
+
+QPainterPath WireItem::shape() const {
+  // Widen the hit area to 8px so thin wires are easier to click/select.
+  QPainterPathStroker stroker;
+  stroker.setWidth(8.0);
+  return stroker.createStroke(path());
 }
 
 // ---------------------------------------------------------------------------

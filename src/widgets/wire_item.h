@@ -11,6 +11,7 @@
 #include <QGraphicsPathItem>
 #include <QPainter>
 #include <QPen>
+#include <QSet>
 
 class ElectronicsElementItem;
 enum class PinDir;
@@ -55,6 +56,9 @@ public:
   static QPainterPath routeManhattan(const QPointF &p1, PinDir d1,
                                      const QPointF &p2, PinDir d2);
 
+  /// Clear per-frame drag dedup set – called by Canvas before each move event.
+  static void clearDragMoved();
+
   /// Custom type for qgraphicsitem_cast.
   enum { Type = UserType + 200 };
   int type() const override { return Type; }
@@ -62,6 +66,9 @@ public:
 protected:
   void paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
              QWidget *widget) override;
+  QPainterPath shape() const override;
+  QVariant itemChange(GraphicsItemChange change,
+                      const QVariant &value) override;
 
 private:
   ElectronicsElementItem *srcElem_;
@@ -69,6 +76,9 @@ private:
   ElectronicsElementItem *dstElem_;
   int dstPin_;
   bool cachedDark_ = false;
+
+  /// Dedup set: elements already moved in the current drag frame.
+  static QSet<ElectronicsElementItem *> s_dragMovedElems_;
 };
 
 #endif // WIRE_ITEM_H
