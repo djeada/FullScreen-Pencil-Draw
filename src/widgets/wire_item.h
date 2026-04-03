@@ -4,6 +4,8 @@
  *        connection pins on ElectronicsElementItem components.
  *
  * The wire automatically follows the connected elements when they are moved.
+ * Selecting a wire auto-selects its connected elements so that drags,
+ * rotations, and scales operate on the whole subcircuit.
  */
 #ifndef WIRE_ITEM_H
 #define WIRE_ITEM_H
@@ -11,7 +13,6 @@
 #include <QGraphicsPathItem>
 #include <QPainter>
 #include <QPen>
-#include <QSet>
 
 class ElectronicsElementItem;
 enum class PinDir;
@@ -20,20 +21,16 @@ enum class PinDir;
  * @brief Graphics item representing a wire between two electronics pins.
  *
  * A WireItem connects a source element/pin to a destination element/pin
- * and draws either a straight line or a simple Manhattan-routed path
- * between the two pin positions. When either element is moved the wire
- * updates automatically (driven by ElectronicsElementItem::itemChange).
+ * and draws a Manhattan-routed path between the two pin positions.
+ * When either element is moved the wire updates automatically (driven by
+ * ElectronicsElementItem::itemChange).
+ *
+ * Selecting a wire automatically co-selects the connected elements so
+ * that drag, rotate, scale, and other transforms work on the subcircuit
+ * as a unit.
  */
 class WireItem : public QGraphicsPathItem {
 public:
-  /**
-   * @brief Construct a wire between two pins.
-   * @param srcElem  Source element.
-   * @param srcPin   Index into srcElem->pins().
-   * @param dstElem  Destination element.
-   * @param dstPin   Index into dstElem->pins().
-   * @param parent   Optional parent item.
-   */
   WireItem(ElectronicsElementItem *srcElem, int srcPin,
            ElectronicsElementItem *dstElem, int dstPin,
            QGraphicsItem *parent = nullptr);
@@ -52,12 +49,8 @@ public:
   int destPin() const { return dstPin_; }
 
   /// Build a direction-aware Manhattan path between two points.
-  /// Exposed as a static helper so the preview line can reuse it.
   static QPainterPath routeManhattan(const QPointF &p1, PinDir d1,
                                      const QPointF &p2, PinDir d2);
-
-  /// Clear per-frame drag dedup set – called by Canvas before each move event.
-  static void clearDragMoved();
 
   /// Custom type for qgraphicsitem_cast.
   enum { Type = UserType + 200 };
@@ -76,9 +69,6 @@ private:
   ElectronicsElementItem *dstElem_;
   int dstPin_;
   bool cachedDark_ = false;
-
-  /// Dedup set: elements already moved in the current drag frame.
-  static QSet<ElectronicsElementItem *> s_dragMovedElems_;
 };
 
 #endif // WIRE_ITEM_H

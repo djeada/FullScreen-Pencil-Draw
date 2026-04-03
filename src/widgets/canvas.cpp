@@ -2966,27 +2966,6 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
       selectionMoveStartPositions_.insert(id, item->pos());
     }
 
-    // Also track unselected elements connected via selected wires (for undo).
-    for (QGraphicsItem *item : selectedItems) {
-      auto *wire = qgraphicsitem_cast<WireItem *>(item);
-      if (!wire)
-        continue;
-      auto trackElem = [&](ElectronicsElementItem *elem) {
-        if (!elem || elem->isSelected())
-          return;
-        auto *gi = static_cast<QGraphicsItem *>(elem);
-        ItemId eid = store->idForItem(gi);
-        if (!eid.isValid())
-          eid = registerItem(gi);
-        if (!eid.isValid())
-          return;
-        if (!selectionMoveStartPositions_.contains(eid))
-          selectionMoveStartPositions_.insert(eid, elem->pos());
-      };
-      trackElem(wire->sourceElement());
-      trackElem(wire->destElement());
-    }
-
     trackingSelectionMove_ = !selectionMoveStartPositions_.isEmpty();
     return;
   }
@@ -3200,7 +3179,6 @@ void Canvas::mouseMoveEvent(QMouseEvent *event) {
   }
 
   if (currentShape_ == Selection) {
-    WireItem::clearDragMoved();
     QGraphicsView::mouseMoveEvent(event);
     // Update handle positions AFTER Qt has moved the items (via
     // QGraphicsView::mouseMoveEvent).  The sceneEventFilter alone is

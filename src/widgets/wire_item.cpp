@@ -8,15 +8,9 @@
 #include "electronics_elements.h"
 #include <QPainterPath>
 #include <QPainterPathStroker>
+#include <QStyleOptionGraphicsItem>
+#include <QTimer>
 #include <QtMath>
-
-// ---------------------------------------------------------------------------
-// Static members
-// ---------------------------------------------------------------------------
-
-QSet<ElectronicsElementItem *> WireItem::s_dragMovedElems_;
-
-void WireItem::clearDragMoved() { s_dragMovedElems_.clear(); }
 
 // ---------------------------------------------------------------------------
 // Routing helpers
@@ -79,37 +73,33 @@ void WireItem::detachElement(ElectronicsElementItem *elem) {
 }
 
 // ---------------------------------------------------------------------------
-// Interaction: make wire draggable (delegates movement to elements)
+// Interaction
 // ---------------------------------------------------------------------------
 
 QVariant WireItem::itemChange(GraphicsItemChange change,
                               const QVariant &value) {
+  if (change == ItemSelectedHasChanged && value.toBool()) {
+    // Defer co-selection to avoid mutating scene selection mid-iteration.
+    ElectronicsElementItem *src = srcElem_;
+    ElectronicsElementItem *dst = dstElem_;
+    QTimer::singleShot(0, [src, dst]() {
+      if (src)
+        src->setSelected(true);
+      if (dst)
+        dst->setSelected(true);
+    });
+  }
   if (change == ItemPositionChange) {
-    // Qt proposes a new pos. Since we always return (0,0), the proposed
-    // value IS the per-frame drag delta.
-    const QPointF delta = value.toPointF() - pos();
-    if (!delta.isNull()) {
-      // Move unselected connected elements. s_dragMovedElems_ prevents
-      // double-moves when multiple selected wires share an element.
-      auto moveElem = [&](ElectronicsElementItem *elem) {
-        if (elem && !elem->isSelected() &&
-            !s_dragMovedElems_.contains(elem)) {
-          s_dragMovedElems_.insert(elem);
-          elem->moveBy(delta.x(), delta.y());
-        }
-      };
-      moveElem(srcElem_);
-      moveElem(dstElem_);
-    }
-    // Wire stays at origin – path is recalculated from element positions
-    // via updatePath(), triggered by the elements' itemChange.
+    // The wire must stay at the scene origin – its path is in scene
+    // coordinates and is recalculated from pin positions by updatePath().
+    // Qt's built-in drag moves the co-selected elements, which trigger
+    // updatePath() via their own itemChange, keeping the wire in sync.
     return QPointF(0, 0);
   }
   return QGraphicsPathItem::itemChange(change, value);
 }
 
 QPainterPath WireItem::shape() const {
-  // Widen the hit area to 8px so thin wires are easier to click/select.
   QPainterPathStroker stroker;
   stroker.setWidth(8.0);
   return stroker.createStroke(path());
@@ -256,9 +246,22 @@ void WireItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
     p.setColor(dark ? Qt::white : Qt::black);
     setPen(p);
   }
-  QGraphicsPathItem::paint(painter, option, widget);
 
-  // Draw small junction dots at both endpoints.
+  // Draw a selection highlight glow behind the wire.
+  if (option->state & QStyle::State_Selected) {
+    QPen hlPen(QColor(34, 211, 238, 100), 6.0, Qt::SolidLine, Qt::RoundCap,
+               Qt::RoundJoin);
+    painter->setPen(hlPen);
+    painter->setBrush(Qt::NoBrush);
+    painter->drawPath(path());
+  }
+
+  // Suppress Qt's default dashed selection rect – paint the path manually.
+  QStyleOptionGraphicsItem optionNoSel(*option);
+  optionNoSel.state &= ~QStyle::State_Selected;
+  QGraphicsPathItem::paint(painter, &optionNoSel, widget);
+
+  // Junction dots at both endpoints.
   const QPainterPath &pp = path();
   if (pp.elementCount() < 2)
     return;
