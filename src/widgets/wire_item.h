@@ -13,6 +13,7 @@
 #include <QPen>
 
 class ElectronicsElementItem;
+enum class PinDir;
 
 /**
  * @brief Graphics item representing a wire between two electronics pins.
@@ -48,6 +49,11 @@ public:
   int sourcePin() const { return srcPin_; }
   ElectronicsElementItem *destElement() const { return dstElem_; }
   int destPin() const { return dstPin_; }
+
+  /// Build a direction-aware Manhattan path between two points.
+  /// Exposed as a static helper so the preview line can reuse it.
+  static QPainterPath routeManhattan(const QPointF &p1, PinDir d1,
+                                     const QPointF &p2, PinDir d2);
 
   /// Custom type for qgraphicsitem_cast.
   enum { Type = UserType + 200 };

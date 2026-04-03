@@ -411,9 +411,13 @@ private:
   // Wire-drawing state
   ElectronicsElementItem *wireSrcElem_ = nullptr;
   int wireSrcPin_ = -1;
-  QGraphicsLineItem *wireTempLine_ = nullptr;
+  QGraphicsPathItem *wireTempPath_ = nullptr;   // Manhattan-routed preview
+  QGraphicsEllipseItem *pinHighlight_ = nullptr; // hover highlight ring
+  void cleanupWireState();
   ElectronicsElementItem *findElectronicsElementNear(const QPointF &scenePos,
                                                      int &pinIndex) const;
+  bool wireAlreadyExists(ElectronicsElementItem *a, int ap,
+                         ElectronicsElementItem *b, int bp) const;
 };
 
 #endif // CANVAS_H
