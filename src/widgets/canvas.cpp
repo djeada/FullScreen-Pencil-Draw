@@ -743,9 +743,32 @@ void Canvas::setShape(const QString &shapeType) {
     colorSelectionOverlay_->hide();
   }
   isPanning_ = false;
+  cleanupWireState();
+}
+
+// ---------------------------------------------------------------------------
+// Wire-drawing state cleanup – called on every tool switch.
+// ---------------------------------------------------------------------------
+
+void Canvas::cleanupWireState() {
+  if (wireTempPath_) {
+    if (scene_)
+      scene_->removeItem(wireTempPath_);
+    delete wireTempPath_;
+    wireTempPath_ = nullptr;
+  }
+  if (pinHighlight_) {
+    if (scene_)
+      scene_->removeItem(pinHighlight_);
+    delete pinHighlight_;
+    pinHighlight_ = nullptr;
+  }
+  wireSrcElem_ = nullptr;
+  wireSrcPin_ = -1;
 }
 
 void Canvas::setPenTool() {
+  cleanupWireState();
   currentShape_ = Pen;
   tempShapeItem_ = nullptr;
   this->setDragMode(QGraphicsView::NoDrag);
@@ -759,6 +782,7 @@ void Canvas::setPenTool() {
 }
 
 void Canvas::setHighlighterTool() {
+  cleanupWireState();
   currentShape_ = Highlighter;
   tempShapeItem_ = nullptr;
   this->setDragMode(QGraphicsView::NoDrag);
@@ -772,6 +796,7 @@ void Canvas::setHighlighterTool() {
 }
 
 void Canvas::setEraserTool() {
+  cleanupWireState();
   currentShape_ = Eraser;
   tempShapeItem_ = nullptr;
   eraserPen_.setColor(backgroundColor_);
@@ -795,6 +820,7 @@ void Canvas::setEraserTool() {
 }
 
 void Canvas::setTextTool() {
+  cleanupWireState();
   currentShape_ = Text;
   tempShapeItem_ = nullptr;
   this->setDragMode(QGraphicsView::NoDrag);
@@ -808,6 +834,7 @@ void Canvas::setTextTool() {
 }
 
 void Canvas::setMermaidTool() {
+  cleanupWireState();
   currentShape_ = Mermaid;
   tempShapeItem_ = nullptr;
   this->setDragMode(QGraphicsView::NoDrag);
@@ -821,6 +848,7 @@ void Canvas::setMermaidTool() {
 }
 
 void Canvas::setFillTool() {
+  cleanupWireState();
   currentShape_ = Fill;
   tempShapeItem_ = nullptr;
   this->setDragMode(QGraphicsView::NoDrag);
@@ -834,6 +862,7 @@ void Canvas::setFillTool() {
 }
 
 void Canvas::setColorSelectTool() {
+  cleanupWireState();
   currentShape_ = ColorSelect;
   tempShapeItem_ = nullptr;
   this->setDragMode(QGraphicsView::NoDrag);
@@ -848,6 +877,7 @@ void Canvas::setColorSelectTool() {
 }
 
 void Canvas::setArrowTool() {
+  cleanupWireState();
   currentShape_ = Arrow;
   tempShapeItem_ = nullptr;
   this->setDragMode(QGraphicsView::NoDrag);
@@ -861,10 +891,9 @@ void Canvas::setArrowTool() {
 }
 
 void Canvas::setWireTool() {
+  cleanupWireState();
   currentShape_ = Wire;
   tempShapeItem_ = nullptr;
-  wireSrcElem_ = nullptr;
-  wireSrcPin_ = -1;
   this->setDragMode(QGraphicsView::NoDrag);
   hideEraserPreview();
   if (scene_)
@@ -876,6 +905,7 @@ void Canvas::setWireTool() {
 }
 
 void Canvas::setCurvedArrowTool() {
+  cleanupWireState();
   currentShape_ = CurvedArrow;
   tempShapeItem_ = nullptr;
   this->setDragMode(QGraphicsView::NoDrag);
@@ -889,6 +919,7 @@ void Canvas::setCurvedArrowTool() {
 }
 
 void Canvas::setBezierTool() {
+  cleanupWireState();
   currentShape_ = Bezier;
   tempShapeItem_ = nullptr;
   this->setDragMode(QGraphicsView::NoDrag);
@@ -902,6 +933,7 @@ void Canvas::setBezierTool() {
 }
 
 void Canvas::setTextOnPathTool() {
+  cleanupWireState();
   currentShape_ = TextOnPath;
   tempShapeItem_ = nullptr;
   this->setDragMode(QGraphicsView::NoDrag);
@@ -915,6 +947,7 @@ void Canvas::setTextOnPathTool() {
 }
 
 void Canvas::setPanTool() {
+  cleanupWireState();
   currentShape_ = Pan;
   tempShapeItem_ = nullptr;
   this->setDragMode(QGraphicsView::NoDrag);
@@ -3050,11 +3083,12 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
       wireSrcElem_ = elem;
       wireSrcPin_ = pinIdx;
       QPointF pinPos = elem->pinScenePos(pinIdx);
-      auto *tl = new QGraphicsLineItem(QLineF(pinPos, pinPos));
-      tl->setPen(QPen(QColor("#22d3ee"), 2.0, Qt::DashLine));
-      tl->setZValue(1e8);
-      scene_->addItem(tl);
-      wireTempLine_ = tl;
+      // Manhattan-routed preview path (initially degenerate)
+      auto *tp = new QGraphicsPathItem();
+      tp->setPen(QPen(QColor("#22d3ee"), 1.6, Qt::DashLine));
+      tp->setZValue(1e8);
+      scene_->addItem(tp);
+      wireTempPath_ = tp;
     }
   } break;
   case CurvedArrow: {
@@ -3189,13 +3223,47 @@ void Canvas::mouseMoveEvent(QMouseEvent *event) {
       static_cast<QGraphicsLineItem *>(tempShapeItem_)
           ->setLine(QLineF(startPoint_, cp));
     break;
-  case Wire:
-    if (wireTempLine_) {
-      QLineF l = wireTempLine_->line();
-      l.setP2(cp);
-      wireTempLine_->setLine(l);
+  case Wire: {
+    // Update pin-highlight ring
+    int hovPin = -1;
+    ElectronicsElementItem *hovElem = findElectronicsElementNear(cp, hovPin);
+    if (hovElem && hovPin >= 0) {
+      QPointF hp = hovElem->pinScenePos(hovPin);
+      if (!pinHighlight_) {
+        pinHighlight_ = new QGraphicsEllipseItem(-6, -6, 12, 12);
+        pinHighlight_->setPen(QPen(QColor("#22d3ee"), 1.6));
+        pinHighlight_->setBrush(Qt::NoBrush);
+        pinHighlight_->setZValue(1e8);
+        scene_->addItem(pinHighlight_);
+      }
+      pinHighlight_->setPos(hp);
+      pinHighlight_->setVisible(true);
+    } else if (pinHighlight_) {
+      pinHighlight_->setVisible(false);
     }
-    break;
+    // Update Manhattan-routed preview
+    if (wireTempPath_ && wireSrcElem_) {
+      PinDir srcDir = wireSrcElem_->pinDir(wireSrcPin_);
+      QPointF srcPos = wireSrcElem_->pinScenePos(wireSrcPin_);
+      // If hovering over a valid destination pin, route to it exactly;
+      // otherwise route toward the cursor assuming Right direction.
+      PinDir dstDir = PinDir::Right;
+      QPointF dstPos = cp;
+      if (hovElem && hovPin >= 0 &&
+          !(hovElem == wireSrcElem_ && hovPin == wireSrcPin_)) {
+        dstDir = hovElem->pinDir(hovPin);
+        dstPos = hovElem->pinScenePos(hovPin);
+      } else {
+        // Guess direction from cursor relative to source
+        if (cp.x() < srcPos.x())
+          dstDir = PinDir::Right; // cursor is left → wire arrives from right
+        else
+          dstDir = PinDir::Left;
+      }
+      wireTempPath_->setPath(
+          WireItem::routeManhattan(srcPos, srcDir, dstPos, dstDir));
+    }
+  } break;
   case CurvedArrow:
     if (tempShapeItem_) {
       const bool shiftDown = (event->modifiers() & Qt::ShiftModifier);
@@ -3351,28 +3419,26 @@ void Canvas::mouseReleaseEvent(QMouseEvent *event) {
     return;
   }
   if (currentShape_ == Wire) {
-    // Remove the temporary preview line.
-    if (wireTempLine_) {
-      scene_->removeItem(wireTempLine_);
-      delete wireTempLine_;
-      wireTempLine_ = nullptr;
-    }
+    // Save source state before cleanup resets it.
+    ElectronicsElementItem *srcElem = wireSrcElem_;
+    int srcPin = wireSrcPin_;
+    // Clean up preview and highlight.
+    cleanupWireState();
     // If we started from a valid pin, try to find a destination pin.
-    if (wireSrcElem_ && wireSrcPin_ >= 0) {
+    if (srcElem && srcPin >= 0) {
       int dstPinIdx = -1;
       ElectronicsElementItem *dstElem =
           findElectronicsElementNear(ep, dstPinIdx);
       if (dstElem && dstPinIdx >= 0 &&
-          !(dstElem == wireSrcElem_ && dstPinIdx == wireSrcPin_)) {
+          !(dstElem == srcElem && dstPinIdx == srcPin) &&
+          !wireAlreadyExists(srcElem, srcPin, dstElem, dstPinIdx)) {
         auto *wire =
-            new WireItem(wireSrcElem_, wireSrcPin_, dstElem, dstPinIdx);
+            new WireItem(srcElem, srcPin, dstElem, dstPinIdx);
         scene_->addItem(wire);
         addDrawAction(wire);
         emit canvasModified();
       }
     }
-    wireSrcElem_ = nullptr;
-    wireSrcPin_ = -1;
     return;
   }
   if (currentShape_ == CurvedArrow && tempShapeItem_) {
@@ -4738,6 +4804,11 @@ void Canvas::updateTransformHandles() {
     if (item->type() == TransformHandleItem::Type)
       continue;
 
+    // Skip wires – they have no meaningful resize/rotate handles
+    // (transforms are applied to connected elements instead).
+    if (item->type() == WireItem::Type)
+      continue;
+
     // Check if handle already exists for this item (O(1) lookup)
     ItemId id;
     if (store) {
@@ -5005,12 +5076,35 @@ void Canvas::createTransformUndoActions() {
   preTransformStates_.clear();
 }
 
+// ---------------------------------------------------------------------------
+// Wire-aware selection expansion for transforms
+// ---------------------------------------------------------------------------
+// Replace selected WireItems with their connected elements so that
+// transforms are applied to elements (wires auto-update via updatePath).
+static QList<QGraphicsItem *>
+expandWireSelection(const QList<QGraphicsItem *> &selected) {
+  QSet<QGraphicsItem *> result;
+  for (QGraphicsItem *item : selected) {
+    auto *wire = qgraphicsitem_cast<WireItem *>(item);
+    if (wire) {
+      if (wire->sourceElement())
+        result.insert(wire->sourceElement());
+      if (wire->destElement())
+        result.insert(wire->destElement());
+    } else {
+      result.insert(item);
+    }
+  }
+  return result.values();
+}
+
 void Canvas::scaleSelectedItems() {
   if (!scene_) {
     return;
   }
 
-  QList<QGraphicsItem *> selected = scene_->selectedItems();
+  QList<QGraphicsItem *> selected =
+      expandWireSelection(scene_->selectedItems());
   if (selected.isEmpty()) {
     return;
   }
@@ -5072,7 +5166,8 @@ void Canvas::rotateSelectedItems() {
     return;
   }
 
-  QList<QGraphicsItem *> selected = scene_->selectedItems();
+  QList<QGraphicsItem *> selected =
+      expandWireSelection(scene_->selectedItems());
   if (selected.isEmpty()) {
     return;
   }
@@ -5140,7 +5235,8 @@ void Canvas::alignSelectedItems() {
     return;
   }
 
-  QList<QGraphicsItem *> selected = scene_->selectedItems();
+  QList<QGraphicsItem *> selected =
+      expandWireSelection(scene_->selectedItems());
   if (selected.isEmpty()) {
     return;
   }
@@ -5400,7 +5496,8 @@ void Canvas::perspectiveTransformSelectedItems() {
     return;
   }
 
-  QList<QGraphicsItem *> selected = scene_->selectedItems();
+  QList<QGraphicsItem *> selected =
+      expandWireSelection(scene_->selectedItems());
   if (selected.isEmpty()) {
     return;
   }
@@ -6007,6 +6104,27 @@ Canvas::findElectronicsElementNear(const QPointF &scenePos,
 
   pinIndex = bestPin;
   return bestElem;
+}
+
+// ---------------------------------------------------------------------------
+// Wire helper: check if a wire already connects the same two pins.
+// ---------------------------------------------------------------------------
+
+bool Canvas::wireAlreadyExists(ElectronicsElementItem *a, int ap,
+                               ElectronicsElementItem *b, int bp) const {
+  if (!scene_)
+    return false;
+  for (QGraphicsItem *item : scene_->items()) {
+    auto *w = qgraphicsitem_cast<WireItem *>(item);
+    if (!w)
+      continue;
+    if ((w->sourceElement() == a && w->sourcePin() == ap &&
+         w->destElement() == b && w->destPin() == bp) ||
+        (w->sourceElement() == b && w->sourcePin() == bp &&
+         w->destElement() == a && w->destPin() == ap))
+      return true;
+  }
+  return false;
 }
 
 void Canvas::placeElement(const QString &elementId) {

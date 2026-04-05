@@ -21,6 +21,9 @@
 
 class WireItem;
 
+/// Direction a pin faces – determines which way the wire stub extends.
+enum class PinDir { Left, Right, Up, Down };
+
 /**
  * @brief Describes a single connection pin on an electronics element.
  *
@@ -29,6 +32,7 @@ class WireItem;
 struct ElectronicsPin {
   QString name;   ///< Human-readable pin name (e.g. "pin1", "anode").
   QPointF offset; ///< Position relative to the element's top-left corner.
+  PinDir  dir;    ///< Direction the pin faces (wire extends this way).
 };
 
 /**
@@ -87,6 +91,9 @@ public:
 
   /// Returns pin @a index position in **scene** coordinates.
   QPointF pinScenePos(int index) const;
+
+  /// Returns pin @a index direction (item-local).
+  PinDir pinDir(int index) const;
 
   /// Returns the index of the pin closest to @a scenePos (or -1).
   int nearestPin(const QPointF &scenePos, qreal maxDist = 18.0) const;

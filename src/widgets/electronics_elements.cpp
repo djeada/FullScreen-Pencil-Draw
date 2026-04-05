@@ -971,6 +971,12 @@ QPointF ElectronicsElementItem::pinScenePos(int index) const {
   return mapToScene(pins_[index].offset);
 }
 
+PinDir ElectronicsElementItem::pinDir(int index) const {
+  if (index < 0 || index >= pins_.size())
+    return PinDir::Right;
+  return pins_[index].dir;
+}
+
 int ElectronicsElementItem::nearestPin(const QPointF &scenePos,
                                        qreal maxDist) const {
   int best = -1;
@@ -1021,64 +1027,64 @@ void ElectronicsElementItem::initPins() {
   case IconKind::Motor:
   case IconKind::Speaker:
   case IconKind::Connector:
-    pins_ = {{QStringLiteral("pin1"), {0.0, midY}},
-             {QStringLiteral("pin2"), {ELEM_W, midY}}};
+    pins_ = {{QStringLiteral("pin1"), {0.0, midY}, PinDir::Left},
+             {QStringLiteral("pin2"), {ELEM_W, midY}, PinDir::Right}};
     break;
 
   // --- Four-terminal (transformer, relay) ---------------------------------
   case IconKind::Transformer:
   case IconKind::Relay:
-    pins_ = {{QStringLiteral("pin1"), {0.0, midY - pinGap}},
-             {QStringLiteral("pin2"), {0.0, midY + pinGap}},
-             {QStringLiteral("pin3"), {ELEM_W, midY - pinGap}},
-             {QStringLiteral("pin4"), {ELEM_W, midY + pinGap}}};
+    pins_ = {{QStringLiteral("pin1"), {0.0, midY - pinGap}, PinDir::Left},
+             {QStringLiteral("pin2"), {0.0, midY + pinGap}, PinDir::Left},
+             {QStringLiteral("pin3"), {ELEM_W, midY - pinGap}, PinDir::Right},
+             {QStringLiteral("pin4"), {ELEM_W, midY + pinGap}, PinDir::Right}};
     break;
 
   // --- Three-terminal (transistor, MOSFET) --------------------------------
   case IconKind::Transistor:
   case IconKind::MOSFET:
-    pins_ = {{QStringLiteral("base"), {0.0, midY}},
-             {QStringLiteral("collector"), {ELEM_W, midY - pinGap}},
-             {QStringLiteral("emitter"), {ELEM_W, midY + pinGap}}};
+    pins_ = {{QStringLiteral("base"), {0.0, midY}, PinDir::Left},
+             {QStringLiteral("collector"), {ELEM_W, midY - pinGap}, PinDir::Right},
+             {QStringLiteral("emitter"), {ELEM_W, midY + pinGap}, PinDir::Right}};
     break;
 
   case IconKind::OpAmp:
-    pins_ = {{QStringLiteral("+in"), {0.0, midY - pinGap}},
-             {QStringLiteral("-in"), {0.0, midY + pinGap}},
-             {QStringLiteral("out"), {ELEM_W, midY}}};
+    pins_ = {{QStringLiteral("+in"), {0.0, midY - pinGap}, PinDir::Left},
+             {QStringLiteral("-in"), {0.0, midY + pinGap}, PinDir::Left},
+             {QStringLiteral("out"), {ELEM_W, midY}, PinDir::Right}};
     break;
 
   case IconKind::VoltageRegulator:
-    pins_ = {{QStringLiteral("in"), {0.0, midY}},
-             {QStringLiteral("out"), {ELEM_W, midY}},
-             {QStringLiteral("gnd"), {midX, ELEM_H}}};
+    pins_ = {{QStringLiteral("in"), {0.0, midY}, PinDir::Left},
+             {QStringLiteral("out"), {ELEM_W, midY}, PinDir::Right},
+             {QStringLiteral("gnd"), {midX, ELEM_H}, PinDir::Down}};
     break;
 
   // --- Battery / power supply (two terminals) -----------------------------
   case IconKind::Battery:
   case IconKind::PowerSupply:
-    pins_ = {{QStringLiteral("+"), {0.0, midY}},
-             {QStringLiteral("-"), {ELEM_W, midY}}};
+    pins_ = {{QStringLiteral("+"), {0.0, midY}, PinDir::Left},
+             {QStringLiteral("-"), {ELEM_W, midY}, PinDir::Right}};
     break;
 
   // --- Ground (single terminal) -------------------------------------------
   case IconKind::Ground:
-    pins_ = {{QStringLiteral("gnd"), {midX, 0.0}}};
+    pins_ = {{QStringLiteral("gnd"), {midX, 0.0}, PinDir::Up}};
     break;
 
   // --- Antenna (single terminal) ------------------------------------------
   case IconKind::Antenna:
-    pins_ = {{QStringLiteral("feed"), {midX, ELEM_H}}};
+    pins_ = {{QStringLiteral("feed"), {midX, ELEM_H}, PinDir::Down}};
     break;
 
   // --- Multi-pin ICs / MCU / Sensor (four symmetric pins) -----------------
   case IconKind::Microcontroller:
   case IconKind::ICChip:
   case IconKind::Sensor:
-    pins_ = {{QStringLiteral("pin1"), {0.0, midY - pinGap}},
-             {QStringLiteral("pin2"), {0.0, midY + pinGap}},
-             {QStringLiteral("pin3"), {ELEM_W, midY - pinGap}},
-             {QStringLiteral("pin4"), {ELEM_W, midY + pinGap}}};
+    pins_ = {{QStringLiteral("pin1"), {0.0, midY - pinGap}, PinDir::Left},
+             {QStringLiteral("pin2"), {0.0, midY + pinGap}, PinDir::Left},
+             {QStringLiteral("pin3"), {ELEM_W, midY - pinGap}, PinDir::Right},
+             {QStringLiteral("pin4"), {ELEM_W, midY + pinGap}, PinDir::Right}};
     break;
   }
 }
