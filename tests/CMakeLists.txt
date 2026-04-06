@@ -410,6 +410,39 @@ set_target_properties(test_wire_item PROPERTIES
 
 add_test(NAME TestWireItem COMMAND test_wire_item)
 
+# UndoRedoManager tests
+add_executable(test_undo_redo_manager
+    test_undo_redo_manager.cpp
+    ../src/core/undo_redo_manager.cpp
+    ../src/core/undo_redo_manager.h
+    ../src/core/action.cpp
+    ../src/core/action.h
+    ${CORE_SOURCES}
+    ${CORE_HEADERS}
+    ../src/widgets/latex_text_item.cpp
+    ../src/widgets/latex_text_item.h
+    ../src/widgets/mermaid_text_item.cpp
+    ../src/widgets/mermaid_text_item.h
+    ../src/widgets/text_on_path_item.cpp
+    ../src/widgets/text_on_path_item.h
+)
+
+target_include_directories(test_undo_redo_manager PRIVATE
+    ../src/core
+    ../src/widgets
+)
+
+target_link_libraries(test_undo_redo_manager PRIVATE
+    Qt${QT_VERSION_MAJOR}::Widgets
+    Qt${QT_VERSION_MAJOR}::Test
+)
+
+set_target_properties(test_undo_redo_manager PROPERTIES
+    AUTOMOC ON
+)
+
+add_test(NAME TestUndoRedoManager COMMAND test_undo_redo_manager)
+
 # Canvas interaction tests
 set(CANVAS_TEST_SOURCES
     ../src/core/action.cpp
@@ -525,6 +558,6 @@ add_test(NAME TestCanvasInteraction COMMAND test_canvas_interaction)
 # Add custom target to run all tests
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-    DEPENDS test_item_store test_project_serializer test_image_filters test_perspective_transform test_snap_engine test_text_whitespace test_latex_unicode test_busy_spinner_overlay test_brush_tip test_rotation_dialog test_alignment_dialog test_transform_action test_group_clipboard test_side_tab_bar test_canvas_interaction
+    DEPENDS test_item_store test_project_serializer test_image_filters test_perspective_transform test_snap_engine test_text_whitespace test_latex_unicode test_busy_spinner_overlay test_brush_tip test_rotation_dialog test_alignment_dialog test_transform_action test_group_clipboard test_side_tab_bar test_undo_redo_manager test_canvas_interaction
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
