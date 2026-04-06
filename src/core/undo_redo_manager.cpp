@@ -6,6 +6,7 @@ void UndoRedoManager::push(std::unique_ptr<Action> action) {
     return;
   }
   undoStack_.push_back(std::move(action));
+  enforceLimit();
   redoStack_.clear();
 }
 
@@ -29,6 +30,7 @@ void UndoRedoManager::redo() {
   redoStack_.pop_back();
   action->redo();
   undoStack_.push_back(std::move(action));
+  enforceLimit();
 }
 
 void UndoRedoManager::clear() {
@@ -39,3 +41,9 @@ void UndoRedoManager::clear() {
 bool UndoRedoManager::canUndo() const { return !undoStack_.empty(); }
 
 bool UndoRedoManager::canRedo() const { return !redoStack_.empty(); }
+
+void UndoRedoManager::enforceLimit() {
+  while (undoStack_.size() > kMaxUndoSteps) {
+    undoStack_.erase(undoStack_.begin());
+  }
+}
