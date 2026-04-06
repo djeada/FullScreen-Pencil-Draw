@@ -952,8 +952,26 @@ void PdfViewer::captureScreenshot(const QRectF &rect) {
     return;
   }
 
+  // Scale the screenshot to match the effective render DPI of the page.
+  // The page pixmap is rendered at effectiveRenderDpi() and displayed in the
+  // scene with a scale factor of (renderDpi_ / effectiveDpi). If we create
+  // the screenshot at just the scene-coordinate size (base DPI), we lose the
+  // extra resolution when the view is zoomed in or resized with fit-to modes.
+  // By scaling up the target image, scene_->render() composites the high-res
+  // pixmap closer to its native resolution, preserving quality.
+  const int effectiveDpi = effectiveRenderDpi();
+  const double dpiScale =
+      static_cast<double>(effectiveDpi) / static_cast<double>(renderDpi_);
+  // Also honour the device-pixel ratio so HiDPI screens don't lose detail.
+  const double dpr = qMax(1.0, static_cast<double>(devicePixelRatioF()));
+  const double scaleFactor = qMax(dpiScale, dpr);
+
+  QSize imageSize(
+      qMax(1, static_cast<int>(std::ceil(rect.width() * scaleFactor))),
+      qMax(1, static_cast<int>(std::ceil(rect.height() * scaleFactor))));
+
   // Create an image to render the selected area
-  QImage screenshot(rect.size().toSize(), QImage::Format_ARGB32);
+  QImage screenshot(imageSize, QImage::Format_ARGB32);
   // Fill with white background (standard PDF background color)
   // instead of transparent to ensure proper visibility
   screenshot.fill(Qt::white);
@@ -963,7 +981,8 @@ void PdfViewer::captureScreenshot(const QRectF &rect) {
   painter.setRenderHint(QPainter::SmoothPixmapTransform);
 
   // Render the scene area (including PDF page and any annotations)
-  // Let scene_->render() handle the transformation from source rect to target
+  // The target rect covers the full (scaled) image so that the scene content
+  // in `rect` is painted at the higher resolution.
   scene_->render(&painter, screenshot.rect(), rect);
 
   painter.end();
