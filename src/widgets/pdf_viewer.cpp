@@ -954,15 +954,19 @@ void PdfViewer::captureScreenshot(const QRectF &rect) {
 
   // Scale the screenshot to match the effective render DPI of the page.
   // The page pixmap is rendered at effectiveRenderDpi() and displayed in the
-  // scene with a scale factor of (renderDpi_ / effectiveDpi). If we create
-  // the screenshot at just the scene-coordinate size (base DPI), we lose the
-  // extra resolution when the view is zoomed in or resized with fit-to modes.
-  // By scaling up the target image, scene_->render() composites the high-res
-  // pixmap closer to its native resolution, preserving quality.
+  // scene with a scale factor of (renderDpi_ / effectiveRenderDpi()). If we
+  // create the screenshot at just the scene-coordinate size (base DPI), we
+  // lose the extra resolution when the view is zoomed in or resized with
+  // fit-to modes.  By scaling up the target image, scene_->render()
+  // composites the high-res pixmap closer to its native resolution,
+  // preserving quality.
   const int effectiveDpi = effectiveRenderDpi();
   const double dpiScale =
       static_cast<double>(effectiveDpi) / static_cast<double>(renderDpi_);
   // Also honour the device-pixel ratio so HiDPI screens don't lose detail.
+  // We use qMax rather than multiplying because the underlying page pixmap
+  // only contains dpiScale worth of resolution; exceeding that would just
+  // produce interpolated (upscaled) pixels without adding real detail.
   const double dpr = qMax(1.0, static_cast<double>(devicePixelRatioF()));
   const double scaleFactor = qMax(dpiScale, dpr);
 
