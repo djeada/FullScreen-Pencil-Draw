@@ -44,9 +44,9 @@ bool UndoRedoManager::canRedo() const { return !redoStack_.empty(); }
 
 void UndoRedoManager::enforceLimit() {
   if (undoStack_.size() > kMaxUndoSteps) {
-    undoStack_.erase(undoStack_.begin(),
-                     undoStack_.begin() +
-                         static_cast<std::ptrdiff_t>(undoStack_.size() -
-                                                     kMaxUndoSteps));
+    undoStack_.erase(
+        undoStack_.begin(),
+        undoStack_.begin() +
+            static_cast<std::ptrdiff_t>(undoStack_.size() - kMaxUndoSteps));
   }
 }

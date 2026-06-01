@@ -4,6 +4,7 @@
  */
 #include "electronics_elements.h"
 #include "wire_item.h"
+#include <QCoreApplication>
 #include <QGraphicsScene>
 #include <QTest>
 
@@ -140,6 +141,29 @@ private slots:
     // Moving elements should not crash after wire is deleted
     r1->setPos(50, 50);
     r2->setPos(350, 50);
+  }
+
+  void selectingWireDoesNotCrashWhenEndpointIsDeleted() {
+    QGraphicsScene scene;
+    auto *r1 = new ResistorElement();
+    auto *r2 = new ResistorElement();
+    r1->setPos(0, 0);
+    r2->setPos(300, 0);
+    scene.addItem(r1);
+    scene.addItem(r2);
+
+    auto *wire = new WireItem(r1, 1, r2, 0);
+    scene.addItem(wire);
+
+    wire->setSelected(true);
+
+    scene.removeItem(r2);
+    delete r2;
+
+    QCoreApplication::processEvents();
+
+    QVERIFY(wire->isSelected());
+    QCOMPARE(scene.items().size(), 2);
   }
 
   void allElementsHavePins() {

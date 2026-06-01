@@ -32,7 +32,7 @@ enum class PinDir { Left, Right, Up, Down };
 struct ElectronicsPin {
   QString name;   ///< Human-readable pin name (e.g. "pin1", "anode").
   QPointF offset; ///< Position relative to the element's top-left corner.
-  PinDir  dir;    ///< Direction the pin faces (wire extends this way).
+  PinDir dir;     ///< Direction the pin faces (wire extends this way).
 };
 
 /**

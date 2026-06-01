@@ -328,6 +328,10 @@ Canvas::Canvas(QWidget *parent)
 }
 
 Canvas::~Canvas() {
+  if (scene_) {
+    disconnect(scene_, &QGraphicsScene::selectionChanged, this,
+               &Canvas::updateTransformHandles);
+  }
   resetColorSelection();
   clearTransformHandles();
   if (undoRedoManager_) {
@@ -3432,8 +3436,7 @@ void Canvas::mouseReleaseEvent(QMouseEvent *event) {
       if (dstElem && dstPinIdx >= 0 &&
           !(dstElem == srcElem && dstPinIdx == srcPin) &&
           !wireAlreadyExists(srcElem, srcPin, dstElem, dstPinIdx)) {
-        auto *wire =
-            new WireItem(srcElem, srcPin, dstElem, dstPinIdx);
+        auto *wire = new WireItem(srcElem, srcPin, dstElem, dstPinIdx);
         scene_->addItem(wire);
         addDrawAction(wire);
         emit canvasModified();

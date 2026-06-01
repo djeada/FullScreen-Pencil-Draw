@@ -411,7 +411,7 @@ private:
   // Wire-drawing state
   ElectronicsElementItem *wireSrcElem_ = nullptr;
   int wireSrcPin_ = -1;
-  QGraphicsPathItem *wireTempPath_ = nullptr;   // Manhattan-routed preview
+  QGraphicsPathItem *wireTempPath_ = nullptr;    // Manhattan-routed preview
   QGraphicsEllipseItem *pinHighlight_ = nullptr; // hover highlight ring
   void cleanupWireState();
   ElectronicsElementItem *findElectronicsElementNear(const QPointF &scenePos,

@@ -1043,9 +1043,10 @@ void ElectronicsElementItem::initPins() {
   // --- Three-terminal (transistor, MOSFET) --------------------------------
   case IconKind::Transistor:
   case IconKind::MOSFET:
-    pins_ = {{QStringLiteral("base"), {0.0, midY}, PinDir::Left},
-             {QStringLiteral("collector"), {ELEM_W, midY - pinGap}, PinDir::Right},
-             {QStringLiteral("emitter"), {ELEM_W, midY + pinGap}, PinDir::Right}};
+    pins_ = {
+        {QStringLiteral("base"), {0.0, midY}, PinDir::Left},
+        {QStringLiteral("collector"), {ELEM_W, midY - pinGap}, PinDir::Right},
+        {QStringLiteral("emitter"), {ELEM_W, midY + pinGap}, PinDir::Right}};
     break;
 
   case IconKind::OpAmp:

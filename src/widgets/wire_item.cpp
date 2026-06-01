@@ -6,6 +6,7 @@
 #include "wire_item.h"
 #include "../core/theme_manager.h"
 #include "electronics_elements.h"
+#include <QGraphicsScene>
 #include <QPainterPath>
 #include <QPainterPathStroker>
 #include <QStyleOptionGraphicsItem>
@@ -22,16 +23,37 @@ static constexpr qreal DOT_R = 2.8; // junction-dot radius
 /// Unit vector for a PinDir.
 static QPointF dirVec(PinDir d) {
   switch (d) {
-  case PinDir::Left:  return {-1.0,  0.0};
-  case PinDir::Right: return { 1.0,  0.0};
-  case PinDir::Up:    return { 0.0, -1.0};
-  case PinDir::Down:  return { 0.0,  1.0};
+  case PinDir::Left:
+    return {-1.0, 0.0};
+  case PinDir::Right:
+    return {1.0, 0.0};
+  case PinDir::Up:
+    return {0.0, -1.0};
+  case PinDir::Down:
+    return {0.0, 1.0};
   }
   return {1.0, 0.0};
 }
 
 static bool isHoriz(PinDir d) {
   return d == PinDir::Left || d == PinDir::Right;
+}
+
+static ElectronicsElementItem *findLiveElement(QGraphicsScene *scene,
+                                               quintptr address) {
+  if (!scene || address == 0) {
+    return nullptr;
+  }
+
+  for (QGraphicsItem *item : scene->items()) {
+    if (reinterpret_cast<quintptr>(item) != address) {
+      continue;
+    }
+
+    return dynamic_cast<ElectronicsElementItem *>(item);
+  }
+
+  return nullptr;
 }
 
 // ---------------------------------------------------------------------------
@@ -80,12 +102,17 @@ QVariant WireItem::itemChange(GraphicsItemChange change,
                               const QVariant &value) {
   if (change == ItemSelectedHasChanged && value.toBool()) {
     // Defer co-selection to avoid mutating scene selection mid-iteration.
-    ElectronicsElementItem *src = srcElem_;
-    ElectronicsElementItem *dst = dstElem_;
-    QTimer::singleShot(0, [src, dst]() {
-      if (src)
+    QGraphicsScene *ownerScene = scene();
+    if (!ownerScene) {
+      return QGraphicsPathItem::itemChange(change, value);
+    }
+
+    const quintptr srcAddress = reinterpret_cast<quintptr>(srcElem_);
+    const quintptr dstAddress = reinterpret_cast<quintptr>(dstElem_);
+    QTimer::singleShot(0, ownerScene, [ownerScene, srcAddress, dstAddress]() {
+      if (ElectronicsElementItem *src = findLiveElement(ownerScene, srcAddress))
         src->setSelected(true);
-      if (dst)
+      if (ElectronicsElementItem *dst = findLiveElement(ownerScene, dstAddress))
         dst->setSelected(true);
     });
   }
@@ -148,9 +175,8 @@ QPainterPath WireItem::routeManhattan(const QPointF &p1, PinDir d1,
     if (sameDir) {
       // Same direction: jog at the farthest stub extent.
       // e.g. both Right → connect at the rightmost X of the two stubs.
-      const qreal jx = (d1 == PinDir::Right)
-                            ? qMax(s1.x(), s2.x())
-                            : qMin(s1.x(), s2.x());
+      const qreal jx =
+          (d1 == PinDir::Right) ? qMax(s1.x(), s2.x()) : qMin(s1.x(), s2.x());
       pp.lineTo(jx, s1.y());
       pp.lineTo(jx, s2.y());
 
@@ -158,8 +184,7 @@ QPainterPath WireItem::routeManhattan(const QPointF &p1, PinDir d1,
       // Opposing directions (Right↔Left).
       // "Converging" when stubs point toward each other with room.
       const bool converging =
-          (d1 == PinDir::Right) ? (s1.x() + 1 < s2.x())
-                                : (s2.x() + 1 < s1.x());
+          (d1 == PinDir::Right) ? (s1.x() + 1 < s2.x()) : (s2.x() + 1 < s1.x());
       if (converging) {
         // Z-step through midpoint between stubs.
         const qreal mx = (s1.x() + s2.x()) / 2.0;
@@ -172,8 +197,8 @@ QPainterPath WireItem::routeManhattan(const QPointF &p1, PinDir d1,
         const qreal above = yMin - STUB * 2.5;
         const qreal below = yMax + STUB * 2.5;
         const qreal mid = (p1.y() + p2.y()) / 2.0;
-        const qreal by = (qAbs(above - mid) <= qAbs(below - mid))
-                              ? above : below;
+        const qreal by =
+            (qAbs(above - mid) <= qAbs(below - mid)) ? above : below;
         pp.lineTo(s1.x(), by);
         pp.lineTo(s2.x(), by);
       }
@@ -184,16 +209,14 @@ QPainterPath WireItem::routeManhattan(const QPointF &p1, PinDir d1,
     const bool sameDir = (d1 == d2);
 
     if (sameDir) {
-      const qreal jy = (d1 == PinDir::Down)
-                            ? qMax(s1.y(), s2.y())
-                            : qMin(s1.y(), s2.y());
+      const qreal jy =
+          (d1 == PinDir::Down) ? qMax(s1.y(), s2.y()) : qMin(s1.y(), s2.y());
       pp.lineTo(s1.x(), jy);
       pp.lineTo(s2.x(), jy);
 
     } else {
       const bool converging =
-          (d1 == PinDir::Down) ? (s1.y() + 1 < s2.y())
-                               : (s2.y() + 1 < s1.y());
+          (d1 == PinDir::Down) ? (s1.y() + 1 < s2.y()) : (s2.y() + 1 < s1.y());
       if (converging) {
         const qreal my = (s1.y() + s2.y()) / 2.0;
         pp.lineTo(s1.x(), my);
@@ -201,11 +224,10 @@ QPainterPath WireItem::routeManhattan(const QPointF &p1, PinDir d1,
       } else {
         const qreal xMin = qMin(p1.x(), p2.x());
         const qreal xMax = qMax(p1.x(), p2.x());
-        const qreal left  = xMin - STUB * 2.5;
+        const qreal left = xMin - STUB * 2.5;
         const qreal right = xMax + STUB * 2.5;
         const qreal mid = (p1.x() + p2.x()) / 2.0;
-        const qreal bx = (qAbs(left - mid) <= qAbs(right - mid))
-                              ? left : right;
+        const qreal bx = (qAbs(left - mid) <= qAbs(right - mid)) ? left : right;
         pp.lineTo(bx, s1.y());
         pp.lineTo(bx, s2.y());
       }
@@ -227,8 +249,8 @@ void WireItem::updatePath() {
 
   const QPointF p1 = srcElem_->pinScenePos(srcPin_);
   const QPointF p2 = dstElem_->pinScenePos(dstPin_);
-  const PinDir  d1 = srcElem_->pinDir(srcPin_);
-  const PinDir  d2 = dstElem_->pinDir(dstPin_);
+  const PinDir d1 = srcElem_->pinDir(srcPin_);
+  const PinDir d2 = dstElem_->pinDir(dstPin_);
 
   setPath(routeManhattan(p1, d1, p2, d2));
 }
