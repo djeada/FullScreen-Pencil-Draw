@@ -137,7 +137,23 @@ MainWindow::MainWindow(QWidget *parent)
           &Canvas::deleteSelectedItems);
 }
 
-MainWindow::~MainWindow() {}
+MainWindow::~MainWindow() {
+  if (_layerPanel) {
+    _layerPanel->setItemStore(nullptr);
+    _layerPanel->setCanvas(nullptr);
+  }
+  if (_canvas) {
+    _canvas->setUndoRedoManager(nullptr);
+  }
+#ifdef HAVE_QT_PDF
+  if (_pdfViewer) {
+    _pdfViewer->setUndoRedoManager(nullptr);
+  }
+#endif
+  if (_undoRedoManager) {
+    _undoRedoManager->clear();
+  }
+}
 
 void MainWindow::setupStatusBar() {
   _statusLabel = new QLabel(
