@@ -334,12 +334,9 @@ Canvas::~Canvas() {
   }
   resetColorSelection();
   clearTransformHandles();
-  if (undoRedoManager_) {
-    undoRedoManager_->clear();
-  } else {
-    undoStack_.clear();
-    redoStack_.clear();
-  }
+  undoRedoManager_ = nullptr;
+  undoStack_.clear();
+  redoStack_.clear();
 }
 
 int Canvas::getCurrentBrushSize() const { return currentPen_.width(); }

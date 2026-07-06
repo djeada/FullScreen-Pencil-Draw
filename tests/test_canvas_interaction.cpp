@@ -80,12 +80,12 @@ private slots:
   }
 
   void mainWindowSelectionModeStillSelectsAndDrags() {
-    auto *window = new MainWindow;
-    window->resize(1200, 800);
-    window->show();
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
 
-    auto *canvas = window->findChild<Canvas *>();
+    auto *canvas = window.findChild<Canvas *>();
     QVERIFY(canvas);
 
     canvas->setShape("Selection");

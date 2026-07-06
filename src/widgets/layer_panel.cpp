@@ -169,6 +169,13 @@ LayerPanel::LayerPanel(LayerManager *manager, QWidget *parent)
 LayerPanel::~LayerPanel() = default;
 
 void LayerPanel::setCanvas(Canvas *canvas) {
+  if (canvas_ && canvas_->scene()) {
+    disconnect(canvas_->scene(), nullptr, this, nullptr);
+  }
+  if (canvas_ && canvas_->sceneController()) {
+    disconnect(canvas_->sceneController(), nullptr, this, nullptr);
+  }
+
   canvas_ = canvas;
   if (canvas_ && canvas_->scene()) {
     connect(canvas_->scene(), &QGraphicsScene::selectionChanged, this,
