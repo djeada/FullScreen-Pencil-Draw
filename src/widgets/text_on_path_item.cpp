@@ -4,8 +4,11 @@
  */
 #include "text_on_path_item.h"
 #include <QFontMetricsF>
+#include <QGraphicsScene>
+#include <QGraphicsView>
 #include <QInputDialog>
 #include <QPainter>
+#include <QPointer>
 #include <QtMath>
 
 TextOnPathItem::TextOnPathItem(QGraphicsItem *parent)
@@ -78,9 +81,22 @@ void TextOnPathItem::setFont(const QFont &font) {
 
 void TextOnPathItem::mouseDoubleClickEvent(
     QGraphicsSceneMouseEvent * /*event*/) {
+  // The dialog runs a nested event loop, during which this item can be
+  // deleted (undo, layer removal, document close) – guard `this` and parent
+  // the dialog to the view so it centres and stays modal to the window.
+  QPointer<TextOnPathItem> guard(this);
+  QWidget *dialogParent = nullptr;
+  if (scene() && !scene()->views().isEmpty()) {
+    dialogParent = scene()->views().constFirst();
+  }
+
   bool ok = false;
-  QString newText = QInputDialog::getText(
-      nullptr, "Edit Text on Path", "Text:", QLineEdit::Normal, text_, &ok);
+  QString newText =
+      QInputDialog::getText(dialogParent, "Edit Text on Path",
+                            "Text:", QLineEdit::Normal, text_, &ok);
+  if (!guard) {
+    return;
+  }
   if (ok && !newText.isEmpty()) {
     setText(newText);
   }

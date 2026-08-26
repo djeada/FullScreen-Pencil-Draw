@@ -60,7 +60,8 @@ void PenTool::mousePressEvent(QMouseEvent *event, const QPointF &scenePos) {
     currentStroke_->addPoint(scenePos);
   }
 
-  renderer_->addDrawAction(currentItem_);
+  // Undo entry is pushed on release so a bare click doesn't commit an
+  // invisible zero-length item into scene/history.
 }
 
 void PenTool::mouseMoveEvent(QMouseEvent *event, const QPointF &scenePos) {
@@ -73,8 +74,22 @@ void PenTool::mouseMoveEvent(QMouseEvent *event, const QPointF &scenePos) {
   }
 }
 
-void PenTool::mouseReleaseEvent(QMouseEvent * /*event*/,
+void PenTool::mouseReleaseEvent(QMouseEvent *event,
                                 const QPointF & /*scenePos*/) {
+  if (!event || event->button() != Qt::LeftButton)
+    return; // ignore other-button releases mid-stroke
+
+  // A single-sample click still produces a visible dot with the path pen.
+  if (currentPath_ && pointBuffer_.size() <= 1) {
+    const QPointF pt =
+        pointBuffer_.isEmpty() ? QPointF() : pointBuffer_.constFirst();
+    QPainterPath dotPath = currentPath_->path();
+    dotPath.lineTo(pt + QPointF(0.01, 0.01));
+    currentPath_->setPath(dotPath);
+  }
+  if (currentItem_) {
+    renderer_->addDrawAction(currentItem_);
+  }
   currentPath_ = nullptr;
   currentStroke_ = nullptr;
   currentItem_ = nullptr;

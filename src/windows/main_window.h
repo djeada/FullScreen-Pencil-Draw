@@ -84,6 +84,7 @@ private:
   QAction *_autoSaveAction;
   QAction *_rulerAction;
   QAction *_measurementAction;
+  bool _documentDirty = false;
   std::unique_ptr<UndoRedoManager> _undoRedoManager;
   ActiveSurface _activeSurface = ActiveSurface::Canvas;
 
@@ -97,9 +98,9 @@ private:
   QLabel *_pdfPageLabel;
   QSpinBox *_pdfPageSpinBox;
   QComboBox *_pdfZoomCombo;
-  QAction *_pdfDarkModeAction;
-  QAction *_pdfModeAction;
-  QAction *_thumbnailToggleAction;
+  QAction *_pdfDarkModeAction = nullptr;
+  QAction *_pdfModeAction = nullptr;
+  QAction *_thumbnailToggleAction = nullptr;
   bool _pdfPanelOnLeft; // Track if PDF panel is on the left side
 
   void setupPdfViewer();

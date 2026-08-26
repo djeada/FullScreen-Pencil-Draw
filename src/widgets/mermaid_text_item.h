@@ -119,6 +119,13 @@ signals:
   void editingFinished();
 
   /**
+   * @brief Emitted when editing was aborted (Escape) without committing.
+   *
+   * Owners use this to discard items that were never given any content.
+   */
+  void editingCancelled();
+
+  /**
    * @brief Emitted when the Mermaid code changes.
    */
   void codeChanged();

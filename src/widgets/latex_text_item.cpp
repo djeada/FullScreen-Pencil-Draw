@@ -22,6 +22,12 @@
 #include "../core/katex_renderer.h"
 #endif
 
+#include <atomic>
+
+namespace {
+std::atomic<quintptr> s_nextRenderId{0};
+} // namespace
+
 // Unicode math symbols for LaTeX rendering
 namespace LatexSymbols {
 // Greek letters (lowercase and uppercase)
@@ -412,6 +418,12 @@ LatexTextEdit::LatexTextEdit(QWidget *parent) : QTextEdit(parent) {
 
 void LatexTextEdit::focusOutEvent(QFocusEvent *event) {
   QTextEdit::focusOutEvent(event);
+  // Focus lost to a popup (color picker, combo list) must not close the
+  // editor – only real focus changes finish editing.
+  if (event->reason() == Qt::PopupFocusReason ||
+      event->reason() == Qt::OtherFocusReason) {
+    return;
+  }
   emit editingFinished();
 }
 
@@ -524,7 +536,8 @@ void LatexTextItem::paint(QPainter *painter,
   }
 
   // Draw selection highlight with refined styling
-  if (option->state & QStyle::State_Selected) {
+  const bool selected = option && (option->state & QStyle::State_Selected);
+  if (selected) {
     // Main selection border
     painter->setPen(QPen(QColor(0, 122, 204, 200), 1.5, Qt::SolidLine));
     painter->setBrush(Qt::NoBrush);
@@ -680,6 +693,9 @@ void LatexTextItem::onEditingCancelled() {
   }
   prepareGeometryChange();
   update();
+  // Owners clean up items whose edit was aborted before any content was
+  // committed (prevents invisible empty items from lingering in the scene).
+  emit editingCancelled();
 }
 
 #ifdef HAVE_QT_WEBENGINE
@@ -769,8 +785,9 @@ void LatexTextItem::renderContent() {
         return;
       }
 
-      // Request async render
-      pendingRenderId_ = reinterpret_cast<quintptr>(this);
+      // Request async render (unique id; a recycled item address must never
+      // match an in-flight request from a destroyed item)
+      pendingRenderId_ = s_nextRenderId.fetch_add(1) + 1;
       KatexRenderer::instance().render(latex, textColor_, font_.pointSize(),
                                        false, pendingRenderId_);
 

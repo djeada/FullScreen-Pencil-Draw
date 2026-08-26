@@ -187,7 +187,7 @@ ToolPanel::ToolPanel(QWidget *parent)
 
   // === NAVIGATION TOOLS ===
   actionSelection = new QAction("⬚ Select", this);
-  actionSelection->setToolTip("Select items (V)");
+  actionSelection->setToolTip("Select items (S or V)");
   actionSelection->setCheckable(true);
   connect(actionSelection, &QAction::triggered, this,
           &ToolPanel::onActionSelection);

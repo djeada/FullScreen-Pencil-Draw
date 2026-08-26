@@ -63,8 +63,11 @@ void LassoSelectionTool::mouseMoveEvent(QMouseEvent *event,
   lassoPath_->setPath(path);
 }
 
-void LassoSelectionTool::mouseReleaseEvent(QMouseEvent * /*event*/,
+void LassoSelectionTool::mouseReleaseEvent(QMouseEvent *event,
                                            const QPointF & /*scenePos*/) {
+  // Only the button that started the lasso finishes it.
+  if (event && event->button() != Qt::LeftButton)
+    return;
   if (!drawing_)
     return;
   drawing_ = false;

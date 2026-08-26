@@ -16,12 +16,6 @@ void BezierTool::mousePressEvent(QMouseEvent *event, const QPointF &scenePos) {
   if (!(event->buttons() & Qt::LeftButton))
     return;
 
-  // Double-click finishes the path
-  if (event->type() == QEvent::MouseButtonDblClick) {
-    finalizePath();
-    return;
-  }
-
   isDragging_ = true;
   dragStart_ = scenePos;
 
@@ -78,8 +72,11 @@ void BezierTool::mouseMoveEvent(QMouseEvent * /*event*/,
   }
 }
 
-void BezierTool::mouseReleaseEvent(QMouseEvent * /*event*/,
+void BezierTool::mouseReleaseEvent(QMouseEvent *event,
                                    const QPointF &scenePos) {
+  // Only the button that started the drag sets the anchor handle.
+  if (event && event->button() != Qt::LeftButton)
+    return;
   if (isDragging_ && !anchors_.isEmpty()) {
     AnchorPoint &current = anchors_.last();
     if (current.position != scenePos) {
@@ -89,6 +86,12 @@ void BezierTool::mouseReleaseEvent(QMouseEvent * /*event*/,
     isDragging_ = false;
     rebuildPath();
   }
+}
+
+void BezierTool::mouseDoubleClickEvent(QMouseEvent * /*event*/,
+                                       const QPointF & /*scenePos*/) {
+  // Double-click finishes the path (forwarded by the host view)
+  finalizePath();
 }
 
 void BezierTool::deactivate() {
@@ -109,6 +112,26 @@ void BezierTool::finalizePath() {
       controller->removeItem(currentPathId_, false);
     } else if (currentPath_->scene()) {
       renderer_->scene()->removeItem(currentPath_);
+      delete currentPath_;
+    }
+  }
+
+  currentPath_ = nullptr;
+  currentPathId_ = ItemId();
+  anchors_.clear();
+  isDragging_ = false;
+}
+
+void BezierTool::discardPath() {
+  clearPreviewItems();
+
+  if (currentPath_) {
+    SceneController *controller = renderer_->sceneController();
+    if (controller && currentPathId_.isValid()) {
+      controller->removeItem(currentPathId_, false);
+    } else {
+      if (currentPath_->scene())
+        renderer_->scene()->removeItem(currentPath_);
       delete currentPath_;
     }
   }

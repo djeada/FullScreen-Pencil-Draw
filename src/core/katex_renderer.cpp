@@ -20,13 +20,50 @@
 
 // Helper to escape string for JavaScript
 static QString escapeJsString(const QString &str) {
-  QString escaped = str;
-  escaped.replace('\\', "\\\\");
-  escaped.replace('\'', "\\'");
-  escaped.replace('\"', "\\\"");
-  escaped.replace('\n', "\\n");
-  escaped.replace('\r', "\\r");
-  return "\"" + escaped + "\"";
+  QString escaped;
+  escaped.reserve(str.size() + 2);
+  escaped.append('"');
+  for (const QChar c : str) {
+    switch (c.unicode()) {
+    case '\\':
+      escaped.append("\\\\");
+      break;
+    case '"':
+      escaped.append("\\\"");
+      break;
+    case '\'':
+      escaped.append("\\'");
+      break;
+    case '`':
+      escaped.append("\\`");
+      break;
+    case '\n':
+      escaped.append("\\n");
+      break;
+    case '\r':
+      escaped.append("\\r");
+      break;
+    case '\t':
+      escaped.append("\\t");
+      break;
+    case '\b':
+      escaped.append("\\b");
+      break;
+    case '\f':
+      escaped.append("\\f");
+      break;
+    // U+2028/U+2029 terminate a JS string literal even though they are
+    // not \n; other control characters are unsafe unescaped too.
+    default:
+      if (c.unicode() < 0x20 || c.unicode() == 0x2028 || c.unicode() == 0x2029)
+        escaped.append(QString::asprintf("\\u%04x", c.unicode()));
+      else
+        escaped.append(c);
+      break;
+    }
+  }
+  escaped.append('"');
+  return escaped;
 }
 
 KatexRenderer &KatexRenderer::instance() {
@@ -118,14 +155,17 @@ void KatexRenderer::processNextRequest() {
   qDebug() << "Processing LaTeX:" << currentRequest_.latex
            << "color:" << currentRequest_.color.name();
 
-  // Apply font size via CSS and render
+  // Apply font size via CSS and render.
+  // Build the JS in a single .arg() pass: LaTeX regularly contains '%'
+  // sequences which would otherwise hijack sequential multi-arg() markers.
   QString js =
       QString("document.getElementById('math').style.fontSize = '%1px';"
               "renderLatex(%2, %3, %4);")
-          .arg(currentRequest_.fontSize)
-          .arg(escapeJsString(currentRequest_.latex))
-          .arg(escapeJsString(currentRequest_.color.name()))
-          .arg(currentRequest_.displayMode ? "true" : "false");
+          .arg(QString::number(currentRequest_.fontSize),
+               escapeJsString(currentRequest_.latex),
+               escapeJsString(currentRequest_.color.name()),
+               currentRequest_.displayMode ? QStringLiteral("true")
+                                           : QStringLiteral("false"));
 
   QPointer<KatexRenderer> self(this);
   webView_->page()->runJavaScript(js, [self](const QVariant &result) {
@@ -146,11 +186,10 @@ void KatexRenderer::processNextRequest() {
 
 QString KatexRenderer::cacheKey(const QString &latex, const QColor &color,
                                 int fontSize, bool displayMode) const {
+  // Single-pass substitution so '%' inside user LaTeX can't corrupt the key.
   return QString("%1|%2|%3|%4")
-      .arg(latex)
-      .arg(color.name())
-      .arg(fontSize)
-      .arg(displayMode ? "d" : "i");
+      .arg(latex, color.name(), QString::number(fontSize),
+           displayMode ? QStringLiteral("d") : QStringLiteral("i"));
 }
 
 QPixmap KatexRenderer::getCached(const QString &latex, const QColor &color,
@@ -286,11 +325,10 @@ bool KatexRenderer::isAvailable() const { return false; }
 
 QString KatexRenderer::cacheKey(const QString &latex, const QColor &color,
                                 int fontSize, bool displayMode) const {
+  // Single-pass substitution so '%' inside user LaTeX can't corrupt the key.
   return QString("%1|%2|%3|%4")
-      .arg(latex)
-      .arg(color.name())
-      .arg(fontSize)
-      .arg(displayMode ? "d" : "i");
+      .arg(latex, color.name(), QString::number(fontSize),
+           displayMode ? QStringLiteral("d") : QStringLiteral("i"));
 }
 
 QPixmap KatexRenderer::getCached(const QString & /*latex*/,

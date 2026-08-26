@@ -139,12 +139,24 @@ protected:
   void mouseReleaseEvent(QGraphicsSceneMouseEvent *event) override;
 
 private:
-  // Handle constants
+  // Handle constants (scene units at 100% zoom; scaled by the current
+  // view transform so handles keep a constant on-screen size)
   static constexpr qreal HANDLE_SIZE = 10.0;
   static constexpr qreal HANDLE_HALF = HANDLE_SIZE / 2.0;
   static constexpr qreal ROTATION_HANDLE_OFFSET = 30.0;
   static constexpr qreal ROTATION_HANDLE_RADIUS = 7.0;
   static constexpr qreal SELECTION_BORDER_WIDTH = 1.5;
+
+  // Current view scale (1.0 when no view is available)
+  qreal viewScale() const;
+  qreal effectiveHandleSize() const { return HANDLE_SIZE / viewScale(); }
+  qreal effectiveRotationOffset() const {
+    return ROTATION_HANDLE_OFFSET / viewScale();
+  }
+  qreal effectiveRotationRadius() const {
+    return ROTATION_HANDLE_RADIUS / viewScale();
+  }
+  QPointF rotationHandleCenter(const QRectF &bounds) const;
 
   // Colors for professional appearance
   static inline const QColor HANDLE_FILL_COLOR = QColor(255, 255, 255);
@@ -174,6 +186,9 @@ private:
 
   // Cached bounds for detecting target item movement
   mutable QRectF cachedTargetBounds_;
+  // View scale the cached geometry was computed for; handle sizes are
+  // scale-dependent, so a zoom change must invalidate the bounding rect.
+  mutable qreal cachedViewScale_ = 1.0;
   // Previous bounds to invalidate during repaint (ensures old anchor positions
   // are cleared)
   mutable QRectF previousTargetBounds_;

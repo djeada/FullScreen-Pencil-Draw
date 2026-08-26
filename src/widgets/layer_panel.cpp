@@ -28,6 +28,7 @@
 #include <QInputDialog>
 #include <QMenu>
 #include <QMessageBox>
+#include <QScrollArea>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -169,6 +170,13 @@ LayerPanel::LayerPanel(LayerManager *manager, QWidget *parent)
 LayerPanel::~LayerPanel() = default;
 
 void LayerPanel::setCanvas(Canvas *canvas) {
+  if (canvas_ && canvas_->scene()) {
+    disconnect(canvas_->scene(), nullptr, this, nullptr);
+  }
+  if (canvas_ && canvas_->sceneController()) {
+    disconnect(canvas_->sceneController(), nullptr, this, nullptr);
+  }
+
   canvas_ = canvas;
   if (canvas_ && canvas_->scene()) {
     connect(canvas_->scene(), &QGraphicsScene::selectionChanged, this,
@@ -412,7 +420,17 @@ void LayerPanel::setupUI() {
   mainLayout->addStretch();
 
   container->setLayout(mainLayout);
-  setWidget(container);
+
+  // The panel's contents (tree + buttons + opacity + blend controls) can be
+  // taller than the dock on small screens; wrap them in a scroll area so
+  // nothing becomes unreachable.
+  auto *scrollArea = new QScrollArea(this);
+  scrollArea->setWidget(container);
+  scrollArea->setWidgetResizable(true);
+  scrollArea->setFrameShape(QFrame::NoFrame);
+  scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+  setWidget(scrollArea);
   setMinimumWidth(200);
   setMaximumWidth(280);
   applyTheme();
@@ -1283,11 +1301,21 @@ void LayerPanel::onRenameLayer() {
     return;
   }
 
+  // The modal dialog runs an event loop, so the layer this pointer refers to
+  // may be gone (or no longer active) by the time it returns – re-resolve it
+  // by id instead of writing through a stale pointer.
+  const QUuid layerId = layer->id();
+
   bool ok = false;
   QString name = QInputDialog::getText(this, "Rename Layer",
                                        "Layer name:", QLineEdit::Normal,
                                        layer->name(), &ok);
   if (!ok) {
+    return;
+  }
+
+  layer = layerManager_ ? layerManager_->layer(layerId) : nullptr;
+  if (!layer) {
     return;
   }
 

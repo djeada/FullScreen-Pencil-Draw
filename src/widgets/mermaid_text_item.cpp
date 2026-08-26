@@ -111,7 +111,7 @@ void MermaidTextItem::paint(QPainter *painter,
   }
 
   // Draw selection highlight
-  if (option->state & QStyle::State_Selected) {
+  if (option && (option->state & QStyle::State_Selected)) {
     painter->setPen(QPen(Qt::blue, 2, Qt::DashLine));
     painter->setBrush(Qt::NoBrush);
     painter->drawRect(contentRect_.adjusted(-2, -2, 2, 2));
@@ -211,6 +211,9 @@ void MermaidTextItem::onEditingCancelled() {
   }
 
   update();
+  // Owners clean up items whose edit was aborted before any content was
+  // committed (prevents invisible empty items from lingering in the scene).
+  emit editingCancelled();
 }
 
 void MermaidTextItem::mouseDoubleClickEvent(QGraphicsSceneMouseEvent *event) {
@@ -229,6 +232,17 @@ QVariant MermaidTextItem::itemChange(GraphicsItemChange change,
   }
   return QGraphicsObject::itemChange(change, value);
 }
+
+namespace {
+// The rendered pixmap carries the screen's device pixel ratio; the item's
+// geometry must be in logical (device-independent) units or the diagram is
+// laid out twice its drawn size on HiDPI displays.
+QRectF logicalRectFor(const QPixmap &pixmap) {
+  const qreal dpr =
+      pixmap.devicePixelRatio() > 0.0 ? pixmap.devicePixelRatio() : 1.0;
+  return QRectF(0, 0, pixmap.width() / dpr, pixmap.height() / dpr);
+}
+} // namespace
 
 void MermaidTextItem::renderContent() {
   if (mermaidCode_.isEmpty()) {
@@ -256,8 +270,7 @@ void MermaidTextItem::renderContent() {
   // No WebEngine - use placeholder
   renderedContent_ = createPlaceholder();
   prepareGeometryChange();
-  contentRect_ =
-      QRectF(0, 0, renderedContent_.width(), renderedContent_.height());
+  contentRect_ = logicalRectFor(renderedContent_);
   update();
 #endif
 }
@@ -274,12 +287,11 @@ void MermaidTextItem::onMermaidRenderComplete(quintptr requestId,
 
   if (success && !pixmap.isNull()) {
     renderedContent_ = pixmap;
-    contentRect_ = QRectF(0, 0, pixmap.width(), pixmap.height());
+    contentRect_ = logicalRectFor(renderedContent_);
   } else {
     // Render failed - use placeholder
     renderedContent_ = createPlaceholder();
-    contentRect_ =
-        QRectF(0, 0, renderedContent_.width(), renderedContent_.height());
+    contentRect_ = logicalRectFor(renderedContent_);
   }
 
   update();
@@ -290,7 +302,11 @@ QPixmap MermaidTextItem::createPlaceholder() const {
   int width = qMax(MIN_WIDTH, 300);
   int height = qMax(MIN_HEIGHT, 150);
 
-  QPixmap pixmap(width, height);
+  // Render at the screen's device pixel ratio so the placeholder text stays
+  // crisp on HiDPI displays (logicalRectFor() converts the size back).
+  const qreal dpr = qApp ? qApp->devicePixelRatio() : 1.0;
+  QPixmap pixmap(qRound(width * dpr), qRound(height * dpr));
+  pixmap.setDevicePixelRatio(dpr);
   pixmap.fill(QColor(255, 250, 240));
 
   QPainter painter(&pixmap);

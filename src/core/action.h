@@ -37,6 +37,16 @@ public:
   virtual void undo() = 0;
   virtual void redo() = 0;
   virtual QString description() const { return "Action"; }
+
+  /**
+   * @brief Report all ItemIds this action may keep parked as undo snapshots.
+   *
+   * Used by UndoRedoManager to notify stores when an action is discarded
+   * (evicted from history), so parked snapshot items can be released.
+   */
+  virtual void collectReferencedItems(QVector<ItemId> &out) const {
+    Q_UNUSED(out);
+  }
 };
 
 /**
@@ -54,6 +64,9 @@ public:
   void undo() override;
   void redo() override;
   QString description() const override { return "Draw"; }
+  void collectReferencedItems(QVector<ItemId> &out) const override {
+    out.append(itemId_);
+  }
 
 private:
   ItemId itemId_;
@@ -77,6 +90,9 @@ public:
   void undo() override;
   void redo() override;
   QString description() const override { return "Delete"; }
+  void collectReferencedItems(QVector<ItemId> &out) const override {
+    out.append(itemId_);
+  }
 
 private:
   ItemId itemId_;
@@ -120,6 +136,7 @@ public:
   void undo() override;
   void redo() override;
   QString description() const override { return "Composite Action"; }
+  void collectReferencedItems(QVector<ItemId> &out) const override;
 
 private:
   std::vector<std::unique_ptr<Action>> actions_;
@@ -247,6 +264,10 @@ public:
   void undo() override;
   void redo() override;
   QString description() const override { return "Group"; }
+  void collectReferencedItems(QVector<ItemId> &out) const override {
+    out.append(groupId_);
+    out.append(itemIds_);
+  }
 
 private:
   ItemId groupId_;
@@ -273,6 +294,10 @@ public:
   void undo() override;
   void redo() override;
   QString description() const override { return "Ungroup"; }
+  void collectReferencedItems(QVector<ItemId> &out) const override {
+    out.append(groupId_);
+    out.append(itemIds_);
+  }
 
 private:
   ItemId groupId_;

@@ -126,7 +126,6 @@ private:
   bool eventFilter(QObject *obj, QEvent *event) override;
 
 private slots:
-  void onActionColor();
   void onActionIncreaseBrush();
   void onActionDecreaseBrush();
   void onActionClear();
@@ -145,6 +144,7 @@ private slots:
   void onOpacityChanged(int value);
 
 public slots:
+  void onActionColor();
   void onActionRectangle();
   void onActionCircle();
   void onActionLine();

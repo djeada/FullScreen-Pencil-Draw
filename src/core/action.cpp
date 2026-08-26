@@ -131,6 +131,12 @@ void CompositeAction::redo() {
   }
 }
 
+void CompositeAction::collectReferencedItems(QVector<ItemId> &out) const {
+  for (const auto &action : actions_) {
+    action->collectReferencedItems(out);
+  }
+}
+
 // FillAction implementation
 FillAction::FillAction(const ItemId &id, ItemStore *store,
                        const QBrush &oldBrush, const QBrush &newBrush)

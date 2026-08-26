@@ -114,6 +114,15 @@ public:
   bool restoreItem(const ItemId &id);
 
   /**
+   * @brief Permanently delete a snapshot item parked for undo (if present)
+   * @param id The ItemId of the parked snapshot to release
+   *
+   * Called when the undo action that could still restore this item has been
+   * discarded, so the snapshot memory can be freed instead of leaking.
+   */
+  void discardSnapshot(const ItemId &id);
+
+  /**
    * @brief Check if an item is pending deletion
    * @param id The ItemId to check
    * @return true if the item is scheduled for deletion

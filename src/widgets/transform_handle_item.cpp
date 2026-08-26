@@ -11,6 +11,7 @@
 #include "latex_text_item.h"
 #include <QCursor>
 #include <QGraphicsScene>
+#include <QGraphicsView>
 #include <QPainter>
 #include <QPainterPath>
 #include <QtMath>
@@ -120,9 +121,11 @@ QRectF TransformHandleItem::boundingRect() const {
     return QRectF();
 
   // Helper to expand bounds to include handles and rotation handle
-  auto expandForHandles = [](const QRectF &rect) {
-    return rect.adjusted(-HANDLE_SIZE, -HANDLE_SIZE - ROTATION_HANDLE_OFFSET,
-                         HANDLE_SIZE, HANDLE_SIZE);
+  auto expandForHandles = [this](const QRectF &rect) {
+    const qreal m = effectiveHandleSize();
+    const qreal topExtra =
+        m + effectiveRotationOffset() + effectiveRotationRadius();
+    return rect.adjusted(-m, -topExtra, m, m);
   };
 
   QRectF expandedBounds = expandForHandles(bounds);
@@ -158,10 +161,9 @@ QPainterPath TransformHandleItem::shape() const {
   }
 
   // Add rotation handle
-  QPointF rotationCenter(bounds.center().x(),
-                         bounds.top() - ROTATION_HANDLE_OFFSET);
-  path.addEllipse(rotationCenter, ROTATION_HANDLE_RADIUS + 2,
-                  ROTATION_HANDLE_RADIUS + 2);
+  path.addEllipse(rotationHandleCenter(bounds),
+                  effectiveRotationRadius() + 2 / viewScale(),
+                  effectiveRotationRadius() + 2 / viewScale());
 
   return path;
 }
@@ -171,6 +173,24 @@ QRectF TransformHandleItem::targetBoundsInScene() const {
   if (!target)
     return QRectF();
   return target->mapToScene(target->boundingRect()).boundingRect();
+}
+
+qreal TransformHandleItem::viewScale() const {
+  if (!scene())
+    return 1.0;
+  const QList<QGraphicsView *> views = scene()->views();
+  for (QGraphicsView *view : views) {
+    if (view && view->isVisible()) {
+      const qreal s = view->transform().m11();
+      if (s > 0.0001)
+        return s;
+    }
+  }
+  return 1.0;
+}
+
+QPointF TransformHandleItem::rotationHandleCenter(const QRectF &bounds) const {
+  return QPointF(bounds.center().x(), bounds.top() - effectiveRotationOffset());
 }
 
 void TransformHandleItem::ensureSceneEventFilter() {
@@ -195,8 +215,9 @@ void TransformHandleItem::paint(QPainter *painter,
   if (bounds.isEmpty())
     return;
 
-  // Draw selection rectangle with solid blue border
+  // Draw selection rectangle with solid blue border (constant on-screen width)
   QPen borderPen(SELECTION_BORDER_COLOR, SELECTION_BORDER_WIDTH);
+  borderPen.setCosmetic(true);
   borderPen.setStyle(Qt::SolidLine);
   painter->setPen(borderPen);
   painter->setBrush(Qt::NoBrush);
@@ -204,6 +225,7 @@ void TransformHandleItem::paint(QPainter *painter,
 
   // Draw resize handles
   QPen handlePen(HANDLE_BORDER_COLOR, 1.5);
+  handlePen.setCosmetic(true);
   painter->setPen(handlePen);
   painter->setBrush(HANDLE_FILL_COLOR);
 
@@ -217,23 +239,27 @@ void TransformHandleItem::paint(QPainter *painter,
 
   // Draw rotation handle connection line
   QPointF topCenter(bounds.center().x(), bounds.top());
-  QPointF rotationCenter(bounds.center().x(),
-                         bounds.top() - ROTATION_HANDLE_OFFSET);
+  QPointF rotationCenter = rotationHandleCenter(bounds);
 
   QPen linePen(SELECTION_BORDER_COLOR, 1.0);
+  linePen.setCosmetic(true);
   linePen.setStyle(Qt::DashLine);
   painter->setPen(linePen);
   painter->drawLine(topCenter, rotationCenter);
 
   // Draw rotation handle (circle)
-  painter->setPen(QPen(ROTATION_HANDLE_COLOR, 2.0));
+  const qreal rotR = effectiveRotationRadius();
+  QPen rotPen(ROTATION_HANDLE_COLOR, 2.0);
+  rotPen.setCosmetic(true);
+  painter->setPen(rotPen);
   painter->setBrush(HANDLE_FILL_COLOR);
-  painter->drawEllipse(rotationCenter, ROTATION_HANDLE_RADIUS,
-                       ROTATION_HANDLE_RADIUS);
+  painter->drawEllipse(rotationCenter, rotR, rotR);
 
   // Draw rotation arrow icon inside the handle
-  painter->setPen(QPen(ROTATION_HANDLE_COLOR, 1.5));
-  qreal arrowSize = ROTATION_HANDLE_RADIUS * 0.6;
+  QPen arrowPen(ROTATION_HANDLE_COLOR, 1.5);
+  arrowPen.setCosmetic(true);
+  painter->setPen(arrowPen);
+  qreal arrowSize = rotR * 0.6;
   painter->drawArc(QRectF(rotationCenter.x() - arrowSize,
                           rotationCenter.y() - arrowSize, arrowSize * 2,
                           arrowSize * 2),
@@ -242,12 +268,14 @@ void TransformHandleItem::paint(QPainter *painter,
 
 void TransformHandleItem::updateHandles() {
   QRectF newBounds = targetBoundsInScene();
+  const qreal scale = viewScale();
 
   // Always sync previousTargetBounds_ so that boundingRect() "heals"
   // after one frame (previous == current → no union → minimal rect).
   previousTargetBounds_ = cachedTargetBounds_;
 
-  if (newBounds == cachedTargetBounds_)
+  if (newBounds == cachedTargetBounds_ &&
+      qFuzzyCompare(scale, cachedViewScale_))
     return;
 
   // Notify the scene that geometry is about to change.
@@ -257,6 +285,7 @@ void TransformHandleItem::updateHandles() {
 
   // Update the cached bounds to the new position
   cachedTargetBounds_ = newBounds;
+  cachedViewScale_ = scale;
 
   update();
 }
@@ -270,9 +299,8 @@ HandleType TransformHandleItem::handleAtPoint(const QPointF &pos) const {
     return HandleType::None;
 
   // Check rotation handle first
-  QPointF rotationCenter(bounds.center().x(),
-                         bounds.top() - ROTATION_HANDLE_OFFSET);
-  if (QLineF(pos, rotationCenter).length() <= ROTATION_HANDLE_RADIUS + 4)
+  if (QLineF(pos, rotationHandleCenter(bounds)).length() <=
+      effectiveRotationRadius() + 4 / viewScale())
     return HandleType::Rotate;
 
   // Check resize handles
@@ -324,8 +352,9 @@ QRectF TransformHandleItem::handleRect(HandleType type) const {
     return QRectF();
   }
 
-  return QRectF(center.x() - HANDLE_HALF, center.y() - HANDLE_HALF, HANDLE_SIZE,
-                HANDLE_SIZE);
+  const qreal half = effectiveHandleSize() / 2.0;
+  return QRectF(center.x() - half, center.y() - half, effectiveHandleSize(),
+                effectiveHandleSize());
 }
 
 QCursor TransformHandleItem::cursorForHandle(HandleType type) const {
@@ -439,6 +468,11 @@ void TransformHandleItem::mouseReleaseEvent(QGraphicsSceneMouseEvent *event) {
     event->ignore();
     return;
   }
+  // Only the button that started the transform ends it.
+  if (event->button() != Qt::LeftButton) {
+    event->ignore();
+    return;
+  }
 
   event->accept();
 
@@ -499,9 +533,12 @@ void TransformHandleItem::applyResize(const QPointF &mousePos) {
   if (newBounds.width() < minSize || newBounds.height() < minSize)
     return;
 
-  // Calculate scale factors
-  qreal scaleX = newBounds.width() / currentBounds.width();
-  qreal scaleY = newBounds.height() / currentBounds.height();
+  // Calculate scale factors, guarding against degenerate source bounds
+  // (e.g., a zero-length line) which would produce infinite scales.
+  const qreal safeWidth = qMax<qreal>(currentBounds.width(), 0.0001);
+  const qreal safeHeight = qMax<qreal>(currentBounds.height(), 0.0001);
+  qreal scaleX = newBounds.width() / safeWidth;
+  qreal scaleY = newBounds.height() / safeHeight;
 
   // Get the anchor point (opposite corner/edge) in scene coordinates
   QPointF anchor;
@@ -578,8 +615,11 @@ void TransformHandleItem::applyRotation(const QPointF &mousePos) {
   if (!target)
     return;
 
-  // Calculate rotation center (center of original bounds)
-  QPointF center = targetBoundsInScene().center();
+  // Use the pivot captured at press; recomputing the center of the
+  // already-rotated bounds each move makes asymmetric items drift.
+  const QPointF center = originalBounds_.isValid()
+                             ? originalBounds_.center()
+                             : targetBoundsInScene().center();
 
   // Calculate angles
   QLineF lineToLast(center, lastMousePos_);

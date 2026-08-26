@@ -127,6 +127,11 @@ PdfOverlayManager::PdfOverlayManager(QObject *parent)
 PdfOverlayManager::~PdfOverlayManager() { clear(); }
 
 void PdfOverlayManager::setItemStore(ItemStore *store) {
+  // Disconnect from the previous store first so repeated calls never
+  // accumulate duplicate connections.
+  if (itemStore_) {
+    disconnect(itemStore_, nullptr, this, nullptr);
+  }
   itemStore_ = store;
   for (auto &overlay : overlays_) {
     if (overlay) {
@@ -242,22 +247,20 @@ void PdfOverlayManager::showPage(int pageIndex) {
   currentPage_ = pageIndex;
 }
 
-std::vector<std::unique_ptr<Action>> &
+std::vector<std::unique_ptr<Action>> *
 PdfOverlayManager::undoStack(int pageIndex) {
-  static std::vector<std::unique_ptr<Action>> empty;
   if (pageIndex < 0 || pageIndex >= static_cast<int>(undoStacks_.size())) {
-    return empty;
+    return nullptr;
   }
-  return undoStacks_[pageIndex];
+  return &undoStacks_[pageIndex];
 }
 
-std::vector<std::unique_ptr<Action>> &
+std::vector<std::unique_ptr<Action>> *
 PdfOverlayManager::redoStack(int pageIndex) {
-  static std::vector<std::unique_ptr<Action>> empty;
   if (pageIndex < 0 || pageIndex >= static_cast<int>(redoStacks_.size())) {
-    return empty;
+    return nullptr;
   }
-  return redoStacks_[pageIndex];
+  return &redoStacks_[pageIndex];
 }
 
 bool PdfOverlayManager::canUndo(int pageIndex) const {
