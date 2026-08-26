@@ -213,16 +213,17 @@ public:
   /**
    * @brief Get the undo stack for a specific page
    * @param pageIndex The page index
-   * @return Reference to the undo stack
+   * @return Pointer to the undo stack, or nullptr for an invalid index.
+   *         Callers must check for nullptr instead of writing into a dummy.
    */
-  std::vector<std::unique_ptr<Action>> &undoStack(int pageIndex);
+  std::vector<std::unique_ptr<Action>> *undoStack(int pageIndex);
 
   /**
    * @brief Get the redo stack for a specific page
    * @param pageIndex The page index
-   * @return Reference to the redo stack
+   * @return Pointer to the redo stack, or nullptr for an invalid index
    */
-  std::vector<std::unique_ptr<Action>> &redoStack(int pageIndex);
+  std::vector<std::unique_ptr<Action>> *redoStack(int pageIndex);
 
   /**
    * @brief Check if undo is available for a page

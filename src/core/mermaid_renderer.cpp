@@ -20,16 +20,50 @@
 
 // Helper to escape string for JavaScript
 static QString escapeJsString(const QString &str) {
-  QString escaped = str;
-  escaped.replace('\\', "\\\\");
-  escaped.replace('\'', "\\'");
-  escaped.replace('\"', "\\\"");
-  escaped.replace('\n', "\\n");
-  escaped.replace('\r', "\\r");
-  escaped.replace('\t', "\\t");
-  escaped.replace(
-      '`', "\\`"); // Escape backticks to prevent template literal injection
-  return "\"" + escaped + "\"";
+  QString escaped;
+  escaped.reserve(str.size() + 2);
+  escaped.append('"');
+  for (const QChar c : str) {
+    switch (c.unicode()) {
+    case '\\':
+      escaped.append("\\\\");
+      break;
+    case '"':
+      escaped.append("\\\"");
+      break;
+    case '\'':
+      escaped.append("\\'");
+      break;
+    case '`':
+      escaped.append("\\`");
+      break;
+    case '\n':
+      escaped.append("\\n");
+      break;
+    case '\r':
+      escaped.append("\\r");
+      break;
+    case '\t':
+      escaped.append("\\t");
+      break;
+    case '\b':
+      escaped.append("\\b");
+      break;
+    case '\f':
+      escaped.append("\\f");
+      break;
+    // U+2028/U+2029 terminate a JS string literal even though they are
+    // not \n; other control characters are unsafe unescaped too.
+    default:
+      if (c.unicode() < 0x20 || c.unicode() == 0x2028 || c.unicode() == 0x2029)
+        escaped.append(QString::asprintf("\\u%04x", c.unicode()));
+      else
+        escaped.append(c);
+      break;
+    }
+  }
+  escaped.append('"');
+  return escaped;
 }
 
 MermaidRenderer &MermaidRenderer::instance() {
@@ -125,10 +159,11 @@ void MermaidRenderer::processNextRequest() {
            << currentRequest_.mermaidCode.left(50)
            << "theme:" << currentRequest_.theme;
 
-  // Render the diagram
+  // Render the diagram (single-pass .arg so '%' in diagram code can't
+  // hijack the placeholders)
   QString js = QString("renderMermaid(%1, %2);")
-                   .arg(escapeJsString(currentRequest_.mermaidCode))
-                   .arg(escapeJsString(currentRequest_.theme));
+                   .arg(escapeJsString(currentRequest_.mermaidCode),
+                        escapeJsString(currentRequest_.theme));
 
   QPointer<MermaidRenderer> self(this);
   webView_->page()->runJavaScript(js, [self](const QVariant &result) {
@@ -149,7 +184,7 @@ void MermaidRenderer::processNextRequest() {
 
 QString MermaidRenderer::cacheKey(const QString &mermaidCode,
                                   const QString &theme) const {
-  return QString("%1|%2").arg(mermaidCode).arg(theme);
+  return QString("%1|%2").arg(mermaidCode, theme);
 }
 
 QPixmap MermaidRenderer::getCached(const QString &mermaidCode,
@@ -283,7 +318,7 @@ bool MermaidRenderer::isAvailable() const { return false; }
 
 QString MermaidRenderer::cacheKey(const QString &mermaidCode,
                                   const QString &theme) const {
-  return QString("%1|%2").arg(mermaidCode).arg(theme);
+  return QString("%1|%2").arg(mermaidCode, theme);
 }
 
 QPixmap MermaidRenderer::getCached(const QString & /*mermaidCode*/,

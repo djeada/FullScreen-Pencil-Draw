@@ -11,7 +11,9 @@
 #include "../core/scene_controller.h"
 #include "../core/transform_action.h"
 #include "../core/undo_redo_manager.h"
+#include "../tools/bezier_tool.h"
 #include "../tools/lasso_selection_tool.h"
+#include "../tools/text_on_path_tool.h"
 #include "alignment_dialog.h"
 #include "architecture_elements.h"
 #include "busy_spinner_overlay.h"
@@ -61,6 +63,7 @@
 #include <QUrl>
 #include <QWheelEvent>
 #include <cmath>
+#include <memory>
 
 // Pressure sensitivity constants
 static constexpr qreal MIN_PRESSURE_THRESHOLD = 0.1;
@@ -68,6 +71,9 @@ static constexpr qreal MIN_POINT_DISTANCE = 1.0;
 static constexpr qreal LENGTH_EPSILON = 0.001;
 static constexpr int MAX_PRESSURE_BUFFER_SIZE = 200;
 static constexpr int PRESSURE_BUFFER_TRIM_SIZE = 100;
+
+// Clicks shorter than this (scene units) discard click-drag shape previews.
+static constexpr qreal kDegenerateShapeEpsilon = 0.75;
 
 // Supported image file extensions for drag-and-drop
 static const QSet<QString> SUPPORTED_IMAGE_EXTENSIONS = {
@@ -328,6 +334,16 @@ Canvas::Canvas(QWidget *parent)
 }
 
 Canvas::~Canvas() {
+  // Drop any in-progress path gesture (and its preview items) while the
+  // scene is still alive; never commit one from a destructor.
+  if (activePathTool_) {
+    Tool *tool = activePathTool_;
+    activePathTool_ = nullptr;
+    tool->cancelGesture();
+  }
+  bezierTool_.reset();
+  textOnPathTool_.reset();
+
   if (scene_) {
     disconnect(scene_, &QGraphicsScene::selectionChanged, this,
                &Canvas::updateTransformHandles);
@@ -369,6 +385,17 @@ bool Canvas::hasActiveColorSelection() const {
 
 void Canvas::setUndoRedoManager(UndoRedoManager *manager) {
   undoRedoManager_ = manager;
+  // When the manager discards actions (history cap, redo invalidation,
+  // clear), release any undo snapshots this store still parks so they don't
+  // leak for the remainder of the session.
+  if (manager) {
+    QPointer<ItemStore> storeGuard = itemStore();
+    manager->addDiscardListener([storeGuard](const ItemId &id) {
+      if (storeGuard && !storeGuard->contains(id)) {
+        storeGuard->discardSnapshot(id);
+      }
+    });
+  }
 }
 
 ItemStore *Canvas::itemStore() const {
@@ -715,7 +742,6 @@ void Canvas::setShape(const QString &shapeType) {
     currentShape_ = ColorSelect;
     setCursor(Qt::PointingHandCursor);
   }
-  tempShapeItem_ = nullptr;
   if (!scene_)
     return;
   if (currentShape_ != Eraser) {
@@ -744,14 +770,61 @@ void Canvas::setShape(const QString &shapeType) {
     colorSelectionOverlay_->hide();
   }
   isPanning_ = false;
-  cleanupWireState();
+  cleanupTransientToolState();
+}
+
+void Canvas::abortInProgressDrawing() {
+  // Multi-click path gestures own preview items of their own.
+  cancelActiveGesture();
+  // Wire preview / pin highlight, and any lingering path-tool state.
+  cleanupTransientToolState();
+
+  auto dropPreview = [this](QGraphicsItem *&item) {
+    if (!item) {
+      return;
+    }
+    if (item->scene()) {
+      item->scene()->removeItem(item);
+    }
+    delete item;
+    item = nullptr;
+  };
+
+  QGraphicsItem *path = currentPath_;
+  dropPreview(path);
+  currentPath_ = nullptr;
+  dropPreview(tempShapeItem_);
+  QGraphicsItem *lasso = lassoPathItem_;
+  dropPreview(lasso);
+  lassoPathItem_ = nullptr;
+
+  lassoDrawing_ = false;
+  lassoPoints_.clear();
+  pointBuffer_.clear();
+  pressureBuffer_.clear();
+  isPanning_ = false;
+
+  // The tool itself stays selected – re-arm it so drawing works immediately
+  // after the document is replaced.
+  activePathTool_ = pathToolFor(currentShape_);
+  if (activePathTool_) {
+    activePathTool_->activate();
+  }
 }
 
 // ---------------------------------------------------------------------------
-// Wire-drawing state cleanup – called on every tool switch.
+// Transient tool state cleanup – called on every tool switch.
 // ---------------------------------------------------------------------------
 
-void Canvas::cleanupWireState() {
+void Canvas::cleanupTransientToolState() {
+  // End an in-progress Bezier / text-on-path gesture before switching away,
+  // so no half-built preview items are left in the scene.
+  if (activePathTool_) {
+    Tool *tool = activePathTool_;
+    activePathTool_ = nullptr;
+    tool->deactivate();
+  }
+
   if (wireTempPath_) {
     if (scene_)
       scene_->removeItem(wireTempPath_);
@@ -766,10 +839,36 @@ void Canvas::cleanupWireState() {
   }
   wireSrcElem_ = nullptr;
   wireSrcPin_ = -1;
+
+  // Abort any in-progress drawing gesture so switching tools mid-drag never
+  // leaks uncommitted preview items into the scene.
+  if (tempShapeItem_) {
+    if (scene_)
+      scene_->removeItem(tempShapeItem_);
+    delete tempShapeItem_;
+    tempShapeItem_ = nullptr;
+  }
+  if (currentPath_) {
+    if (scene_)
+      scene_->removeItem(currentPath_);
+    delete currentPath_;
+    currentPath_ = nullptr;
+  }
+  pointBuffer_.clear();
+  pressureBuffer_.clear();
+  tabletActive_ = false;
+  if (lassoPathItem_) {
+    if (scene_)
+      scene_->removeItem(lassoPathItem_);
+    delete lassoPathItem_;
+    lassoPathItem_ = nullptr;
+  }
+  lassoPoints_.clear();
+  lassoDrawing_ = false;
 }
 
 void Canvas::setPenTool() {
-  cleanupWireState();
+  cleanupTransientToolState();
   currentShape_ = Pen;
   tempShapeItem_ = nullptr;
   this->setDragMode(QGraphicsView::NoDrag);
@@ -783,7 +882,7 @@ void Canvas::setPenTool() {
 }
 
 void Canvas::setHighlighterTool() {
-  cleanupWireState();
+  cleanupTransientToolState();
   currentShape_ = Highlighter;
   tempShapeItem_ = nullptr;
   this->setDragMode(QGraphicsView::NoDrag);
@@ -797,7 +896,7 @@ void Canvas::setHighlighterTool() {
 }
 
 void Canvas::setEraserTool() {
-  cleanupWireState();
+  cleanupTransientToolState();
   currentShape_ = Eraser;
   tempShapeItem_ = nullptr;
   eraserPen_.setColor(backgroundColor_);
@@ -821,7 +920,7 @@ void Canvas::setEraserTool() {
 }
 
 void Canvas::setTextTool() {
-  cleanupWireState();
+  cleanupTransientToolState();
   currentShape_ = Text;
   tempShapeItem_ = nullptr;
   this->setDragMode(QGraphicsView::NoDrag);
@@ -835,7 +934,7 @@ void Canvas::setTextTool() {
 }
 
 void Canvas::setMermaidTool() {
-  cleanupWireState();
+  cleanupTransientToolState();
   currentShape_ = Mermaid;
   tempShapeItem_ = nullptr;
   this->setDragMode(QGraphicsView::NoDrag);
@@ -849,7 +948,7 @@ void Canvas::setMermaidTool() {
 }
 
 void Canvas::setFillTool() {
-  cleanupWireState();
+  cleanupTransientToolState();
   currentShape_ = Fill;
   tempShapeItem_ = nullptr;
   this->setDragMode(QGraphicsView::NoDrag);
@@ -863,7 +962,7 @@ void Canvas::setFillTool() {
 }
 
 void Canvas::setColorSelectTool() {
-  cleanupWireState();
+  cleanupTransientToolState();
   currentShape_ = ColorSelect;
   tempShapeItem_ = nullptr;
   this->setDragMode(QGraphicsView::NoDrag);
@@ -878,7 +977,7 @@ void Canvas::setColorSelectTool() {
 }
 
 void Canvas::setArrowTool() {
-  cleanupWireState();
+  cleanupTransientToolState();
   currentShape_ = Arrow;
   tempShapeItem_ = nullptr;
   this->setDragMode(QGraphicsView::NoDrag);
@@ -892,7 +991,7 @@ void Canvas::setArrowTool() {
 }
 
 void Canvas::setWireTool() {
-  cleanupWireState();
+  cleanupTransientToolState();
   currentShape_ = Wire;
   tempShapeItem_ = nullptr;
   this->setDragMode(QGraphicsView::NoDrag);
@@ -906,7 +1005,7 @@ void Canvas::setWireTool() {
 }
 
 void Canvas::setCurvedArrowTool() {
-  cleanupWireState();
+  cleanupTransientToolState();
   currentShape_ = CurvedArrow;
   tempShapeItem_ = nullptr;
   this->setDragMode(QGraphicsView::NoDrag);
@@ -919,8 +1018,38 @@ void Canvas::setCurvedArrowTool() {
   isPanning_ = false;
 }
 
+bool Canvas::finishActiveGesture() {
+  if (!activePathTool_ || !activePathTool_->hasActiveGesture()) {
+    return false;
+  }
+  activePathTool_->finishGesture();
+  return true;
+}
+
+bool Canvas::cancelActiveGesture() {
+  if (!activePathTool_ || !activePathTool_->hasActiveGesture()) {
+    return false;
+  }
+  activePathTool_->cancelGesture();
+  return true;
+}
+
+Tool *Canvas::pathToolFor(ShapeType shape) {
+  if (shape == Bezier) {
+    if (!bezierTool_)
+      bezierTool_ = std::make_unique<BezierTool>(this);
+    return bezierTool_.get();
+  }
+  if (shape == TextOnPath) {
+    if (!textOnPathTool_)
+      textOnPathTool_ = std::make_unique<TextOnPathTool>(this);
+    return textOnPathTool_.get();
+  }
+  return nullptr;
+}
+
 void Canvas::setBezierTool() {
-  cleanupWireState();
+  cleanupTransientToolState();
   currentShape_ = Bezier;
   tempShapeItem_ = nullptr;
   this->setDragMode(QGraphicsView::NoDrag);
@@ -931,10 +1060,13 @@ void Canvas::setBezierTool() {
     colorSelectionOverlay_->hide();
   setCursor(Qt::CrossCursor);
   isPanning_ = false;
+  activePathTool_ = pathToolFor(currentShape_);
+  if (activePathTool_)
+    activePathTool_->activate();
 }
 
 void Canvas::setTextOnPathTool() {
-  cleanupWireState();
+  cleanupTransientToolState();
   currentShape_ = TextOnPath;
   tempShapeItem_ = nullptr;
   this->setDragMode(QGraphicsView::NoDrag);
@@ -945,10 +1077,13 @@ void Canvas::setTextOnPathTool() {
     colorSelectionOverlay_->hide();
   setCursor(Qt::CrossCursor);
   isPanning_ = false;
+  activePathTool_ = pathToolFor(currentShape_);
+  if (activePathTool_)
+    activePathTool_->activate();
 }
 
 void Canvas::setPanTool() {
-  cleanupWireState();
+  cleanupTransientToolState();
   currentShape_ = Pan;
   tempShapeItem_ = nullptr;
   this->setDragMode(QGraphicsView::NoDrag);
@@ -1033,6 +1168,9 @@ void Canvas::clearCanvas() {
   }
 
   clearTransformHandles();
+  // Drop in-progress previews first: the teardown below deletes every item,
+  // which would leave the active tool holding dangling pointers.
+  abortInProgressDrawing();
 
   // Clear undo/redo history first (it may hold references to items)
   if (undoRedoManager_) {
@@ -1111,6 +1249,8 @@ void Canvas::zoomReset() {
   resetTransform();
   currentZoom_ = 1.0;
   emit zoomChanged(100.0);
+  // Keep transform handles at a constant on-screen size after zooming.
+  updateTransformHandles();
 }
 
 void Canvas::applyZoom(double factor) {
@@ -1120,6 +1260,8 @@ void Canvas::applyZoom(double factor) {
   currentZoom_ = newZoom;
   scale(factor, factor);
   emit zoomChanged(currentZoom_ * 100.0);
+  // Keep transform handles at a constant on-screen size after zooming.
+  updateTransformHandles();
 }
 
 void Canvas::wheelEvent(QWheelEvent *event) {
@@ -1858,12 +2000,22 @@ QPointF Canvas::calculateSmartDuplicateOffset() const {
   return QPointF(offsetX, offsetY);
 }
 
+void Canvas::deselectAll() {
+  if (!scene_)
+    return;
+  resetColorSelection();
+  scene_->clearSelection();
+  clearTransformHandles();
+  viewport()->update();
+}
+
 void Canvas::selectAll() {
   if (!scene_)
     return;
   for (auto item : scene_->items())
     if (item && item != eraserPreview_ && item != backgroundImage_ &&
-        item != colorSelectionOverlay_)
+        item != colorSelectionOverlay_ && item->isVisible() &&
+        (item->flags() & QGraphicsItem::ItemIsSelectable))
       item->setSelected(true);
 }
 
@@ -1983,6 +2135,7 @@ void Canvas::saveToFile() {
                                        layerManager_, scene_->sceneRect(),
                                        backgroundColor_)) {
       RecentFilesManager::instance().addRecentFile(fileName);
+      emit documentSaved();
     }
     hideBusySpinner();
     return;
@@ -2025,6 +2178,7 @@ void Canvas::saveToFile() {
       eraserPreview_->show();
     hideBusySpinner();
     RecentFilesManager::instance().addRecentFile(fileName);
+    emit documentSaved();
     return;
   }
 #endif
@@ -2052,6 +2206,7 @@ void Canvas::saveToFile() {
 
   // Add to recent files
   RecentFilesManager::instance().addRecentFile(fileName);
+  emit documentSaved();
 }
 
 void Canvas::openFile() {
@@ -2079,6 +2234,9 @@ void Canvas::openFile() {
     showBusySpinner(tr("Loading project…"));
     QRectF loadedRect;
     QColor loadedBg;
+    // Loading replaces the whole document: drop in-progress previews so
+    // no tool keeps pointing at items from the old one.
+    abortInProgressDrawing();
     if (ProjectSerializer::loadProject(fileName, scene_, itemStore(),
                                        layerManager_, loadedRect, loadedBg)) {
       backgroundColor_ = loadedBg;
@@ -2086,7 +2244,11 @@ void Canvas::openFile() {
       scene_->setSceneRect(loadedRect);
       scene_->setBackgroundBrush(backgroundColor_);
       RecentFilesManager::instance().addRecentFile(fileName);
-      emit canvasModified();
+      // The old document's history is meaningless now; drop it so undo can
+      // never interleave actions across documents.
+      if (undoRedoManager_)
+        undoRedoManager_->clear();
+      emit documentSaved();
     } else {
       QMessageBox::warning(this, "Error",
                            QString("Could not open project: %1").arg(fileName));
@@ -2132,6 +2294,9 @@ void Canvas::openRecentFile(const QString &filePath) {
   if (filePath.endsWith(".fspd", Qt::CaseInsensitive)) {
     QRectF loadedRect;
     QColor loadedBg;
+    // Loading replaces the whole document: drop in-progress previews so
+    // no tool keeps pointing at items from the old one.
+    abortInProgressDrawing();
     if (ProjectSerializer::loadProject(filePath, scene_, itemStore(),
                                        layerManager_, loadedRect, loadedBg)) {
       backgroundColor_ = loadedBg;
@@ -2139,7 +2304,9 @@ void Canvas::openRecentFile(const QString &filePath) {
       scene_->setSceneRect(loadedRect);
       scene_->setBackgroundBrush(backgroundColor_);
       RecentFilesManager::instance().addRecentFile(filePath);
-      emit canvasModified();
+      if (undoRedoManager_)
+        undoRedoManager_->clear();
+      emit documentSaved();
     } else {
       QMessageBox::warning(this, "Error",
                            QString("Could not open project: %1").arg(filePath));
@@ -2206,6 +2373,9 @@ void Canvas::openProject() {
   QRectF loadedRect;
   QColor loadedBg;
   showBusySpinner(tr("Loading project…"));
+  // Loading replaces the whole document: drop in-progress previews so
+  // no tool keeps pointing at items from the old one.
+  abortInProgressDrawing();
   if (ProjectSerializer::loadProject(fileName, scene_, itemStore(),
                                      layerManager_, loadedRect, loadedBg)) {
     backgroundColor_ = loadedBg;
@@ -2213,7 +2383,9 @@ void Canvas::openProject() {
     scene_->setSceneRect(loadedRect);
     scene_->setBackgroundBrush(backgroundColor_);
     RecentFilesManager::instance().addRecentFile(fileName);
-    emit canvasModified();
+    if (undoRedoManager_)
+      undoRedoManager_->clear();
+    emit documentSaved();
   } else {
     QMessageBox::warning(this, "Error",
                          QString("Could not open project: %1").arg(fileName));
@@ -2304,26 +2476,36 @@ void Canvas::createTextItem(const QPointF &pos) {
   // Connect to handle when editing is finished
   // Use QPointer to safely track the textItem in case it gets deleted before
   // signal fires
-  connect(textItem, &LatexTextItem::editingFinished, this,
-          [this, textItem = QPointer<LatexTextItem>(textItem)]() {
-            // Check if textItem is still valid (not deleted)
-            if (!textItem) {
-              return;
-            }
-            // If the text is empty after editing, remove the item
-            if (textItem->text().trimmed().isEmpty()) {
-              if (sceneController_) {
-                sceneController_->removeItem(textItem, false);
-              } else {
-                scene_->removeItem(textItem);
-                onItemRemoved(textItem);
-                textItem->deleteLater();
-              }
-            } else {
-              // Add to undo stack only when there's actual content
-              addDrawAction(textItem);
-            }
-          });
+  // Runs once, for the initial edit session only: later edits of an item
+  // already on the undo stack must not push it again (or delete it from
+  // under the stack when cleared).
+  auto textHandled = std::make_shared<bool>(false);
+  auto onTextEditDone = [this, textItem = QPointer<LatexTextItem>(textItem),
+                         textHandled]() {
+    if (*textHandled)
+      return;
+    *textHandled = true;
+    // Check if textItem is still valid (not deleted)
+    if (!textItem) {
+      return;
+    }
+    // If the text is empty after editing, remove the item
+    if (textItem->text().trimmed().isEmpty()) {
+      if (sceneController_) {
+        sceneController_->removeItem(textItem, false);
+      } else {
+        scene_->removeItem(textItem);
+        onItemRemoved(textItem);
+        textItem->deleteLater();
+      }
+    } else {
+      // Add to undo stack only when there's actual content
+      addDrawAction(textItem);
+    }
+  };
+  connect(textItem, &LatexTextItem::editingFinished, this, onTextEditDone);
+  // Escape-cancelling a brand new item must discard it too.
+  connect(textItem, &LatexTextItem::editingCancelled, this, onTextEditDone);
 
   // Start inline editing immediately
   textItem->startEditing();
@@ -2341,26 +2523,37 @@ void Canvas::createMermaidItem(const QPointF &pos) {
   }
 
   // Connect to handle when editing is finished
+  // Runs once, for the initial edit session only (see createTextItem).
+  auto mermaidHandled = std::make_shared<bool>(false);
+  auto onMermaidEditDone =
+      [this, mermaidItem = QPointer<MermaidTextItem>(mermaidItem),
+       mermaidHandled]() {
+        if (*mermaidHandled)
+          return;
+        *mermaidHandled = true;
+        // Check if mermaidItem is still valid (not deleted)
+        if (!mermaidItem) {
+          return;
+        }
+        // If the code is empty after editing, remove the item
+        if (mermaidItem->mermaidCode().trimmed().isEmpty()) {
+          if (sceneController_) {
+            sceneController_->removeItem(mermaidItem, false);
+          } else {
+            scene_->removeItem(mermaidItem);
+            onItemRemoved(mermaidItem);
+            mermaidItem->deleteLater();
+          }
+        } else {
+          // Add to undo stack only when there's actual content
+          addDrawAction(mermaidItem);
+        }
+      };
   connect(mermaidItem, &MermaidTextItem::editingFinished, this,
-          [this, mermaidItem = QPointer<MermaidTextItem>(mermaidItem)]() {
-            // Check if mermaidItem is still valid (not deleted)
-            if (!mermaidItem) {
-              return;
-            }
-            // If the code is empty after editing, remove the item
-            if (mermaidItem->mermaidCode().trimmed().isEmpty()) {
-              if (sceneController_) {
-                sceneController_->removeItem(mermaidItem, false);
-              } else {
-                scene_->removeItem(mermaidItem);
-                onItemRemoved(mermaidItem);
-                mermaidItem->deleteLater();
-              }
-            } else {
-              // Add to undo stack only when there's actual content
-              addDrawAction(mermaidItem);
-            }
-          });
+          onMermaidEditDone);
+  // Escape-cancelling a brand new item must discard it too.
+  connect(mermaidItem, &MermaidTextItem::editingCancelled, this,
+          onMermaidEditDone);
 
   // Start inline editing immediately
   mermaidItem->startEditing();
@@ -2877,10 +3070,19 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
   if ((snapToGrid_ || snapToObject_) &&
       (currentShape_ == Rectangle || currentShape_ == Circle ||
        currentShape_ == Line || currentShape_ == Arrow ||
-       currentShape_ == CurvedArrow)) {
+       currentShape_ == CurvedArrow || currentShape_ == Bezier ||
+       currentShape_ == TextOnPath)) {
     sp = snapPoint(sp);
   }
   emit cursorPositionChanged(sp);
+
+  // Multi-click path tools own the whole gesture.
+  if (activePathTool_) {
+    activePathTool_->mousePressEvent(event, sp);
+    event->accept();
+    return;
+  }
+
   if (currentShape_ == Selection) {
     trackingSelectionMove_ = false;
     selectionMoveStartPositions_.clear();
@@ -2976,6 +3178,13 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
     lassoPoints_.append(sp);
     lassoDrawing_ = true;
 
+    // Remove any leftover overlay from an aborted gesture instead of leaking
+    // it and overwriting the pointer.
+    if (lassoPathItem_) {
+      scene_->removeItem(lassoPathItem_);
+      delete lassoPathItem_;
+      lassoPathItem_ = nullptr;
+    }
     lassoPathItem_ = new QGraphicsPathItem();
     QPen dashPen(Qt::DashLine);
     dashPen.setColor(QColor(LassoSelectionTool::kLassoColorR,
@@ -3019,6 +3228,7 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
     selectByColorAt(sp, event->modifiers());
     break;
   case Eraser:
+    beginEraseStroke();
     eraseAt(sp);
     break;
   case Pen: {
@@ -3042,7 +3252,8 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
     if (pressureSensitive_ && tabletActive_) {
       pressureBuffer_.append(tabletPressure_);
     }
-    addDrawAction(currentPath_);
+    // Undo entry is pushed on release so clicks don't commit invisible
+    // zero-length items into scene/history.
   } break;
   case Highlighter: {
     currentPath_ = new QGraphicsPathItem();
@@ -3056,7 +3267,6 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
     pointBuffer_.clear();
     pressureBuffer_.clear();
     pointBuffer_.append(sp);
-    addDrawAction(currentPath_);
   } break;
   case Rectangle: {
     auto ri = new QGraphicsRectItem(QRectF(startPoint_, startPoint_));
@@ -3067,7 +3277,6 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
                  QGraphicsItem::ItemIsMovable);
     scene_->addItem(ri);
     tempShapeItem_ = ri;
-    addDrawAction(ri);
   } break;
   case Arrow: {
     auto li = new QGraphicsLineItem(QLineF(startPoint_, startPoint_));
@@ -3119,7 +3328,6 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
                  QGraphicsItem::ItemIsMovable);
     scene_->addItem(ei);
     tempShapeItem_ = ei;
-    addDrawAction(ei);
   } break;
   case Line: {
     auto li = new QGraphicsLineItem(QLineF(startPoint_, startPoint_));
@@ -3128,7 +3336,6 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
                  QGraphicsItem::ItemIsMovable);
     scene_->addItem(li);
     tempShapeItem_ = li;
-    addDrawAction(li);
   } break;
   default:
     QGraphicsView::mousePressEvent(event);
@@ -3148,10 +3355,17 @@ void Canvas::mouseMoveEvent(QMouseEvent *event) {
   if ((snapToGrid_ || snapToObject_) &&
       (currentShape_ == Rectangle || currentShape_ == Circle ||
        currentShape_ == Line || currentShape_ == Arrow ||
-       currentShape_ == CurvedArrow)) {
+       currentShape_ == CurvedArrow || currentShape_ == Bezier ||
+       currentShape_ == TextOnPath)) {
     cp = snapPoint(cp);
   }
   emit cursorPositionChanged(cp);
+
+  if (activePathTool_) {
+    activePathTool_->mouseMoveEvent(event, cp);
+    event->accept();
+    return;
+  }
 
   // Emit measurement when drawing shapes (only when we have a valid start
   // point)
@@ -3193,6 +3407,13 @@ void Canvas::mouseMoveEvent(QMouseEvent *event) {
     return;
   }
   if (currentShape_ == Pan && isPanning_) {
+    // Guard against a lost release (window deactivation, popup swallowing the
+    // event): stop scrolling as soon as no button is held.
+    if (!(event->buttons() & Qt::LeftButton)) {
+      isPanning_ = false;
+      setCursor(Qt::OpenHandCursor);
+      return;
+    }
     QPointF d = event->pos() - lastPanPoint_;
     lastPanPoint_ = event->pos();
     horizontalScrollBar()->setValue(horizontalScrollBar()->value() - d.x());
@@ -3215,12 +3436,14 @@ void Canvas::mouseMoveEvent(QMouseEvent *event) {
     updateEraserPreview(cp);
     break;
   case Rectangle:
-    if (tempShapeItem_)
+    // Only reshape while the left button is actually held; otherwise a lost
+    // release would make the preview follow the cursor forever.
+    if (tempShapeItem_ && (event->buttons() & Qt::LeftButton))
       static_cast<QGraphicsRectItem *>(tempShapeItem_)
           ->setRect(QRectF(startPoint_, cp).normalized());
     break;
   case Arrow:
-    if (tempShapeItem_)
+    if (tempShapeItem_ && (event->buttons() & Qt::LeftButton))
       static_cast<QGraphicsLineItem *>(tempShapeItem_)
           ->setLine(QLineF(startPoint_, cp));
     break;
@@ -3242,8 +3465,8 @@ void Canvas::mouseMoveEvent(QMouseEvent *event) {
     } else if (pinHighlight_) {
       pinHighlight_->setVisible(false);
     }
-    // Update Manhattan-routed preview
-    if (wireTempPath_ && wireSrcElem_) {
+    // Update Manhattan-routed preview (only while actively dragging a wire)
+    if (wireTempPath_ && wireSrcElem_ && (event->buttons() & Qt::LeftButton)) {
       PinDir srcDir = wireSrcElem_->pinDir(wireSrcPin_);
       QPointF srcPos = wireSrcElem_->pinScenePos(wireSrcPin_);
       // If hovering over a valid destination pin, route to it exactly;
@@ -3266,7 +3489,7 @@ void Canvas::mouseMoveEvent(QMouseEvent *event) {
     }
   } break;
   case CurvedArrow:
-    if (tempShapeItem_) {
+    if (tempShapeItem_ && (event->buttons() & Qt::LeftButton)) {
       const bool shiftDown = (event->modifiers() & Qt::ShiftModifier);
       if (shiftDown && !curvedArrowShiftWasDown_) {
         curvedArrowManualFlip_ = !curvedArrowManualFlip_;
@@ -3286,12 +3509,12 @@ void Canvas::mouseMoveEvent(QMouseEvent *event) {
     }
     break;
   case Circle:
-    if (tempShapeItem_)
+    if (tempShapeItem_ && (event->buttons() & Qt::LeftButton))
       static_cast<QGraphicsEllipseItem *>(tempShapeItem_)
           ->setRect(QRectF(startPoint_, cp).normalized());
     break;
   case Line:
-    if (tempShapeItem_)
+    if (tempShapeItem_ && (event->buttons() & Qt::LeftButton))
       static_cast<QGraphicsLineItem *>(tempShapeItem_)
           ->setLine(QLineF(startPoint_, cp));
     break;
@@ -3308,18 +3531,32 @@ void Canvas::mouseReleaseEvent(QMouseEvent *event) {
     QGraphicsView::mouseReleaseEvent(event);
     return;
   }
+  // Only finish tool gestures for the button that started them; a
+  // right/middle-button release must not commit an in-progress drawing.
+  if (event->button() != Qt::LeftButton) {
+    QGraphicsView::mouseReleaseEvent(event);
+    return;
+  }
   QPointF ep = mapToScene(event->pos());
   // Apply snapping for shape tools
   if ((snapToGrid_ || snapToObject_) &&
       (currentShape_ == Rectangle || currentShape_ == Circle ||
        currentShape_ == Line || currentShape_ == Arrow ||
-       currentShape_ == CurvedArrow)) {
+       currentShape_ == CurvedArrow || currentShape_ == Bezier ||
+       currentShape_ == TextOnPath)) {
     ep = snapPoint(ep);
   }
 
   // Clear snap guides on release
   hasActiveSnap_ = false;
   viewport()->update();
+
+  if (activePathTool_) {
+    activePathTool_->mouseReleaseEvent(event, ep);
+    event->accept();
+    return;
+  }
+
   if (currentShape_ == LassoSelection) {
     if (lassoDrawing_) {
       lassoDrawing_ = false;
@@ -3352,6 +3589,8 @@ void Canvas::mouseReleaseEvent(QMouseEvent *event) {
             continue;
           if (!(item->flags() & QGraphicsItem::ItemIsSelectable))
             continue;
+          if (!item->isVisible())
+            continue; // never select content on hidden layers
           QPainterPath mappedPath = item->mapFromScene(selectionPath);
           if (item->shape().intersects(mappedPath)) {
             item->setSelected(true);
@@ -3424,7 +3663,7 @@ void Canvas::mouseReleaseEvent(QMouseEvent *event) {
     ElectronicsElementItem *srcElem = wireSrcElem_;
     int srcPin = wireSrcPin_;
     // Clean up preview and highlight.
-    cleanupWireState();
+    cleanupTransientToolState();
     // If we started from a valid pin, try to find a destination pin.
     if (srcElem && srcPin >= 0) {
       int dstPinIdx = -1;
@@ -3454,15 +3693,76 @@ void Canvas::mouseReleaseEvent(QMouseEvent *event) {
     curvedArrowShiftWasDown_ = false;
     return;
   }
-  if (currentShape_ != Pen && currentShape_ != Highlighter &&
-      currentShape_ != Eraser && tempShapeItem_)
+  // Commit deferred undo entries for click-drag shapes.
+  if ((currentShape_ == Rectangle || currentShape_ == Circle ||
+       currentShape_ == Line) &&
+      tempShapeItem_) {
+    QGraphicsItem *committed = tempShapeItem_;
     tempShapeItem_ = nullptr;
-  else if (currentShape_ == Pen || currentShape_ == Highlighter) {
+    // A plain click must not leave an invisible zero-size item behind.
+    if (QLineF(startPoint_, ep).length() < kDegenerateShapeEpsilon) {
+      scene_->removeItem(committed);
+      delete committed;
+      return;
+    }
+    addDrawAction(committed);
+    return;
+  }
+  if (currentShape_ == Pen || currentShape_ == Highlighter) {
+    if (currentPath_) {
+      // A single-sample stroke (plain click) still produces a visible dot.
+      if (pointBuffer_.size() <= 1) {
+        const QPointF pt =
+            pointBuffer_.isEmpty() ? startPoint_ : pointBuffer_.constFirst();
+        QPainterPath dotPath = currentPath_->path();
+        dotPath.lineTo(pt + QPointF(0.01, 0.01));
+        currentPath_->setPath(dotPath);
+      }
+      addDrawAction(currentPath_);
+    }
     currentPath_ = nullptr;
     pointBuffer_.clear();
     pressureBuffer_.clear();
     tabletActive_ = false;
+    return;
   }
+  if (currentShape_ == Eraser) {
+    endEraseStroke();
+    return;
+  }
+  tempShapeItem_ = nullptr;
+}
+
+void Canvas::mouseDoubleClickEvent(QMouseEvent *event) {
+  if (!event)
+    return;
+  // Double-click finishes a multi-click path gesture.
+  if (activePathTool_ && event->button() == Qt::LeftButton) {
+    activePathTool_->mouseDoubleClickEvent(event, mapToScene(event->pos()));
+    event->accept();
+    return;
+  }
+  QGraphicsView::mouseDoubleClickEvent(event);
+}
+
+void Canvas::keyPressEvent(QKeyEvent *event) {
+  if (!event) {
+    return;
+  }
+  // Enter commits and Escape discards an in-progress path gesture; when no
+  // gesture is running the keys keep their window-level meaning.
+  if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
+    if (finishActiveGesture()) {
+      event->accept();
+      return;
+    }
+  } else if (event->key() == Qt::Key_Escape) {
+    if (cancelActiveGesture()) {
+      event->accept();
+      return;
+    }
+  }
+  QGraphicsView::keyPressEvent(event);
 }
 
 void Canvas::tabletEvent(QTabletEvent *event) {
@@ -3474,15 +3774,18 @@ void Canvas::tabletEvent(QTabletEvent *event) {
   switch (event->type()) {
   case QEvent::TabletPress:
     tabletActive_ = true;
-    event->accept();
+    // Do NOT accept: drawing is driven by mouse events, and an accepted
+    // tablet event suppresses Qt's synthesized mouse events on some
+    // platforms, which would break stylus input entirely.
+    event->ignore();
     break;
   case QEvent::TabletMove:
-    event->accept();
+    event->ignore();
     break;
   case QEvent::TabletRelease:
     tabletActive_ = false;
     tabletPressure_ = 1.0;
-    event->accept();
+    event->ignore();
     break;
   default:
     break;
@@ -3984,6 +4287,11 @@ void Canvas::pasteItems() {
 void Canvas::addPoint(const QPointF &point) {
   if (!currentPath_)
     return;
+  // Cull samples closer than MIN_POINT_DISTANCE: mouse move events can fire
+  // at very high rates, and every accepted sample triggers a full path copy.
+  if (!pointBuffer_.isEmpty() &&
+      QLineF(pointBuffer_.last(), point).length() < MIN_POINT_DISTANCE)
+    return;
   pointBuffer_.append(point);
   const int mpr = 4;
   if (pointBuffer_.size() >= mpr) {
@@ -4068,6 +4376,22 @@ void Canvas::addPressurePoint(const QPointF &point, qreal pressure) {
   }
 }
 
+void Canvas::beginEraseStroke() {
+  // One composite undo entry per eraser sweep instead of one per item.
+  if (!eraserStrokeAction_)
+    eraserStrokeAction_ = std::make_unique<CompositeAction>();
+}
+
+void Canvas::endEraseStroke() {
+  if (eraserStrokeAction_) {
+    if (!eraserStrokeAction_->isEmpty()) {
+      addAction(std::move(eraserStrokeAction_));
+      emit canvasModified();
+    }
+    eraserStrokeAction_.reset();
+  }
+}
+
 void Canvas::eraseAt(const QPointF &point) {
   if (!scene_)
     return;
@@ -4088,11 +4412,10 @@ void Canvas::eraseAt(const QPointF &point) {
     if (item->type() == TransformHandleItem::Type)
       continue;
     QPainterPath itemShape = item->sceneTransform().map(item->shape());
-    // Check if eraser intersects either the item's shape (for filled items like
-    // pixmaps) or the stroked outline (for line-based items like paths)
-    QPainterPathStroker s;
-    s.setWidth(1);
-    if (ep.intersects(itemShape) || ep.intersects(s.createStroke(itemShape))) {
+    // item->shape() already includes outlined geometry for line-based items,
+    // so a single intersection test is sufficient (stroking it again adds
+    // cost without changing what is hit).
+    if (ep.intersects(itemShape)) {
       itemsToRemove.append(item);
     }
   }
@@ -4100,7 +4423,12 @@ void Canvas::eraseAt(const QPointF &point) {
   for (QGraphicsItem *item : itemsToRemove) {
     if (!item)
       continue;
-    addDeleteAction(item);
+    std::unique_ptr<DeleteAction> action = prepareDeleteAction(item);
+    if (action && eraserStrokeAction_) {
+      eraserStrokeAction_->addAction(std::move(action));
+    } else if (action) {
+      addAction(std::move(action));
+    }
     if (sceneController_) {
       sceneController_->removeItem(item, true);
     } else {
@@ -4516,7 +4844,8 @@ void Canvas::exportSelectionToSVG() {
         item != colorSelectionOverlay_) {
       painter.save();
       painter.setTransform(item->sceneTransform(), true);
-      item->paint(&painter, nullptr, nullptr);
+      QStyleOptionGraphicsItem styleOption;
+      item->paint(&painter, &styleOption, nullptr);
       painter.restore();
     }
   }
@@ -4603,7 +4932,8 @@ void Canvas::exportSelectionToPNG() {
         item != colorSelectionOverlay_) {
       painter.save();
       painter.setTransform(item->sceneTransform(), true);
-      item->paint(&painter, nullptr, nullptr);
+      QStyleOptionGraphicsItem styleOption;
+      item->paint(&painter, &styleOption, nullptr);
       painter.restore();
     }
   }
@@ -4645,7 +4975,8 @@ void Canvas::exportSelectionToJPG() {
         item != colorSelectionOverlay_) {
       painter.save();
       painter.setTransform(item->sceneTransform(), true);
-      item->paint(&painter, nullptr, nullptr);
+      QStyleOptionGraphicsItem styleOption;
+      item->paint(&painter, &styleOption, nullptr);
       painter.restore();
     }
   }
@@ -4687,7 +5018,8 @@ void Canvas::exportSelectionToWebP() {
         item != colorSelectionOverlay_) {
       painter.save();
       painter.setTransform(item->sceneTransform(), true);
-      item->paint(&painter, nullptr, nullptr);
+      QStyleOptionGraphicsItem styleOption;
+      item->paint(&painter, &styleOption, nullptr);
       painter.restore();
     }
   }
@@ -4729,7 +5061,8 @@ void Canvas::exportSelectionToTIFF() {
         item != colorSelectionOverlay_) {
       painter.save();
       painter.setTransform(item->sceneTransform(), true);
-      item->paint(&painter, nullptr, nullptr);
+      QStyleOptionGraphicsItem styleOption;
+      item->paint(&painter, &styleOption, nullptr);
       painter.restore();
     }
   }
@@ -4786,6 +5119,9 @@ void Canvas::updateTransformHandles() {
       delete handle;
       it.remove();
     } else {
+      // Retained handles still need a refresh: their geometry depends on
+      // the target bounds and on the current view scale.
+      handle->updateHandles();
       if (hid.isValid())
         handleMap.insert(hid, handle);
     }
@@ -5120,6 +5456,13 @@ void Canvas::scaleSelectedItems() {
     return;
   }
 
+  // The modal dialog runs an event loop: items could have been deleted
+  // meanwhile, so re-read the selection instead of using stale pointers.
+  selected = expandWireSelection(scene_->selectedItems());
+  if (selected.isEmpty()) {
+    return;
+  }
+
   // Compute combined bounding center
   QRectF bounds;
   for (QGraphicsItem *item : selected) {
@@ -5179,6 +5522,13 @@ void Canvas::rotateSelectedItems() {
 
   double angle = dialog.angle();
   if (qFuzzyIsNull(angle)) {
+    return;
+  }
+
+  // The modal dialog runs an event loop: items could have been deleted
+  // meanwhile, so re-read the selection instead of using stale pointers.
+  selected = expandWireSelection(scene_->selectedItems());
+  if (selected.isEmpty()) {
     return;
   }
 
@@ -5247,6 +5597,13 @@ void Canvas::alignSelectedItems() {
   }
 
   AlignmentMode mode = dialog.alignmentMode();
+
+  // The modal dialog runs an event loop: items could have been deleted
+  // meanwhile, so re-read the selection instead of using stale pointers.
+  selected = expandWireSelection(scene_->selectedItems());
+  if (selected.isEmpty()) {
+    return;
+  }
 
   // Helper to extract the current rotation angle from an item's transform
   auto extractRotation = [](QGraphicsItem *item) -> qreal {
@@ -5507,6 +5864,13 @@ void Canvas::perspectiveTransformSelectedItems() {
     return;
   }
 
+  // The modal dialog runs an event loop: items could have been deleted
+  // meanwhile, so re-read the selection instead of using stale pointers.
+  selected = expandWireSelection(scene_->selectedItems());
+  if (selected.isEmpty()) {
+    return;
+  }
+
   // Compute combined bounding rect of selected items
   QRectF bounds;
   for (QGraphicsItem *item : selected) {
@@ -5591,6 +5955,13 @@ void Canvas::scaleActiveLayer() {
   double sx = dialog.scaleX();
   double sy = dialog.scaleY();
   if (qFuzzyCompare(sx, 1.0) && qFuzzyCompare(sy, 1.0)) {
+    return;
+  }
+
+  // The modal dialog runs an event loop: the active layer may have been
+  // removed or changed meanwhile.
+  layer = layerManager_->activeLayer();
+  if (!layer || layer->itemCount() == 0) {
     return;
   }
 
@@ -5790,6 +6161,10 @@ void Canvas::applyScanDocumentToSelection() {
   if (dialog.exec() != QDialog::Accepted)
     return;
 
+  // The modal dialog runs an event loop: items could have been deleted
+  // meanwhile, so re-read the selection instead of using stale pointers.
+  selected = scene_->selectedItems();
+
   ImageFilters::ScanDocumentOptions opts;
   opts.hardBinarize = dialog.hardBinarize();
   opts.threshold = dialog.threshold();
@@ -5890,6 +6265,10 @@ void Canvas::applyColorCurvesToSelection() {
   ColorCurvesDialog dialog(hasPixmapSelection, this);
   if (dialog.exec() != QDialog::Accepted)
     return;
+
+  // The modal dialog runs an event loop: items could have been deleted
+  // meanwhile, so re-read the selection instead of using stale pointers.
+  selected = scene_->selectedItems();
 
   ImageFilters::LevelsOptions opts;
   opts.inputBlack = dialog.inputBlack();
@@ -6020,7 +6399,8 @@ void Canvas::exportSingleElementToPNG() {
   QPainter painter(&image);
   painter.setRenderHint(QPainter::Antialiasing);
   painter.setRenderHint(QPainter::TextAntialiasing);
-  item->paint(&painter, nullptr, nullptr);
+  QStyleOptionGraphicsItem styleOption;
+  item->paint(&painter, &styleOption, nullptr);
   painter.end();
 
   image.save(fileName);

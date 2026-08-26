@@ -8,6 +8,7 @@
 
 #include <QDebug>
 #include <QPainter>
+#include <algorithm>
 
 // --- PdfPageCache Implementation ---
 
@@ -20,7 +21,7 @@ QImage PdfPageCache::getPage(int pageIndex, int dpi) const {
   CacheKey key{pageIndex, dpi};
   auto it = cache_.find(key);
   if (it != cache_.end()) {
-    it->second.accessCount++;
+    it->second.lastAccess = ++accessClock_; // mark recency for LRU eviction
     return it->second.image;
   }
   return QImage();
@@ -28,20 +29,73 @@ QImage PdfPageCache::getPage(int pageIndex, int dpi) const {
 
 void PdfPageCache::setPage(int pageIndex, int dpi, const QImage &image) {
   QMutexLocker locker(&mutex_);
-  evictIfNeeded();
-  CacheKey key{pageIndex, dpi};
-  cache_[key] = CacheEntry{image, 1};
+  if (image.isNull()) {
+    return;
+  }
+  const std::size_t cost =
+      static_cast<std::size_t>(qMax<qsizetype>(0, image.sizeInBytes()));
+  // A single page larger than the whole budget would evict everything and
+  // still not fit – don't cache it at all.
+  if (cost > maxBytes_) {
+    return;
+  }
+
+  const CacheKey key{pageIndex, dpi};
+  // Drop any existing entry first so its bytes are not double counted.
+  auto existing = cache_.find(key);
+  if (existing != cache_.end()) {
+    currentBytes_ -=
+        static_cast<std::size_t>(existing->second.image.sizeInBytes());
+    cache_.erase(existing);
+  }
+
+  // Evict least-recently-used entries until the new page fits both caps.
+  while (!cache_.empty() && (currentBytes_ + cost > maxBytes_ ||
+                             static_cast<int>(cache_.size()) + 1 > maxPages_)) {
+    auto lruIt = std::min_element(
+        cache_.begin(), cache_.end(), [](const auto &a, const auto &b) {
+          return a.second.lastAccess < b.second.lastAccess;
+        });
+    currentBytes_ -=
+        static_cast<std::size_t>(lruIt->second.image.sizeInBytes());
+    cache_.erase(lruIt);
+  }
+
+  cache_[key] = CacheEntry{image, ++accessClock_};
+  currentBytes_ += cost;
 }
 
 bool PdfPageCache::hasPage(int pageIndex, int dpi) const {
   QMutexLocker locker(&mutex_);
   CacheKey key{pageIndex, dpi};
-  return cache_.find(key) != cache_.end();
+  auto it = cache_.find(key);
+  if (it != cache_.end()) {
+    it->second.lastAccess = ++accessClock_;
+    return true;
+  }
+  return false;
+}
+
+void PdfPageCache::setMaxBytes(std::size_t maxBytes) {
+  QMutexLocker locker(&mutex_);
+  maxBytes_ = maxBytes;
+  evictIfNeeded();
+}
+
+std::size_t PdfPageCache::maxBytes() const {
+  QMutexLocker locker(&mutex_);
+  return maxBytes_;
+}
+
+std::size_t PdfPageCache::currentBytes() const {
+  QMutexLocker locker(&mutex_);
+  return currentBytes_;
 }
 
 void PdfPageCache::clear() {
   QMutexLocker locker(&mutex_);
   cache_.clear();
+  currentBytes_ = 0;
 }
 
 void PdfPageCache::removePage(int pageIndex) {
@@ -49,6 +103,7 @@ void PdfPageCache::removePage(int pageIndex) {
   // Remove all DPI variants for this page
   for (auto it = cache_.begin(); it != cache_.end();) {
     if (it->first.pageIndex == pageIndex) {
+      currentBytes_ -= static_cast<std::size_t>(it->second.image.sizeInBytes());
       it = cache_.erase(it);
     } else {
       ++it;
@@ -57,15 +112,15 @@ void PdfPageCache::removePage(int pageIndex) {
 }
 
 void PdfPageCache::evictIfNeeded() {
-  // Evict least accessed pages if cache is full
-  while (static_cast<int>(cache_.size()) >= maxPages_ && !cache_.empty()) {
-    auto minIt = cache_.begin();
-    for (auto it = cache_.begin(); it != cache_.end(); ++it) {
-      if (it->second.accessCount < minIt->second.accessCount) {
-        minIt = it;
-      }
-    }
-    cache_.erase(minIt);
+  while (!cache_.empty() && (currentBytes_ > maxBytes_ ||
+                             static_cast<int>(cache_.size()) > maxPages_)) {
+    auto lruIt = std::min_element(
+        cache_.begin(), cache_.end(), [](const auto &a, const auto &b) {
+          return a.second.lastAccess < b.second.lastAccess;
+        });
+    currentBytes_ -=
+        static_cast<std::size_t>(lruIt->second.image.sizeInBytes());
+    cache_.erase(lruIt);
   }
 }
 

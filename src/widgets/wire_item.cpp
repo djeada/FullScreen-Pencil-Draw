@@ -270,7 +270,7 @@ void WireItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
   }
 
   // Draw a selection highlight glow behind the wire.
-  if (option->state & QStyle::State_Selected) {
+  if (option && (option->state & QStyle::State_Selected)) {
     QPen hlPen(QColor(34, 211, 238, 100), 6.0, Qt::SolidLine, Qt::RoundCap,
                Qt::RoundJoin);
     painter->setPen(hlPen);
@@ -279,7 +279,9 @@ void WireItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
   }
 
   // Suppress Qt's default dashed selection rect – paint the path manually.
-  QStyleOptionGraphicsItem optionNoSel(*option);
+  QStyleOptionGraphicsItem optionNoSel;
+  if (option)
+    optionNoSel = *option;
   optionNoSel.state &= ~QStyle::State_Selected;
   QGraphicsPathItem::paint(painter, &optionNoSel, widget);
 

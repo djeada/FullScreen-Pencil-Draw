@@ -18,6 +18,7 @@
 #endif
 #include <QSize>
 #include <QString>
+#include <cstddef>
 #include <memory>
 #include <unordered_map>
 
@@ -25,7 +26,8 @@
  * @brief Cache for rendered PDF pages.
  *
  * Provides caching of rendered PDF pages by page index and DPI.
- * Implements a simple LRU-like eviction strategy to bound memory usage.
+ * Memory is bounded by total pixel bytes (with a secondary entry-count cap)
+ * and eviction picks the least-recently-used entry.
  */
 class PdfPageCache {
 public:
@@ -61,6 +63,26 @@ public:
   bool hasPage(int pageIndex, int dpi) const;
 
   /**
+   * @brief Set the total budget, in bytes, for cached page pixels
+   * @param maxBytes Budget in bytes; entries are evicted (least recently used
+   *        first) until the cache fits
+   *
+   * A single page larger than the budget is never cached, since caching it
+   * would evict everything else and still not fit.
+   */
+  void setMaxBytes(std::size_t maxBytes);
+
+  /**
+   * @brief Current byte budget for cached page pixels
+   */
+  std::size_t maxBytes() const;
+
+  /**
+   * @brief Bytes currently held by cached pages
+   */
+  std::size_t currentBytes() const;
+
+  /**
    * @brief Clear the entire cache
    */
   void clear();
@@ -89,10 +111,13 @@ private:
 
   struct CacheEntry {
     QImage image;
-    mutable int accessCount;
+    mutable quint64 lastAccess = 0;
   };
 
   int maxPages_;
+  std::size_t maxBytes_ = 256ull * 1024 * 1024; // bound total cached pixels
+  std::size_t currentBytes_ = 0;
+  mutable quint64 accessClock_ = 0;
   mutable QMutex mutex_;
   std::unordered_map<CacheKey, CacheEntry, CacheKeyHash> cache_;
 

@@ -199,17 +199,39 @@ bool applyFillToItem(QGraphicsItem *item, ItemStore *store, const QBrush &brush,
 
   if (auto *path = dynamic_cast<QGraphicsPathItem *>(item)) {
     const QPen oldPen = path->pen();
-    QPen newPen = oldPen;
-    newPen.setColor(color);
-    if (oldPen == newPen) {
-      return false;
+    const QBrush oldBrush = path->brush();
+    const bool hasStroke = oldPen.style() != Qt::NoPen;
+    const bool hasFill = oldBrush.style() != Qt::NoBrush;
+    bool changed = false;
+
+    // Pressure strokes are drawn as a filled outline with Qt::NoPen; only
+    // recolouring the pen would make the fill tool a silent no-op on them.
+    if (hasStroke || !hasFill) {
+      QPen newPen = oldPen;
+      newPen.setColor(color);
+      if (oldPen != newPen) {
+        path->setPen(newPen);
+        changed = true;
+        ItemId id = resolveItemId();
+        if (store && id.isValid()) {
+          actions.push_back(
+              std::make_unique<FillAction>(id, store, oldPen, newPen));
+        }
+      }
     }
-    path->setPen(newPen);
-    ItemId id = resolveItemId();
-    if (store && id.isValid()) {
-      outAction = std::make_unique<FillAction>(id, store, oldPen, newPen);
+
+    if (hasFill && oldBrush != brush) {
+      path->setBrush(brush);
+      changed = true;
+      ItemId id = resolveItemId();
+      if (store && id.isValid()) {
+        actions.push_back(
+            std::make_unique<FillAction>(id, store, oldBrush, brush));
+      }
     }
-    return true;
+
+    outAction = collapseActions(std::move(actions));
+    return changed;
   }
 
   if (auto *shape = dynamic_cast<QAbstractGraphicsShapeItem *>(item)) {

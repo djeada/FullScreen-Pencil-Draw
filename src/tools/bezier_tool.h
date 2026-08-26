@@ -31,8 +31,14 @@ public:
   void mousePressEvent(QMouseEvent *event, const QPointF &scenePos) override;
   void mouseMoveEvent(QMouseEvent *event, const QPointF &scenePos) override;
   void mouseReleaseEvent(QMouseEvent *event, const QPointF &scenePos) override;
+  void mouseDoubleClickEvent(QMouseEvent *event,
+                             const QPointF &scenePos) override;
 
   void deactivate() override;
+
+  void finishGesture() override { finalizePath(); }
+  void cancelGesture() override { discardPath(); }
+  bool hasActiveGesture() const override { return !anchors_.isEmpty(); }
 
 private:
   /** @brief Information stored for each anchor point. */
@@ -43,6 +49,7 @@ private:
   };
 
   void finalizePath();
+  void discardPath();
   void updatePreview(const QPointF &mousePos);
   void rebuildPath();
   void clearPreviewItems();

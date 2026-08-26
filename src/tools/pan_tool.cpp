@@ -24,6 +24,12 @@ void PanTool::mousePressEvent(QMouseEvent *event,
 }
 
 void PanTool::mouseMoveEvent(QMouseEvent *event, const QPointF & /*scenePos*/) {
+  // Recover from a lost release: stop panning as soon as no button is held.
+  if (isPanning_ && !(event->buttons() & Qt::LeftButton)) {
+    isPanning_ = false;
+    renderer_->setCursor(Qt::OpenHandCursor);
+    return;
+  }
   if (isPanning_) {
     QPoint delta = event->pos() - lastPanPoint_;
     lastPanPoint_ = event->pos();

@@ -275,6 +275,40 @@ bool ItemStore::restoreItem(const ItemId &id) {
   return true;
 }
 
+void ItemStore::discardSnapshot(const ItemId &id) {
+  auto it = snapshotItems_.find(id);
+  if (it == snapshotItems_.end()) {
+    return;
+  }
+
+  QGraphicsItem *item = it->second;
+  snapshotItems_.erase(it);
+  if (!item) {
+    return;
+  }
+
+  // Descendants die with the parent; purge their snapshot entries too so no
+  // dangling pointers remain in the map.
+  QList<QGraphicsItem *> descendants;
+  collectDescendants(item, descendants);
+  for (QGraphicsItem *child : descendants) {
+    for (auto snapIt = snapshotItems_.begin(); snapIt != snapshotItems_.end();
+         ++snapIt) {
+      if (snapIt->second == child) {
+        snapshotItems_.erase(snapIt);
+        break;
+      }
+    }
+  }
+
+  // Parked snapshots are normally detached already; never delete an item
+  // that a scene still owns a pointer to.
+  if (item->scene()) {
+    item->scene()->removeItem(item);
+  }
+  delete item;
+}
+
 bool ItemStore::isPendingDeletion(const ItemId &id) const {
   for (const auto &pair : deletionQueue_) {
     if (pair.first == id) {

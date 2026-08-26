@@ -7,6 +7,11 @@
 #include <QtMath>
 #include <algorithm>
 
+namespace {
+constexpr int MAX_BUFFER_DIM = 16384;
+constexpr qreal GROW_FACTOR = 1.5;
+} // namespace
+
 BrushStrokeItem::BrushStrokeItem(const BrushTip &tip, qreal size,
                                  const QColor &color, qreal opacity,
                                  QGraphicsItem *parent)
@@ -33,8 +38,24 @@ void BrushStrokeItem::addPoint(const QPointF &scenePoint) {
       return; // not far enough for a new stamp
   }
 
+  if (points_.isEmpty()) {
+    points_.append(local);
+    initBuffer(local);
+    stampPoint(local);
+    update();
+    return;
+  }
+
+  // Grow the raster buffer only when the new stamp would leave it.
+  if (!bounds_
+           .adjusted(tipImage_.width() / 2.0, tipImage_.height() / 2.0,
+                     -tipImage_.width() / 2.0, -tipImage_.height() / 2.0)
+           .contains(local)) {
+    expandBuffer(local);
+  }
+
   points_.append(local);
-  rebuildImage();
+  stampPoint(local);
   update();
 }
 
@@ -48,47 +69,75 @@ void BrushStrokeItem::paint(QPainter *painter,
   painter->drawImage(bounds_.topLeft(), buffer_);
 }
 
-void BrushStrokeItem::rebuildImage() {
-  if (points_.isEmpty())
-    return;
+qreal BrushStrokeItem::stampRadius() const {
+  return qMax<qreal>(tipImage_.width(), tipImage_.height()) / 2.0 + MARGIN;
+}
 
-  // Compute bounding rect of all points + brush radius + margin
-  qreal half = brushSize_ / 2.0 + MARGIN;
-  qreal minX = points_.first().x();
-  qreal maxX = minX;
-  qreal minY = points_.first().y();
-  qreal maxY = minY;
-  for (const auto &pt : points_) {
-    minX = qMin(minX, pt.x());
-    maxX = qMax(maxX, pt.x());
-    minY = qMin(minY, pt.y());
-    maxY = qMax(maxY, pt.y());
+void BrushStrokeItem::initBuffer(const QPointF &p) {
+  qreal r = stampRadius();
+  QRectF rect(p.x() - r, p.y() - r, 2 * r, 2 * r);
+  allocateBuffer(rect);
+}
+
+void BrushStrokeItem::expandBuffer(const QPointF &p) {
+  qreal r = stampRadius();
+  QRectF needed(
+      qMin(p.x(), bounds_.left()) - r, qMin(p.y(), bounds_.top()) - r,
+      qMax(p.x(), bounds_.right()) - qMin(p.x(), bounds_.left()) + 2 * r,
+      qMax(p.y(), bounds_.bottom()) - qMin(p.y(), bounds_.top()) + 2 * r);
+
+  // Grow generously so expansions stay rare.
+  qreal extraW = needed.width() * (GROW_FACTOR - 1.0);
+  qreal extraH = needed.height() * (GROW_FACTOR - 1.0);
+  needed.adjust(-extraW / 2.0, -extraH / 2.0, extraW / 2.0, extraH / 2.0);
+
+  allocateBuffer(needed);
+}
+
+void BrushStrokeItem::allocateBuffer(const QRectF &desired) {
+  // Clamp to the maximum buffer dimension; content beyond the clamp is
+  // cropped consistently because bounds_ always mirrors the buffer rect.
+  QRectF rect = desired;
+  if (rect.width() > MAX_BUFFER_DIM) {
+    qreal left =
+        qMax(desired.left(), bounds_.center().x() - MAX_BUFFER_DIM / 2.0);
+    left = qMin(left, desired.right() - MAX_BUFFER_DIM);
+    rect.setLeft(left);
+    rect.setWidth(MAX_BUFFER_DIM);
   }
-  bounds_ = QRectF(minX - half, minY - half, (maxX - minX) + 2 * half,
-                   (maxY - minY) + 2 * half);
+  if (rect.height() > MAX_BUFFER_DIM) {
+    qreal top =
+        qMax(desired.top(), bounds_.center().y() - MAX_BUFFER_DIM / 2.0);
+    top = qMin(top, desired.bottom() - MAX_BUFFER_DIM);
+    rect.setTop(top);
+    rect.setHeight(MAX_BUFFER_DIM);
+  }
 
-  // Guard against excessively large images
-  static constexpr int MAX_BUFFER_DIM = 16384;
-  int w = qMax(1, static_cast<int>(qCeil(qMin(
-                      bounds_.width(), static_cast<qreal>(MAX_BUFFER_DIM)))));
-  int h = qMax(1, static_cast<int>(qCeil(qMin(
-                      bounds_.height(), static_cast<qreal>(MAX_BUFFER_DIM)))));
+  int w = qMax(1, static_cast<int>(qCeil(rect.width())));
+  int h = qMax(1, static_cast<int>(qCeil(rect.height())));
 
+  // Qt requires prepareGeometryChange BEFORE the bounding rect changes.
+  prepareGeometryChange();
+  QImage previous = buffer_;
+  QRectF previousBounds = bounds_;
+
+  bounds_ = QRectF(rect.topLeft(), QSizeF(w, h));
   buffer_ = QImage(w, h, QImage::Format_ARGB32_Premultiplied);
   buffer_.fill(Qt::transparent);
 
-  QPainter p(&buffer_);
-  p.setRenderHint(QPainter::Antialiasing);
-
-  int tipW = tipImage_.width();
-  int tipH = tipImage_.height();
-
-  for (const auto &pt : points_) {
-    qreal px = pt.x() - bounds_.left() - tipW / 2.0;
-    qreal py = pt.y() - bounds_.top() - tipH / 2.0;
-    p.drawImage(QPointF(px, py), tipImage_);
+  if (!previous.isNull()) {
+    QPainter p(&buffer_);
+    p.drawImage(previousBounds.topLeft() - bounds_.topLeft(), previous);
+    p.end();
   }
-  p.end();
+}
 
-  prepareGeometryChange();
+void BrushStrokeItem::stampPoint(const QPointF &p) {
+  if (buffer_.isNull())
+    return;
+  QPainter pnt(&buffer_);
+  pnt.setRenderHint(QPainter::Antialiasing);
+  qreal px = p.x() - bounds_.left() - tipImage_.width() / 2.0;
+  qreal py = p.y() - bounds_.top() - tipImage_.height() / 2.0;
+  pnt.drawImage(QPointF(px, py), tipImage_);
 }

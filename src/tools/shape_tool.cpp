@@ -5,6 +5,7 @@
 #include "shape_tool.h"
 #include "../core/scene_controller.h"
 #include "../core/scene_renderer.h"
+#include <QLineF>
 
 ShapeTool::ShapeTool(SceneRenderer *renderer)
     : Tool(renderer), tempShape_(nullptr), tempShapeId_() {}
@@ -40,16 +41,33 @@ void ShapeTool::mouseMoveEvent(QMouseEvent *event, const QPointF &scenePos) {
   }
 }
 
-void ShapeTool::mouseReleaseEvent(QMouseEvent * /*event*/,
-                                  const QPointF &scenePos) {
-  if (tempShape_) {
-    finalizeShape(startPoint_, scenePos);
-    if (tempShape_) {
-      renderer_->addDrawAction(tempShape_);
+void ShapeTool::mouseReleaseEvent(QMouseEvent *event, const QPointF &scenePos) {
+  if (!event || event->button() != Qt::LeftButton)
+    return; // only the button that started the drag finalizes the shape
+  if (!tempShape_)
+    return;
+
+  // A plain click would leave an invisible zero-size shape behind – discard.
+  if (QLineF(startPoint_, scenePos).length() < 0.5) {
+    SceneController *controller = renderer_->sceneController();
+    if (controller && tempShapeId_.isValid()) {
+      controller->removeItem(tempShapeId_, false);
+    } else {
+      if (tempShape_->scene())
+        tempShape_->scene()->removeItem(tempShape_);
+      delete tempShape_;
     }
     tempShape_ = nullptr;
     tempShapeId_ = ItemId();
+    return;
   }
+
+  finalizeShape(startPoint_, scenePos);
+  if (tempShape_) {
+    renderer_->addDrawAction(tempShape_);
+  }
+  tempShape_ = nullptr;
+  tempShapeId_ = ItemId();
 }
 
 void ShapeTool::finalizeShape(const QPointF & /*startPos*/,

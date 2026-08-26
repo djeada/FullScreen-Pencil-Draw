@@ -82,6 +82,38 @@ public:
                                  const QPointF &scenePos) = 0;
 
   /**
+   * @brief Handle mouse double-click event
+   * @param event The mouse event
+   * @param scenePos The position in scene coordinates
+   *
+   * Default implementation does nothing; tools that support double-click
+   * gestures (e.g. path finalization) override it.
+   */
+  virtual void mouseDoubleClickEvent(QMouseEvent * /*event*/,
+                                     const QPointF & /*scenePos*/) {}
+
+  /**
+   * @brief Commit an in-progress multi-step gesture (Enter/Return).
+   *
+   * Tools that build up a shape over several clicks (Bezier, text on path)
+   * override this; for everything else it is a no-op.
+   */
+  virtual void finishGesture() {}
+
+  /**
+   * @brief Discard an in-progress multi-step gesture (Escape).
+   */
+  virtual void cancelGesture() {}
+
+  /**
+   * @brief Whether a multi-step gesture is currently in progress.
+   *
+   * Hosts use this to decide whether Enter/Escape belong to the tool or to
+   * the surrounding window.
+   */
+  virtual bool hasActiveGesture() const { return false; }
+
+  /**
    * @brief Check if this tool uses rubber band selection
    * @return true if the tool uses rubber band selection
    */

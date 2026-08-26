@@ -49,6 +49,8 @@
 
 class ToolManager;
 class Tool;
+class BezierTool;
+class TextOnPathTool;
 class TransformHandleItem;
 class SceneController;
 class ItemStore;
@@ -137,6 +139,7 @@ signals:
   void snapToGridChanged(bool enabled);
   void snapToObjectChanged(bool enabled);
   void canvasModified();
+  void documentSaved();
   void rulerVisibilityChanged(bool visible);
   void measurementToolChanged(bool enabled);
   void measurementUpdated(const QString &measurement);
@@ -144,8 +147,23 @@ signals:
   void pressureSensitivityChanged(bool enabled);
   void brushTipChanged(const BrushTip &tip);
 
+public:
+  /**
+   * @brief Commit an in-progress multi-click path gesture (Bezier / text on
+   * path), if one is running.
+   * @return true when a gesture was active and has been committed
+   */
+  bool finishActiveGesture();
+
+  /**
+   * @brief Discard an in-progress multi-click path gesture, if one is running.
+   * @return true when a gesture was active and has been discarded
+   */
+  bool cancelActiveGesture();
+
 public slots:
   void setShape(const QString &shapeType);
+  void deselectAll();
   void setPenTool();
   void setHighlighterTool();
   void setEraserTool();
@@ -228,6 +246,8 @@ protected:
   void mousePressEvent(QMouseEvent *event) override;
   void mouseMoveEvent(QMouseEvent *event) override;
   void mouseReleaseEvent(QMouseEvent *event) override;
+  void mouseDoubleClickEvent(QMouseEvent *event) override;
+  void keyPressEvent(QKeyEvent *event) override;
   void tabletEvent(QTabletEvent *event) override;
   void wheelEvent(QWheelEvent *event) override;
   void paintEvent(QPaintEvent *event) override;
@@ -338,6 +358,9 @@ private:
   bool tabletActive_ = false;
   QVector<qreal> pressureBuffer_;
 
+  // Eraser gesture: one composite undo entry per stroke sweep
+  std::unique_ptr<CompositeAction> eraserStrokeAction_;
+
   // Brush tip
   BrushTip brushTip_;
 
@@ -349,6 +372,8 @@ private:
   // Private methods
   void updateEraserPreview(const QPointF &position);
   void hideEraserPreview();
+  void beginEraseStroke();
+  void endEraseStroke();
   void addPoint(const QPointF &point);
   void addPressurePoint(const QPointF &point, qreal pressure);
   void eraseAt(const QPointF &point);
@@ -413,7 +438,23 @@ private:
   int wireSrcPin_ = -1;
   QGraphicsPathItem *wireTempPath_ = nullptr;    // Manhattan-routed preview
   QGraphicsEllipseItem *pinHighlight_ = nullptr; // hover highlight ring
-  void cleanupWireState();
+  void cleanupTransientToolState();
+
+  /**
+   * @brief Drop every in-progress drawing gesture and its preview items.
+   *
+   * Called before the scene is torn down (clear / new / load) so no tool is
+   * left holding a pointer to an item the teardown is about to delete.
+   */
+  void abortInProgressDrawing();
+
+  // Multi-click path tools (Bezier, text-on-path). These are the shared
+  // Tool implementations also used by PdfViewer; the canvas drives them
+  // directly instead of duplicating their logic.
+  std::unique_ptr<BezierTool> bezierTool_;
+  std::unique_ptr<TextOnPathTool> textOnPathTool_;
+  Tool *activePathTool_ = nullptr;
+  Tool *pathToolFor(ShapeType shape);
   ElectronicsElementItem *findElectronicsElementNear(const QPointF &scenePos,
                                                      int &pinIndex) const;
   bool wireAlreadyExists(ElectronicsElementItem *a, int ap,

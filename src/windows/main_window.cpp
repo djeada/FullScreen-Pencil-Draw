@@ -127,14 +127,21 @@ MainWindow::MainWindow(QWidget *parent)
           [this]() { applyTheme(); });
   applyTheme();
 
-  // Add global shortcuts for delete (works regardless of focus)
-  QShortcut *deleteShortcut = new QShortcut(QKeySequence(Qt::Key_Delete), this);
-  connect(deleteShortcut, &QShortcut::activated, _canvas,
-          &Canvas::deleteSelectedItems);
+  // Add global shortcut for Backspace delete (Delete key is owned by the
+  // Edit-menu QAction; registering both creates ambiguous-shortcut warnings).
   QShortcut *backspaceShortcut =
       new QShortcut(QKeySequence(Qt::Key_Backspace), this);
   connect(backspaceShortcut, &QShortcut::activated, _canvas,
           &Canvas::deleteSelectedItems);
+
+  // Track dirty state so the exit confirmation only appears when work could
+  // actually be lost.
+  connect(_canvas, &Canvas::canvasModified, this,
+          [this]() { _documentDirty = true; });
+  // Saving (or loading a document) makes the in-memory state match a file
+  // again – otherwise the exit prompt would keep firing after a save.
+  connect(_canvas, &Canvas::documentSaved, this,
+          [this]() { _documentDirty = false; });
 }
 
 MainWindow::~MainWindow() {
@@ -158,28 +165,13 @@ MainWindow::~MainWindow() {
 void MainWindow::setupStatusBar() {
   _statusLabel = new QLabel(
       "✦ Ready | P:Pen I:Highlight E:Eraser T:Text F:Fill Q:ColorSelect "
-      "L:Line A:Arrow R:Rect C:Circle S:Select H:Pan | G:Grid "
-      "B:Filled | Ctrl+Scroll:Zoom",
+      "L:Line A:Arrow R:Rect C:Circle S/V:Select H:Pan M:Mermaid W:Wire "
+      "K:Color | Shift+B:Bezier Shift+T:TextOnPath (Enter finishes, Esc "
+      "cancels) | G:Grid B:Filled | Ctrl+Scroll:Zoom",
       this);
   _measurementLabel = new QLabel("", this);
   statusBar()->addWidget(_statusLabel);
   statusBar()->addPermanentWidget(_measurementLabel);
-  statusBar()->setStyleSheet(R"(
-    QStatusBar { 
-      background-color: #161618; 
-      color: #a0a0a8; 
-      border-top: 1px solid rgba(255, 255, 255, 0.06);
-      padding: 6px 12px;
-    }
-    QStatusBar::item {
-      border: none;
-    }
-    QLabel {
-      color: #a0a0a8;
-      font-size: 11px;
-      font-weight: 500;
-    }
-  )");
 }
 
 void MainWindow::applyTheme() {
@@ -750,7 +742,7 @@ void MainWindow::setupMenuBar() {
   gridAction->setChecked(_canvas->isGridVisible());
 
   _snapToGridAction = createAction(viewMenu, "&Snap to Grid",
-                                   QKeySequence(Qt::CTRL | Qt::Key_G), _canvas,
+                                   QKeySequence(Qt::SHIFT | Qt::Key_G), _canvas,
                                    SLOT(toggleSnapToGrid()));
   _snapToGridAction->setCheckable(true);
   _snapToGridAction->setChecked(_canvas->isSnapToGridEnabled());
@@ -776,9 +768,9 @@ void MainWindow::setupMenuBar() {
   _rulerAction->setCheckable(true);
   _rulerAction->setChecked(_canvas->isRulerVisible());
 
-  _measurementAction =
-      createAction(viewMenu, "&Measurement Tool", QKeySequence(Qt::Key_M),
-                   _canvas, SLOT(toggleMeasurementTool()));
+  _measurementAction = createAction(viewMenu, "&Measurement Tool",
+                                    QKeySequence(Qt::ALT | Qt::Key_M), _canvas,
+                                    SLOT(toggleMeasurementTool()));
   _measurementAction->setCheckable(true);
   _measurementAction->setChecked(_canvas->isMeasurementToolEnabled());
 
@@ -839,7 +831,7 @@ void MainWindow::setupMenuBar() {
   // Edit menu - rotation and alignment
   editMenu->addSeparator();
   createAction(editMenu, "Rotate Selected &Items...",
-               QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_T), _canvas,
+               QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_R), _canvas,
                SLOT(rotateSelectedItems()));
   editMenu->addAction("Align Items...", _canvas, SLOT(alignSelectedItems()));
 
@@ -1091,6 +1083,8 @@ void MainWindow::onNewCanvas() {
   if (!bgColor.isValid())
     return;
   _canvas->newCanvas(width, height, bgColor);
+  // A brand new empty canvas holds nothing worth warning about on exit.
+  _documentDirty = false;
   // Refresh layer panel after new canvas
   if (_layerPanel) {
     _layerPanel->refreshLayerList();
@@ -1098,16 +1092,21 @@ void MainWindow::onNewCanvas() {
 }
 
 void MainWindow::closeEvent(QCloseEvent *event) {
-  QMessageBox::StandardButton response = QMessageBox::question(
-      this, "Confirm Exit", "Do you want to close the application?",
-      QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+  // Only interrupt the user when unsaved work could actually be lost.
+  if (_documentDirty) {
+    QMessageBox::StandardButton response = QMessageBox::question(
+        this, tr("Unsaved Changes"),
+        tr("The document has been modified. Do you want to exit without "
+           "saving?"),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
 
-  if (response == QMessageBox::Yes) {
-    event->accept();
-    QMainWindow::closeEvent(event);
-  } else {
-    event->ignore();
+    if (response != QMessageBox::Yes) {
+      event->ignore();
+      return;
+    }
   }
+  event->accept();
+  QMainWindow::closeEvent(event);
 }
 
 void MainWindow::keyPressEvent(QKeyEvent *event) {
@@ -1134,8 +1133,27 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
              (event->modifiers() & Qt::ControlModifier) &&
              (event->modifiers() & Qt::ShiftModifier)) {
     _canvas->extractColorSelectionToNewLayer();
+  } else if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
+    // Enter commits an in-progress path gesture even when focus sits on a
+    // panel widget rather than the canvas.
+    if (!_canvas->finishActiveGesture()) {
+      QMainWindow::keyPressEvent(event);
+      return;
+    }
+    event->accept();
   } else if (event->key() == Qt::Key_Escape) {
-    this->close();
+    // Esc cancels the current interaction (path gesture, selection, overlays,
+    // search); quitting is done via the Exit action (Ctrl+Q) instead.
+    if (_canvas->cancelActiveGesture()) {
+      event->accept();
+      return;
+    }
+#ifdef HAVE_QT_PDF
+    if (_pdfPanel && _pdfPanel->isVisible() && _pdfViewer) {
+      _pdfViewer->closeSearch();
+    }
+#endif
+    _canvas->deselectAll();
     event->accept();
   } else if (event->key() == Qt::Key_Delete ||
              event->key() == Qt::Key_Backspace) {
@@ -1183,9 +1201,15 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
              !(event->modifiers() & Qt::ControlModifier) &&
              (event->modifiers() & Qt::ShiftModifier)) {
     _toolPanel->onActionLassoSelection();
-  } else if (event->key() == Qt::Key_S &&
+  } else if ((event->key() == Qt::Key_S || event->key() == Qt::Key_V) &&
              !(event->modifiers() & Qt::ControlModifier)) {
     _toolPanel->onActionSelection();
+  } else if (event->key() == Qt::Key_W &&
+             !(event->modifiers() & Qt::ControlModifier)) {
+    _toolPanel->onActionWire();
+  } else if (event->key() == Qt::Key_K &&
+             !(event->modifiers() & Qt::ControlModifier)) {
+    _toolPanel->onActionColor();
   } else if (event->key() == Qt::Key_H) {
     _toolPanel->onActionPan();
   } else if (event->key() == Qt::Key_G) {
@@ -1357,7 +1381,10 @@ void MainWindow::setupPdfToolBar() {
       });
   _thumbnailToggleAction->setToolTip("Toggle Page Thumbnails");
   _thumbnailToggleAction->setCheckable(true);
-  _thumbnailToggleAction->setChecked(true);
+  // Start in sync with the panel (hidden until a PDF is loaded) instead of
+  // showing a checked button over a hidden panel.
+  _thumbnailToggleAction->setChecked(_thumbnailPanel &&
+                                     _thumbnailPanel->isPanelVisible());
 
   _pdfToolBar->addSeparator();
 

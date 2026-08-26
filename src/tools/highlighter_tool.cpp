@@ -41,8 +41,6 @@ void HighlighterTool::mousePressEvent(QMouseEvent *event,
 
   pointBuffer_.clear();
   pointBuffer_.append(scenePos);
-
-  renderer_->addDrawAction(currentPath_);
 }
 
 void HighlighterTool::mouseMoveEvent(QMouseEvent *event,
@@ -52,8 +50,20 @@ void HighlighterTool::mouseMoveEvent(QMouseEvent *event,
   }
 }
 
-void HighlighterTool::mouseReleaseEvent(QMouseEvent * /*event*/,
-                                        const QPointF & /*scenePos*/) {
+void HighlighterTool::mouseReleaseEvent(QMouseEvent *event,
+                                        const QPointF &scenePos) {
+  if (!event || event->button() != Qt::LeftButton)
+    return; // ignore other-button releases mid-stroke
+
+  // A single-sample click still leaves a visible dab of highlight.
+  if (currentPath_ && pointBuffer_.size() <= 1) {
+    QPainterPath dotPath = currentPath_->path();
+    dotPath.lineTo(scenePos + QPointF(0.01, 0.01));
+    currentPath_->setPath(dotPath);
+  }
+  if (currentPath_) {
+    renderer_->addDrawAction(currentPath_);
+  }
   currentPath_ = nullptr;
   currentItemId_ = ItemId();
   pointBuffer_.clear();

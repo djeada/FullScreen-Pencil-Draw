@@ -19,11 +19,6 @@ void TextOnPathTool::mousePressEvent(QMouseEvent *event,
   if (!(event->buttons() & Qt::LeftButton))
     return;
 
-  if (event->type() == QEvent::MouseButtonDblClick) {
-    finalizePath();
-    return;
-  }
-
   isDragging_ = true;
   dragStart_ = scenePos;
 
@@ -70,8 +65,11 @@ void TextOnPathTool::mouseMoveEvent(QMouseEvent * /*event*/,
   }
 }
 
-void TextOnPathTool::mouseReleaseEvent(QMouseEvent * /*event*/,
+void TextOnPathTool::mouseReleaseEvent(QMouseEvent *event,
                                        const QPointF &scenePos) {
+  // Only the button that started the drag sets the anchor handle.
+  if (event && event->button() != Qt::LeftButton)
+    return;
   if (isDragging_ && !anchors_.isEmpty()) {
     AnchorPoint &current = anchors_.last();
     if (current.position != scenePos) {
@@ -83,9 +81,29 @@ void TextOnPathTool::mouseReleaseEvent(QMouseEvent * /*event*/,
   }
 }
 
-void TextOnPathTool::deactivate() {
+void TextOnPathTool::mouseDoubleClickEvent(QMouseEvent * /*event*/,
+                                           const QPointF & /*scenePos*/) {
+  // Double-click finishes the path (forwarded by the host view)
   finalizePath();
+}
+
+void TextOnPathTool::deactivate() {
+  // Abandon an in-progress path without blocking on the text-input dialog;
+  // finalizing is done explicitly via double-click.
+  cancelPath();
   Tool::deactivate();
+}
+
+void TextOnPathTool::cancelPath() {
+  clearPreviewItems();
+  if (previewPath_) {
+    if (previewPath_->scene())
+      renderer_->scene()->removeItem(previewPath_);
+    delete previewPath_;
+    previewPath_ = nullptr;
+  }
+  anchors_.clear();
+  isDragging_ = false;
 }
 
 void TextOnPathTool::finalizePath() {
@@ -93,14 +111,7 @@ void TextOnPathTool::finalizePath() {
 
   if (anchors_.size() < 2) {
     // Not enough points — discard
-    if (previewPath_) {
-      if (previewPath_->scene())
-        renderer_->scene()->removeItem(previewPath_);
-      delete previewPath_;
-    }
-    previewPath_ = nullptr;
-    anchors_.clear();
-    isDragging_ = false;
+    cancelPath();
     return;
   }
 
@@ -126,10 +137,12 @@ void TextOnPathTool::finalizePath() {
     previewPath_ = nullptr;
   }
 
-  // Ask user for text
+  // Ask user for text (parented to the host view so it centers and
+  // participates in modality correctly)
   bool ok = false;
+  QWidget *dialogParent = dynamic_cast<QWidget *>(renderer_);
   QString text =
-      QInputDialog::getText(nullptr, "Text on Path",
+      QInputDialog::getText(dialogParent, "Text on Path",
                             "Enter text:", QLineEdit::Normal, QString(), &ok);
   if (!ok || text.trimmed().isEmpty()) {
     anchors_.clear();

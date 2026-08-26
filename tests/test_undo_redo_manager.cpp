@@ -29,6 +29,22 @@ private:
   int *redoCounter_;
 };
 
+// Action that reports an ItemId, so discard notifications can be observed.
+class StubItemAction : public Action {
+public:
+  explicit StubItemAction(const ItemId &id) : id_(id) {}
+
+  void undo() override {}
+  void redo() override {}
+  QString description() const override { return "StubItem"; }
+  void collectReferencedItems(QVector<ItemId> &out) const override {
+    out.append(id_);
+  }
+
+private:
+  ItemId id_;
+};
+
 class TestUndoRedoManager : public QObject {
   Q_OBJECT
 
@@ -138,6 +154,60 @@ private slots:
       mgr.undo();
     }
     QCOMPARE(firstUndos, 0);
+  }
+
+  // Actions evicted by the history limit must report their items so parked
+  // undo snapshots can be released instead of leaking.
+  void testEvictedActionsNotifyDiscardListeners() {
+    UndoRedoManager mgr;
+    QVector<ItemId> discarded;
+    mgr.addDiscardListener(
+        [&discarded](const ItemId &id) { discarded.append(id); });
+
+    const ItemId first = ItemId::generate();
+    mgr.push(std::make_unique<StubItemAction>(first));
+    for (std::size_t i = 0; i < UndoRedoManager::kMaxUndoSteps; ++i) {
+      mgr.push(std::make_unique<StubItemAction>(ItemId::generate()));
+    }
+
+    QCOMPARE(discarded.size(), 1);
+    QCOMPARE(discarded.first(), first);
+  }
+
+  // Pushing after an undo drops the redo stack – those actions are gone for
+  // good and must be reported too.
+  void testInvalidatedRedoStackNotifiesDiscardListeners() {
+    UndoRedoManager mgr;
+    QVector<ItemId> discarded;
+    mgr.addDiscardListener(
+        [&discarded](const ItemId &id) { discarded.append(id); });
+
+    const ItemId undone = ItemId::generate();
+    mgr.push(std::make_unique<StubItemAction>(undone));
+    mgr.undo();
+    QVERIFY(mgr.canRedo());
+
+    mgr.push(std::make_unique<StubItemAction>(ItemId::generate()));
+    QVERIFY(!mgr.canRedo());
+    QCOMPARE(discarded.size(), 1);
+    QCOMPARE(discarded.first(), undone);
+  }
+
+  // clear() destroys both stacks; every referenced item must be reported.
+  void testClearNotifiesDiscardListenersForBothStacks() {
+    UndoRedoManager mgr;
+    QVector<ItemId> discarded;
+    mgr.addDiscardListener(
+        [&discarded](const ItemId &id) { discarded.append(id); });
+
+    mgr.push(std::make_unique<StubItemAction>(ItemId::generate()));
+    mgr.push(std::make_unique<StubItemAction>(ItemId::generate()));
+    mgr.undo(); // one action moves to the redo stack
+
+    mgr.clear();
+    QCOMPARE(discarded.size(), 2);
+    QVERIFY(!mgr.canUndo());
+    QVERIFY(!mgr.canRedo());
   }
 };
 

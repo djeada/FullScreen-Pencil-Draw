@@ -8,6 +8,7 @@
 #include "../widgets/latex_text_item.h"
 #include <QFont>
 #include <QPointer>
+#include <memory>
 
 TextTool::TextTool(SceneRenderer *renderer)
     : Tool(renderer), currentEditingItem_(nullptr), currentEditingItemId_() {}
@@ -85,35 +86,48 @@ void TextTool::createTextItem(const QPointF &position) {
     textItemId = renderer_->registerItem(textItem);
   }
 
-  // Connect to handle when editing is finished
+  // Connect to handle when editing is finished.
   // Use QPointer to safely track the textItem in case it gets deleted before
-  // signal fires
-  QObject::connect(textItem, &LatexTextItem::editingFinished,
-                   [this, textItem = QPointer<LatexTextItem>(textItem),
-                    textItemId, controller]() {
-                     // Check if textItem is still valid (not deleted)
-                     if (!textItem) {
-                       return;
-                     }
-                     // If the text is empty after editing, remove the item
-                     if (textItem->text().trimmed().isEmpty()) {
-                       if (controller && textItemId.isValid()) {
-                         controller->removeItem(textItemId,
-                                                false); // Don't keep for undo
-                       } else {
-                         renderer_->onItemRemoved(textItem);
-                         renderer_->scene()->removeItem(textItem);
-                         textItem->deleteLater();
-                       }
-                     } else {
-                       // Add to undo stack only when there's actual content
-                       renderer_->addDrawAction(textItem);
-                     }
-                     if (currentEditingItem_ == textItem) {
-                       currentEditingItem_ = nullptr;
-                       currentEditingItemId_ = ItemId();
-                     }
-                   });
+  // the signal fires, and pass the renderer (a QObject) as receiver context so
+  // the lambda can never run after the tool/renderer was destroyed.
+  QObject *context = dynamic_cast<QObject *>(renderer_);
+  // Runs once, for the initial edit session only: later edits of an item
+  // already on the undo stack must not push it again (or delete it from
+  // under the stack when cleared).
+  auto handled = std::make_shared<bool>(false);
+  auto onEditDone = [this, textItem = QPointer<LatexTextItem>(textItem),
+                     textItemId, controller, handled]() {
+    if (*handled)
+      return;
+    *handled = true;
+    // Check if textItem is still valid (not deleted)
+    if (!textItem) {
+      return;
+    }
+    // If the text is empty after editing, remove the item
+    if (textItem->text().trimmed().isEmpty()) {
+      if (controller && textItemId.isValid()) {
+        controller->removeItem(textItemId,
+                               false); // Don't keep for undo
+      } else {
+        renderer_->onItemRemoved(textItem);
+        renderer_->scene()->removeItem(textItem);
+        textItem->deleteLater();
+      }
+    } else {
+      // Add to undo stack only when there's actual content
+      renderer_->addDrawAction(textItem);
+    }
+    if (currentEditingItem_ == textItem) {
+      currentEditingItem_ = nullptr;
+      currentEditingItemId_ = ItemId();
+    }
+  };
+  QObject::connect(textItem, &LatexTextItem::editingFinished, context,
+                   onEditDone);
+  // Escape-cancelling a brand new item must discard it too.
+  QObject::connect(textItem, &LatexTextItem::editingCancelled, context,
+                   onEditDone);
 
   // Start inline editing immediately
   textItem->startEditing();

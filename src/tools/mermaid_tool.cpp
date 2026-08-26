@@ -7,6 +7,7 @@
 #include "../core/scene_renderer.h"
 #include "../widgets/mermaid_text_item.h"
 #include <QPointer>
+#include <memory>
 
 MermaidTool::MermaidTool(SceneRenderer *renderer)
     : Tool(renderer), currentEditingItem_(nullptr), currentEditingItemId_() {}
@@ -81,33 +82,46 @@ void MermaidTool::createMermaidItem(const QPointF &position) {
     mermaidItemId = renderer_->registerItem(mermaidItem);
   }
 
-  // Connect to handle when editing is finished
-  QObject::connect(mermaidItem, &MermaidTextItem::editingFinished,
-                   [this, mermaidItem = QPointer<MermaidTextItem>(mermaidItem),
-                    mermaidItemId, controller]() {
-                     // Check if mermaidItem is still valid (not deleted)
-                     if (!mermaidItem) {
-                       return;
-                     }
-                     // If the code is empty after editing, remove the item
-                     if (mermaidItem->mermaidCode().trimmed().isEmpty()) {
-                       if (controller && mermaidItemId.isValid()) {
-                         controller->removeItem(mermaidItemId,
-                                                false); // Don't keep for undo
-                       } else {
-                         renderer_->onItemRemoved(mermaidItem);
-                         renderer_->scene()->removeItem(mermaidItem);
-                         mermaidItem->deleteLater();
-                       }
-                     } else {
-                       // Add to undo stack only when there's actual content
-                       renderer_->addDrawAction(mermaidItem);
-                     }
-                     if (currentEditingItem_ == mermaidItem) {
-                       currentEditingItem_ = nullptr;
-                       currentEditingItemId_ = ItemId();
-                     }
-                   });
+  // Connect to handle when editing is finished (renderer as receiver context
+  // so the lambda can't run after tool/renderer destruction)
+  QObject *context = dynamic_cast<QObject *>(renderer_);
+  // Runs once, for the initial edit session only: later edits of an item
+  // already on the undo stack must not push it again (or delete it from
+  // under the stack when cleared).
+  auto handled = std::make_shared<bool>(false);
+  auto onEditDone = [this, mermaidItem = QPointer<MermaidTextItem>(mermaidItem),
+                     mermaidItemId, controller, handled]() {
+    if (*handled)
+      return;
+    *handled = true;
+    // Check if mermaidItem is still valid (not deleted)
+    if (!mermaidItem) {
+      return;
+    }
+    // If the code is empty after editing, remove the item
+    if (mermaidItem->mermaidCode().trimmed().isEmpty()) {
+      if (controller && mermaidItemId.isValid()) {
+        controller->removeItem(mermaidItemId,
+                               false); // Don't keep for undo
+      } else {
+        renderer_->onItemRemoved(mermaidItem);
+        renderer_->scene()->removeItem(mermaidItem);
+        mermaidItem->deleteLater();
+      }
+    } else {
+      // Add to undo stack only when there's actual content
+      renderer_->addDrawAction(mermaidItem);
+    }
+    if (currentEditingItem_ == mermaidItem) {
+      currentEditingItem_ = nullptr;
+      currentEditingItemId_ = ItemId();
+    }
+  };
+  QObject::connect(mermaidItem, &MermaidTextItem::editingFinished, context,
+                   onEditDone);
+  // Escape-cancelling a brand new item must discard it too.
+  QObject::connect(mermaidItem, &MermaidTextItem::editingCancelled, context,
+                   onEditDone);
 
   // Start inline editing immediately
   mermaidItem->startEditing();

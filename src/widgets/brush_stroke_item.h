@@ -35,7 +35,11 @@ public:
              QWidget *widget) override;
 
 private:
-  void rebuildImage();
+  qreal stampRadius() const;
+  void initBuffer(const QPointF &p);
+  void expandBuffer(const QPointF &p);
+  void allocateBuffer(const QRectF &desired);
+  void stampPoint(const QPointF &p);
 
   BrushTip tip_;
   qreal brushSize_;

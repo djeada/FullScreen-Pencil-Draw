@@ -23,6 +23,7 @@
 #include <QPdfWriter>
 #include <QPointer>
 #include <QScrollBar>
+#include <QStyleOptionGraphicsItem>
 #include <QUrl>
 #include <QWheelEvent>
 #include <cmath>
@@ -147,8 +148,17 @@ bool PdfViewer::openPdf(const QString &filePath) {
 
 void PdfViewer::closePdf() {
   if (toolManager_) {
+    // Discard – never commit – an in-progress gesture: the document it would
+    // be drawn into is going away.
+    if (Tool *tool = toolManager_->activeTool()) {
+      tool->cancelGesture();
+    }
     toolManager_->setActiveTool(ToolManager::ToolType::Pen);
   }
+  // Cancel any in-progress special tool gesture; the scene clear below would
+  // otherwise delete the rubber-band item out from under the mouse handlers.
+  specialTool_ = SpecialTool::None;
+  screenshotSelectionRect_ = nullptr;
 
   // Remove page item
   if (pageItem_) {
@@ -169,6 +179,9 @@ void PdfViewer::closePdf() {
   currentPage_ = 0;
   currentZoom_ = 1.0;
   resetTransform();
+  // Drop search state bound to the old document so stale highlights can't
+  // flash against the geometry of a newly opened document.
+  closeSearch();
   if (undoRedoManager_) {
     undoRedoManager_->clear();
   }
@@ -304,6 +317,15 @@ void PdfViewer::setPenWidth(int width) {
 
 void PdfViewer::setUndoRedoManager(UndoRedoManager *manager) {
   undoRedoManager_ = manager;
+  // Release parked undo snapshots when actions are discarded (see Canvas).
+  if (manager) {
+    QPointer<ItemStore> storeGuard = itemStore();
+    manager->addDiscardListener([storeGuard](const ItemId &id) {
+      if (storeGuard && !storeGuard->contains(id)) {
+        storeGuard->discardSnapshot(id);
+      }
+    });
+  }
 }
 
 void PdfViewer::setFilledShapes(bool filled) { fillShapes_ = filled; }
@@ -469,14 +491,14 @@ void PdfViewer::undo() {
     return;
   }
 
-  auto &undoStack = overlayManager_->undoStack(currentPage_);
-  auto &redoStack = overlayManager_->redoStack(currentPage_);
+  auto *undoStack = overlayManager_->undoStack(currentPage_);
+  auto *redoStack = overlayManager_->redoStack(currentPage_);
 
-  if (!undoStack.empty()) {
-    std::unique_ptr<Action> action = std::move(undoStack.back());
-    undoStack.pop_back();
+  if (undoStack && redoStack && !undoStack->empty()) {
+    std::unique_ptr<Action> action = std::move(undoStack->back());
+    undoStack->pop_back();
     action->undo();
-    redoStack.push_back(std::move(action));
+    redoStack->push_back(std::move(action));
   }
 }
 
@@ -490,14 +512,14 @@ void PdfViewer::redo() {
     return;
   }
 
-  auto &undoStack = overlayManager_->undoStack(currentPage_);
-  auto &redoStack = overlayManager_->redoStack(currentPage_);
+  auto *undoStack = overlayManager_->undoStack(currentPage_);
+  auto *redoStack = overlayManager_->redoStack(currentPage_);
 
-  if (!redoStack.empty()) {
-    std::unique_ptr<Action> action = std::move(redoStack.back());
-    redoStack.pop_back();
+  if (undoStack && redoStack && !redoStack->empty()) {
+    std::unique_ptr<Action> action = std::move(redoStack->back());
+    redoStack->pop_back();
     action->redo();
-    undoStack.push_back(std::move(action));
+    undoStack->push_back(std::move(action));
   }
 }
 
@@ -602,8 +624,9 @@ void PdfViewer::addAction(std::unique_ptr<Action> action) {
   if (undoRedoManager_) {
     undoRedoManager_->push(std::move(action));
   } else {
-    auto &undoStack = overlayManager_->undoStack(currentPage_);
-    undoStack.push_back(std::move(action));
+    if (auto *undoStack = overlayManager_->undoStack(currentPage_)) {
+      undoStack->push_back(std::move(action));
+    }
     clearRedoStack();
   }
   emit documentModified();
@@ -620,7 +643,9 @@ void PdfViewer::onItemRemoved(QGraphicsItem *item) {
 
 void PdfViewer::clearRedoStack() {
   if (!undoRedoManager_ && hasPdf()) {
-    overlayManager_->redoStack(currentPage_).clear();
+    if (auto *redoStack = overlayManager_->redoStack(currentPage_)) {
+      redoStack->clear();
+    }
   }
 }
 
@@ -637,6 +662,10 @@ bool PdfViewer::exportAnnotatedPdf(const QString &filePath) {
   pdfWriter.setResolution(renderDpi_);
 
   QPainter painter(&pdfWriter);
+  if (!painter.isActive()) {
+    // Failed to open the target file (bad path / permissions)
+    return false;
+  }
   painter.setRenderHint(QPainter::Antialiasing);
   painter.setRenderHint(QPainter::SmoothPixmapTransform);
   painter.setRenderHint(QPainter::TextAntialiasing);
@@ -675,20 +704,22 @@ bool PdfViewer::exportAnnotatedPdf(const QString &filePath) {
     if (auto *overlay = overlayManager_->overlay(i)) {
       ItemStore *store = itemStore();
       if (store) {
+        QStyleOptionGraphicsItem styleOption;
         for (const ItemId &id : overlay->itemIds()) {
           if (QGraphicsItem *item = store->item(id)) {
             painter.save();
             painter.setTransform(item->sceneTransform(), true);
-            item->paint(&painter, nullptr, nullptr);
+            item->paint(&painter, &styleOption, nullptr);
             painter.restore();
           }
         }
       } else {
+        QStyleOptionGraphicsItem styleOption;
         for (QGraphicsItem *item : overlay->items()) {
           if (item) {
             painter.save();
             painter.setTransform(item->sceneTransform(), true);
-            item->paint(&painter, nullptr, nullptr);
+            item->paint(&painter, &styleOption, nullptr);
             painter.restore();
           }
         }
@@ -698,12 +729,13 @@ bool PdfViewer::exportAnnotatedPdf(const QString &filePath) {
     painter.restore();
   }
 
+  const bool ok = painter.isActive();
   painter.end();
 
   // Restore current page
   goToPage(savedPage);
 
-  return true;
+  return ok;
 }
 
 void PdfViewer::drawBackground(QPainter *painter, const QRectF &rect) {
@@ -767,6 +799,19 @@ void PdfViewer::mousePressEvent(QMouseEvent *event) {
 
   // Handle screenshot selection mode (PDF-specific tool)
   if (specialTool_ == SpecialTool::ScreenshotSelection) {
+    // Only the left button starts a capture; right-click opens the context
+    // menu and must not drop a stray rubber band on the page.
+    if (event->button() != Qt::LeftButton) {
+      QGraphicsView::mousePressEvent(event);
+      return;
+    }
+    // A previous band can survive a lost release – never leak it.
+    if (screenshotSelectionRect_) {
+      if (screenshotSelectionRect_->scene())
+        scene_->removeItem(screenshotSelectionRect_);
+      delete screenshotSelectionRect_;
+      screenshotSelectionRect_ = nullptr;
+    }
     startPoint_ = sp;
     screenshotSelectionRect_ =
         new QGraphicsRectItem(QRectF(startPoint_, startPoint_));
@@ -845,6 +890,10 @@ void PdfViewer::mouseReleaseEvent(QMouseEvent *event) {
   // Handle screenshot selection mode
   if (specialTool_ == SpecialTool::ScreenshotSelection &&
       screenshotSelectionRect_) {
+    // Only the button that started the capture ends it.
+    if (event->button() != Qt::LeftButton) {
+      return;
+    }
     QRectF selectionRect = screenshotSelectionRect_->rect();
     scene_->removeItem(screenshotSelectionRect_);
     delete screenshotSelectionRect_;
@@ -867,6 +916,47 @@ void PdfViewer::mouseReleaseEvent(QMouseEvent *event) {
   if (tool) {
     tool->mouseReleaseEvent(event, ep);
   }
+}
+
+void PdfViewer::mouseDoubleClickEvent(QMouseEvent *event) {
+  if (!hasPdf()) {
+    QGraphicsView::mouseDoubleClickEvent(event);
+    return;
+  }
+
+  if (mode_ == Mode::View || specialTool_ != SpecialTool::None) {
+    QGraphicsView::mouseDoubleClickEvent(event);
+    return;
+  }
+
+  // Forward to the active tool so it can implement double-click gestures
+  // (e.g. finalizing a Bezier / text-on-path).
+  Tool *tool = toolManager_->activeTool();
+  if (tool) {
+    tool->mouseDoubleClickEvent(event, mapToScene(event->pos()));
+  }
+}
+
+void PdfViewer::keyPressEvent(QKeyEvent *event) {
+  if (!event) {
+    return;
+  }
+  // Enter commits and Escape discards an in-progress path gesture; when no
+  // gesture is running the keys keep their window-level meaning.
+  Tool *tool = toolManager_ ? toolManager_->activeTool() : nullptr;
+  if (tool && tool->hasActiveGesture()) {
+    if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
+      tool->finishGesture();
+      event->accept();
+      return;
+    }
+    if (event->key() == Qt::Key_Escape) {
+      tool->cancelGesture();
+      event->accept();
+      return;
+    }
+  }
+  QGraphicsView::keyPressEvent(event);
 }
 
 void PdfViewer::wheelEvent(QWheelEvent *event) {
