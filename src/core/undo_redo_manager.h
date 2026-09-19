@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <functional>
 #include <memory>
+#include <unordered_map>
 #include <vector>
 
 class Action;
@@ -23,13 +24,23 @@ public:
    */
   using DiscardListener = std::function<void(const ItemId &)>;
 
-  void push(std::unique_ptr<Action> action);
+  /**
+   * @param owner Optional tag for the surface that created the action (the
+   *        canvas and the PDF viewer share one history); see clearOwnedBy().
+   */
+  void push(std::unique_ptr<Action> action, const void *owner = nullptr);
   void undo();
   void redo();
   void clear();
+  /// Drop only the actions pushed with @p owner (e.g. when a PDF closes).
+  void clearOwnedBy(const void *owner);
 
   bool canUndo() const;
   bool canRedo() const;
+
+  /// Owner tag (see push()) of the action undo() / redo() would replay.
+  const void *undoOwner() const;
+  const void *redoOwner() const;
 
   void addDiscardListener(DiscardListener listener) {
     discardListeners_.push_back(std::move(listener));
@@ -37,11 +48,20 @@ public:
 
 private:
   void enforceLimit();
-  void notifyDiscarded(const Action *action);
+  void evictOverLimit(std::vector<std::unique_ptr<Action>> &discarded);
+  void notifyDiscarded(const std::vector<std::unique_ptr<Action>> &discarded);
 
   std::vector<std::unique_ptr<Action>> undoStack_;
   std::vector<std::unique_ptr<Action>> redoStack_;
   std::vector<DiscardListener> discardListeners_;
+  std::unordered_map<const Action *, const void *> owners_;
+  // Actions pushed while an action is being replayed (e.g. a callback
+  // commits an in-progress gesture) are queued until the replay finished:
+  // pushing mid-replay would reshuffle the stacks around the in-flight
+  // action.
+  bool replaying_ = false;
+  std::vector<std::pair<std::unique_ptr<Action>, const void *>> deferred_;
+  void flushDeferred();
 };
 
 #endif // UNDO_REDO_MANAGER_H

@@ -17,6 +17,7 @@
 #include <QGraphicsPixmapItem>
 #include <QGraphicsScene>
 #include <QGraphicsView>
+#include <QHash>
 #include <QMimeData>
 #include <QWidget>
 #include <memory>
@@ -190,6 +191,8 @@ public:
    * @param color The color to use
    */
   void setPenColor(const QColor &color);
+  /// Ink opacity (0-255), kept in sync with the canvas opacity slider.
+  void setOpacity(int opacity);
 
   /**
    * @brief Get the current pen color
@@ -374,6 +377,17 @@ public:
   void redo();
 
   void setUndoRedoManager(UndoRedoManager *manager);
+
+  /// Commit an unfinished gesture (text being typed, Bezier path, ...).
+  void commitActiveGesture();
+
+  void beginActionGroup() override;
+  void endActionGroup() override;
+
+  /// Delete the selected annotations on the current page (undoable).
+  void deleteSelectedItems();
+  /// Select every annotation on the current page.
+  void selectAll();
 
   /**
    * @brief Check if undo is available
@@ -568,6 +582,7 @@ protected:
   void drawBackground(QPainter *painter, const QRectF &rect) override;
   void drawForeground(QPainter *painter, const QRectF &rect) override;
   void resizeEvent(QResizeEvent *event) override;
+  void scrollContentsBy(int dx, int dy) override;
   void dragEnterEvent(QDragEnterEvent *event) override;
   void dragMoveEvent(QDragMoveEvent *event) override;
   void dragLeaveEvent(QDragLeaveEvent *event) override;
@@ -585,6 +600,9 @@ private:
   SceneController *sceneController_;
   ToolManager *toolManager_;
   SpecialTool specialTool_;
+  QHash<ItemId, QPointF> moveStartPositions_;    ///< Select-tool drag start
+  std::unique_ptr<CompositeAction> actionGroup_; ///< see beginActionGroup()
+  bool navigatingForHistory_ = false; ///< goToPage() from an undo/redo
 
   // Current state
   int currentPage_;
@@ -596,6 +614,7 @@ private:
   bool fillShapes_;
   double currentZoom_;
   QPen currentPen_;
+  int currentOpacity_ = 255;
   QPen eraserPen_;
 
   // Drawing state for screenshot selection (special tool)
@@ -622,12 +641,17 @@ private:
   // Search
   void performSearch(const QString &text);
   void navigateToMatch(int index);
+  void onSearchResultsChanged();
+  void applyViewTransform();
+  void updateDragMode();
   void updateSearchHighlights();
 
   QPdfSearchModel *searchModel_;
   PdfSearchBar *searchBar_;
   int currentMatchIndex_;
   int totalMatchCount_;
+  int searchStartPage_ = 0;          // page the current search started on
+  bool searchUserNavigated_ = false; // user stepped through matches
   QList<QRectF> currentPageHighlights_;
   int highlightedMatchPage_;
   int highlightedMatchIndexOnPage_;

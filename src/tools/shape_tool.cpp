@@ -13,7 +13,8 @@ ShapeTool::ShapeTool(SceneRenderer *renderer)
 ShapeTool::~ShapeTool() = default;
 
 void ShapeTool::mousePressEvent(QMouseEvent *event, const QPointF &scenePos) {
-  if (!(event->buttons() & Qt::LeftButton))
+  if (event->button() !=
+      Qt::LeftButton) // not buttons(): extra presses mid-drag
     return;
 
   startPoint_ = scenePos;

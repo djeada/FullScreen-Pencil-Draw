@@ -19,7 +19,8 @@ HighlighterTool::~HighlighterTool() = default;
 
 void HighlighterTool::mousePressEvent(QMouseEvent *event,
                                       const QPointF &scenePos) {
-  if (!(event->buttons() & Qt::LeftButton)) {
+  if (event->button() !=
+      Qt::LeftButton) { // not buttons(): extra presses mid-drag
     return;
   }
 

@@ -9,6 +9,7 @@
 #include "../core/theme_manager.h"
 #include "wire_item.h"
 #include <QFont>
+#include <QGraphicsScene>
 #include <QPainterPath>
 #include <QPixmap>
 #include <QPolygonF>
@@ -789,9 +790,22 @@ QPainterPath ElectronicsElementItem::shape() const {
   return path;
 }
 
+bool schematicOnDarkBackground(const QGraphicsItem *item) {
+  if (const QGraphicsScene *scene = item ? item->scene() : nullptr) {
+    const QVariant documentBackground = scene->property("documentBackground");
+    if (documentBackground.canConvert<QColor>() &&
+        documentBackground.value<QColor>().isValid())
+      return documentBackground.value<QColor>().lightness() < 128;
+    const QBrush brush = scene->backgroundBrush();
+    if (brush.style() != Qt::NoBrush)
+      return brush.color().lightness() < 128;
+  }
+  return ThemeManager::instance().isDarkTheme();
+}
+
 void ElectronicsElementItem::initPaintCache() {
-  // Monochrome schematic style – adapts to dark/light theme.
-  const bool dark = ThemeManager::instance().isDarkTheme();
+  // Monochrome schematic style – contrasts with the drawing background.
+  const bool dark = schematicOnDarkBackground(this);
   strokeColor_ = dark ? Qt::white : Qt::black;
   labelColor_ = dark ? Qt::white : Qt::black;
   selectColor_ = QColor("#2563eb");
@@ -847,8 +861,8 @@ void ElectronicsElementItem::renderToPixmap(qreal scale) {
 void ElectronicsElementItem::paint(QPainter *painter,
                                    const QStyleOptionGraphicsItem * /*option*/,
                                    QWidget * /*widget*/) {
-  // Detect theme change.
-  const bool dark = ThemeManager::instance().isDarkTheme();
+  // Detect background (or theme) change.
+  const bool dark = schematicOnDarkBackground(this);
   bool themeChanged = false;
   if (dark != cachedDark_) {
     cachedDark_ = dark;
@@ -1002,7 +1016,10 @@ void ElectronicsElementItem::removeWire(WireItem *wire) {
 
 QVariant ElectronicsElementItem::itemChange(GraphicsItemChange change,
                                             const QVariant &value) {
-  if (change == ItemPositionHasChanged) {
+  // Rotating/scaling via the transform handles changes the pin positions
+  // without moving the item, so follow transform changes too.
+  if (change == ItemPositionHasChanged || change == ItemTransformHasChanged ||
+      change == ItemRotationHasChanged || change == ItemScaleHasChanged) {
     for (WireItem *w : connectedWires_)
       w->updatePath();
   }

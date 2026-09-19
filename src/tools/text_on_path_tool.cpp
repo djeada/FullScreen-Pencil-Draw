@@ -16,7 +16,8 @@ TextOnPathTool::~TextOnPathTool() { clearPreviewItems(); }
 
 void TextOnPathTool::mousePressEvent(QMouseEvent *event,
                                      const QPointF &scenePos) {
-  if (!(event->buttons() & Qt::LeftButton))
+  if (event->button() !=
+      Qt::LeftButton) // not buttons(): extra presses mid-drag
     return;
 
   isDragging_ = true;
@@ -34,7 +35,7 @@ void TextOnPathTool::mousePressEvent(QMouseEvent *event,
     QPen pen = renderer_->currentPen();
     pen.setStyle(Qt::DashLine);
     previewPath_->setPen(pen);
-    previewPath_->setZValue(998);
+    previewPath_->setZValue(1e9 - 2); // above all layer content
     renderer_->scene()->addItem(previewPath_);
   }
 
@@ -46,7 +47,7 @@ void TextOnPathTool::mousePressEvent(QMouseEvent *event,
   markerPen.setWidth(1);
   marker->setPen(markerPen);
   marker->setBrush(Qt::white);
-  marker->setZValue(1000);
+  marker->setZValue(1e9);
   renderer_->scene()->addItem(marker);
   anchorMarkers_.append(marker);
 
@@ -190,7 +191,7 @@ void TextOnPathTool::updatePreview(const QPointF &mousePos) {
     QPen pen = renderer_->currentPen();
     pen.setStyle(Qt::DashLine);
     previewSegment_->setPen(pen);
-    previewSegment_->setZValue(999);
+    previewSegment_->setZValue(1e9 - 1);
     renderer_->scene()->addItem(previewSegment_);
   }
   previewSegment_->setPath(preview);

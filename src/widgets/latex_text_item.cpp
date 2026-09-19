@@ -441,6 +441,76 @@ void LatexTextEdit::keyPressEvent(QKeyEvent *event) {
   QTextEdit::keyPressEvent(event);
 }
 
+#ifdef HAVE_QT_WEBENGINE
+// Escape a plain-text run for use inside KaTeX's \text{...}.
+static QString escapeForKatexText(const QString &plain) {
+  QString out;
+  out.reserve(plain.size());
+  for (QChar c : plain) {
+    switch (c.unicode()) {
+    case '\\':
+      out += QStringLiteral("\\textbackslash{}");
+      break;
+    case '{':
+    case '}':
+    case '#':
+    case '%':
+    case '&':
+    case '_':
+    case '$':
+      out += QLatin1Char('\\');
+      out += c;
+      break;
+    case '^':
+      out += QStringLiteral("\\textasciicircum{}");
+      break;
+    case '~':
+      out += QStringLiteral("\\textasciitilde{}");
+      break;
+    default:
+      out += c;
+    }
+  }
+  return out;
+}
+
+// Build one KaTeX expression for mixed text: plain runs become \text{...},
+// $...$ segments stay math, and lines stack in a left-aligned array.
+static QString composeKatexSource(const QString &text) {
+  // $$...$$ (display style) or $...$ (inline).
+  static const QRegularExpression mathPattern(
+      "\\$\\$(.+?)\\$\\$|\\$([^$]+)\\$");
+  const QStringList lines = text.split(QLatin1Char('\n'));
+  QStringList rows;
+  for (const QString &line : lines) {
+    QString row;
+    qsizetype pos = 0;
+    auto it = mathPattern.globalMatch(line);
+    while (it.hasNext()) {
+      const QRegularExpressionMatch m = it.next();
+      if (m.capturedStart() > pos)
+        row += QStringLiteral("\\text{") +
+               escapeForKatexText(line.mid(pos, m.capturedStart() - pos)) +
+               QLatin1Char('}');
+      if (m.captured(1).isEmpty())
+        row += QLatin1Char('{') + m.captured(2) + QLatin1Char('}');
+      else
+        row += QStringLiteral("{\\displaystyle ") + m.captured(1) +
+               QLatin1Char('}');
+      pos = m.capturedEnd();
+    }
+    if (pos < line.size())
+      row += QStringLiteral("\\text{") + escapeForKatexText(line.mid(pos)) +
+             QLatin1Char('}');
+    rows.append(row);
+  }
+  if (rows.size() == 1)
+    return rows.first();
+  return QStringLiteral("\\begin{array}{l}") +
+         rows.join(QStringLiteral(" \\\\ ")) + QStringLiteral("\\end{array}");
+}
+#endif
+
 // Math-friendly font selection helper with optimized font stack
 static QFont selectMathFont(int pointSize) {
   // Priority list of math-friendly fonts with excellent Unicode coverage
@@ -590,6 +660,10 @@ void LatexTextItem::setFont(const QFont &font) {
     textEdit_->setFont(font_);
   }
   renderContent();
+#ifdef HAVE_QT_WEBENGINE
+  if (!pendingRenderId_) // otherwise applied when the KaTeX render lands
+#endif
+    applyPendingAnchor(); // rendered synchronously (cache / fallback)
   update();
 }
 
@@ -722,8 +796,26 @@ void LatexTextItem::onKatexRenderComplete(quintptr requestId,
         QRectF(0, 0, renderedContent_.width(), renderedContent_.height());
     update();
   }
+  applyPendingAnchor();
 }
 #endif
+
+void LatexTextItem::keepAnchorOnNextLayout(const QPointF &fraction,
+                                           const QPointF &scenePoint) {
+  hasPendingAnchor_ = true;
+  anchorFraction_ = fraction;
+  anchorScenePoint_ = scenePoint;
+}
+
+void LatexTextItem::applyPendingAnchor() {
+  if (!hasPendingAnchor_)
+    return;
+  hasPendingAnchor_ = false;
+  const QRectF br = boundingRect();
+  const QPointF local(br.left() + br.width() * anchorFraction_.x(),
+                      br.top() + br.height() * anchorFraction_.y());
+  setPos(pos() + (anchorScenePoint_ - mapToScene(local)));
+}
 
 void LatexTextItem::finishEditing() {
   if (!isEditing_)
@@ -751,6 +843,12 @@ void LatexTextItem::finishEditing() {
 }
 
 void LatexTextItem::renderContent() {
+#ifdef HAVE_QT_WEBENGINE
+  // Any render still in flight is superseded by this one; a synchronous
+  // result below (cache hit, fallback, empty text) must not be overwritten
+  // later by that older, differently sized image.
+  pendingRenderId_ = 0;
+#endif
   if (text_.isEmpty()) {
     renderedContent_ = QPixmap();
     contentRect_ = QRectF(0, 0, MIN_WIDTH, MIN_HEIGHT);
@@ -767,34 +865,39 @@ void LatexTextItem::renderContent() {
       katexConnected_ = true;
     }
 
-    // Extract just the LaTeX content (first match for now)
-    static QRegularExpression latexPattern("\\$([^$]+)\\$");
-    QRegularExpressionMatch match = latexPattern.match(text_);
-    if (match.hasMatch()) {
-      QString latex = match.captured(1);
-
-      // Check cache first
-      QPixmap cached = KatexRenderer::instance().getCached(
-          latex, textColor_, font_.pointSize(), false);
-      if (!cached.isNull()) {
-        renderedContent_ = cached;
-        contentRect_ = QRectF(
-            0, 0,
-            renderedContent_.width() / renderedContent_.devicePixelRatio(),
-            renderedContent_.height() / renderedContent_.devicePixelRatio());
-        return;
-      }
-
-      // Request async render (unique id; a recycled item address must never
-      // match an in-flight request from a destroyed item)
-      pendingRenderId_ = s_nextRenderId.fetch_add(1) + 1;
-      KatexRenderer::instance().render(latex, textColor_, font_.pointSize(),
-                                       false, pendingRenderId_);
-
-      // Show placeholder while rendering
-      contentRect_ = QRectF(0, 0, MIN_WIDTH, MIN_HEIGHT);
+    // KaTeX only renders math, so fold the plain-text runs and every $...$
+    // segment into a single expression; otherwise surrounding words (and all
+    // but the first formula) would silently disappear.
+    const QString latex = composeKatexSource(text_);
+    // KaTeX takes a CSS pixel size and then scales its output by 1.21em;
+    // the item's font is in points (1pt = 4/3 px at 96 dpi). Convert so a
+    // formula matches plain text of the same font size.
+    const qreal pointSize =
+        font_.pointSizeF() > 0 ? font_.pointSizeF() : font_.pointSize();
+    const int katexPixelSize = qMax(1, qRound(pointSize * 4.0 / 3.0 / 1.21));
+    // Check cache first
+    QPixmap cached = KatexRenderer::instance().getCached(latex, textColor_,
+                                                         katexPixelSize, false);
+    if (!cached.isNull()) {
+      renderedContent_ = cached;
+      contentRect_ = QRectF(
+          0, 0, renderedContent_.width() / renderedContent_.devicePixelRatio(),
+          renderedContent_.height() / renderedContent_.devicePixelRatio());
       return;
     }
+
+    // Request async render (unique id; a recycled item address must never
+    // match an in-flight request from a destroyed item)
+    pendingRenderId_ = s_nextRenderId.fetch_add(1) + 1;
+    KatexRenderer::instance().render(latex, textColor_, katexPixelSize, false,
+                                     pendingRenderId_);
+
+    // Keep showing the previous rendering until the new one arrives
+    // (collapsing to a placeholder made resizing flicker); only a first
+    // render needs the placeholder.
+    if (renderedContent_.isNull())
+      contentRect_ = QRectF(0, 0, MIN_WIDTH, MIN_HEIGHT);
+    return;
   }
 #endif
 
@@ -880,7 +983,12 @@ QPixmap LatexTextItem::renderLatex(const QString &text) {
 }
 
 QString LatexTextItem::latexToHtml(const QString &latex) {
+  // Escape HTML metacharacters first: the result is fed to a rich-text
+  // document, where e.g. "$a<b$" would otherwise start a <b> tag.
   QString result = latex;
+  result.replace(QLatin1Char('&'), QLatin1String("&amp;"))
+      .replace(QLatin1Char('<'), QLatin1String("&lt;"))
+      .replace(QLatin1Char('>'), QLatin1String("&gt;"));
 
   // Helper lambda to process regex matches in reverse order (O(n) instead of
   // O(n²))

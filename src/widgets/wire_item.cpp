@@ -35,6 +35,17 @@ static QPointF dirVec(PinDir d) {
   return {1.0, 0.0};
 }
 
+/// A pin's direction as seen in the scene: rotating/flipping an element
+/// turns its pins, so the item-local direction must go through the
+/// element's transform (snapped to the nearest axis for Manhattan routing).
+static PinDir sceneDir(const ElectronicsElementItem *elem, int pin) {
+  const QTransform t = elem->sceneTransform();
+  const QPointF v = t.map(dirVec(elem->pinDir(pin))) - t.map(QPointF(0, 0));
+  if (qAbs(v.x()) >= qAbs(v.y()))
+    return v.x() >= 0 ? PinDir::Right : PinDir::Left;
+  return v.y() >= 0 ? PinDir::Down : PinDir::Up;
+}
+
 static bool isHoriz(PinDir d) {
   return d == PinDir::Left || d == PinDir::Right;
 }
@@ -67,7 +78,7 @@ WireItem::WireItem(ElectronicsElementItem *srcElem, int srcPin,
       dstElem_(dstElem), dstPin_(dstPin) {
   setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable |
            QGraphicsItem::ItemSendsGeometryChanges);
-  cachedDark_ = ThemeManager::instance().isDarkTheme();
+  cachedDark_ = schematicOnDarkBackground(srcElem);
   const QColor wireColor = cachedDark_ ? Qt::white : Qt::black;
   setPen(QPen(wireColor, 1.2, Qt::SolidLine, Qt::SquareCap, Qt::MiterJoin));
   setZValue(-1.0); // draw behind elements
@@ -249,8 +260,8 @@ void WireItem::updatePath() {
 
   const QPointF p1 = srcElem_->pinScenePos(srcPin_);
   const QPointF p2 = dstElem_->pinScenePos(dstPin_);
-  const PinDir d1 = srcElem_->pinDir(srcPin_);
-  const PinDir d2 = dstElem_->pinDir(dstPin_);
+  const PinDir d1 = sceneDir(srcElem_, srcPin_);
+  const PinDir d2 = sceneDir(dstElem_, dstPin_);
 
   setPath(routeManhattan(p1, d1, p2, d2));
 }
@@ -261,7 +272,7 @@ void WireItem::updatePath() {
 
 void WireItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
                      QWidget *widget) {
-  const bool dark = ThemeManager::instance().isDarkTheme();
+  const bool dark = schematicOnDarkBackground(this);
   if (dark != cachedDark_) {
     cachedDark_ = dark;
     QPen p = pen();

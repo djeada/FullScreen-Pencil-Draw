@@ -97,8 +97,10 @@ void TextOnPathItem::mouseDoubleClickEvent(
   if (!guard) {
     return;
   }
-  if (ok && !newText.isEmpty()) {
+  if (ok && !newText.isEmpty() && newText != text_) {
+    const QString oldText = text_;
     setText(newText);
+    emit textEdited(oldText, newText);
   }
 }
 

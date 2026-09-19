@@ -433,10 +433,10 @@ void DomainSwitcher::paintEvent(QPaintEvent *) {
   p.drawRoundedRect(area, kSwitcherRadius, kSwitcherRadius);
 
   // -- sliding indicator -------------------------------------------------
-  // Ensure indicatorX_ is initialised on first paint
-  if (slideAnim_.state() != QVariantAnimation::Running &&
-      qFuzzyCompare(indicatorX_, 0.0) && currentIndex_ == 0) {
-    indicatorX_ = area.left();
+  // At rest the indicator follows the current segment, so it stays aligned
+  // after the panel is resized (the animation only covers the transition).
+  if (slideAnim_.state() != QVariantAnimation::Running) {
+    indicatorX_ = area.left() + currentIndex_ * segW;
   }
 
   const qreal indPad = 3;

@@ -17,6 +17,7 @@
 #include <QGraphicsTextItem>
 #include <QSet>
 #include <QtGlobal>
+#include <algorithm>
 #include <vector>
 
 namespace {
@@ -108,6 +109,31 @@ void applyTintState(QGraphicsPixmapItem *pixmap,
   effect->setStrength(state.strength);
 }
 
+// Keep a stroke's translucency (highlighter) unless the fill colour itself
+// is translucent.
+QColor keepPenAlpha(QColor color, const QColor &previous) {
+  if (color.alpha() == 255)
+    color.setAlpha(previous.alpha());
+  return color;
+}
+
+// Whether applyFillToItem() knows how to recolour this kind of item.
+bool isFillableItem(QGraphicsItem *item) {
+  if (!item) {
+    return false;
+  }
+  if (auto *group = dynamic_cast<QGraphicsItemGroup *>(item)) {
+    const QList<QGraphicsItem *> children = group->childItems();
+    return std::any_of(children.cbegin(), children.cend(), isFillableItem);
+  }
+  return dynamic_cast<QAbstractGraphicsShapeItem *>(item) ||
+         dynamic_cast<QGraphicsLineItem *>(item) ||
+         dynamic_cast<QGraphicsTextItem *>(item) ||
+         dynamic_cast<LatexTextItem *>(item) ||
+         dynamic_cast<MermaidTextItem *>(item) ||
+         dynamic_cast<QGraphicsPixmapItem *>(item);
+}
+
 bool applyFillToItem(QGraphicsItem *item, ItemStore *store, const QBrush &brush,
                      std::unique_ptr<Action> &outAction) {
   outAction.reset();
@@ -167,7 +193,7 @@ bool applyFillToItem(QGraphicsItem *item, ItemStore *store, const QBrush &brush,
 
     const QPen oldPen = polygon->pen();
     QPen newPen = oldPen;
-    newPen.setColor(color);
+    newPen.setColor(keepPenAlpha(color, oldPen.color()));
     if (oldPen != newPen) {
       polygon->setPen(newPen);
       changed = true;
@@ -185,7 +211,7 @@ bool applyFillToItem(QGraphicsItem *item, ItemStore *store, const QBrush &brush,
   if (auto *line = dynamic_cast<QGraphicsLineItem *>(item)) {
     const QPen oldPen = line->pen();
     QPen newPen = oldPen;
-    newPen.setColor(color);
+    newPen.setColor(keepPenAlpha(color, oldPen.color()));
     if (oldPen == newPen) {
       return false;
     }
@@ -208,7 +234,7 @@ bool applyFillToItem(QGraphicsItem *item, ItemStore *store, const QBrush &brush,
     // recolouring the pen would make the fill tool a silent no-op on them.
     if (hasStroke || !hasFill) {
       QPen newPen = oldPen;
-      newPen.setColor(color);
+      newPen.setColor(keepPenAlpha(color, oldPen.color()));
       if (oldPen != newPen) {
         path->setPen(newPen);
         changed = true;
@@ -320,7 +346,8 @@ bool fillTopItemAtPoint(
     QGraphicsScene *scene, const QPointF &point, const QBrush &brush,
     ItemStore *store, QGraphicsItem *backgroundItem,
     QGraphicsItem *extraSkipItem,
-    const std::function<void(std::unique_ptr<Action>)> &pushAction) {
+    const std::function<void(std::unique_ptr<Action>)> &pushAction,
+    const std::function<bool(QGraphicsItem *)> &isLocked) {
   if (!scene) {
     return false;
   }
@@ -341,6 +368,10 @@ bool fillTopItemAtPoint(
       continue;
     }
     visitedTargets.insert(target);
+    // A locked item on top shields whatever lies beneath it.
+    if (isLocked && isLocked(target)) {
+      return false;
+    }
 
     std::unique_ptr<Action> action;
     if (applyFillToItem(target, store, brush, action)) {
@@ -348,6 +379,11 @@ bool fillTopItemAtPoint(
         pushAction(std::move(action));
       }
       return true;
+    }
+    // The topmost fillable item already has this fill: stop here instead of
+    // recolouring whatever happens to lie underneath it.
+    if (isFillableItem(target)) {
+      return false;
     }
   }
 

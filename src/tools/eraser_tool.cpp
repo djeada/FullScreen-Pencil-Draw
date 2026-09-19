@@ -6,7 +6,8 @@
 #include "../core/scene_controller.h"
 #include "../core/scene_renderer.h"
 #include "../widgets/transform_handle_item.h"
-#include <QPainterPathStroker>
+#include <QGraphicsItemGroup>
+#include <QGraphicsPixmapItem>
 
 EraserTool::EraserTool(SceneRenderer *renderer)
     : Tool(renderer), eraserPreview_(nullptr) {}
@@ -20,7 +21,7 @@ void EraserTool::activate() {
     int size = renderer_->eraserPen().width();
     eraserPreview_ = renderer_->scene()->addEllipse(
         0, 0, size, size, QPen(Qt::gray), QBrush(Qt::NoBrush));
-    eraserPreview_->setZValue(1000);
+    eraserPreview_->setZValue(1e9); // above all layer content
     // Do NOT register with ItemStore - this is a UI helper, not user content.
     // Registering would cause it to be deleted by SceneController::clearAll()
     // while this tool still holds a raw pointer to it.
@@ -29,6 +30,7 @@ void EraserTool::activate() {
 }
 
 void EraserTool::deactivate() {
+  renderer_->endActionGroup(); // switching tools mid-drag closes the step
   if (eraserPreview_) {
     eraserPreview_->hide();
     // Keep the item in the scene for reuse - don't delete it
@@ -37,7 +39,10 @@ void EraserTool::deactivate() {
 }
 
 void EraserTool::mousePressEvent(QMouseEvent *event, const QPointF &scenePos) {
-  if (event->buttons() & Qt::LeftButton) {
+  if (event->button() == Qt::LeftButton) {
+    // Everything one drag erases becomes a single undo step (instead of one
+    // entry per item flooding the history).
+    renderer_->beginActionGroup();
     eraseAt(scenePos);
   }
 }
@@ -49,9 +54,10 @@ void EraserTool::mouseMoveEvent(QMouseEvent *event, const QPointF &scenePos) {
   }
 }
 
-void EraserTool::mouseReleaseEvent(QMouseEvent * /*event*/,
+void EraserTool::mouseReleaseEvent(QMouseEvent *event,
                                    const QPointF & /*scenePos*/) {
-  // Nothing to do on release
+  if (!event || event->button() == Qt::LeftButton)
+    renderer_->endActionGroup();
 }
 
 void EraserTool::eraseAt(const QPointF &point) {
@@ -64,43 +70,33 @@ void EraserTool::eraseAt(const QPointF &point) {
   SceneController *controller = renderer_->sceneController();
   QList<QGraphicsItem *> itemsToRemove;
 
-  // Use Qt::IntersectsItemBoundingRect for reliable detection of filled items
-  // like pixmaps The default Qt::IntersectsItemShape can fail for
-  // QGraphicsPixmapItem because its shape() returns a complex outline of
-  // non-transparent pixels, making hit-testing unreliable
+  QGraphicsItem *background = renderer_->backgroundImageItem();
   for (QGraphicsItem *item :
        scene->items(eraseRect, Qt::IntersectsItemBoundingRect)) {
-    // Skip the eraser preview and background image
-    if (item == eraserPreview_ || item == renderer_->backgroundImageItem())
+    // A group's own shape is its whole bounding box: test its children's
+    // real shapes instead (they are in this list too).
+    if (item->type() == QGraphicsItemGroup::Type)
+      continue;
+    // Erase whole top-level items: removing a group child on its own would
+    // detach it from its arrow/group and undo would restore it misplaced.
+    QGraphicsItem *target = item->topLevelItem();
+    if (target == eraserPreview_ || target == background ||
+        target->type() == TransformHandleItem::Type ||
+        itemsToRemove.contains(target))
       continue;
 
-    // Skip TransformHandleItems - they are UI elements, not user content
-    if (item->type() == TransformHandleItem::Type)
-      continue;
-
-    // Get bounding rect in scene coordinates - this is always reliable
-    QRectF itemSceneBounds = item->sceneBoundingRect();
-
-    // Simple and reliable: if eraser point is inside item's scene bounding
-    // rect, erase it This works for filled items like pixmaps, rectangles,
-    // ellipses
-    if (itemSceneBounds.contains(point)) {
-      itemsToRemove.append(item);
-      continue;
+    bool hit = false;
+    if (dynamic_cast<QGraphicsPixmapItem *>(item)) {
+      // A pixmap's shape() traces opaque pixels and is unreliable for
+      // hit-testing; its bounds are what the user sees.
+      hit = erasePath.intersects(item->sceneBoundingRect());
+    } else {
+      // Test the actual (stroked) shape, not the bounding box: touching the
+      // empty inside of a diagonal line's box must not erase it.
+      hit = erasePath.intersects(item->sceneTransform().map(item->shape()));
     }
-
-    // For line-based items (paths), check if eraser touches the stroked shape
-    // Transform click point to item-local coordinates for shape check
-    QPointF localPoint = item->mapFromScene(point);
-    QPainterPath itemShape = item->shape();
-
-    // Stroke the shape with eraser size to create a "hit area" around lines
-    QPainterPathStroker stroker;
-    stroker.setWidth(size);
-    QPainterPath strokedShape = stroker.createStroke(itemShape);
-    if (strokedShape.contains(localPoint)) {
-      itemsToRemove.append(item);
-    }
+    if (hit)
+      itemsToRemove.append(target);
   }
 
   for (QGraphicsItem *item : itemsToRemove) {

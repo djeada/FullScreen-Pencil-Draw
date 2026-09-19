@@ -13,7 +13,8 @@ BezierTool::BezierTool(SceneRenderer *renderer)
 BezierTool::~BezierTool() { clearPreviewItems(); }
 
 void BezierTool::mousePressEvent(QMouseEvent *event, const QPointF &scenePos) {
-  if (!(event->buttons() & Qt::LeftButton))
+  if (event->button() !=
+      Qt::LeftButton) // not buttons(): extra presses mid-drag
     return;
 
   isDragging_ = true;
@@ -30,8 +31,8 @@ void BezierTool::mousePressEvent(QMouseEvent *event, const QPointF &scenePos) {
   if (anchors_.size() == 1) {
     currentPath_ = new QGraphicsPathItem();
     currentPath_->setPen(renderer_->currentPen());
-    currentPath_->setFlags(QGraphicsItem::ItemIsSelectable |
-                           QGraphicsItem::ItemIsMovable);
+    // Not selectable while the gesture runs: select-all + delete would
+    // otherwise remove the path from under the tool. Enabled on commit.
 
     SceneController *controller = renderer_->sceneController();
     if (controller) {
@@ -51,7 +52,7 @@ void BezierTool::mousePressEvent(QMouseEvent *event, const QPointF &scenePos) {
   markerPen.setWidth(1);
   marker->setPen(markerPen);
   marker->setBrush(Qt::white);
-  marker->setZValue(1000);
+  marker->setZValue(1e9);
   renderer_->scene()->addItem(marker);
   anchorMarkers_.append(marker);
 
@@ -104,6 +105,8 @@ void BezierTool::finalizePath() {
 
   if (currentPath_ && anchors_.size() >= 2) {
     rebuildPath();
+    currentPath_->setFlags(QGraphicsItem::ItemIsSelectable |
+                           QGraphicsItem::ItemIsMovable);
     renderer_->addDrawAction(currentPath_);
   } else if (currentPath_) {
     // Not enough points — remove the path
@@ -163,7 +166,7 @@ void BezierTool::updatePreview(const QPointF &mousePos) {
     QPen previewPen = renderer_->currentPen();
     previewPen.setStyle(Qt::DashLine);
     previewSegment_->setPen(previewPen);
-    previewSegment_->setZValue(999);
+    previewSegment_->setZValue(1e9 - 1);
     renderer_->scene()->addItem(previewSegment_);
   }
   previewSegment_->setPath(preview);

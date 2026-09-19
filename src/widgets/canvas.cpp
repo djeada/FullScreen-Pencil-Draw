@@ -19,7 +19,9 @@
 #include "busy_spinner_overlay.h"
 #include "color_curves_dialog.h"
 #include "electronics_elements.h"
+#include "element_factory.h"
 #include "image_size_dialog.h"
+#include "item_painting.h"
 #include "latex_text_item.h"
 #include "mermaid_text_item.h"
 #include "perspective_transform_dialog.h"
@@ -53,7 +55,11 @@
 #include <QPdfWriter>
 #include <QPointer>
 #include <QQueue>
+#include <QRubberBand>
 #include <QScrollBar>
+#include <QSet>
+#include <QStyleOptionGraphicsItem>
+#include <QStyleOptionRubberBand>
 #include <QTabletEvent>
 #include <algorithm>
 #ifdef HAVE_QT_SVG
@@ -159,6 +165,14 @@ effectiveCurvedArrowModifiers(Qt::KeyboardModifiers rawModifiers,
   return modifiers;
 }
 
+// Recolouring keeps an item's translucency (e.g. highlighter strokes) unless
+// the user explicitly picked a translucent colour.
+QColor keepAlpha(QColor picked, const QColor &previous) {
+  if (picked.alpha() == 255)
+    picked.setAlpha(previous.alpha());
+  return picked;
+}
+
 QPen makeHighlighterPen(const QPen &basePen) {
   constexpr int kHighlighterAlpha = 96;
   constexpr qreal kMinimumHighlighterWidth = 12.0;
@@ -186,74 +200,6 @@ inline int colorDistanceSquared(QRgb a, QRgb b) {
 }
 } // namespace
 
-// Helper function to clone a QGraphicsItem (excluding groups and pixmap items)
-static void copyTransformState(QGraphicsItem *dst, const QGraphicsItem *src) {
-  if (!dst || !src)
-    return;
-  dst->setTransformOriginPoint(src->transformOriginPoint());
-  dst->setTransform(src->transform());
-}
-
-static QGraphicsItem *cloneItem(QGraphicsItem *item,
-                                QGraphicsEllipseItem *eraserPreview) {
-  if (!item)
-    return nullptr;
-
-  if (auto r = dynamic_cast<QGraphicsRectItem *>(item)) {
-    auto n = new QGraphicsRectItem(r->rect());
-    n->setPen(r->pen());
-    n->setBrush(r->brush());
-    n->setPos(r->pos());
-    copyTransformState(n, r);
-    return n;
-  } else if (auto e = dynamic_cast<QGraphicsEllipseItem *>(item)) {
-    if (item == eraserPreview)
-      return nullptr;
-    auto n = new QGraphicsEllipseItem(e->rect());
-    n->setPen(e->pen());
-    n->setBrush(e->brush());
-    n->setPos(e->pos());
-    copyTransformState(n, e);
-    return n;
-  } else if (auto l = dynamic_cast<QGraphicsLineItem *>(item)) {
-    auto n = new QGraphicsLineItem(l->line());
-    n->setPen(l->pen());
-    n->setPos(l->pos());
-    copyTransformState(n, l);
-    return n;
-  } else if (auto p = dynamic_cast<QGraphicsPathItem *>(item)) {
-    auto n = new QGraphicsPathItem(p->path());
-    n->setPen(p->pen());
-    n->setBrush(p->brush());
-    n->setPos(p->pos());
-    copyTransformState(n, p);
-    return n;
-  } else if (auto lt = dynamic_cast<LatexTextItem *>(item)) {
-    auto n = new LatexTextItem();
-    n->setText(lt->text());
-    n->setFont(lt->font());
-    n->setTextColor(lt->textColor());
-    n->setPos(lt->pos());
-    copyTransformState(n, lt);
-    return n;
-  } else if (auto t = dynamic_cast<QGraphicsTextItem *>(item)) {
-    auto n = new QGraphicsTextItem(t->toPlainText());
-    n->setFont(t->font());
-    n->setDefaultTextColor(t->defaultTextColor());
-    n->setPos(t->pos());
-    copyTransformState(n, t);
-    return n;
-  } else if (auto pg = dynamic_cast<QGraphicsPolygonItem *>(item)) {
-    auto n = new QGraphicsPolygonItem(pg->polygon());
-    n->setPen(pg->pen());
-    n->setBrush(pg->brush());
-    n->setPos(pg->pos());
-    copyTransformState(n, pg);
-    return n;
-  }
-  return nullptr;
-}
-
 Canvas::Canvas(QWidget *parent)
     : QGraphicsView(parent), scene_(new QGraphicsScene(this)),
       sceneController_(nullptr), layerManager_(nullptr),
@@ -274,6 +220,8 @@ Canvas::Canvas(QWidget *parent)
   scene_->setSceneRect(0, 0, 3000, 2000);
 
   scene_->setBackgroundBrush(backgroundColor_);
+
+  scene_->setProperty("documentBackground", backgroundColor_);
   eraserPen_.setColor(backgroundColor_);
 
   // Initialize scene controller (single source of truth)
@@ -288,6 +236,38 @@ Canvas::Canvas(QWidget *parent)
           [this](Layer * /*layer*/) { clearTransformHandles(); });
 
   if (sceneController_ && sceneController_->itemStore()) {
+    // Re-editing existing text or diagram code changes the document too.
+    connect(
+        sceneController_->itemStore(), &ItemStore::itemRegistered, this,
+        [this](const ItemId &id) {
+          QGraphicsItem *item = itemStore()->item(id);
+          if (auto *text = dynamic_cast<LatexTextItem *>(item)) {
+            connect(text, &LatexTextItem::textChanged, this,
+                    &Canvas::canvasModified, Qt::UniqueConnection);
+          } else if (auto *mermaid = dynamic_cast<MermaidTextItem *>(item)) {
+            connect(mermaid, &MermaidTextItem::codeChanged, this,
+                    &Canvas::canvasModified, Qt::UniqueConnection);
+          } else if (auto *pathText = dynamic_cast<TextOnPathItem *>(item);
+                     pathText &&
+                     !pathText->property("editUndoHooked").toBool()) {
+            // Double-click edits happen inside the item: record them.
+            pathText->setProperty("editUndoHooked", true);
+            connect(pathText, &TextOnPathItem::textEdited, this,
+                    [this, id](const QString &oldText, const QString &newText) {
+                      QPointer<ItemStore> store = itemStore();
+                      auto apply = [store, id](const QString &text) {
+                        if (auto *target = dynamic_cast<TextOnPathItem *>(
+                                store ? store->item(id) : nullptr))
+                          target->setText(text);
+                      };
+                      addAction(std::make_unique<CallbackAction>(
+                          "Edit Text on Path",
+                          [apply, oldText]() { apply(oldText); },
+                          [apply, newText]() { apply(newText); }));
+                      emit canvasModified();
+                    });
+          }
+        });
     connect(sceneController_->itemStore(), &ItemStore::itemAboutToBeDeleted,
             this, [this](const ItemId &id) {
               QMutableListIterator<TransformHandleItem *> it(transformHandles_);
@@ -312,7 +292,7 @@ Canvas::Canvas(QWidget *parent)
   eraserPreview_ =
       scene_->addEllipse(0, 0, eraserPen_.width(), eraserPen_.width(),
                          QPen(Qt::gray), QBrush(Qt::NoBrush));
-  eraserPreview_->setZValue(1000);
+  eraserPreview_->setZValue(1e9); // above all layer content
   eraserPreview_->hide();
 
   this->setMouseTracking(true);
@@ -561,7 +541,7 @@ void Canvas::onItemRemoved(QGraphicsItem *item) {
 
 void Canvas::addAction(std::unique_ptr<Action> action) {
   if (undoRedoManager_) {
-    undoRedoManager_->push(std::move(action));
+    undoRedoManager_->push(std::move(action), this);
   } else {
     undoStack_.push_back(std::move(action));
     clearRedoStack();
@@ -587,121 +567,118 @@ bool Canvas::hasNonNormalBlendModes() const {
   return false;
 }
 
+namespace {
+// Layers are painted item by item (see item_painting.h) rather than with
+// QGraphicsScene::render, so compositing never has to toggle item
+// visibility: hiding an item deselects it, drops its mouse grab and
+// schedules yet another repaint.
+void paintItemsInStackOrder(QPainter *painter, QList<QGraphicsItem *> items,
+                            const QTransform &viewTransform,
+                            const QRectF &visibleSceneRect) {
+  std::stable_sort(items.begin(), items.end(),
+                   [](QGraphicsItem *a, QGraphicsItem *b) {
+                     return a->zValue() < b->zValue();
+                   });
+  for (QGraphicsItem *item : items) {
+    if (item && item->sceneBoundingRect().intersects(visibleSceneRect))
+      paintItemTree(painter, item, viewTransform);
+  }
+}
+} // namespace
+
 void Canvas::paintEvent(QPaintEvent *event) {
   if (!hasNonNormalBlendModes()) {
+    if (viewportUpdateMode() != QGraphicsView::SmartViewportUpdate)
+      setViewportUpdateMode(QGraphicsView::SmartViewportUpdate);
     // No blend modes active — use default rendering for best performance
     QGraphicsView::paintEvent(event);
     return;
   }
 
-  // Custom layer-by-layer rendering with blend mode compositing.
-  // 1. Temporarily hide all managed items so the base scene paint
-  //    only renders background/grid/foreground.
-  // 2. Paint each layer into an offscreen image with the layer's blend mode.
+  // Compositing renders the whole viewport anyway; partial updates would
+  // leave stale pixels (e.g. of removed selection handles) outside the
+  // scene's dirty rects.
+  if (viewportUpdateMode() != QGraphicsView::FullViewportUpdate) {
+    setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
+    viewport()->update();
+  }
 
-  QSize vpSize = viewport()->size();
-  if (vpSize.isEmpty()) {
+  // Custom layer-by-layer rendering with blend mode compositing: paint the
+  // background, then each layer into an offscreen image composited with the
+  // layer's blend mode, then non-layer items (handles, previews) on top.
+  const QSize vpSize = viewport()->size();
+  if (vpSize.isEmpty() || !scene_) {
     QGraphicsView::paintEvent(event);
     return;
   }
 
-  // Collect all managed items and record their original visibility
-  struct ItemState {
-    QGraphicsItem *item;
-    bool wasVisible;
-  };
-  QList<ItemState> allStates;
+  const QTransform viewTransform = viewportTransform();
+  const QRectF visibleSceneRect = mapToScene(viewport()->rect()).boundingRect();
 
+  QImage result(vpSize, QImage::Format_ARGB32_Premultiplied);
+  result.fill(Qt::transparent);
+  QPainter resultPainter(&result);
+  resultPainter.setRenderHints(renderHints());
+  resultPainter.setWorldTransform(viewTransform);
+  drawBackground(&resultPainter, visibleSceneRect);
+  resultPainter.resetTransform();
+  // The opened base image sits outside every layer, underneath them all.
+  if (backgroundImage_)
+    paintItemTree(&resultPainter, backgroundImage_, viewTransform);
+
+  QSet<QGraphicsItem *> layerItemSet;
   for (int i = 0; i < layerManager_->layerCount(); ++i) {
     Layer *layer = layerManager_->layer(i);
     if (!layer)
       continue;
-    for (QGraphicsItem *item : layer->items()) {
-      if (item) {
-        allStates.append({item, item->isVisible()});
-        item->setVisible(false);
-      }
-    }
-  }
-
-  // Render the base scene (background, grid) without any managed items
-  QImage baseImage(vpSize, QImage::Format_ARGB32_Premultiplied);
-  baseImage.fill(Qt::transparent);
-  {
-    QPainter basePainter(&baseImage);
-    basePainter.setRenderHints(renderHints());
-    QGraphicsView::render(&basePainter, QRectF(), viewport()->rect());
-    basePainter.end();
-  }
-
-  // Composited result starts with the base
-  QImage result = baseImage;
-  QPainter resultPainter(&result);
-  resultPainter.setRenderHints(renderHints());
-
-  // Render each layer
-  for (int i = 0; i < layerManager_->layerCount(); ++i) {
-    Layer *layer = layerManager_->layer(i);
-    if (!layer || !layer->isVisible())
+    const QList<QGraphicsItem *> layerItems = layer->items();
+    for (QGraphicsItem *item : layerItems)
+      layerItemSet.insert(item);
+    if (!layer->isVisible() || layerItems.isEmpty())
       continue;
 
-    QList<QGraphicsItem *> layerItems = layer->items();
-    if (layerItems.isEmpty())
-      continue;
-
-    // Show only this layer's items
-    for (QGraphicsItem *item : layerItems) {
-      if (item) {
-        item->setVisible(true);
-      }
-    }
-
-    // Render the scene (only this layer's items are visible)
     QImage layerImage(vpSize, QImage::Format_ARGB32_Premultiplied);
     layerImage.fill(Qt::transparent);
     {
       QPainter layerPainter(&layerImage);
       layerPainter.setRenderHints(renderHints());
-      // Render scene items only (skip background to avoid double-drawing)
-      scene_->render(&layerPainter, QRectF(viewport()->rect()),
-                     mapToScene(viewport()->rect()).boundingRect());
-      layerPainter.end();
+      paintItemsInStackOrder(&layerPainter, layerItems, viewTransform,
+                             visibleSceneRect);
     }
-
-    // Hide items again
-    for (QGraphicsItem *item : layerItems) {
-      if (item) {
-        item->setVisible(false);
-      }
-    }
-
-    // Composite this layer with its blend mode
-    QPainter::CompositionMode mode =
-        Layer::toCompositionMode(layer->blendMode());
-    resultPainter.setCompositionMode(mode);
+    resultPainter.setCompositionMode(
+        Layer::toCompositionMode(layer->blendMode()));
     resultPainter.drawImage(0, 0, layerImage);
     resultPainter.setCompositionMode(QPainter::CompositionMode_SourceOver);
   }
 
+  // Remaining items outside every layer (transform handles, tool previews)
+  // go on top.
+  QList<QGraphicsItem *> overlayItems;
+  for (QGraphicsItem *item : scene_->items()) {
+    if (item && !item->parentItem() && !layerItemSet.contains(item) &&
+        item != backgroundImage_)
+      overlayItems.append(item);
+  }
+  paintItemsInStackOrder(&resultPainter, overlayItems, viewTransform,
+                         visibleSceneRect);
   resultPainter.end();
 
-  // Restore original visibility
-  for (const auto &state : allStates) {
-    if (state.item) {
-      state.item->setVisible(state.wasVisible);
-    }
-  }
-
-  // Paint the composited result to the viewport
   QPainter viewportPainter(viewport());
   viewportPainter.drawImage(0, 0, result);
 
-  // Draw foreground elements (ruler, etc.) on top
-  if (showRuler_) {
-    viewportPainter.setRenderHints(renderHints());
-    QRectF sceneRect = mapToScene(viewport()->rect()).boundingRect();
-    viewportPainter.setTransform(viewportTransform());
-    drawRuler(&viewportPainter, sceneRect);
+  viewportPainter.setRenderHints(renderHints());
+  viewportPainter.setWorldTransform(viewTransform);
+  drawForeground(&viewportPainter, visibleSceneRect); // snap guides, ruler
+  viewportPainter.resetTransform();
+
+  // QGraphicsView::paintEvent normally draws the rubber band itself.
+  if (rubberBandRect().isValid()) {
+    QStyleOptionRubberBand option;
+    option.initFrom(viewport());
+    option.rect = rubberBandRect();
+    option.shape = QRubberBand::Rectangle;
+    style()->drawControl(QStyle::CE_RubberBand, &option, &viewportPainter,
+                         viewport());
   }
 }
 
@@ -746,14 +723,32 @@ void Canvas::setShape(const QString &shapeType) {
     return;
   if (currentShape_ != Eraser) {
     hideEraserPreview();
+    // Collected once: a per-item layer lookup would be quadratic.
+    QSet<QGraphicsItem *> onLockedLayers;
+    if (layerManager_) {
+      for (int i = 0; i < layerManager_->layerCount(); ++i) {
+        Layer *layer = layerManager_->layer(i);
+        if (layer && layer->isLocked()) {
+          const QList<QGraphicsItem *> layerItems = layer->items();
+          for (QGraphicsItem *layerItem : layerItems)
+            onLockedLayers.insert(layerItem);
+        }
+      }
+    }
     for (auto item : scene_->items()) {
       if (!item)
         continue;
       if (item != eraserPreview_ && item != backgroundImage_ &&
           item != colorSelectionOverlay_ &&
           item->type() != TransformHandleItem::Type) {
-        item->setFlag(QGraphicsItem::ItemIsSelectable, true);
-        item->setFlag(QGraphicsItem::ItemIsMovable, true);
+        // Keep locked items (and items on locked layers) pinned.
+        QGraphicsItem *top = item->topLevelItem();
+        const bool locked =
+            item->data(0).toString() == QLatin1String("locked") ||
+            top->data(0).toString() == QLatin1String("locked") ||
+            onLockedLayers.contains(top);
+        item->setFlag(QGraphicsItem::ItemIsSelectable, !locked);
+        item->setFlag(QGraphicsItem::ItemIsMovable, !locked);
       }
     }
   }
@@ -764,7 +759,7 @@ void Canvas::setShape(const QString &shapeType) {
   }
   if (currentShape_ == ColorSelect) {
     if (colorSelectionOverlay_) {
-      colorSelectionOverlay_->show();
+      refreshColorSelectionOverlay(); // the image may have moved meanwhile
     }
   } else if (colorSelectionOverlay_) {
     colorSelectionOverlay_->hide();
@@ -802,6 +797,7 @@ void Canvas::abortInProgressDrawing() {
   lassoPoints_.clear();
   pointBuffer_.clear();
   pressureBuffer_.clear();
+  pressureCommitted_ = QPainterPath();
   isPanning_ = false;
 
   // The tool itself stays selected – re-arm it so drawing works immediately
@@ -856,6 +852,7 @@ void Canvas::cleanupTransientToolState() {
   }
   pointBuffer_.clear();
   pressureBuffer_.clear();
+  pressureCommitted_ = QPainterPath();
   tabletActive_ = false;
   if (lassoPathItem_) {
     if (scene_)
@@ -865,6 +862,56 @@ void Canvas::cleanupTransientToolState() {
   }
   lassoPoints_.clear();
   lassoDrawing_ = false;
+
+  // Tool buttons don't take focus, so an open text/mermaid editor would never
+  // see a focus-out and would stay open across the tool switch.
+  finishInlineEditing();
+}
+
+bool Canvas::isItemLocked(QGraphicsItem *item) const {
+  if (!item)
+    return false;
+  QGraphicsItem *top = item->topLevelItem();
+  if (item->data(0).toString() == QLatin1String("locked") ||
+      top->data(0).toString() == QLatin1String("locked"))
+    return true;
+  if (!layerManager_)
+    return false;
+  // Cheap pre-check: the per-item layer lookup is linear, and this runs for
+  // every scene item on each tool switch.
+  bool anyLayerLocked = false;
+  for (int i = 0; i < layerManager_->layerCount() && !anyLayerLocked; ++i) {
+    Layer *layer = layerManager_->layer(i);
+    anyLayerLocked = layer && layer->isLocked();
+  }
+  if (!anyLayerLocked)
+    return false;
+  Layer *layer = layerManager_->findLayerForItem(top);
+  return layer && layer->isLocked();
+}
+
+void Canvas::finishInlineEditing(const QGraphicsItem *except) {
+  if (!scene_)
+    return;
+  // Collect first: finishing a still-empty new item removes it from the scene.
+  QList<QPointer<QGraphicsObject>> editing;
+  for (QGraphicsItem *item : scene_->items()) {
+    if (item == except)
+      continue;
+    if (auto *text = dynamic_cast<LatexTextItem *>(item)) {
+      if (text->isEditing())
+        editing.append(text);
+    } else if (auto *mermaid = dynamic_cast<MermaidTextItem *>(item)) {
+      if (mermaid->isEditing())
+        editing.append(mermaid);
+    }
+  }
+  for (const QPointer<QGraphicsObject> &obj : editing) {
+    if (auto *text = qobject_cast<LatexTextItem *>(obj.data()))
+      text->finishEditing();
+    else if (auto *mermaid = qobject_cast<MermaidTextItem *>(obj.data()))
+      mermaid->finishEditing();
+  }
 }
 
 void Canvas::setPenTool() {
@@ -970,7 +1017,7 @@ void Canvas::setColorSelectTool() {
   if (scene_)
     scene_->clearSelection();
   if (colorSelectionOverlay_) {
-    colorSelectionOverlay_->show();
+    refreshColorSelectionOverlay(); // the image may have moved meanwhile
   }
   setCursor(Qt::PointingHandCursor);
   isPanning_ = false;
@@ -1167,14 +1214,22 @@ void Canvas::clearCanvas() {
     }
   }
 
+  resetDocument();
+}
+
+void Canvas::resetDocument() {
+  if (!scene_)
+    return;
+  resetColorSelection();
   clearTransformHandles();
   // Drop in-progress previews first: the teardown below deletes every item,
   // which would leave the active tool holding dangling pointers.
   abortInProgressDrawing();
 
-  // Clear undo/redo history first (it may hold references to items)
+  // Clear undo/redo history first (it may hold references to items); the
+  // history is shared with the PDF viewer, so only drop canvas actions.
   if (undoRedoManager_) {
-    undoRedoManager_->clear();
+    undoRedoManager_->clearOwnedBy(this);
   } else {
     undoStack_.clear();
     redoStack_.clear();
@@ -1197,25 +1252,29 @@ void Canvas::clearCanvas() {
     backgroundImage_ = nullptr;
   }
   scene_->setBackgroundBrush(backgroundColor_);
+  scene_->setProperty("documentBackground", backgroundColor_);
   if (eraserPreview_) {
     eraserPreview_->hide();
   } else {
     eraserPreview_ =
         scene_->addEllipse(0, 0, eraserPen_.width(), eraserPen_.width(),
                            QPen(Qt::gray), QBrush(Qt::NoBrush));
-    eraserPreview_->setZValue(1000);
+    eraserPreview_->setZValue(1e9); // above all layer content
     eraserPreview_->hide();
   }
 }
 
 void Canvas::newCanvas(int width, int height, const QColor &bgColor) {
-  clearCanvas();
   if (!scene_)
     return;
+  // The caller already confirmed discarding the current document; a second
+  // "clear canvas?" prompt whose "No" still resized the canvas made no sense.
+  resetDocument();
   backgroundColor_ = bgColor;
   eraserPen_.setColor(backgroundColor_);
   scene_->setSceneRect(0, 0, width, height);
   scene_->setBackgroundBrush(backgroundColor_);
+  scene_->setProperty("documentBackground", backgroundColor_);
   resetTransform();
   currentZoom_ = 1.0;
   emit zoomChanged(100.0);
@@ -1230,6 +1289,7 @@ void Canvas::undoLastAction() {
     lastAction->undo();
     redoStack_.push_back(std::move(lastAction));
   }
+  updateTransformHandles();
 }
 
 void Canvas::redoLastAction() {
@@ -1241,6 +1301,7 @@ void Canvas::redoLastAction() {
     nextAction->redo();
     undoStack_.push_back(std::move(nextAction));
   }
+  updateTransformHandles();
 }
 
 void Canvas::zoomIn() { applyZoom(ZOOM_FACTOR); }
@@ -1253,9 +1314,21 @@ void Canvas::zoomReset() {
   updateTransformHandles();
 }
 
+void Canvas::fitRectInView(const QRectF &rect) {
+  fitInView(rect, Qt::KeepAspectRatio);
+  // fitInView changes the view transform behind applyZoom's back: resync
+  // the zoom level (label and min/max limits) and the handle sizes.
+  currentZoom_ = transform().m11();
+  emit zoomChanged(currentZoom_ * 100.0);
+  updateTransformHandles();
+}
+
 void Canvas::applyZoom(double factor) {
   double newZoom = currentZoom_ * factor;
-  if (newZoom > MAX_ZOOM || newZoom < MIN_ZOOM)
+  // Only refuse steps that go further out of range: fitting a tiny or huge
+  // image can land outside [MIN_ZOOM, MAX_ZOOM], and zooming back must work.
+  if ((factor > 1.0 && newZoom > MAX_ZOOM) ||
+      (factor < 1.0 && newZoom < MIN_ZOOM))
     return;
   currentZoom_ = newZoom;
   scale(factor, factor);
@@ -1266,7 +1339,17 @@ void Canvas::applyZoom(double factor) {
 
 void Canvas::wheelEvent(QWheelEvent *event) {
   if (event->modifiers() & Qt::ControlModifier) {
-    event->angleDelta().y() > 0 ? zoomIn() : zoomOut();
+    // Accumulate high-resolution (trackpad) deltas into standard 120-unit
+    // notches, and ignore purely horizontal scrolling.
+    wheelZoomAccum_ += event->angleDelta().y();
+    while (wheelZoomAccum_ >= 120) {
+      wheelZoomAccum_ -= 120;
+      zoomIn();
+    }
+    while (wheelZoomAccum_ <= -120) {
+      wheelZoomAccum_ += 120;
+      zoomOut();
+    }
     event->accept();
   } else
     QGraphicsView::wheelEvent(event);
@@ -1349,9 +1432,11 @@ void Canvas::unlockSelectedItems() {
     if (item != eraserPreview_ && item != backgroundImage_ &&
         item != colorSelectionOverlay_) {
       if (item->data(0).toString() == "locked") {
-        item->setFlag(QGraphicsItem::ItemIsMovable, true);
-        item->setFlag(QGraphicsItem::ItemIsSelectable, true);
         item->setData(0, QVariant());
+        // Items on a locked layer stay pinned by the layer lock.
+        const bool layerLocked = isItemLocked(item);
+        item->setFlag(QGraphicsItem::ItemIsMovable, !layerLocked);
+        item->setFlag(QGraphicsItem::ItemIsSelectable, !layerLocked);
       }
     }
   }
@@ -1538,9 +1623,17 @@ void Canvas::ungroupSelectedItems() {
       child->setFlags(QGraphicsItem::ItemIsSelectable |
                       QGraphicsItem::ItemIsMovable);
       child->setSelected(true);
+      // Register directly with the store: Canvas::registerItem would drop
+      // the child into the *active* layer instead of the group's layer.
+      ItemId childId = store ? store->idForItem(child) : ItemId();
+      if (store && !childId.isValid())
+        childId = store->registerItem(child);
       if (layerManager_ && !groupLayerId.isNull()) {
         if (Layer *layer = layerManager_->layer(groupLayerId)) {
-          layer->addItem(child);
+          if (childId.isValid())
+            layer->addItem(childId, store);
+          else
+            layer->addItem(child);
         }
       }
     }
@@ -1598,6 +1691,10 @@ void Canvas::ungroupSelectedItems() {
       qWarning() << "Cannot create UngroupAction without ItemStore";
     }
   }
+  // Former children keep their group-local z (about 0, i.e. the bottom of
+  // the stack); give them proper layer z-values.
+  if (layerManager_)
+    layerManager_->updateLayerZOrder();
 }
 
 void Canvas::bringToFront() {
@@ -1674,6 +1771,9 @@ void Canvas::bringForward() {
     int oldIndex;
   };
   QList<ItemInfo> items;
+  // Selected items that can't move; a selected item right behind one of
+  // them must not jump over it (that just swapped two selected items).
+  QSet<ItemId> blocked;
   for (QGraphicsItem *item : selected) {
     ItemId id = store->idForItem(item);
     if (!id.isValid())
@@ -1684,6 +1784,8 @@ void Canvas::bringForward() {
     int idx = layer->indexOfItem(id);
     if (idx < layer->itemCount() - 1) {
       items.append({id, layer, idx});
+    } else {
+      blocked.insert(id); // already on top
     }
   }
   if (items.isEmpty())
@@ -1700,6 +1802,11 @@ void Canvas::bringForward() {
     int currentIdx = info.layer->indexOfItem(info.id);
     if (currentIdx >= info.layer->itemCount() - 1)
       continue;
+    const ItemId neighbour = info.layer->itemIds().value(currentIdx + 1);
+    if (blocked.contains(neighbour)) {
+      blocked.insert(info.id);
+      continue;
+    }
     layerManager_->moveItemUp(info.id);
     composite->addAction(std::make_unique<ReorderAction>(
         info.id, info.layer->id(), currentIdx, currentIdx + 1, layerManager_));
@@ -1727,6 +1834,9 @@ void Canvas::sendBackward() {
     int oldIndex;
   };
   QList<ItemInfo> items;
+  // Selected items that can't move; a selected item right behind one of
+  // them must not jump over it (that just swapped two selected items).
+  QSet<ItemId> blocked;
   for (QGraphicsItem *item : selected) {
     ItemId id = store->idForItem(item);
     if (!id.isValid())
@@ -1737,6 +1847,8 @@ void Canvas::sendBackward() {
     int idx = layer->indexOfItem(id);
     if (idx > 0) {
       items.append({id, layer, idx});
+    } else {
+      blocked.insert(id); // already at the bottom
     }
   }
   if (items.isEmpty())
@@ -1753,6 +1865,11 @@ void Canvas::sendBackward() {
     int currentIdx = info.layer->indexOfItem(info.id);
     if (currentIdx <= 0)
       continue;
+    const ItemId neighbour = info.layer->itemIds().value(currentIdx - 1);
+    if (blocked.contains(neighbour)) {
+      blocked.insert(info.id);
+      continue;
+    }
     layerManager_->moveItemDown(info.id);
     composite->addAction(std::make_unique<ReorderAction>(
         info.id, info.layer->id(), currentIdx, currentIdx - 1, layerManager_));
@@ -2019,12 +2136,29 @@ void Canvas::selectAll() {
       item->setSelected(true);
 }
 
+// Removing a circuit element must take its wires along: a wire left behind
+// would keep pointing at the vanished pins. Both go into the same undo step.
+static QList<QGraphicsItem *>
+withConnectedWires(const QList<QGraphicsItem *> &items) {
+  QList<QGraphicsItem *> result = items;
+  for (QGraphicsItem *item : items) {
+    if (auto *elem = dynamic_cast<ElectronicsElementItem *>(item)) {
+      for (WireItem *wire : elem->connectedWires()) {
+        if (wire && wire->scene() && !result.contains(wire))
+          result.append(wire);
+      }
+    }
+  }
+  return result;
+}
+
 void Canvas::deleteSelectedItems() {
   if (!scene_)
     return;
   clearTransformHandles();
   // Copy the list to avoid modifying while iterating
-  QList<QGraphicsItem *> selectedItems = scene_->selectedItems();
+  QList<QGraphicsItem *> selectedItems =
+      withConnectedWires(scene_->selectedItems());
   auto composite = std::make_unique<CompositeAction>();
   for (QGraphicsItem *item : selectedItems) {
     if (!item)
@@ -2057,53 +2191,30 @@ void Canvas::duplicateSelectedItems() {
   QList<QGraphicsItem *> selectedItems = scene_->selectedItems();
   auto composite = std::make_unique<CompositeAction>();
   for (QGraphicsItem *item : selectedItems) {
-    if (!item)
+    if (!item || item == eraserPreview_ || item == backgroundImage_ ||
+        item == colorSelectionOverlay_)
       continue;
-    if (auto g = dynamic_cast<QGraphicsItemGroup *>(item)) {
-      // Duplicate entire group
-      QGraphicsItemGroup *newGroup = new QGraphicsItemGroup();
-
-      // Add children BEFORE setting position so addToGroup() sees
-      // the group at the origin and preserves group-local coords.
-      for (QGraphicsItem *child : g->childItems()) {
-        QGraphicsItem *newChild = cloneItem(child, eraserPreview_);
-        if (newChild) {
-          newGroup->addToGroup(newChild);
-        }
-      }
-
-      QPointF groupOffset = (snapToGrid_ || snapToObject_)
-                                ? snapPoint(g->pos() + offset)
-                                : g->pos() + offset;
-      newGroup->setPos(groupOffset);
-
-      scene_->addItem(newGroup);
-      newGroup->setFlags(QGraphicsItem::ItemIsSelectable |
-                         QGraphicsItem::ItemIsMovable);
-      newItems.append(newGroup);
-      auto action = prepareDrawAction(newGroup);
-      if (action) {
-        composite->addAction(std::move(action));
-      }
-    } else {
-      // Clone individual item
-      QGraphicsItem *newItem = cloneItem(item, eraserPreview_);
-      if (newItem) {
-        QPointF newPos = (snapToGrid_ || snapToObject_)
-                             ? snapPoint(item->pos() + offset)
-                             : item->pos() + offset;
-        newItem->setPos(newPos);
-        newItem->setFlags(QGraphicsItem::ItemIsSelectable |
-                          QGraphicsItem::ItemIsMovable);
-        scene_->addItem(newItem);
-        newItems.append(newItem);
-        auto action = prepareDrawAction(newItem);
-        if (action) {
-          composite->addAction(std::move(action));
-        }
-      }
+    // Clone through the project format: it covers every savable item type
+    // (images, nested groups, Mermaid, diagram elements, brush strokes...).
+    QGraphicsItem *newItem = ProjectSerializer::deserializeItem(
+        ProjectSerializer::serializeItem(item));
+    if (!newItem)
+      continue;
+    QPointF newPos = (snapToGrid_ || snapToObject_)
+                         ? snapPoint(item->pos() + offset)
+                         : item->pos() + offset;
+    newItem->setPos(newPos);
+    // Flags come from deserializeItem(); replacing them wholesale would drop
+    // e.g. ItemSendsGeometryChanges that circuit elements need for wires.
+    scene_->addItem(newItem);
+    newItems.append(newItem);
+    auto action = prepareDrawAction(newItem);
+    if (action) {
+      composite->addAction(std::move(action));
     }
   }
+  if (newItems.isEmpty())
+    return; // keep the current selection when nothing could be duplicated
   if (!composite->isEmpty()) {
     addAction(std::move(composite));
     emit canvasModified();
@@ -2115,6 +2226,9 @@ void Canvas::duplicateSelectedItems() {
 }
 
 void Canvas::saveToFile() {
+  // Commit text still open in an inline editor, or it would be saved
+  // (or exported) without what the user just typed.
+  finishInlineEditing();
   QString fileName = QFileDialog::getSaveFileName(
       this, "Save Image", "",
 #ifdef HAVE_QT_SVG
@@ -2136,6 +2250,9 @@ void Canvas::saveToFile() {
                                        backgroundColor_)) {
       RecentFilesManager::instance().addRecentFile(fileName);
       emit documentSaved();
+    } else {
+      QMessageBox::warning(this, "Error",
+                           QString("Could not save project: %1").arg(fileName));
     }
     hideBusySpinner();
     return;
@@ -2151,14 +2268,8 @@ void Canvas::saveToFile() {
   // Check if saving as SVG
   if (fileName.endsWith(".svg", Qt::CaseInsensitive)) {
     showBusySpinner(tr("Exporting SVG…"));
-    bool ev = eraserPreview_ && eraserPreview_->isVisible();
-    if (eraserPreview_)
-      eraserPreview_->hide();
-    scene_->clearSelection();
-    QRectF sr = scene_->itemsBoundingRect();
-    if (sr.isEmpty())
-      sr = scene_->sceneRect();
-    sr.adjust(-10, -10, 10, 10);
+    const QList<QGraphicsItem *> items = documentItems();
+    QRectF sr = documentExportRect(items);
 
     QSvgGenerator generator;
     generator.setFileName(fileName);
@@ -2171,11 +2282,10 @@ void Canvas::saveToFile() {
     svgPainter.begin(&generator);
     svgPainter.setRenderHint(QPainter::Antialiasing);
     svgPainter.setRenderHint(QPainter::TextAntialiasing);
-    scene_->render(&svgPainter, QRectF(), sr);
+    svgPainter.fillRect(QRectF(QPointF(), sr.size()), backgroundColor_);
+    renderItems(&svgPainter, QRectF(QPointF(), sr.size()), sr, items);
     svgPainter.end();
 
-    if (ev && eraserPreview_)
-      eraserPreview_->show();
     hideBusySpinner();
     RecentFilesManager::instance().addRecentFile(fileName);
     emit documentSaved();
@@ -2184,25 +2294,18 @@ void Canvas::saveToFile() {
 #endif
 
   showBusySpinner(tr("Saving image…"));
-  bool ev = eraserPreview_ && eraserPreview_->isVisible();
-  if (eraserPreview_)
-    eraserPreview_->hide();
-  scene_->clearSelection();
-  QRectF sr = scene_->itemsBoundingRect();
-  if (sr.isEmpty())
-    sr = scene_->sceneRect();
-  sr.adjust(-10, -10, 10, 10);
-  QImage img(sr.size().toSize(), QImage::Format_ARGB32);
-  img.fill(backgroundColor_);
-  QPainter p(&img);
-  p.setRenderHint(QPainter::Antialiasing);
-  p.setRenderHint(QPainter::TextAntialiasing);
-  scene_->render(&p, QRectF(), sr);
-  p.end();
-  img.save(fileName);
-  if (ev && eraserPreview_)
-    eraserPreview_->show();
+  const QList<QGraphicsItem *> items = documentItems();
+  const QImage img =
+      renderItemsToImage(items, documentExportRect(items),
+                         QImage::Format_ARGB32, backgroundColor_);
+  const bool saved = img.save(fileName);
   hideBusySpinner();
+  if (!saved) {
+    // Keep the document dirty so the exit prompt still protects the work.
+    QMessageBox::warning(this, "Error",
+                         QString("Could not save image: %1").arg(fileName));
+    return;
+  }
 
   // Add to recent files
   RecentFilesManager::instance().addRecentFile(fileName);
@@ -2231,35 +2334,15 @@ void Canvas::openFile() {
 
   // Handle project files
   if (fileName.endsWith(".fspd", Qt::CaseInsensitive)) {
-    showBusySpinner(tr("Loading project…"));
-    QRectF loadedRect;
-    QColor loadedBg;
-    // Loading replaces the whole document: drop in-progress previews so
-    // no tool keeps pointing at items from the old one.
-    abortInProgressDrawing();
-    if (ProjectSerializer::loadProject(fileName, scene_, itemStore(),
-                                       layerManager_, loadedRect, loadedBg)) {
-      backgroundColor_ = loadedBg;
-      eraserPen_.setColor(backgroundColor_);
-      scene_->setSceneRect(loadedRect);
-      scene_->setBackgroundBrush(backgroundColor_);
-      RecentFilesManager::instance().addRecentFile(fileName);
-      // The old document's history is meaningless now; drop it so undo can
-      // never interleave actions across documents.
-      if (undoRedoManager_)
-        undoRedoManager_->clear();
-      emit documentSaved();
-    } else {
-      QMessageBox::warning(this, "Error",
-                           QString("Could not open project: %1").arg(fileName));
-    }
-    hideBusySpinner();
+    loadProjectFile(fileName);
     return;
   }
 
 #ifdef HAVE_QT_SVG
   if (fileName.endsWith(".svg", Qt::CaseInsensitive)) {
-    importSvg(fileName);
+    // Drop it in the middle of the view (the default position is the scene
+    // origin, which put most of the image off the canvas).
+    importSvg(fileName, mapToScene(viewport()->rect().center()));
     RecentFilesManager::instance().addRecentFile(fileName);
     return;
   }
@@ -2279,7 +2362,7 @@ void Canvas::openFile() {
   backgroundImage_->setFlag(QGraphicsItem::ItemIsSelectable, false);
   backgroundImage_->setFlag(QGraphicsItem::ItemIsMovable, false);
   scene_->setSceneRect(0, 0, pm.width(), pm.height());
-  fitInView(scene_->sceneRect(), Qt::KeepAspectRatio);
+  fitRectInView(scene_->sceneRect());
 
   // Add to recent files
   RecentFilesManager::instance().addRecentFile(fileName);
@@ -2292,30 +2375,12 @@ void Canvas::openRecentFile(const QString &filePath) {
 
   // Handle project files
   if (filePath.endsWith(".fspd", Qt::CaseInsensitive)) {
-    QRectF loadedRect;
-    QColor loadedBg;
-    // Loading replaces the whole document: drop in-progress previews so
-    // no tool keeps pointing at items from the old one.
-    abortInProgressDrawing();
-    if (ProjectSerializer::loadProject(filePath, scene_, itemStore(),
-                                       layerManager_, loadedRect, loadedBg)) {
-      backgroundColor_ = loadedBg;
-      eraserPen_.setColor(backgroundColor_);
-      scene_->setSceneRect(loadedRect);
-      scene_->setBackgroundBrush(backgroundColor_);
-      RecentFilesManager::instance().addRecentFile(filePath);
-      if (undoRedoManager_)
-        undoRedoManager_->clear();
-      emit documentSaved();
-    } else {
-      QMessageBox::warning(this, "Error",
-                           QString("Could not open project: %1").arg(filePath));
-    }
+    loadProjectFile(filePath);
     return;
   }
 #ifdef HAVE_QT_SVG
   if (filePath.endsWith(".svg", Qt::CaseInsensitive)) {
-    importSvg(filePath);
+    importSvg(filePath, mapToScene(viewport()->rect().center()));
     RecentFilesManager::instance().addRecentFile(filePath);
     return;
   }
@@ -2339,13 +2404,14 @@ void Canvas::openRecentFile(const QString &filePath) {
   backgroundImage_->setFlag(QGraphicsItem::ItemIsSelectable, false);
   backgroundImage_->setFlag(QGraphicsItem::ItemIsMovable, false);
   scene_->setSceneRect(0, 0, pm.width(), pm.height());
-  fitInView(scene_->sceneRect(), Qt::KeepAspectRatio);
+  fitRectInView(scene_->sceneRect());
 
   // Update recent files
   RecentFilesManager::instance().addRecentFile(filePath);
 }
 
 void Canvas::saveProject() {
+  finishInlineEditing(); // include text still being typed
   QString fileName = QFileDialog::getSaveFileName(
       this, "Save Project", "", ProjectSerializer::fileFilter());
   if (fileName.isEmpty())
@@ -2357,6 +2423,7 @@ void Canvas::saveProject() {
                                      layerManager_, scene_->sceneRect(),
                                      backgroundColor_)) {
     RecentFilesManager::instance().addRecentFile(fileName);
+    emit documentSaved();
   } else {
     QMessageBox::warning(this, "Error",
                          QString("Could not save project: %1").arg(fileName));
@@ -2370,27 +2437,47 @@ void Canvas::openProject() {
       this, "Open Project", "", ProjectSerializer::fileFilter());
   if (fileName.isEmpty())
     return;
+  loadProjectFile(fileName);
+}
+
+bool Canvas::loadProjectFile(const QString &fileName, bool addToRecentFiles) {
+  if (discardChangesHandler_ && !discardChangesHandler_())
+    return false;
   QRectF loadedRect;
   QColor loadedBg;
   showBusySpinner(tr("Loading project…"));
-  // Loading replaces the whole document: drop in-progress previews so
-  // no tool keeps pointing at items from the old one.
+  // Loading replaces the whole document: drop in-progress previews and
+  // handles so no tool keeps pointing at items from the old one.
   abortInProgressDrawing();
-  if (ProjectSerializer::loadProject(fileName, scene_, itemStore(),
-                                     layerManager_, loadedRect, loadedBg)) {
+  clearTransformHandles();
+  const bool loaded = ProjectSerializer::loadProject(
+      fileName, scene_, itemStore(), layerManager_, loadedRect, loadedBg);
+  if (loaded) {
     backgroundColor_ = loadedBg;
     eraserPen_.setColor(backgroundColor_);
     scene_->setSceneRect(loadedRect);
     scene_->setBackgroundBrush(backgroundColor_);
-    RecentFilesManager::instance().addRecentFile(fileName);
+    scene_->setProperty("documentBackground", backgroundColor_);
+    // An image opened into the previous document is not part of this one.
+    if (backgroundImage_) {
+      scene_->removeItem(backgroundImage_);
+      delete backgroundImage_;
+      backgroundImage_ = nullptr;
+    }
+    if (addToRecentFiles)
+      RecentFilesManager::instance().addRecentFile(fileName);
+    // The old document's history is meaningless now; drop it so undo can
+    // never interleave actions across documents.
     if (undoRedoManager_)
-      undoRedoManager_->clear();
+      undoRedoManager_->clearOwnedBy(this);
     emit documentSaved();
-  } else {
+  }
+  hideBusySpinner();
+  if (!loaded) {
     QMessageBox::warning(this, "Error",
                          QString("Could not open project: %1").arg(fileName));
   }
-  hideBusySpinner();
+  return loaded;
 }
 
 void Canvas::exportToPDF() {
@@ -2402,58 +2489,42 @@ void Canvas::exportToPDF() {
 }
 
 void Canvas::exportToPDFWithFilename(const QString &fileName) {
+  finishInlineEditing(); // include text still being typed
   showBusySpinner(tr("Exporting PDF…"));
-  bool ev = eraserPreview_ && eraserPreview_->isVisible();
-  if (eraserPreview_)
-    eraserPreview_->hide();
-  scene_->clearSelection();
+  const QList<QGraphicsItem *> items = documentItems();
+  const QRectF sr = documentExportRect(items);
 
-  QRectF sr = scene_->itemsBoundingRect();
-  if (sr.isEmpty())
-    sr = scene_->sceneRect();
-  sr.adjust(-10, -10, 10, 10);
-
-  // Create PDF writer with A4 page size as default
   QPdfWriter pdfWriter(fileName);
-
-  // Use A4 page size for reasonable dimensions
+  // A4 with 10mm margins; the drawing is scaled to fit and centred.
   pdfWriter.setPageSize(QPageSize(QPageSize::A4));
   pdfWriter.setPageMargins(QMarginsF(10, 10, 10, 10), QPageLayout::Millimeter);
   pdfWriter.setTitle("FullScreen Pencil Draw Export");
   pdfWriter.setCreator("FullScreen Pencil Draw");
-
-  // Calculate resolution to maintain quality
-  int dpi = 300;
-  pdfWriter.setResolution(dpi);
+  pdfWriter.setResolution(300);
 
   QPainter painter(&pdfWriter);
+  if (!painter.isActive()) {
+    hideBusySpinner();
+    QMessageBox::warning(this, "Export Failed",
+                         QString("Could not write %1.").arg(fileName));
+    return;
+  }
   painter.setRenderHint(QPainter::Antialiasing);
   painter.setRenderHint(QPainter::TextAntialiasing);
   painter.setRenderHint(QPainter::SmoothPixmapTransform);
 
-  // Fill background
-  painter.fillRect(painter.viewport(), backgroundColor_);
-
-  // Calculate scale factor to fit the scene onto the page while maintaining
-  // aspect ratio
-  QRectF pageRect = painter.viewport();
-  double scaleX = pageRect.width() / sr.width();
-  double scaleY = pageRect.height() / sr.height();
-  double scale = qMin(scaleX, scaleY);
-
-  // Center the content on the page
-  double offsetX = (pageRect.width() - sr.width() * scale) / 2.0;
-  double offsetY = (pageRect.height() - sr.height() * scale) / 2.0;
-
-  painter.translate(offsetX, offsetY);
-  painter.scale(scale, scale);
-  painter.translate(-sr.topLeft());
-
-  scene_->render(&painter, QRectF(), sr);
+  const QRectF pageRect = painter.viewport();
+  painter.fillRect(pageRect, backgroundColor_);
+  const double scale =
+      qMin(pageRect.width() / sr.width(), pageRect.height() / sr.height());
+  const QSizeF fitted(sr.width() * scale, sr.height() * scale);
+  const QRectF target(QPointF((pageRect.width() - fitted.width()) / 2.0,
+                              (pageRect.height() - fitted.height()) / 2.0),
+                      fitted);
+  // render() maps source to target itself; no extra painter transform (the
+  // old code scaled twice, clipping or shrinking the drawing).
+  renderItems(&painter, target, sr, items);
   painter.end();
-
-  if (ev && eraserPreview_)
-    eraserPreview_->show();
   hideBusySpinner();
 
   // Add to recent files
@@ -2575,7 +2646,8 @@ QGraphicsPixmapItem *Canvas::findPixmapItemAt(const QPointF &scenePoint) const {
       continue;
     }
 
-    const QPointF localPoint = pixmapItem->mapFromScene(scenePoint);
+    const QPointF localPoint =
+        pixmapItem->mapFromScene(scenePoint) - pixmapItem->offset();
     const QSizeF pixmapSize =
         pixmapItem->pixmap().size() / pixmapItem->pixmap().devicePixelRatio();
     if (QRectF(QPointF(0, 0), pixmapSize).contains(localPoint)) {
@@ -2696,12 +2768,13 @@ void Canvas::refreshColorSelectionOverlay() {
     colorSelectionOverlay_->setPixmap(QPixmap::fromImage(overlayImage));
   }
 
-  colorSelectionOverlay_->setPos(sourceItem->pos());
-  colorSelectionOverlay_->setTransformOriginPoint(
-      sourceItem->transformOriginPoint());
-  colorSelectionOverlay_->setTransform(sourceItem->transform());
+  // Full scene mapping: pos()/transform() are parent-relative, so an image
+  // inside a moved group would get a misplaced overlay.
+  colorSelectionOverlay_->setPos(0, 0);
+  colorSelectionOverlay_->setTransform(sourceItem->sceneTransform());
+  colorSelectionOverlay_->setOffset(sourceItem->offset());
   colorSelectionOverlay_->setOpacity(1.0);
-  colorSelectionOverlay_->setZValue(sourceItem->zValue() + 0.5);
+  colorSelectionOverlay_->setZValue(1e8 - 2); // above layer content
   colorSelectionOverlay_->setVisible(currentShape_ == ColorSelect);
 }
 
@@ -2726,7 +2799,7 @@ bool Canvas::selectByColorAt(const QPointF &scenePoint,
   }
 
   QGraphicsPixmapItem *pixmapItem = findPixmapItemAt(scenePoint);
-  if (!pixmapItem) {
+  if (!pixmapItem || isItemLocked(pixmapItem)) {
     resetColorSelection();
     return false;
   }
@@ -2849,23 +2922,25 @@ void Canvas::extractColorSelectionToNewLayer() {
   }
 
   auto *newItem = new QGraphicsPixmapItem(QPixmap::fromImage(extractedImage));
-  newItem->setPos(sourceItem->pos());
-  newItem->setTransformOriginPoint(sourceItem->transformOriginPoint());
-  newItem->setTransform(sourceItem->transform());
+  // Scene mapping of the source (correct even inside a moved group); the z
+  // value comes from the new layer below.
+  newItem->setTransform(sourceItem->sceneTransform());
+  newItem->setOffset(sourceItem->offset());
   newItem->setOpacity(sourceItem->opacity());
-  newItem->setZValue(sourceItem->zValue() + 0.5);
   newItem->setFlag(QGraphicsItem::ItemIsSelectable, true);
   newItem->setFlag(QGraphicsItem::ItemIsMovable, true);
 
   Layer *newLayer = nullptr;
-  QUuid newLayerId;
+  // Shared with the undo callbacks: redo recreates the layer under a new id.
+  auto newLayerId = std::make_shared<QUuid>();
+  const QString layerName =
+      QString("Color Selection %1")
+          .arg(layerManager_ ? layerManager_->layerCount() + 1 : 1);
   if (layerManager_) {
-    newLayer = layerManager_->createLayer(
-        QString("Color Selection %1").arg(layerManager_->layerCount() + 1),
-        Layer::Type::Raster);
+    newLayer = layerManager_->createLayer(layerName, Layer::Type::Raster);
     if (newLayer) {
-      newLayerId = newLayer->id();
-      layerManager_->setActiveLayer(newLayerId);
+      *newLayerId = newLayer->id();
+      layerManager_->setActiveLayer(*newLayerId);
     }
   }
 
@@ -2889,14 +2964,17 @@ void Canvas::extractColorSelectionToNewLayer() {
   }
 
   sourceItem->setPixmap(QPixmap::fromImage(remainingImage));
+  if (layerManager_)
+    layerManager_->updateLayerZOrder(); // new layer's item goes on top
 
   auto onAdd = [this, newLayerId](QGraphicsItem *added) {
     if (!layerManager_ || !added) {
       return;
     }
-    if (!newLayerId.isNull()) {
-      if (Layer *layer = layerManager_->layer(newLayerId)) {
+    if (!newLayerId->isNull()) {
+      if (Layer *layer = layerManager_->layer(*newLayerId)) {
         layer->addItem(added);
+        layerManager_->updateLayerZOrder();
         return;
       }
     }
@@ -2905,6 +2983,25 @@ void Canvas::extractColorSelectionToNewLayer() {
   auto onRemove = [this](QGraphicsItem *removed) { onItemRemoved(removed); };
 
   auto action = std::make_unique<CompositeAction>();
+  // First in the composite: its undo runs last (after the extracted item was
+  // removed) and drops the then-empty layer; its redo runs first and
+  // recreates the layer the item goes back into.
+  action->addAction(std::make_unique<CallbackAction>(
+      "Extract Color Selection Layer",
+      [this, newLayerId]() {
+        if (!layerManager_ || newLayerId->isNull())
+          return;
+        Layer *layer = layerManager_->layer(*newLayerId);
+        if (layer && layer->itemCount() == 0 && layerManager_->layerCount() > 1)
+          layerManager_->deleteLayer(*newLayerId);
+      },
+      [this, newLayerId, layerName]() {
+        if (!layerManager_ || layerManager_->layer(*newLayerId))
+          return;
+        if (Layer *layer =
+                layerManager_->createLayer(layerName, Layer::Type::Raster))
+          *newLayerId = layer->id();
+      }));
   action->addAction(std::make_unique<RasterPixmapAction>(
       colorSelectionItemId_, store, originalImage, remainingImage));
   action->addAction(
@@ -2938,12 +3035,14 @@ void Canvas::fillAt(const QPointF &point) {
   if (!scene_)
     return;
 
-  fillTopItemAtPoint(scene_, point, fillBrush_, itemStore(), backgroundImage_,
-                     eraserPreview_, [this](std::unique_ptr<Action> action) {
-                       if (action) {
-                         addAction(std::move(action));
-                       }
-                     });
+  fillTopItemAtPoint(
+      scene_, point, fillBrush_, itemStore(), backgroundImage_, eraserPreview_,
+      [this](std::unique_ptr<Action> action) {
+        if (action) {
+          addAction(std::move(action));
+        }
+      },
+      [this](QGraphicsItem *item) { return isItemLocked(item); });
 }
 
 void Canvas::drawArrow(const QPointF &start, const QPointF &end) {
@@ -3213,6 +3312,34 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
     setCursor(Qt::ClosedHandCursor);
     return;
   }
+  if (currentShape_ == Text || currentShape_ == Mermaid) {
+    // The inline editor is a proxy-widget child, so walk up to its owner.
+    QGraphicsItem *hit = itemAt(event->pos());
+    while (hit && !dynamic_cast<LatexTextItem *>(hit) &&
+           !dynamic_cast<MermaidTextItem *>(hit))
+      hit = hit->parentItem();
+    if (hit && isItemLocked(hit))
+      hit = nullptr; // locked text isn't editable; start a new item instead
+    // A new editor takes focus with OtherFocusReason, which the old editor's
+    // focus-out handler ignores, so commit open editors explicitly.
+    finishInlineEditing(hit);
+    auto *hitText = dynamic_cast<LatexTextItem *>(hit);
+    auto *hitMermaid = dynamic_cast<MermaidTextItem *>(hit);
+    if ((hitText && hitText->isEditing()) ||
+        (hitMermaid && hitMermaid->isEditing())) {
+      // Clicking inside the open editor places the caret.
+      QGraphicsView::mousePressEvent(event);
+      return;
+    }
+    if (hitText && currentShape_ == Text) {
+      hitText->startEditing();
+      return;
+    }
+    if (hitMermaid && currentShape_ == Mermaid) {
+      hitMermaid->startEditing();
+      return;
+    }
+  }
   startPoint_ = sp;
   switch (currentShape_) {
   case Text:
@@ -3248,6 +3375,7 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
     scene_->addItem(currentPath_);
     pointBuffer_.clear();
     pressureBuffer_.clear();
+    pressureCommitted_ = QPainterPath();
     pointBuffer_.append(sp);
     if (pressureSensitive_ && tabletActive_) {
       pressureBuffer_.append(tabletPressure_);
@@ -3266,6 +3394,7 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
     scene_->addItem(currentPath_);
     pointBuffer_.clear();
     pressureBuffer_.clear();
+    pressureCommitted_ = QPainterPath();
     pointBuffer_.append(sp);
   } break;
   case Rectangle: {
@@ -3341,6 +3470,12 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
     QGraphicsView::mousePressEvent(event);
     break;
   }
+  // Show in-progress previews above existing content; committing the item
+  // assigns its real z-value within the active layer.
+  if (tempShapeItem_)
+    tempShapeItem_->setZValue(1e8 - 1);
+  if (currentPath_)
+    currentPath_->setZValue(1e8 - 1);
 }
 
 void Canvas::mouseMoveEvent(QMouseEvent *event) {
@@ -3557,6 +3692,12 @@ void Canvas::mouseReleaseEvent(QMouseEvent *event) {
     return;
   }
 
+  // Pair with presses forwarded into an open inline editor.
+  if (currentShape_ == Text || currentShape_ == Mermaid) {
+    QGraphicsView::mouseReleaseEvent(event);
+    return;
+  }
+
   if (currentShape_ == LassoSelection) {
     if (lassoDrawing_) {
       lassoDrawing_ = false;
@@ -3655,7 +3796,10 @@ void Canvas::mouseReleaseEvent(QMouseEvent *event) {
     scene_->removeItem(tempShapeItem_);
     delete tempShapeItem_;
     tempShapeItem_ = nullptr;
-    drawArrow(startPoint_, ep);
+    // A plain click would commit an invisible zero-length arrow (plus undo
+    // entry), like the degenerate-shape guard used for other shapes.
+    if (QLineF(startPoint_, ep).length() >= kDegenerateShapeEpsilon)
+      drawArrow(startPoint_, ep);
     return;
   }
   if (currentShape_ == Wire) {
@@ -3687,7 +3831,8 @@ void Canvas::mouseReleaseEvent(QMouseEvent *event) {
     scene_->removeItem(tempShapeItem_);
     delete tempShapeItem_;
     tempShapeItem_ = nullptr;
-    drawCurvedArrow(startPoint_, ep, modifiers);
+    if (QLineF(startPoint_, ep).length() >= kDegenerateShapeEpsilon)
+      drawCurvedArrow(startPoint_, ep, modifiers);
     curvedArrowAutoBendEnabled_ = true;
     curvedArrowManualFlip_ = false;
     curvedArrowShiftWasDown_ = false;
@@ -3710,19 +3855,44 @@ void Canvas::mouseReleaseEvent(QMouseEvent *event) {
   }
   if (currentShape_ == Pen || currentShape_ == Highlighter) {
     if (currentPath_) {
-      // A single-sample stroke (plain click) still produces a visible dot.
+      const bool pressureStroke = currentPath_->pen().style() == Qt::NoPen;
+      QPainterPath path = currentPath_->path();
       if (pointBuffer_.size() <= 1) {
+        // A single-sample stroke (plain click) still produces a visible dot.
         const QPointF pt =
             pointBuffer_.isEmpty() ? startPoint_ : pointBuffer_.constFirst();
-        QPainterPath dotPath = currentPath_->path();
-        dotPath.lineTo(pt + QPointF(0.01, 0.01));
-        currentPath_->setPath(dotPath);
+        if (pressureStroke) {
+          // Filled outline stroke: a zero-length line would be invisible.
+          const qreal r = qMax<qreal>(0.5, currentPen_.widthF() * 0.5);
+          path.addEllipse(pt, r, r);
+        } else {
+          path.lineTo(pt + QPointF(0.01, 0.01));
+        }
+      } else if (!pressureStroke) {
+        // The spline trails the pointer by a few samples: draw the rest, or
+        // short flicks stay invisible and every stroke ends short.
+        int drawn = -1;
+        for (int i = pointBuffer_.size() - 1; i >= 0; --i) {
+          if (QLineF(pointBuffer_.at(i), path.currentPosition()).length() <
+              0.01) {
+            drawn = i;
+            break;
+          }
+        }
+        if (drawn < 0) {
+          path.lineTo(pointBuffer_.constLast());
+        } else {
+          for (int i = drawn + 1; i < pointBuffer_.size(); ++i)
+            path.lineTo(pointBuffer_.at(i));
+        }
       }
+      currentPath_->setPath(path);
       addDrawAction(currentPath_);
     }
     currentPath_ = nullptr;
     pointBuffer_.clear();
     pressureBuffer_.clear();
+    pressureCommitted_ = QPainterPath();
     tabletActive_ = false;
     return;
   }
@@ -3740,6 +3910,27 @@ void Canvas::mouseDoubleClickEvent(QMouseEvent *event) {
   if (activePathTool_ && event->button() == Qt::LeftButton) {
     activePathTool_->mouseDoubleClickEvent(event, mapToScene(event->pos()));
     event->accept();
+    return;
+  }
+  // A fast second click arrives as a double-click. Only the selection tools
+  // give it a meaning (editing text/diagrams); for drawing tools handle it
+  // as a new press, or quick successive strokes/shapes would be dropped.
+  if (currentShape_ != Selection && currentShape_ != LassoSelection) {
+    // ...except inside an open inline editor, where a double-click selects
+    // a word.
+    if (currentShape_ == Text || currentShape_ == Mermaid) {
+      QGraphicsItem *hit = itemAt(event->pos());
+      while (hit && !dynamic_cast<LatexTextItem *>(hit) &&
+             !dynamic_cast<MermaidTextItem *>(hit))
+        hit = hit->parentItem();
+      auto *text = dynamic_cast<LatexTextItem *>(hit);
+      auto *mermaid = dynamic_cast<MermaidTextItem *>(hit);
+      if ((text && text->isEditing()) || (mermaid && mermaid->isEditing())) {
+        QGraphicsView::mouseDoubleClickEvent(event);
+        return;
+      }
+    }
+    mousePressEvent(event);
     return;
   }
   QGraphicsView::mouseDoubleClickEvent(event);
@@ -3818,11 +4009,21 @@ static void serializeOneItem(QDataStream &ds, QGraphicsItem *item,
   if (!item)
     return;
   if (auto g = dynamic_cast<QGraphicsItemGroup *>(item)) {
-    auto children = g->childItems();
-    ds << QString("GroupT") << g->pos() << g->transform()
-       << static_cast<qint32>(children.size());
-    for (auto *child : children)
-      serializeOneItem(ds, child, eraserPreview, backgroundImage);
+    // Serialize children first and count only those actually written: a
+    // header count that includes unsupported children would make the reader
+    // swallow the following top-level records as group members.
+    QByteArray childData;
+    QDataStream childStream(&childData, QIODevice::WriteOnly);
+    childStream.setVersion(ds.version());
+    qint32 written = 0;
+    for (auto *child : g->childItems()) {
+      const qint64 before = childData.size();
+      serializeOneItem(childStream, child, eraserPreview, backgroundImage);
+      if (childData.size() > before)
+        ++written;
+    }
+    ds << QString("GroupT") << g->pos() << g->transform() << written;
+    ds.writeRawData(childData.constData(), static_cast<int>(childData.size()));
   } else if (auto r = dynamic_cast<QGraphicsRectItem *>(item)) {
     ds << QString("RectangleT") << r->rect() << r->pos() << r->pen()
        << r->brush() << r->transform();
@@ -4329,19 +4530,45 @@ void Canvas::addPressurePoint(const QPointF &point, qreal pressure) {
   if (pointBuffer_.size() < 2)
     return;
 
+  QPainterPath outline = pressureOutline(0, pointBuffer_.size());
+  if (outline.isEmpty())
+    return;
+
+  // Keep a sliding window to avoid rebuilding an ever-growing outline, but
+  // freeze the part that leaves the window into pressureCommitted_ first -
+  // otherwise the beginning of long strokes vanished while drawing.
+  if (pointBuffer_.size() > MAX_PRESSURE_BUFFER_SIZE) {
+    // +1 overlaps the frozen prefix with the live part so there's no gap.
+    pressureCommitted_.addPath(
+        pressureOutline(0, PRESSURE_BUFFER_TRIM_SIZE + 1));
+    pointBuffer_.remove(0, PRESSURE_BUFFER_TRIM_SIZE);
+    pressureBuffer_.remove(0, PRESSURE_BUFFER_TRIM_SIZE);
+    outline = pressureOutline(0, pointBuffer_.size());
+  }
+
+  QPainterPath full = pressureCommitted_;
+  full.addPath(outline);
+  // Overlapping pieces must not cancel each other out (odd-even filling).
+  full.setFillRule(Qt::WindingFill);
+  currentPath_->setPath(full);
+}
+
+QPainterPath Canvas::pressureOutline(int begin, int end) const {
   QPainterPath outline;
+  end = qMin(end, static_cast<int>(pointBuffer_.size()));
+  if (end - begin < 2)
+    return outline;
   QVector<QPointF> leftSide;
   QVector<QPointF> rightSide;
-
-  for (int i = 0; i < pointBuffer_.size(); ++i) {
+  for (int i = begin; i < end; ++i) {
     qreal p = pressureBuffer_.at(i);
     qreal w =
         currentPen_.widthF() * qBound(MIN_PRESSURE_THRESHOLD, p, 1.0) * 0.5;
 
     QPointF dir;
-    if (i == 0) {
-      dir = pointBuffer_.at(1) - pointBuffer_.at(0);
-    } else if (i == pointBuffer_.size() - 1) {
+    if (i == begin) {
+      dir = pointBuffer_.at(i + 1) - pointBuffer_.at(i);
+    } else if (i == end - 1) {
       dir = pointBuffer_.at(i) - pointBuffer_.at(i - 1);
     } else {
       dir = pointBuffer_.at(i + 1) - pointBuffer_.at(i - 1);
@@ -4357,23 +4584,16 @@ void Canvas::addPressurePoint(const QPointF &point, qreal pressure) {
   }
 
   if (leftSide.size() < 2)
-    return;
+    return outline;
 
-  // Build a closed path: left side forward, right side backward
+  // Closed path: left side forward, right side backward
   outline.moveTo(leftSide.first());
   for (int i = 1; i < leftSide.size(); ++i)
     outline.lineTo(leftSide.at(i));
   for (int i = rightSide.size() - 1; i >= 0; --i)
     outline.lineTo(rightSide.at(i));
   outline.closeSubpath();
-
-  currentPath_->setPath(outline);
-
-  // Keep a sliding window to avoid unbounded growth
-  if (pointBuffer_.size() > MAX_PRESSURE_BUFFER_SIZE) {
-    pointBuffer_.remove(0, PRESSURE_BUFFER_TRIM_SIZE);
-    pressureBuffer_.remove(0, PRESSURE_BUFFER_TRIM_SIZE);
-  }
+  return outline;
 }
 
 void Canvas::beginEraseStroke() {
@@ -4406,19 +4626,29 @@ void Canvas::eraseAt(const QPointF &point) {
   for (QGraphicsItem *item : itemsToCheck) {
     if (!item)
       continue;
-    if (item == eraserPreview_ || item == backgroundImage_ ||
-        item == colorSelectionOverlay_)
+    // A group's shape() is its whole bounding box; test its children's real
+    // shapes instead (they are in itemsToCheck too).
+    if (item->type() == QGraphicsItemGroup::Type)
       continue;
-    if (item->type() == TransformHandleItem::Type)
+    // Erase whole top-level items: removing a group child on its own would
+    // detach it from the group and undo would restore it misplaced.
+    QGraphicsItem *target = item->topLevelItem();
+    if (target == eraserPreview_ || target == backgroundImage_ ||
+        target == colorSelectionOverlay_)
+      continue;
+    if (target->type() == TransformHandleItem::Type)
+      continue;
+    if (itemsToRemove.contains(target) || isItemLocked(target))
       continue;
     QPainterPath itemShape = item->sceneTransform().map(item->shape());
     // item->shape() already includes outlined geometry for line-based items,
     // so a single intersection test is sufficient (stroking it again adds
     // cost without changing what is hit).
     if (ep.intersects(itemShape)) {
-      itemsToRemove.append(item);
+      itemsToRemove.append(target);
     }
   }
+  itemsToRemove = withConnectedWires(itemsToRemove);
   // Now safely remove items after iteration is complete
   for (QGraphicsItem *item : itemsToRemove) {
     if (!item)
@@ -4772,40 +5002,16 @@ void Canvas::contextMenuEvent(QContextMenuEvent *event) {
   contextMenu.exec(event->globalPos());
 }
 
-QRectF Canvas::getSelectionBoundingRect() const {
-  if (!scene_)
-    return QRectF();
-  QList<QGraphicsItem *> selectedItems = scene_->selectedItems();
-  if (selectedItems.isEmpty())
-    return QRectF();
-
-  QRectF boundingRect;
-  bool firstItem = true;
-  for (QGraphicsItem *item : selectedItems) {
-    if (!item)
-      continue;
-    if (item != eraserPreview_ && item != backgroundImage_ &&
-        item != colorSelectionOverlay_) {
-      if (firstItem) {
-        boundingRect = item->sceneBoundingRect();
-        firstItem = false;
-      } else {
-        boundingRect = boundingRect.united(item->sceneBoundingRect());
-      }
-    }
-  }
-  boundingRect.adjust(-10, -10, 10, 10);
-  return boundingRect;
-}
-
 void Canvas::exportSelectionToSVG() {
+  finishInlineEditing(); // include text still being typed
 #ifndef HAVE_QT_SVG
   QMessageBox::information(this, "SVG Export Unavailable",
                            "SVG export requires the Qt SVG module, which was "
                            "not found at build time.");
   return;
 #else
-  if (!scene_ || scene_->selectedItems().isEmpty())
+  const QList<QGraphicsItem *> items = exportableSelection();
+  if (items.isEmpty())
     return;
 
   QString fileName = QFileDialog::getSaveFileName(
@@ -4813,13 +5019,13 @@ void Canvas::exportSelectionToSVG() {
   if (fileName.isEmpty())
     return;
 
-  QRectF boundingRect = getSelectionBoundingRect();
+  QRectF boundingRect = visibleBounds(items);
   if (boundingRect.isEmpty())
     return;
+  boundingRect.adjust(-10, -10, 10, 10);
 
   showBusySpinner(tr("Exporting SVG…"));
 
-  // Create SVG generator
   QSvgGenerator generator;
   generator.setFileName(fileName);
   generator.setSize(boundingRect.size().toSize());
@@ -4829,30 +5035,158 @@ void Canvas::exportSelectionToSVG() {
   generator.setDescription(
       "Selected items exported from FullScreen Pencil Draw");
 
-  // Render selected items to SVG
   QPainter painter;
   painter.begin(&generator);
   painter.setRenderHint(QPainter::Antialiasing);
   painter.setRenderHint(QPainter::TextAntialiasing);
-  painter.translate(-boundingRect.topLeft());
-
-  QList<QGraphicsItem *> selectedItems = scene_->selectedItems();
-  for (QGraphicsItem *item : selectedItems) {
-    if (!item)
-      continue;
-    if (item != eraserPreview_ && item != backgroundImage_ &&
-        item != colorSelectionOverlay_) {
-      painter.save();
-      painter.setTransform(item->sceneTransform(), true);
-      QStyleOptionGraphicsItem styleOption;
-      item->paint(&painter, &styleOption, nullptr);
-      painter.restore();
-    }
-  }
-
+  renderItems(&painter, QRectF(QPointF(), boundingRect.size()), boundingRect,
+              items);
   painter.end();
   hideBusySpinner();
 #endif
+}
+
+QList<QGraphicsItem *> Canvas::documentItems() const {
+  // Everything that belongs to the drawing (visible layers' items plus an
+  // opened base image) - never tool overlays, previews or handles.
+  QList<QGraphicsItem *> items;
+  if (backgroundImage_ && backgroundImage_->isVisible())
+    items.append(backgroundImage_);
+  if (layerManager_) {
+    for (int i = 0; i < layerManager_->layerCount(); ++i) {
+      Layer *layer = layerManager_->layer(i);
+      if (!layer || !layer->isVisible())
+        continue;
+      const QList<QGraphicsItem *> layerItems = layer->items();
+      for (QGraphicsItem *item : layerItems) {
+        if (item && item->isVisible())
+          items.append(item);
+      }
+    }
+  }
+  return items;
+}
+
+QRectF Canvas::documentExportRect(const QList<QGraphicsItem *> &items) const {
+  QRectF bounds = visibleBounds(items);
+  if (bounds.isEmpty())
+    bounds = scene_ ? scene_->sceneRect() : QRectF(0, 0, 1, 1);
+  return bounds.adjusted(-10, -10, 10, 10);
+}
+
+QList<QGraphicsItem *> Canvas::exportableSelection() const {
+  QList<QGraphicsItem *> items;
+  if (!scene_)
+    return items;
+  for (QGraphicsItem *item : scene_->selectedItems()) {
+    if (item && !item->parentItem() && item != eraserPreview_ &&
+        item != backgroundImage_ && item != colorSelectionOverlay_ &&
+        item->type() != TransformHandleItem::Type)
+      items.append(item);
+  }
+  return items;
+}
+
+QRectF Canvas::visibleBounds(const QList<QGraphicsItem *> &items) {
+  QRectF bounds;
+  for (QGraphicsItem *item : items) {
+    if (item && item->isVisible())
+      bounds = bounds.isNull() ? item->sceneBoundingRect()
+                               : bounds.united(item->sceneBoundingRect());
+  }
+  return bounds;
+}
+
+void Canvas::renderItems(QPainter *painter, const QRectF &target,
+                         const QRectF &source,
+                         const QList<QGraphicsItem *> &items) {
+  if (!scene_ || !painter)
+    return;
+  // Render through the scene (children, stacking order and opacity all
+  // correct) with everything else - overlays, previews, handles, other
+  // items - hidden and without selection outlines.
+  const QList<QGraphicsItem *> selection = scene_->selectedItems();
+  scene_->clearSelection();
+  const QSet<QGraphicsItem *> keep(items.cbegin(), items.cend());
+  QList<QGraphicsItem *> hidden;
+  for (QGraphicsItem *item : scene_->items()) {
+    if (item->parentItem() || keep.contains(item) || !item->isVisible())
+      continue;
+    item->setVisible(false);
+    hidden.append(item);
+  }
+  // The target is pre-filled by the caller (canvas colour, white for JPEG,
+  // transparent for selections); the scene's own background brush would
+  // otherwise paint over transparent exports.
+  const QBrush sceneBackground = scene_->backgroundBrush();
+  scene_->setBackgroundBrush(Qt::NoBrush);
+  scene_->render(painter, target, source);
+  scene_->setBackgroundBrush(sceneBackground);
+  for (QGraphicsItem *item : hidden)
+    item->setVisible(true);
+  for (QGraphicsItem *item : selection)
+    item->setSelected(true);
+}
+
+QImage Canvas::renderItemsToImage(const QList<QGraphicsItem *> &items,
+                                  const QRectF &source, QImage::Format format,
+                                  const QColor &fill) {
+  QImage image(source.size().toSize(), format);
+  image.fill(fill);
+  QPainter painter(&image);
+  painter.setRenderHint(QPainter::Antialiasing);
+  painter.setRenderHint(QPainter::TextAntialiasing);
+  painter.setRenderHint(QPainter::SmoothPixmapTransform);
+  renderItems(&painter, QRectF(QPointF(), QSizeF(image.size())), source, items);
+  return image;
+}
+
+void Canvas::exportSelectionImage(const QString &title, const QString &filter,
+                                  const char *format,
+                                  QImage::Format imageFormat,
+                                  const QColor &fill) {
+  finishInlineEditing(); // include text still being typed
+  const QList<QGraphicsItem *> items = exportableSelection();
+  if (items.isEmpty())
+    return;
+  QString fileName = QFileDialog::getSaveFileName(this, title, "", filter);
+  if (fileName.isEmpty())
+    return;
+  QRectF bounds = visibleBounds(items);
+  if (bounds.isEmpty())
+    return;
+  bounds.adjust(-10, -10, 10, 10);
+
+  showBusySpinner(tr("Exporting…"));
+  const QImage image = renderItemsToImage(items, bounds, imageFormat, fill);
+  const bool saved = image.save(fileName, format);
+  hideBusySpinner();
+  if (!saved) {
+    QMessageBox::warning(this, "Export Failed",
+                         QString("Could not write %1.").arg(fileName));
+  }
+}
+
+void Canvas::exportSelectionToPNG() {
+  exportSelectionImage("Export Selection as PNG", "PNG (*.png)", "PNG",
+                       QImage::Format_ARGB32, Qt::transparent);
+}
+
+void Canvas::exportSelectionToJPG() {
+  // JPEG has no alpha: use the drawing's background (content colours such as
+  // schematic symbols follow it; white-on-white would vanish).
+  exportSelectionImage("Export Selection as JPG", "JPEG (*.jpg)", "JPG",
+                       QImage::Format_RGB32, backgroundColor_);
+}
+
+void Canvas::exportSelectionToWebP() {
+  exportSelectionImage("Export Selection as WebP", "WebP (*.webp)", "WEBP",
+                       QImage::Format_ARGB32, Qt::transparent);
+}
+
+void Canvas::exportSelectionToTIFF() {
+  exportSelectionImage("Export Selection as TIFF", "TIFF (*.tiff *.tif)",
+                       "TIFF", QImage::Format_ARGB32, Qt::transparent);
 }
 
 void Canvas::importSvg(const QString &filePath, const QPointF &position) {
@@ -4898,178 +5232,6 @@ void Canvas::importSvg(const QString &filePath, const QPointF &position) {
   }
   addDrawAction(pixmapItem);
 #endif
-}
-
-void Canvas::exportSelectionToPNG() {
-  if (!scene_ || scene_->selectedItems().isEmpty())
-    return;
-
-  QString fileName = QFileDialog::getSaveFileName(
-      this, "Export Selection as PNG", "", "PNG (*.png)");
-  if (fileName.isEmpty())
-    return;
-
-  QRectF boundingRect = getSelectionBoundingRect();
-  if (boundingRect.isEmpty())
-    return;
-
-  showBusySpinner(tr("Exporting PNG…"));
-
-  // Create image and render selected items
-  QImage image(boundingRect.size().toSize(), QImage::Format_ARGB32);
-  image.fill(Qt::transparent);
-
-  QPainter painter(&image);
-  painter.setRenderHint(QPainter::Antialiasing);
-  painter.setRenderHint(QPainter::TextAntialiasing);
-  painter.translate(-boundingRect.topLeft());
-
-  QList<QGraphicsItem *> selectedItems = scene_->selectedItems();
-  for (QGraphicsItem *item : selectedItems) {
-    if (!item)
-      continue;
-    if (item != eraserPreview_ && item != backgroundImage_ &&
-        item != colorSelectionOverlay_) {
-      painter.save();
-      painter.setTransform(item->sceneTransform(), true);
-      QStyleOptionGraphicsItem styleOption;
-      item->paint(&painter, &styleOption, nullptr);
-      painter.restore();
-    }
-  }
-
-  painter.end();
-  image.save(fileName);
-  hideBusySpinner();
-}
-
-void Canvas::exportSelectionToJPG() {
-  if (!scene_ || scene_->selectedItems().isEmpty())
-    return;
-
-  QString fileName = QFileDialog::getSaveFileName(
-      this, "Export Selection as JPG", "", "JPEG (*.jpg)");
-  if (fileName.isEmpty())
-    return;
-
-  QRectF boundingRect = getSelectionBoundingRect();
-  if (boundingRect.isEmpty())
-    return;
-
-  showBusySpinner(tr("Exporting JPG…"));
-
-  // Create image with white background and render selected items
-  QImage image(boundingRect.size().toSize(), QImage::Format_RGB32);
-  image.fill(Qt::white);
-
-  QPainter painter(&image);
-  painter.setRenderHint(QPainter::Antialiasing);
-  painter.setRenderHint(QPainter::TextAntialiasing);
-  painter.translate(-boundingRect.topLeft());
-
-  QList<QGraphicsItem *> selectedItems = scene_->selectedItems();
-  for (QGraphicsItem *item : selectedItems) {
-    if (!item)
-      continue;
-    if (item != eraserPreview_ && item != backgroundImage_ &&
-        item != colorSelectionOverlay_) {
-      painter.save();
-      painter.setTransform(item->sceneTransform(), true);
-      QStyleOptionGraphicsItem styleOption;
-      item->paint(&painter, &styleOption, nullptr);
-      painter.restore();
-    }
-  }
-
-  painter.end();
-  image.save(fileName);
-  hideBusySpinner();
-}
-
-void Canvas::exportSelectionToWebP() {
-  if (!scene_ || scene_->selectedItems().isEmpty())
-    return;
-
-  QString fileName = QFileDialog::getSaveFileName(
-      this, "Export Selection as WebP", "", "WebP (*.webp)");
-  if (fileName.isEmpty())
-    return;
-
-  QRectF boundingRect = getSelectionBoundingRect();
-  if (boundingRect.isEmpty())
-    return;
-
-  showBusySpinner(tr("Exporting WebP…"));
-
-  // Create image with transparency and render selected items
-  QImage image(boundingRect.size().toSize(), QImage::Format_ARGB32);
-  image.fill(Qt::transparent);
-
-  QPainter painter(&image);
-  painter.setRenderHint(QPainter::Antialiasing);
-  painter.setRenderHint(QPainter::TextAntialiasing);
-  painter.translate(-boundingRect.topLeft());
-
-  QList<QGraphicsItem *> selectedItems = scene_->selectedItems();
-  for (QGraphicsItem *item : selectedItems) {
-    if (!item)
-      continue;
-    if (item != eraserPreview_ && item != backgroundImage_ &&
-        item != colorSelectionOverlay_) {
-      painter.save();
-      painter.setTransform(item->sceneTransform(), true);
-      QStyleOptionGraphicsItem styleOption;
-      item->paint(&painter, &styleOption, nullptr);
-      painter.restore();
-    }
-  }
-
-  painter.end();
-  image.save(fileName, "WEBP");
-  hideBusySpinner();
-}
-
-void Canvas::exportSelectionToTIFF() {
-  if (!scene_ || scene_->selectedItems().isEmpty())
-    return;
-
-  QString fileName = QFileDialog::getSaveFileName(
-      this, "Export Selection as TIFF", "", "TIFF (*.tiff *.tif)");
-  if (fileName.isEmpty())
-    return;
-
-  QRectF boundingRect = getSelectionBoundingRect();
-  if (boundingRect.isEmpty())
-    return;
-
-  showBusySpinner(tr("Exporting TIFF…"));
-
-  // Create image with transparency and render selected items
-  QImage image(boundingRect.size().toSize(), QImage::Format_ARGB32);
-  image.fill(Qt::transparent);
-
-  QPainter painter(&image);
-  painter.setRenderHint(QPainter::Antialiasing);
-  painter.setRenderHint(QPainter::TextAntialiasing);
-  painter.translate(-boundingRect.topLeft());
-
-  QList<QGraphicsItem *> selectedItems = scene_->selectedItems();
-  for (QGraphicsItem *item : selectedItems) {
-    if (!item)
-      continue;
-    if (item != eraserPreview_ && item != backgroundImage_ &&
-        item != colorSelectionOverlay_) {
-      painter.save();
-      painter.setTransform(item->sceneTransform(), true);
-      QStyleOptionGraphicsItem styleOption;
-      item->paint(&painter, &styleOption, nullptr);
-      painter.restore();
-    }
-  }
-
-  painter.end();
-  image.save(fileName, "TIFF");
-  hideBusySpinner();
 }
 
 void Canvas::updateTransformHandles() {
@@ -5220,7 +5382,10 @@ void Canvas::applyResizeToOtherItems(QGraphicsItem *sourceItem, qreal scaleX,
     if (item == eraserPreview_ || item == backgroundImage_ ||
         item == colorSelectionOverlay_)
       continue;
-    if (item->type() == TransformHandleItem::Type)
+    // Wires are re-routed from their pins (path in scene coordinates);
+    // transforming them as well would warp them away from the pins.
+    if (item->type() == TransformHandleItem::Type ||
+        item->type() == WireItem::Type)
       continue;
 
     // Handle text items specially - adjust font size instead of transform
@@ -5302,7 +5467,10 @@ void Canvas::applyRotationToOtherItems(QGraphicsItem *sourceItem,
     if (item == eraserPreview_ || item == backgroundImage_ ||
         item == colorSelectionOverlay_)
       continue;
-    if (item->type() == TransformHandleItem::Type)
+    // Wires are re-routed from their pins (path in scene coordinates);
+    // transforming them as well would warp them away from the pins.
+    if (item->type() == TransformHandleItem::Type ||
+        item->type() == WireItem::Type)
       continue;
 
     // Rotate around the shared center so relative positions are preserved
@@ -5344,7 +5512,10 @@ void Canvas::savePreTransformStates() {
     if (item == eraserPreview_ || item == backgroundImage_ ||
         item == colorSelectionOverlay_)
       continue;
-    if (item->type() == TransformHandleItem::Type)
+    // Wires are re-routed from their pins (path in scene coordinates);
+    // transforming them as well would warp them away from the pins.
+    if (item->type() == TransformHandleItem::Type ||
+        item->type() == WireItem::Type)
       continue;
 
     ItemId id = store->idForItem(item);
@@ -5477,13 +5648,16 @@ void Canvas::scaleSelectedItems() {
     QTransform oldTransform = item->transform();
     QPointF oldPos = item->pos();
 
-    QTransform newTransform = oldTransform;
-    newTransform.scale(sx, sy);
-    item->setTransform(newTransform);
-
-    QPointF offset = oldPos - center;
-    QPointF newPos = center + QPointF(offset.x() * sx, offset.y() * sy);
-    item->setPos(newPos);
+    // Scale about the common centre in scene space, keeping pos: composing
+    // onto the full scene mapping also scales the translation part of an
+    // earlier rotation (pre-multiplying made rotated items drift).
+    const QTransform aboutCenter =
+        QTransform::fromTranslate(-center.x(), -center.y()) *
+        QTransform::fromScale(sx, sy) *
+        QTransform::fromTranslate(center.x(), center.y());
+    item->setTransform(
+        oldTransform * QTransform::fromTranslate(oldPos.x(), oldPos.y()) *
+        aboutCenter * QTransform::fromTranslate(-oldPos.x(), -oldPos.y()));
 
     // Record undo action
     if (sceneController_) {
@@ -5775,14 +5949,14 @@ void Canvas::changeColorOfSelectedItems() {
     else if (auto *shape = dynamic_cast<QAbstractGraphicsShapeItem *>(item)) {
       QPen oldPen = shape->pen();
       QPen newPen = oldPen;
-      newPen.setColor(newColor);
+      newPen.setColor(keepAlpha(newColor, oldPen.color()));
       composite->addAction(
           std::make_unique<FillAction>(id, store, oldPen, newPen));
 
       QBrush oldBrush = shape->brush();
       if (oldBrush.style() != Qt::NoBrush) {
         QBrush newBrush = oldBrush;
-        newBrush.setColor(newColor);
+        newBrush.setColor(keepAlpha(newColor, oldBrush.color()));
         composite->addAction(
             std::make_unique<FillAction>(id, store, oldBrush, newBrush));
       }
@@ -5791,7 +5965,7 @@ void Canvas::changeColorOfSelectedItems() {
     else if (auto *line = dynamic_cast<QGraphicsLineItem *>(item)) {
       QPen oldPen = line->pen();
       QPen newPen = oldPen;
-      newPen.setColor(newColor);
+      newPen.setColor(keepAlpha(newColor, oldPen.color()));
       composite->addAction(
           std::make_unique<FillAction>(id, store, oldPen, newPen));
     }
@@ -5806,7 +5980,7 @@ void Canvas::changeColorOfSelectedItems() {
                 dynamic_cast<QAbstractGraphicsShapeItem *>(child)) {
           QPen oldPen = childShape->pen();
           QPen newPen = oldPen;
-          newPen.setColor(newColor);
+          newPen.setColor(keepAlpha(newColor, oldPen.color()));
           if (childId.isValid()) {
             composite->addAction(
                 std::make_unique<FillAction>(childId, store, oldPen, newPen));
@@ -5817,7 +5991,7 @@ void Canvas::changeColorOfSelectedItems() {
           QBrush oldBrush = childShape->brush();
           if (oldBrush.style() != Qt::NoBrush) {
             QBrush newBrush = oldBrush;
-            newBrush.setColor(newColor);
+            newBrush.setColor(keepAlpha(newColor, oldBrush.color()));
             if (childId.isValid()) {
               composite->addAction(std::make_unique<FillAction>(
                   childId, store, oldBrush, newBrush));
@@ -5828,7 +6002,7 @@ void Canvas::changeColorOfSelectedItems() {
         } else if (auto *childLine = dynamic_cast<QGraphicsLineItem *>(child)) {
           QPen oldPen = childLine->pen();
           QPen newPen = oldPen;
-          newPen.setColor(newColor);
+          newPen.setColor(keepAlpha(newColor, oldPen.color()));
           if (childId.isValid()) {
             composite->addAction(
                 std::make_unique<FillAction>(childId, store, oldPen, newPen));
@@ -5841,6 +6015,9 @@ void Canvas::changeColorOfSelectedItems() {
   }
 
   if (!composite->isEmpty()) {
+    // The actions only record old/new colours; pushing them onto the stack
+    // doesn't apply anything, so perform the change now.
+    composite->redo();
     addAction(std::move(composite));
   }
 
@@ -6054,18 +6231,55 @@ void Canvas::resizeCanvas() {
     break;
   }
 
-  // Move existing items so they stay at the correct position relative to anchor
-  if (offsetX != 0.0 || offsetY != 0.0) {
+  // Move existing items so they stay at the correct position relative to
+  // the anchor, as one undoable step together with the size change (earlier
+  // move/transform entries store absolute positions and would otherwise put
+  // items back at pre-resize spots).
+  auto composite = std::make_unique<CompositeAction>();
+  ItemStore *store = itemStore();
+  const QPointF offset(offsetX, offsetY);
+  if (!offset.isNull()) {
     for (auto *item : scene_->items()) {
       if (!item)
         continue;
       if (item == eraserPreview_ || item == colorSelectionOverlay_)
         continue;
+      // Children (group members, text editors) follow their parent; moving
+      // them as well would shift them twice.
+      if (item->parentItem() || item->type() == TransformHandleItem::Type)
+        continue;
+      const QPointF oldPos = item->pos();
       item->moveBy(offsetX, offsetY);
+      const ItemId id = store ? store->idForItem(item) : ItemId();
+      if (id.isValid())
+        composite->addAction(
+            std::make_unique<MoveAction>(id, store, oldPos, item->pos()));
     }
   }
 
-  scene_->setSceneRect(0, 0, newW, newH);
+  const QRectF oldRect = scene_->sceneRect();
+  const QRectF newRect(0, 0, newW, newH);
+  scene_->setSceneRect(newRect);
+  // The opened base image isn't in the item store; move it with the rect.
+  QGraphicsPixmapItem *baseImage = backgroundImage_;
+  QPointer<QGraphicsScene> scene = scene_;
+  composite->addAction(std::make_unique<CallbackAction>(
+      "Resize Canvas",
+      [this, scene, oldRect, offset, baseImage]() {
+        if (!scene)
+          return;
+        scene->setSceneRect(oldRect);
+        if (baseImage && baseImage == backgroundImage_)
+          baseImage->moveBy(-offset.x(), -offset.y());
+      },
+      [this, scene, newRect, offset, baseImage]() {
+        if (!scene)
+          return;
+        scene->setSceneRect(newRect);
+        if (baseImage && baseImage == backgroundImage_)
+          baseImage->moveBy(offset.x(), offset.y());
+      }));
+  addAction(std::move(composite));
   emit canvasModified();
 }
 
@@ -6076,11 +6290,24 @@ void Canvas::applyBlurToSelection() {
   QList<QGraphicsItem *> selected = scene_->selectedItems();
   if (selected.isEmpty())
     return;
+  const bool hasImage =
+      std::any_of(selected.cbegin(), selected.cend(), [](QGraphicsItem *item) {
+        return dynamic_cast<QGraphicsPixmapItem *>(item) != nullptr;
+      });
+  if (!hasImage) {
+    QMessageBox::information(this, "Blur",
+                             "Blur applies to images. Select an image first.");
+    return;
+  }
 
   bool ok = false;
   int radius = QInputDialog::getInt(this, "Blur", "Radius:", 3, 1, 20, 1, &ok);
   if (!ok)
     return;
+
+  // The modal dialog runs an event loop: items could have been deleted
+  // meanwhile, so re-read the selection instead of using stale pointers.
+  selected = scene_->selectedItems();
 
   showBusySpinner(tr("Applying blur…"));
   bool applied = false;
@@ -6113,12 +6340,25 @@ void Canvas::applySharpenToSelection() {
   QList<QGraphicsItem *> selected = scene_->selectedItems();
   if (selected.isEmpty())
     return;
+  const bool hasImage =
+      std::any_of(selected.cbegin(), selected.cend(), [](QGraphicsItem *item) {
+        return dynamic_cast<QGraphicsPixmapItem *>(item) != nullptr;
+      });
+  if (!hasImage) {
+    QMessageBox::information(
+        this, "Sharpen", "Sharpen applies to images. Select an image first.");
+    return;
+  }
 
   bool ok = false;
   double strength = QInputDialog::getDouble(this, "Sharpen", "Strength:", 1.0,
                                             0.1, 5.0, 1, &ok);
   if (!ok)
     return;
+
+  // The modal dialog runs an event loop: items could have been deleted
+  // meanwhile, so re-read the selection instead of using stale pointers.
+  selected = scene_->selectedItems();
 
   showBusySpinner(tr("Applying sharpen…"));
   bool applied = false;
@@ -6356,6 +6596,7 @@ void Canvas::applyColorCurvesToSelection() {
 }
 
 void Canvas::exportSingleElementToPNG() {
+  finishInlineEditing(); // include text still being typed
   if (!scene_)
     return;
 
@@ -6368,7 +6609,7 @@ void Canvas::exportSingleElementToPNG() {
   for (QGraphicsItem *candidate : selected) {
     if (candidate && candidate != eraserPreview_ &&
         candidate != backgroundImage_ && candidate != colorSelectionOverlay_) {
-      item = candidate;
+      item = candidate->topLevelItem(); // renderItems() keeps top-level items
       break;
     }
   }
@@ -6384,26 +6625,24 @@ void Canvas::exportSingleElementToPNG() {
   // If it's a pixmap item, save its native pixmap directly (no re-render)
   auto *pixmapItem = dynamic_cast<QGraphicsPixmapItem *>(item);
   if (pixmapItem) {
-    pixmapItem->pixmap().save(fileName);
+    if (!pixmapItem->pixmap().save(fileName)) {
+      QMessageBox::warning(this, "Export Failed",
+                           QString("Could not write %1.").arg(fileName));
+    }
     return;
   }
 
-  // For other item types, render at native bounding-rect size
-  QRectF br = item->boundingRect();
-  if (br.isEmpty())
+  // Other items: render just this item (children included) at its native
+  // size in scene units.
+  const QRectF bounds = item->sceneBoundingRect();
+  if (bounds.isEmpty())
     return;
-
-  QImage image(br.size().toSize(), QImage::Format_ARGB32);
-  image.fill(Qt::transparent);
-
-  QPainter painter(&image);
-  painter.setRenderHint(QPainter::Antialiasing);
-  painter.setRenderHint(QPainter::TextAntialiasing);
-  QStyleOptionGraphicsItem styleOption;
-  item->paint(&painter, &styleOption, nullptr);
-  painter.end();
-
-  image.save(fileName);
+  const QImage image = renderItemsToImage({item}, bounds, QImage::Format_ARGB32,
+                                          Qt::transparent);
+  if (!image.save(fileName)) {
+    QMessageBox::warning(this, "Export Failed",
+                         QString("Could not write %1.").arg(fileName));
+  }
 }
 
 void Canvas::openSingleImage() {
@@ -6446,7 +6685,16 @@ void Canvas::openSingleImage() {
   scene_->clearSelection();
   pixmapItem->setSelected(true);
 
-  fitInView(scene_->sceneRect(), Qt::KeepAspectRatio);
+  // "Original size": show it 1:1 when it fits, otherwise fit the image
+  // (fitting the whole, possibly much larger, canvas shrank it to a speck).
+  const QRectF imageRect = pixmapItem->sceneBoundingRect();
+  if (imageRect.width() <= viewport()->width() &&
+      imageRect.height() <= viewport()->height()) {
+    zoomReset();
+    centerOn(imageRect.center());
+  } else {
+    fitRectInView(imageRect);
+  }
 
   emit canvasModified();
 }
@@ -6511,113 +6759,7 @@ void Canvas::placeElement(const QString &elementId) {
   if (!scene_)
     return;
 
-  // Create the appropriate custom vector-drawn element
-  ArchitectureElementItem *elem = nullptr;
-  if (elementId == "client")
-    elem = new ClientElement();
-  else if (elementId == "load_balancer")
-    elem = new LoadBalancerElement();
-  else if (elementId == "api_gateway")
-    elem = new ApiGatewayElement();
-  else if (elementId == "app_server")
-    elem = new AppServerElement();
-  else if (elementId == "cache")
-    elem = new CacheElement();
-  else if (elementId == "message_queue")
-    elem = new MessageQueueElement();
-  else if (elementId == "database")
-    elem = new DatabaseElement();
-  else if (elementId == "object_storage")
-    elem = new ObjectStorageElement();
-  else if (elementId == "auth")
-    elem = new AuthElement();
-  else if (elementId == "monitoring")
-    elem = new MonitoringElement();
-  else if (elementId == "user")
-    elem = new UserElement();
-  else if (elementId == "user_group")
-    elem = new UserGroupElement();
-  else if (elementId == "cloud")
-    elem = new CloudElement();
-  else if (elementId == "cdn")
-    elem = new CDNElement();
-  else if (elementId == "dns")
-    elem = new DNSElement();
-  else if (elementId == "firewall")
-    elem = new FirewallElement();
-  else if (elementId == "container")
-    elem = new ContainerElement();
-  else if (elementId == "serverless")
-    elem = new ServerlessElement();
-  else if (elementId == "virtual_machine")
-    elem = new VirtualMachineElement();
-  else if (elementId == "microservice")
-    elem = new MicroserviceElement();
-  else if (elementId == "api")
-    elem = new APIElement();
-  else if (elementId == "notification")
-    elem = new NotificationElement();
-  else if (elementId == "search")
-    elem = new SearchElement();
-  else if (elementId == "logging")
-    elem = new LoggingElement();
-
-  // Electronics elements
-  ElectronicsElementItem *elecElem = nullptr;
-  if (!elem) {
-    if (elementId == "resistor")
-      elecElem = new ResistorElement();
-    else if (elementId == "capacitor")
-      elecElem = new CapacitorElement();
-    else if (elementId == "inductor")
-      elecElem = new InductorElement();
-    else if (elementId == "fuse")
-      elecElem = new FuseElement();
-    else if (elementId == "crystal")
-      elecElem = new CrystalElement();
-    else if (elementId == "transformer")
-      elecElem = new TransformerElement();
-    else if (elementId == "diode")
-      elecElem = new DiodeElement();
-    else if (elementId == "led")
-      elecElem = new LEDElement();
-    else if (elementId == "transistor")
-      elecElem = new TransistorElement();
-    else if (elementId == "mosfet")
-      elecElem = new MOSFETElement();
-    else if (elementId == "opamp")
-      elecElem = new OpAmpElement();
-    else if (elementId == "voltage_regulator")
-      elecElem = new VoltageRegulatorElement();
-    else if (elementId == "battery")
-      elecElem = new BatteryElement();
-    else if (elementId == "ground")
-      elecElem = new GroundElement();
-    else if (elementId == "elec_switch")
-      elecElem = new SwitchElement();
-    else if (elementId == "relay")
-      elecElem = new RelayElement();
-    else if (elementId == "motor")
-      elecElem = new MotorElement();
-    else if (elementId == "power_supply")
-      elecElem = new PowerSupplyElement();
-    else if (elementId == "microcontroller")
-      elecElem = new MicrocontrollerElement();
-    else if (elementId == "ic_chip")
-      elecElem = new ICChipElement();
-    else if (elementId == "sensor")
-      elecElem = new SensorElement();
-    else if (elementId == "antenna")
-      elecElem = new AntennaElement();
-    else if (elementId == "speaker")
-      elecElem = new SpeakerElement();
-    else if (elementId == "connector")
-      elecElem = new ConnectorElement();
-  }
-
-  // Determine which item to place
-  QGraphicsItem *item = elem ? static_cast<QGraphicsItem *>(elem)
-                             : static_cast<QGraphicsItem *>(elecElem);
+  QGraphicsItem *item = createDiagramElement(elementId);
   if (!item)
     return;
 

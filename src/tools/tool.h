@@ -93,6 +93,13 @@ public:
                                      const QPointF & /*scenePos*/) {}
 
   /**
+   * @brief Whether the tool gives double-clicks their own meaning. For all
+   *        other tools a fast second click (delivered as a double-click) is
+   *        treated as an ordinary press, so quick strokes aren't dropped.
+   */
+  virtual bool usesDoubleClick() const { return false; }
+
+  /**
    * @brief Commit an in-progress multi-step gesture (Enter/Return).
    *
    * Tools that build up a shape over several clicks (Bezier, text on path)

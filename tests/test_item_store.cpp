@@ -605,6 +605,30 @@ private slots:
     QVERIFY(qFuzzyCompare(t2.m22(), 2.0));
   }
 
+  // A rotation carries a translation (it pivots around the item centre);
+  // scaling must grow the item in place instead of letting it drift.
+  void testScaleLayerKeepsRotatedItemInPlace() {
+    QGraphicsScene scene;
+    SceneController controller(&scene);
+    LayerManager layerManager(&scene);
+    controller.setLayerManager(&layerManager);
+    Layer *layer = layerManager.activeLayer();
+
+    auto *rect = new QGraphicsRectItem(0, 0, 100, 50);
+    rect->setPos(300, 200);
+    QTransform rotation;
+    rotation.translate(50, 25).rotate(90).translate(-50, -25);
+    rect->setTransform(rotation);
+    controller.addItem(rect);
+    const QRectF before = rect->sceneBoundingRect();
+
+    QCOMPARE(controller.scaleLayer(layer, 2.0, 2.0), 1);
+    const QRectF after = rect->sceneBoundingRect();
+    QVERIFY(QLineF(before.center(), after.center()).length() < 0.01);
+    QVERIFY(qAbs(after.width() - before.width() * 2) < 0.01);
+    QVERIFY(qAbs(after.height() - before.height() * 2) < 0.01);
+  }
+
   void testScaleLayerEmptyLayer() {
     QGraphicsScene scene;
     SceneController controller(&scene);
@@ -837,6 +861,27 @@ private slots:
     Layer *copy = manager.duplicateLayer(0);
     QVERIFY(copy);
     QCOMPARE(copy->blendMode(), Layer::BlendMode::Screen);
+  }
+
+  void testDuplicateLayerCopiesItemsAboveSource() {
+    QGraphicsScene scene;
+    ItemStore store(&scene);
+    LayerManager manager(&scene);
+    manager.setItemStore(&store);
+    Layer *base = manager.activeLayer();
+    manager.createLayer("Top");
+
+    auto *rect = new QGraphicsRectItem(0, 0, 40, 20);
+    base->addItem(store.registerItem(rect), &store);
+
+    Layer *copy = manager.duplicateLayer(0);
+    QVERIFY(copy);
+    QCOMPARE(copy->itemCount(), 1);
+    QVERIFY(copy->items().first() != rect);
+    QCOMPARE(manager.layer(1), copy); // directly above its source
+    auto *copiedRect = dynamic_cast<QGraphicsRectItem *>(copy->items().first());
+    QVERIFY(copiedRect);
+    QCOMPARE(copiedRect->rect(), rect->rect());
   }
 
   void testBlendModeMoveConstructor() {

@@ -7,6 +7,7 @@
 
 #include "../core/item_id.h"
 #include "tool.h"
+#include <QPointer>
 
 class LatexTextItem;
 
@@ -34,7 +35,8 @@ public:
 
 private:
   void createTextItem(const QPointF &position);
-  LatexTextItem *currentEditingItem_;
+  // Guarded: the item may be deleted (undo, clear) while the tool is idle.
+  QPointer<LatexTextItem> currentEditingItem_;
   ItemId currentEditingItemId_; // Stable ID for safe reference
 };
 

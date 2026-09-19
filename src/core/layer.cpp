@@ -4,6 +4,7 @@
  */
 #include "layer.h"
 #include "item_store.h"
+#include "project_serializer.h"
 #include "scene_controller.h"
 #include <QGraphicsItemGroup>
 #include <algorithm>
@@ -41,6 +42,34 @@ void Layer::setVisible(bool visible) {
   if (visible_ != visible) {
     visible_ = visible;
     updateItemsVisibility();
+  }
+}
+
+void Layer::setLocked(bool locked) {
+  if (locked_ == locked) {
+    return;
+  }
+  locked_ = locked;
+  if (!itemStore_) {
+    return;
+  }
+  for (const ItemId &id : itemIds_) {
+    applyLockToItem(itemStore_->item(id));
+  }
+}
+
+void Layer::applyLockToItem(QGraphicsItem *item) const {
+  if (!item) {
+    return;
+  }
+  if (locked_) {
+    item->setSelected(false);
+    item->setFlag(QGraphicsItem::ItemIsSelectable, false);
+    item->setFlag(QGraphicsItem::ItemIsMovable, false);
+  } else if (item->data(0).toString() != QLatin1String("locked")) {
+    // Individually locked items stay locked when their layer is unlocked.
+    item->setFlag(QGraphicsItem::ItemIsSelectable, true);
+    item->setFlag(QGraphicsItem::ItemIsMovable, true);
   }
 }
 
@@ -94,6 +123,8 @@ void Layer::addItem(QGraphicsItem *item) {
     itemIds_.append(id);
     item->setVisible(visible_);
     item->setOpacity(opacity_);
+    if (locked_)
+      applyLockToItem(item);
   }
 }
 
@@ -111,6 +142,8 @@ void Layer::addItem(const ItemId &id, ItemStore *store) {
   if (item) {
     item->setVisible(visible_);
     item->setOpacity(opacity_);
+    if (locked_)
+      applyLockToItem(item);
   }
 }
 
@@ -501,14 +534,18 @@ bool LayerManager::reorderItem(const ItemId &id, int newIndex) {
 void LayerManager::addItemToActiveLayer(QGraphicsItem *item) {
   Layer *active = activeLayer();
   if (active && item) {
-    if (itemStore_) {
-      ItemId id = itemStore_->idForItem(item);
-      if (id.isValid()) {
-        active->addItem(id, itemStore_);
-        return;
-      }
+    ItemId id = itemStore_ ? itemStore_->idForItem(item) : ItemId();
+    if (id.isValid()) {
+      active->addItem(id, itemStore_);
+    } else {
+      active->addItem(item);
     }
-    active->addItem(item);
+    // Stack the new item on top of its own layer (and so above lower layers
+    // and below higher ones) instead of leaving it at z = 0.
+    const int position = id.isValid() ? active->itemIds().indexOf(id)
+                                      : active->itemIds().size() - 1;
+    item->setZValue(static_cast<qreal>(activeLayerIndex_) * kLayerZSpacing +
+                    static_cast<qreal>(qMax(0, position)));
   }
 }
 
@@ -625,10 +662,30 @@ Layer *LayerManager::duplicateLayer(int index) {
 
   if (newLayer) {
     newLayer->setVisible(source->isVisible());
-    newLayer->setLocked(source->isLocked());
     newLayer->setOpacity(source->opacity());
     newLayer->setBlendMode(source->blendMode());
-    // Note: Items are not duplicated, only the layer properties
+
+    // Copy the items via the project format, which covers every savable
+    // item type (wires need their elements' identities and are skipped).
+    if (itemStore_) {
+      for (const ItemId &id : source->itemIds()) {
+        QGraphicsItem *original = itemStore_->item(id);
+        if (!original)
+          continue;
+        QGraphicsItem *copy = ProjectSerializer::deserializeItem(
+            ProjectSerializer::serializeItem(original));
+        if (!copy)
+          continue;
+        newLayer->addItem(itemStore_->registerItem(copy), itemStore_);
+      }
+    }
+    newLayer->setLocked(source->isLocked());
+
+    // Place the copy directly above its source rather than on top.
+    for (int i = layerCount() - 1; i > index + 1; --i) {
+      moveLayerUp(i);
+    }
+    updateLayerZOrder();
   }
 
   return newLayer;
@@ -654,7 +711,7 @@ void LayerManager::updateLayerZOrder() {
   // Set Z-value based on layer order and item position within layer
   qreal zBase = 0.0;
   for (size_t i = 0; i < layers_.size(); ++i) {
-    qreal layerZ = zBase + static_cast<qreal>(i) * 1000.0;
+    qreal layerZ = zBase + static_cast<qreal>(i) * kLayerZSpacing;
     const QList<ItemId> &ids = layers_[i]->itemIds();
     if (itemStore_) {
       for (int j = 0; j < ids.size(); ++j) {

@@ -26,13 +26,13 @@ ImageSizeDialog::ImageSizeDialog(int originalWidth, int originalHeight,
 
   // Create widgets with modern styling
   widthSpinBox = new QSpinBox(this);
-  widthSpinBox->setRange(1, 10000);
+  widthSpinBox->setRange(1, 100000);
   widthSpinBox->setValue(originalWidth);
   widthSpinBox->setSuffix(" px");
   widthSpinBox->setMinimumHeight(40);
 
   heightSpinBox = new QSpinBox(this);
-  heightSpinBox->setRange(1, 10000);
+  heightSpinBox->setRange(1, 100000);
   heightSpinBox->setValue(originalHeight);
   heightSpinBox->setSuffix(" px");
   heightSpinBox->setMinimumHeight(40);

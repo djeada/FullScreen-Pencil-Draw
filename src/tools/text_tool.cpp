@@ -18,7 +18,22 @@ TextTool::~TextTool() = default;
 void TextTool::mousePressEvent(QMouseEvent *event, const QPointF &scenePos) {
   if (event->button() == Qt::LeftButton) {
     // Check if we clicked on an existing LatexTextItem
+    // The inline editor is a proxy-widget child, so walk up to the owner.
     QGraphicsItem *item = renderer_->scene()->itemAt(scenePos, QTransform());
+    while (item && !dynamic_cast<LatexTextItem *>(item))
+      item = item->parentItem();
+    // Commit any other open editor first: the next editor grabs focus with
+    // OtherFocusReason, which the focus-out handler deliberately ignores, so
+    // the previous one would otherwise stay open forever.
+    if (currentEditingItem_ &&
+        static_cast<QGraphicsItem *>(currentEditingItem_.data()) != item) {
+      QPointer<LatexTextItem> previous = currentEditingItem_;
+      currentEditingItem_ = nullptr;
+      currentEditingItemId_ = ItemId();
+      if (previous->isEditing())
+        previous->finishEditing();
+    }
+
     if (auto *latexItem = dynamic_cast<LatexTextItem *>(item)) {
       // If item is not editing, start editing it
       if (!latexItem->isEditing()) {
@@ -34,13 +49,6 @@ void TextTool::mousePressEvent(QMouseEvent *event, const QPointF &scenePos) {
         }
       }
       return;
-    }
-
-    // If there's a currently editing item, finish editing first
-    if (currentEditingItem_ && currentEditingItem_->isEditing()) {
-      // The editing will be finished by the focus out event
-      currentEditingItem_ = nullptr;
-      currentEditingItemId_ = ItemId();
     }
 
     // Create a new LatexTextItem with inline editing

@@ -124,6 +124,18 @@ void MermaidRenderer::initializeWebEngine() {
   // White background for diagrams
   webView_->page()->setBackgroundColor(Qt::white);
 
+  // Wait for the page to load before rendering. The view is created only
+  // once (guarded above), so no de-duplication is needed – and Qt rejects
+  // Qt::UniqueConnection for lambdas, which left this handler unconnected
+  // and every diagram stuck on its placeholder.
+  connect(webView_, &QWebEngineView::loadFinished, this, [this](bool ok) {
+    qDebug() << "Mermaid page load finished:" << ok;
+    initialized_ = ok;
+    if (ok && !pendingRequests_.isEmpty()) {
+      processNextRequest();
+    }
+  });
+
   // Load the Mermaid HTML template from resources
   QFile htmlFile(":/mermaid/mermaid.html");
   if (htmlFile.open(QIODevice::ReadOnly)) {
@@ -133,18 +145,6 @@ void MermaidRenderer::initializeWebEngine() {
   } else {
     qWarning() << "Failed to load Mermaid HTML template";
   }
-
-  // Wait for page to load (use Qt::UniqueConnection to prevent duplicates)
-  connect(
-      webView_, &QWebEngineView::loadFinished, this,
-      [this](bool ok) {
-        qDebug() << "Mermaid page load finished:" << ok;
-        initialized_ = ok;
-        if (ok && !pendingRequests_.isEmpty()) {
-          processNextRequest();
-        }
-      },
-      Qt::UniqueConnection);
 }
 
 void MermaidRenderer::processNextRequest() {

@@ -20,6 +20,13 @@
 #include <QVector>
 
 class WireItem;
+class QGraphicsItem;
+
+/// Whether schematic symbols/wires on @p item's scene sit on a dark
+/// background (so they should be drawn white). Follows the drawing's own
+/// background colour rather than the UI theme: a light UI over the default
+/// black canvas otherwise drew black symbols on black.
+bool schematicOnDarkBackground(const QGraphicsItem *item);
 
 /// Direction a pin faces – determines which way the wire stub extends.
 enum class PinDir { Left, Right, Up, Down };
@@ -101,6 +108,8 @@ public:
   /// Register / unregister a wire that is connected to this element.
   void addWire(WireItem *wire);
   void removeWire(WireItem *wire);
+  /// Wires currently attached to this element's pins.
+  const QSet<WireItem *> &connectedWires() const { return connectedWires_; }
 
   /// Radius used to draw pin terminal dots.
   static constexpr qreal PIN_RADIUS = 3.0;

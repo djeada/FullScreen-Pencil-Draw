@@ -13,7 +13,9 @@ QImage blur(const QImage &source, int radius) {
   if (source.isNull() || radius < 1)
     return source;
 
-  QImage img = source.convertToFormat(QImage::Format_ARGB32);
+  // Average premultiplied colours: with straight alpha, the (usually black)
+  // colour of fully transparent pixels would bleed in as a dark fringe.
+  QImage img = source.convertToFormat(QImage::Format_ARGB32_Premultiplied);
   const int w = img.width();
   const int h = img.height();
   if (w == 0 || h == 0)
@@ -21,7 +23,7 @@ QImage blur(const QImage &source, int radius) {
 
   // Separable box blur: horizontal pass then vertical pass.
   // Each pass uses a sliding-window running sum for O(w*h) total.
-  QImage temp(w, h, QImage::Format_ARGB32);
+  QImage temp(w, h, QImage::Format_ARGB32_Premultiplied);
   const int side = 2 * radius + 1;
 
   // --- Horizontal pass ---
@@ -56,7 +58,7 @@ QImage blur(const QImage &source, int radius) {
   }
 
   // --- Vertical pass ---
-  QImage result(w, h, QImage::Format_ARGB32);
+  QImage result(w, h, QImage::Format_ARGB32_Premultiplied);
   for (int x = 0; x < w; ++x) {
     int rSum = 0, gSum = 0, bSum = 0, aSum = 0;
     // Initialize window for y=0
@@ -85,7 +87,7 @@ QImage blur(const QImage &source, int radius) {
     }
   }
 
-  return result;
+  return result.convertToFormat(QImage::Format_ARGB32);
 }
 
 QImage sharpen(const QImage &source, int radius, double strength) {

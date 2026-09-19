@@ -2,8 +2,10 @@
 #include "auto_save_manager.h"
 #include "../widgets/canvas.h"
 #include "app_constants.h"
+#include "project_serializer.h"
 #include <QApplication>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QGraphicsScene>
 #include <QImage>
@@ -70,38 +72,30 @@ void AutoSaveManager::setIntervalMinutes(int minutes) {
 void AutoSaveManager::performAutoSave() {
   if (!canvas_ || !canvas_->scene())
     return;
+  if (shouldSave_ && !shouldSave_())
+    return; // nothing new since the last save
 
-  QString savePath = generateAutoSavePath();
-
-  // Get scene bounds
+  // Save as a project so a recovered document keeps its layers and stays
+  // editable (a flattened image would come back as a locked background).
+  const QString savePath = generateAutoSavePath();
   QGraphicsScene *scene = canvas_->scene();
-  QRectF sr = scene->itemsBoundingRect();
-  if (sr.isEmpty())
-    sr = scene->sceneRect();
-  sr.adjust(-10, -10, 10, 10);
-
-  // Render to image
-  QImage img(sr.size().toSize(), QImage::Format_ARGB32);
-  img.fill(canvas_->backgroundColor());
-
-  QPainter painter(&img);
-  painter.setRenderHint(QPainter::Antialiasing);
-  painter.setRenderHint(QPainter::TextAntialiasing);
-  scene->render(&painter, QRectF(), sr);
-  painter.end();
-
-  // Save image
-  if (img.save(savePath)) {
+  if (ProjectSerializer::saveProject(
+          savePath, scene, canvas_->itemStore(), canvas_->layerManager(),
+          scene->sceneRect(), canvas_->backgroundColor())) {
     autoSavePath_ = savePath;
+    // Persist the location right away: this is what lets the next launch
+    // offer recovery after a crash.
+    saveSettings();
     emit autoSavePerformed(savePath);
   }
 }
 
 void AutoSaveManager::clearAutoSave() {
-  if (hasAutoSave()) {
-    QFile::remove(autoSavePath_);
-    autoSavePath_.clear();
-  }
+  if (autoSavePath_.isEmpty())
+    return;
+  QFile::remove(autoSavePath_);
+  autoSavePath_.clear();
+  saveSettings();
 }
 
 bool AutoSaveManager::restoreAutoSave() {
@@ -114,8 +108,16 @@ bool AutoSaveManager::restoreAutoSave() {
       QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
 
   if (reply == QMessageBox::Yes) {
-    canvas_->openRecentFile(autoSavePath_);
-    return true;
+    bool restored = false;
+    if (autoSavePath_.endsWith(QStringLiteral(".fspd"), Qt::CaseInsensitive)) {
+      restored = canvas_->loadProjectFile(autoSavePath_,
+                                          /*addToRecentFiles=*/false);
+    } else {
+      // Auto-saves from older versions were flattened images.
+      canvas_->openRecentFile(autoSavePath_);
+      restored = true;
+    }
+    return restored;
   }
 
   // User declined - clear the auto-save
@@ -144,5 +146,5 @@ QString AutoSaveManager::generateAutoSavePath() const {
   QString dataDir =
       QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
   QDir().mkpath(dataDir);
-  return dataDir + "/autosave.png";
+  return dataDir + "/autosave.fspd";
 }

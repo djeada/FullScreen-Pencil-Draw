@@ -8,9 +8,13 @@
 #include "../core/scene_controller.h"
 #include "../core/theme_manager.h"
 #include "animated_button.h"
+#include "architecture_elements.h"
 #include "canvas.h"
+#include "electronics_elements.h"
 #include "latex_text_item.h"
+#include "mermaid_text_item.h"
 #include "text_on_path_item.h"
+#include "wire_item.h"
 #include <QDropEvent>
 #include <QGraphicsEllipseItem>
 #include <QGraphicsItemGroup>
@@ -28,6 +32,7 @@
 #include <QInputDialog>
 #include <QMenu>
 #include <QMessageBox>
+#include <QPainter>
 #include <QScrollArea>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -42,6 +47,28 @@ static void applyLayerButtonIcon(QPushButton *button, const QString &iconPath,
   button->setText(QString());
   button->setIcon(icon);
   button->setIconSize(QSize(18, 18));
+  // Remembered so applyTheme() can re-tint the icon for the active theme.
+  button->setProperty("layerIconPath", iconPath);
+}
+
+// The bundled SVGs use a fixed light stroke that disappears on the light
+// theme; recolour them (checked buttons sit on the orange accent: white).
+static QIcon tintedLayerIcon(const QString &iconPath, const QColor &color) {
+  const QIcon source(iconPath);
+  if (source.isNull()) {
+    return QIcon();
+  }
+  auto tinted = [&source](const QColor &tint) {
+    QPixmap pm = source.pixmap(QSize(36, 36));
+    QPainter painter(&pm);
+    painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
+    painter.fillRect(pm.rect(), tint);
+    return pm;
+  };
+  QIcon icon;
+  icon.addPixmap(tinted(color), QIcon::Normal, QIcon::Off);
+  icon.addPixmap(tinted(Qt::white), QIcon::Normal, QIcon::On);
+  return icon;
 }
 
 // LayerTreeWidget implementation
@@ -124,6 +151,11 @@ void LayerTreeWidget::dropEvent(QDropEvent *event) {
     return;
   }
   int totalItems = layer->itemCount();
+  // visualIndex is an insertion point in the list that still contains the
+  // dragged row; once that row is taken out, points below it shift up.
+  const int oldVisualIndex = totalItems - 1 - oldItemIndex;
+  if (visualIndex > oldVisualIndex)
+    visualIndex -= 1;
   int newItemIndex = totalItems - 1 - visualIndex;
   if (newItemIndex < 0)
     newItemIndex = 0;
@@ -439,6 +471,14 @@ void LayerPanel::setupUI() {
 void LayerPanel::applyTheme() {
   const bool darkTheme = ThemeManager::instance().isDarkTheme();
 
+  const QColor iconColor = darkTheme ? QColor("#DDE3F0") : QColor("#3f3f46");
+  for (QPushButton *button : findChildren<QPushButton *>()) {
+    const QString iconPath = button->property("layerIconPath").toString();
+    if (!iconPath.isEmpty()) {
+      button->setIcon(tintedLayerIcon(iconPath, iconColor));
+    }
+  }
+
   if (darkTheme) {
     setStyleSheet(R"(
       QDockWidget {
@@ -748,12 +788,13 @@ void LayerPanel::refreshLayerList() {
   // Block signals to prevent infinite recursion
   layerTree_->blockSignals(true);
 
-  // Remember expanded state
-  QSet<QUuid> expandedLayers;
+  // Remember which layers the user collapsed. Only layers with children can
+  // be collapsed (Qt never reports a childless item as expanded).
+  QSet<QUuid> collapsedLayers;
   for (int i = 0; i < layerTree_->topLevelItemCount(); ++i) {
     QTreeWidgetItem *item = layerTree_->topLevelItem(i);
-    if (item->isExpanded()) {
-      expandedLayers.insert(QUuid(item->data(0, LayerIdRole).toString()));
+    if (item->childCount() > 0 && !item->isExpanded()) {
+      collapsedLayers.insert(QUuid(item->data(0, LayerIdRole).toString()));
     }
   }
 
@@ -795,7 +836,9 @@ void LayerPanel::refreshLayerList() {
     }
 
     // Expand if was previously expanded, or expand by default
-    if (expandedLayers.contains(layer->id()) || expandedLayers.isEmpty()) {
+    // Keep the user's collapsed choice; everything else (including new or
+    // previously empty layers) is expanded so freshly drawn items show up.
+    if (!collapsedLayers.contains(layer->id())) {
       layerItem->setExpanded(true);
     }
   }
@@ -866,8 +909,8 @@ void LayerPanel::updateButtonStates() {
   int activeIndex = layerManager_->activeLayerIndex();
 
   deleteButton_->setEnabled(layerCount > 1);
-  moveUpButton_->setEnabled(activeIndex > 0);
-  moveDownButton_->setEnabled(activeIndex < layerCount - 1 && activeIndex >= 0);
+  moveUpButton_->setEnabled(activeIndex < layerCount - 1 && activeIndex >= 0);
+  moveDownButton_->setEnabled(activeIndex > 0);
   mergeButton_->setEnabled(activeIndex > 0);
   duplicateButton_->setEnabled(activeIndex >= 0);
   flattenButton_->setEnabled(layerCount > 1);
@@ -912,6 +955,8 @@ void LayerPanel::onAddLayer() {
   if (layerManager_) {
     int count = layerManager_->layerCount();
     layerManager_->createLayer(QString("Layer %1").arg(count + 1));
+    // Draw on the layer the user just added.
+    layerManager_->setActiveLayer(layerManager_->layerCount() - 1);
     emit addLayerRequested();
   }
 }
@@ -945,17 +990,19 @@ void LayerPanel::onDeleteLayer() {
   }
 }
 
+// Index 0 is the bottom of the stack and the tree lists the top layer first,
+// so "up" on screen means a higher index (LayerManager::moveLayerDown).
 void LayerPanel::onMoveLayerUp() {
   if (layerManager_) {
     int activeIndex = layerManager_->activeLayerIndex();
-    layerManager_->moveLayerUp(activeIndex);
+    layerManager_->moveLayerDown(activeIndex);
   }
 }
 
 void LayerPanel::onMoveLayerDown() {
   if (layerManager_) {
     int activeIndex = layerManager_->activeLayerIndex();
-    layerManager_->moveLayerDown(activeIndex);
+    layerManager_->moveLayerUp(activeIndex);
   }
 }
 
@@ -993,6 +1040,18 @@ void LayerPanel::onMergeSelectedItems() {
     QMessageBox::information(
         this, "Merge Items",
         "Select at least 2 items within a layer to merge.");
+    return;
+  }
+
+  // Group through the canvas like "Merge Selected" in the context menu, so
+  // the operation is undoable and keeps the children registered.
+  if (canvas_ && canvas_->scene() && itemStore_) {
+    canvas_->scene()->clearSelection();
+    for (const ItemId &id : selectedIds) {
+      if (QGraphicsItem *item = itemStore_->item(id))
+        item->setSelected(true);
+    }
+    canvas_->groupSelectedItems();
     return;
   }
 
@@ -1064,6 +1123,18 @@ void LayerPanel::onTreeSelectionChanged() {
     emit layerSelected(layerManager_->activeLayerIndex());
   }
   updatingSelection_ = false;
+
+  // refreshLayerList() was skipped while updatingSelection_ was set, so move
+  // the active-layer highlight in place (rebuilding would drop the tree
+  // selection the user just made).
+  const int activeTreeIndex =
+      layerManager_->layerCount() - 1 - layerManager_->activeLayerIndex();
+  for (int i = 0; i < layerTree_->topLevelItemCount(); ++i) {
+    QTreeWidgetItem *layerItem = layerTree_->topLevelItem(i);
+    QFont font = layerItem->font(0);
+    font.setBold(i == activeTreeIndex);
+    layerItem->setFont(0, font);
+  }
 
   updateButtonStates();
   updatePropertyControls();
@@ -1190,9 +1261,9 @@ void LayerPanel::onLayerTreeContextMenuRequested(const QPoint &pos) {
 
     deleteLayerAction->setEnabled(layerCount > 1);
     mergeDownAction->setEnabled(layerIndex > 0);
-    moveLayerUpAction->setEnabled(layerIndex > 0);
-    moveLayerDownAction->setEnabled(layerIndex >= 0 &&
-                                    layerIndex < layerCount - 1);
+    moveLayerUpAction->setEnabled(layerIndex >= 0 &&
+                                  layerIndex < layerCount - 1);
+    moveLayerDownAction->setEnabled(layerIndex > 0);
 
     QAction *chosen = menu.exec(globalPos);
     if (!chosen) {
@@ -1346,8 +1417,16 @@ QString LayerPanel::itemDescription(const ItemId &id) const {
   }
   if (dynamic_cast<QGraphicsLineItem *>(item))
     return "Line";
+  if (dynamic_cast<WireItem *>(item))
+    return "Wire";
   if (dynamic_cast<QGraphicsPathItem *>(item))
     return "Path";
+  if (dynamic_cast<MermaidTextItem *>(item))
+    return "Mermaid Diagram";
+  if (auto *arch = dynamic_cast<ArchitectureElementItem *>(item))
+    return QString("Element: %1").arg(arch->label());
+  if (auto *elec = dynamic_cast<ElectronicsElementItem *>(item))
+    return QString("Element: %1").arg(elec->label());
   if (dynamic_cast<QGraphicsPixmapItem *>(item))
     return "Image";
   if (auto *group = dynamic_cast<QGraphicsItemGroup *>(item)) {
