@@ -57,7 +57,7 @@ TransformHandleItem::TransformHandleItem(const ItemId &targetId,
   setFlag(QGraphicsItem::ItemIsSelectable, false);
   setFlag(QGraphicsItem::ItemIsMovable, false);
   // High Z value so handles appear above everything
-  setZValue(10000);
+  setZValue(1e9 + 1);
   ensureSceneEventFilter();
   updateHandles();
 }
@@ -581,6 +581,15 @@ void TransformHandleItem::applyResize(const QPointF &mousePos) {
     qreal currentSize = effectivePointSize(currentFont);
     qreal newSize = qBound(8.0, currentSize * uniformScale, 256.0);
     if (qAbs(newSize - currentSize) > 0.01) {
+      // Grow/shrink away from the opposite corner/edge, like other items.
+      const QRectF local = textItem->boundingRect();
+      const QPointF localAnchor = textItem->mapFromScene(anchor);
+      if (local.width() > 0 && local.height() > 0) {
+        textItem->keepAnchorOnNextLayout(
+            QPointF((localAnchor.x() - local.left()) / local.width(),
+                    (localAnchor.y() - local.top()) / local.height()),
+            anchor);
+      }
       currentFont.setPointSizeF(newSize);
       textItem->setFont(currentFont);
     }

@@ -39,6 +39,7 @@ bool fillTopItemAtPoint(
     QGraphicsScene *scene, const QPointF &point, const QBrush &brush,
     ItemStore *store, QGraphicsItem *backgroundItem,
     QGraphicsItem *extraSkipItem,
-    const std::function<void(std::unique_ptr<Action>)> &pushAction);
+    const std::function<void(std::unique_ptr<Action>)> &pushAction,
+    const std::function<bool(QGraphicsItem *)> &isLocked = {});
 
 #endif // FILL_UTILS_H

@@ -72,6 +72,8 @@ private:
   QLabel *matchLabel_;
   QPushButton *closeButton_;
 
+public:
+  /** @brief Keep the bar anchored top-right inside its parent. */
   void positionInParent();
 };
 

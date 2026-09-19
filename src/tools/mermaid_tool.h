@@ -7,6 +7,7 @@
 
 #include "../core/item_id.h"
 #include "tool.h"
+#include <QPointer>
 
 class MermaidTextItem;
 
@@ -34,7 +35,8 @@ public:
 
 private:
   void createMermaidItem(const QPointF &position);
-  MermaidTextItem *currentEditingItem_;
+  // Guarded: the item may be deleted (undo, clear) while the tool is idle.
+  QPointer<MermaidTextItem> currentEditingItem_;
   ItemId currentEditingItemId_;
 };
 

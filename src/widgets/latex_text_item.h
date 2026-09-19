@@ -111,6 +111,18 @@ public:
   void setFont(const QFont &font);
 
   /**
+   * @brief Keep a point of the item fixed through the next re-layout.
+   * @param fraction Point within boundingRect() as fractions of its size
+   *        (e.g. (1, 1) = bottom-right corner).
+   * @param scenePoint Where that point must stay in scene coordinates.
+   *
+   * Rendering may finish asynchronously (KaTeX), so the new size - and the
+   * position correction - is only known once the render completes.
+   */
+  void keepAnchorOnNextLayout(const QPointF &fraction,
+                              const QPointF &scenePoint);
+
+  /**
    * @brief Start inline editing mode with text rectangle.
    */
   void startEditing();
@@ -207,6 +219,12 @@ private:
   quintptr pendingRenderId_;
   bool katexConnected_;
 #endif
+
+  // Point kept fixed through the next re-layout (keepAnchorOnNextLayout)
+  bool hasPendingAnchor_ = false;
+  QPointF anchorFraction_;
+  QPointF anchorScenePoint_;
+  void applyPendingAnchor();
 
   // Layout constants for refined visual appearance
   static constexpr int MIN_WIDTH = 120;

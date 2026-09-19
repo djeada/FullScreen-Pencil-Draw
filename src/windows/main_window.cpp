@@ -131,8 +131,8 @@ MainWindow::MainWindow(QWidget *parent)
   // Edit-menu QAction; registering both creates ambiguous-shortcut warnings).
   QShortcut *backspaceShortcut =
       new QShortcut(QKeySequence(Qt::Key_Backspace), this);
-  connect(backspaceShortcut, &QShortcut::activated, _canvas,
-          &Canvas::deleteSelectedItems);
+  connect(backspaceShortcut, &QShortcut::activated, this,
+          &MainWindow::onEditDelete);
 
   // Track dirty state so the exit confirmation only appears when work could
   // actually be lost.
@@ -140,8 +140,56 @@ MainWindow::MainWindow(QWidget *parent)
           [this]() { _documentDirty = true; });
   // Saving (or loading a document) makes the in-memory state match a file
   // again – otherwise the exit prompt would keep firing after a save.
-  connect(_canvas, &Canvas::documentSaved, this,
-          [this]() { _documentDirty = false; });
+  connect(_canvas, &Canvas::documentSaved, this, [this]() {
+    _documentDirty = false;
+    // The document is safely on disk (or freshly loaded): a recovery copy
+    // would only produce a stale "restore?" prompt on the next launch.
+    if (_autoSaveManager)
+      _autoSaveManager->clearAutoSave();
+  });
+  // Opening a project replaces the drawing; give the user a chance to save.
+  _canvas->setDiscardChangesHandler([this]() { return maybeSaveChanges(); });
+}
+
+bool MainWindow::maybeSaveChanges() {
+  // Text still being typed only counts once committed (which also marks
+  // the document dirty for a brand new item).
+  _canvas->finishInlineEditing();
+  if (!_documentDirty)
+    return true;
+  const QMessageBox::StandardButton response = QMessageBox::warning(
+      this, tr("Unsaved Changes"),
+      tr("The drawing has unsaved changes. Do you want to save them?"),
+      QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
+      QMessageBox::Save);
+  if (response == QMessageBox::Cancel)
+    return false;
+  if (response == QMessageBox::Save) {
+    // Save as a project so nothing (layers, text, groups) is flattened;
+    // a cancelled or failed save leaves the document dirty.
+    _canvas->saveProject();
+    return !_documentDirty;
+  }
+  return true;
+}
+
+bool MainWindow::maybeDiscardPdfAnnotations() {
+#ifdef HAVE_QT_PDF
+  if (!_pdfDirty || !_pdfViewer || !_pdfViewer->hasPdf())
+    return true;
+  const QMessageBox::StandardButton response = QMessageBox::warning(
+      this, tr("Unsaved PDF Annotations"),
+      tr("The PDF annotations have not been exported. Export them now?"),
+      QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
+      QMessageBox::Save);
+  if (response == QMessageBox::Cancel)
+    return false;
+  if (response == QMessageBox::Save) {
+    onExportAnnotatedPdf();
+    return !_pdfDirty;
+  }
+#endif
+  return true;
 }
 
 MainWindow::~MainWindow() {
@@ -454,16 +502,163 @@ void MainWindow::applyTheme() {
 #endif
 }
 
-void MainWindow::performUndo() {
-  if (_undoRedoManager) {
-    _undoRedoManager->undo();
+bool MainWindow::pdfIsActive() const {
+#ifdef HAVE_QT_PDF
+  // Edit/zoom commands follow the surface the user works in: the PDF when
+  // it has focus or the pointer was last over it.
+  return _pdfViewer && _pdfPanel && _pdfPanel->isVisible() &&
+         _pdfViewer->hasPdf() &&
+         (_pdfViewer->hasFocus() || _activeSurface == ActiveSurface::Pdf);
+#else
+  return false;
+#endif
+}
+
+void MainWindow::onEditDelete() {
+#ifdef HAVE_QT_PDF
+  if (pdfIsActive()) {
+    _pdfViewer->deleteSelectedItems();
+    return;
   }
+#endif
+  _canvas->deleteSelectedItems();
+}
+
+void MainWindow::onEditSelectAll() {
+#ifdef HAVE_QT_PDF
+  if (pdfIsActive()) {
+    _pdfViewer->selectAll();
+    return;
+  }
+#endif
+  _canvas->selectAll();
+}
+
+// Clipboard and duplicate operate on canvas items only; never let them act
+// on a canvas selection the user can't see while annotating a PDF.
+void MainWindow::onEditCut() {
+  if (pdfIsActive()) {
+    statusBar()->showMessage(tr("Cut is not available for PDF annotations"),
+                             3000);
+    return;
+  }
+  _canvas->cutSelectedItems();
+}
+
+void MainWindow::onEditCopy() {
+  if (pdfIsActive()) {
+    statusBar()->showMessage(tr("Copy is not available for PDF annotations"),
+                             3000);
+    return;
+  }
+  _canvas->copySelectedItems();
+}
+
+void MainWindow::onEditPaste() {
+  if (pdfIsActive()) {
+    statusBar()->showMessage(tr("Paste is not available for PDF annotations"),
+                             3000);
+    return;
+  }
+  _canvas->pasteItems();
+}
+
+void MainWindow::onEditDuplicate() {
+  if (pdfIsActive()) {
+    statusBar()->showMessage(
+        tr("Duplicate is not available for PDF annotations"), 3000);
+    return;
+  }
+  _canvas->duplicateSelectedItems();
+}
+
+void MainWindow::onZoomIn() {
+#ifdef HAVE_QT_PDF
+  if (pdfIsActive()) {
+    _pdfViewer->zoomIn();
+    return;
+  }
+#endif
+  _canvas->zoomIn();
+}
+
+void MainWindow::onZoomOut() {
+#ifdef HAVE_QT_PDF
+  if (pdfIsActive()) {
+    _pdfViewer->zoomOut();
+    return;
+  }
+#endif
+  _canvas->zoomOut();
+}
+
+void MainWindow::onZoomReset() {
+#ifdef HAVE_QT_PDF
+  if (pdfIsActive()) {
+    _pdfViewer->zoomReset();
+    return;
+  }
+#endif
+  _canvas->zoomReset();
+}
+
+void MainWindow::commitGesturesBeforeHistory() {
+  // Replaying history must not interleave with an unfinished gesture: an
+  // open text editor or half-built path would otherwise be committed from
+  // inside the replay.
+  _canvas->finishInlineEditing();
+  _canvas->finishActiveGesture();
+#ifdef HAVE_QT_PDF
+  if (_pdfViewer && _pdfViewer->hasPdf())
+    _pdfViewer->commitActiveGesture();
+#endif
+}
+
+void MainWindow::markOwnerDirty(const void *owner) {
+  // The history is shared between canvas and PDF: mark the surface whose
+  // action was replayed (fall back to the one the user works in).
+#ifdef HAVE_QT_PDF
+  if (owner && owner == _pdfViewer) {
+    _pdfDirty = true;
+    return;
+  }
+#endif
+  if (owner && owner == _canvas) {
+    _documentDirty = true;
+    return;
+  }
+  if (_activeSurface == ActiveSurface::Pdf)
+    _pdfDirty = true;
+  else
+    _documentDirty = true;
+}
+
+void MainWindow::performUndo() {
+  if (!_undoRedoManager)
+    return;
+  commitGesturesBeforeHistory();
+  if (_undoRedoManager->canUndo()) {
+    const void *owner = _undoRedoManager->undoOwner();
+    _undoRedoManager->undo();
+    markOwnerDirty(owner);
+  }
+  // Undone transforms move items without a selection change, so the handles
+  // would otherwise keep showing the pre-undo bounds.
+  if (_canvas)
+    _canvas->updateTransformHandles();
 }
 
 void MainWindow::performRedo() {
-  if (_undoRedoManager) {
+  if (!_undoRedoManager)
+    return;
+  commitGesturesBeforeHistory();
+  if (_undoRedoManager->canRedo()) {
+    const void *owner = _undoRedoManager->redoOwner();
     _undoRedoManager->redo();
+    markOwnerDirty(owner);
   }
+  if (_canvas)
+    _canvas->updateTransformHandles();
 }
 
 void MainWindow::setupConnections() {
@@ -539,12 +734,29 @@ void MainWindow::setupConnections() {
       _pdfViewer->setToolType(ToolManager::ToolType::TextOnPath);
     });
 
+    // Canvas-only tools: say so instead of silently leaving the PDF on the
+    // previous tool while the panel highlights the new one.
+    auto canvasOnly = [this](const QString &tool) {
+      if (_pdfPanel && _pdfPanel->isVisible() && _pdfViewer->hasPdf()) {
+        statusBar()->showMessage(
+            tr("%1 is only available on the canvas").arg(tool), 4000);
+      }
+    };
+    connect(_toolPanel, &ToolPanel::colorSelectSelected, this,
+            [canvasOnly]() { canvasOnly(tr("Color Select")); });
+    connect(_toolPanel, &ToolPanel::curvedArrowSelected, this,
+            [canvasOnly]() { canvasOnly(tr("Curved Arrow")); });
+    connect(_toolPanel, &ToolPanel::wireSelected, this,
+            [canvasOnly]() { canvasOnly(tr("Wire")); });
+
     // Connect color selection to PDF viewer
     connect(_toolPanel, &ToolPanel::colorSelected, _pdfViewer,
             &PdfViewer::setPenColor);
-    // Connect brush size changes to PDF viewer
+    // Connect brush size and opacity changes to PDF viewer
     connect(_canvas, &Canvas::brushSizeChanged, _pdfViewer,
             &PdfViewer::setPenWidth);
+    connect(_canvas, &Canvas::opacityChanged, _pdfViewer,
+            &PdfViewer::setOpacity);
     // Connect filled shapes toggle to PDF viewer
     connect(_canvas, &Canvas::filledShapesChanged, _pdfViewer,
             &PdfViewer::setFilledShapes);
@@ -564,16 +776,16 @@ void MainWindow::setupConnections() {
           [this]() { _canvas->setShape("LassoSelection"); });
 
   // Edit operations
-  connect(_toolPanel, &ToolPanel::copyAction, _canvas,
-          &Canvas::copySelectedItems);
-  connect(_toolPanel, &ToolPanel::cutAction, _canvas,
-          &Canvas::cutSelectedItems);
-  connect(_toolPanel, &ToolPanel::pasteAction, _canvas, &Canvas::pasteItems);
-  connect(_toolPanel, &ToolPanel::duplicateAction, _canvas,
-          &Canvas::duplicateSelectedItems);
-  connect(_toolPanel, &ToolPanel::deleteAction, _canvas,
-          &Canvas::deleteSelectedItems);
-  connect(_toolPanel, &ToolPanel::selectAllAction, _canvas, &Canvas::selectAll);
+  // (routed through MainWindow so they act on the PDF while annotating it)
+  connect(_toolPanel, &ToolPanel::copyAction, this, &MainWindow::onEditCopy);
+  connect(_toolPanel, &ToolPanel::cutAction, this, &MainWindow::onEditCut);
+  connect(_toolPanel, &ToolPanel::pasteAction, this, &MainWindow::onEditPaste);
+  connect(_toolPanel, &ToolPanel::duplicateAction, this,
+          &MainWindow::onEditDuplicate);
+  connect(_toolPanel, &ToolPanel::deleteAction, this,
+          &MainWindow::onEditDelete);
+  connect(_toolPanel, &ToolPanel::selectAllAction, this,
+          &MainWindow::onEditSelectAll);
 
   // Brush controls
   connect(_toolPanel, &ToolPanel::increaseBrushSize, _canvas,
@@ -599,9 +811,10 @@ void MainWindow::setupConnections() {
   connect(_toolPanel, &ToolPanel::redoAction, this, &MainWindow::performRedo);
 
   // Zoom
-  connect(_toolPanel, &ToolPanel::zoomInAction, _canvas, &Canvas::zoomIn);
-  connect(_toolPanel, &ToolPanel::zoomOutAction, _canvas, &Canvas::zoomOut);
-  connect(_toolPanel, &ToolPanel::zoomResetAction, _canvas, &Canvas::zoomReset);
+  connect(_toolPanel, &ToolPanel::zoomInAction, this, &MainWindow::onZoomIn);
+  connect(_toolPanel, &ToolPanel::zoomOutAction, this, &MainWindow::onZoomOut);
+  connect(_toolPanel, &ToolPanel::zoomResetAction, this,
+          &MainWindow::onZoomReset);
   connect(_toolPanel, &ToolPanel::toggleGridAction, _canvas,
           &Canvas::toggleGrid);
   connect(_toolPanel, &ToolPanel::toggleFilledShapesAction, _canvas,
@@ -704,22 +917,26 @@ void MainWindow::setupMenuBar() {
   connect(undoEditAction, &QAction::triggered, this, &MainWindow::performUndo);
 
   QAction *redoEditAction = editMenu->addAction("&Redo");
-  redoEditAction->setShortcut(QKeySequence::Redo);
+  // QKeySequence::Redo is only Ctrl+Shift+Z on Linux/macOS; the UI advertises
+  // Ctrl+Y everywhere, so bind it explicitly as well.
+  QList<QKeySequence> redoShortcuts =
+      QKeySequence::keyBindings(QKeySequence::Redo);
+  if (!redoShortcuts.contains(QKeySequence(Qt::CTRL | Qt::Key_Y)))
+    redoShortcuts.append(QKeySequence(Qt::CTRL | Qt::Key_Y));
+  redoEditAction->setShortcuts(redoShortcuts);
   connect(redoEditAction, &QAction::triggered, this, &MainWindow::performRedo);
   editMenu->addSeparator();
-  createAction(editMenu, "Cu&t", QKeySequence::Cut, _canvas,
-               SLOT(cutSelectedItems()));
-  createAction(editMenu, "&Copy", QKeySequence::Copy, _canvas,
-               SLOT(copySelectedItems()));
-  createAction(editMenu, "&Paste", QKeySequence::Paste, _canvas,
-               SLOT(pasteItems()));
+  createAction(editMenu, "Cu&t", QKeySequence::Cut, this, SLOT(onEditCut()));
+  createAction(editMenu, "&Copy", QKeySequence::Copy, this, SLOT(onEditCopy()));
+  createAction(editMenu, "&Paste", QKeySequence::Paste, this,
+               SLOT(onEditPaste()));
   editMenu->addSeparator();
-  createAction(editMenu, "Select &All", QKeySequence::SelectAll, _canvas,
-               SLOT(selectAll()));
-  createAction(editMenu, "&Delete", QKeySequence::Delete, _canvas,
-               SLOT(deleteSelectedItems()));
-  createAction(editMenu, "D&uplicate", QKeySequence(Qt::CTRL | Qt::Key_D),
-               _canvas, SLOT(duplicateSelectedItems()));
+  createAction(editMenu, "Select &All", QKeySequence::SelectAll, this,
+               SLOT(onEditSelectAll()));
+  createAction(editMenu, "&Delete", QKeySequence::Delete, this,
+               SLOT(onEditDelete()));
+  createAction(editMenu, "D&uplicate", QKeySequence(Qt::CTRL | Qt::Key_D), this,
+               SLOT(onEditDuplicate()));
   createAction(editMenu, "Extract Color Selection to New Layer",
                QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_J), _canvas,
                SLOT(extractColorSelectionToNewLayer()));
@@ -727,12 +944,12 @@ void MainWindow::setupMenuBar() {
   // View menu
   QMenu *viewMenu = menuBar->addMenu("&View");
 
-  createAction(viewMenu, "Zoom &In", QKeySequence::ZoomIn, _canvas,
-               SLOT(zoomIn()));
-  createAction(viewMenu, "Zoom &Out", QKeySequence::ZoomOut, _canvas,
-               SLOT(zoomOut()));
-  createAction(viewMenu, "&Reset Zoom", QKeySequence(Qt::Key_0), _canvas,
-               SLOT(zoomReset()));
+  createAction(viewMenu, "Zoom &In", QKeySequence::ZoomIn, this,
+               SLOT(onZoomIn()));
+  createAction(viewMenu, "Zoom &Out", QKeySequence::ZoomOut, this,
+               SLOT(onZoomOut()));
+  createAction(viewMenu, "&Reset Zoom", QKeySequence(Qt::Key_0), this,
+               SLOT(onZoomReset()));
   viewMenu->addSeparator();
 
   QAction *gridAction =
@@ -1054,9 +1271,13 @@ void MainWindow::setupAutoSave() {
   connect(_autoSaveManager, &AutoSaveManager::autoSavePerformed, this,
           &MainWindow::onAutoSavePerformed);
 
+  // Only auto-save when there is something the user could lose.
+  _autoSaveManager->setShouldSaveCheck([this]() { return _documentDirty; });
+
   // Check for recovery on startup
-  if (_autoSaveManager->hasAutoSave()) {
-    _autoSaveManager->restoreAutoSave();
+  if (_autoSaveManager->hasAutoSave() && _autoSaveManager->restoreAutoSave()) {
+    // The recovered work was never saved by the user.
+    _documentDirty = true;
   }
 
   // Update the menu action state
@@ -1070,6 +1291,8 @@ void MainWindow::onAutoSavePerformed(const QString &path) {
 }
 
 void MainWindow::onNewCanvas() {
+  if (!maybeSaveChanges())
+    return;
   bool ok;
   int width = QInputDialog::getInt(this, "New Canvas", "Width:", 1920, 100,
                                    10000, 100, &ok);
@@ -1093,30 +1316,27 @@ void MainWindow::onNewCanvas() {
 
 void MainWindow::closeEvent(QCloseEvent *event) {
   // Only interrupt the user when unsaved work could actually be lost.
-  if (_documentDirty) {
-    QMessageBox::StandardButton response = QMessageBox::question(
-        this, tr("Unsaved Changes"),
-        tr("The document has been modified. Do you want to exit without "
-           "saving?"),
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-
-    if (response != QMessageBox::Yes) {
-      event->ignore();
-      return;
-    }
+  if (!maybeSaveChanges() || !maybeDiscardPdfAnnotations()) {
+    event->ignore();
+    return;
   }
+  // Clean exit: the user saved or chose to discard, nothing to recover.
+  if (_autoSaveManager)
+    _autoSaveManager->clearAutoSave();
   event->accept();
   QMainWindow::closeEvent(event);
 }
 
 void MainWindow::keyPressEvent(QKeyEvent *event) {
+  // Single-letter tool keys must not also fire for Ctrl+<key> combinations.
+  const bool ctrl = event->modifiers() & Qt::ControlModifier;
   // Standard shortcuts
   if (event->matches(QKeySequence::Copy)) {
-    _canvas->copySelectedItems();
+    onEditCopy();
   } else if (event->matches(QKeySequence::Cut)) {
-    _canvas->cutSelectedItems();
+    onEditCut();
   } else if (event->matches(QKeySequence::Paste)) {
-    _canvas->pasteItems();
+    onEditPaste();
   } else if (event->matches(QKeySequence::Undo)) {
     performUndo();
   } else if (event->matches(QKeySequence::Redo)) {
@@ -1128,7 +1348,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
   } else if (event->matches(QKeySequence::New)) {
     onNewCanvas();
   } else if (event->matches(QKeySequence::SelectAll)) {
-    _canvas->selectAll();
+    onEditSelectAll();
   } else if (event->key() == Qt::Key_J &&
              (event->modifiers() & Qt::ControlModifier) &&
              (event->modifiers() & Qt::ShiftModifier)) {
@@ -1157,7 +1377,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
     event->accept();
   } else if (event->key() == Qt::Key_Delete ||
              event->key() == Qt::Key_Backspace) {
-    _canvas->deleteSelectedItems();
+    onEditDelete();
   }
   // Group/Ungroup shortcuts
   else if (event->key() == Qt::Key_G &&
@@ -1168,31 +1388,39 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
              (event->modifiers() & Qt::ShiftModifier)) {
     _canvas->ungroupSelectedItems();
   }
+#ifdef HAVE_QT_PDF
+  // PDF search (Ctrl+F when PDF panel is visible); must precede the plain
+  // tool keys below.
+  else if (event->key() == Qt::Key_F && ctrl && _pdfPanel &&
+           _pdfPanel->isVisible() && _pdfViewer) {
+    _pdfViewer->openSearch();
+  }
+#endif
   // Tool shortcuts
-  else if (event->key() == Qt::Key_P) {
+  else if (event->key() == Qt::Key_P && !ctrl) {
     _toolPanel->onActionPen();
-  } else if (event->key() == Qt::Key_I) {
+  } else if (event->key() == Qt::Key_I && !ctrl) {
     _toolPanel->onActionHighlighter();
-  } else if (event->key() == Qt::Key_E) {
+  } else if (event->key() == Qt::Key_E && !ctrl) {
     _toolPanel->onActionEraser();
   } else if (event->key() == Qt::Key_T &&
              (event->modifiers() & Qt::ShiftModifier)) {
     _toolPanel->onActionTextOnPath();
-  } else if (event->key() == Qt::Key_T) {
+  } else if (event->key() == Qt::Key_T && !ctrl) {
     _toolPanel->onActionText();
-  } else if (event->key() == Qt::Key_M) {
+  } else if (event->key() == Qt::Key_M && !ctrl) {
     _toolPanel->onActionMermaid();
-  } else if (event->key() == Qt::Key_F) {
+  } else if (event->key() == Qt::Key_F && !ctrl) {
     _toolPanel->onActionFill();
   } else if (event->key() == Qt::Key_Q &&
              !(event->modifiers() & Qt::ControlModifier)) {
     _toolPanel->onActionColorSelect();
-  } else if (event->key() == Qt::Key_L) {
+  } else if (event->key() == Qt::Key_L && !ctrl) {
     _toolPanel->onActionLine();
   } else if (event->key() == Qt::Key_A &&
              !(event->modifiers() & Qt::ControlModifier)) {
     _toolPanel->onActionArrow();
-  } else if (event->key() == Qt::Key_R) {
+  } else if (event->key() == Qt::Key_R && !ctrl) {
     _toolPanel->onActionRectangle();
   } else if (event->key() == Qt::Key_C &&
              !(event->modifiers() & Qt::ControlModifier)) {
@@ -1210,26 +1438,20 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
   } else if (event->key() == Qt::Key_K &&
              !(event->modifiers() & Qt::ControlModifier)) {
     _toolPanel->onActionColor();
-  } else if (event->key() == Qt::Key_H) {
+  } else if (event->key() == Qt::Key_H && !ctrl) {
     _toolPanel->onActionPan();
-  } else if (event->key() == Qt::Key_G) {
+  } else if (event->key() == Qt::Key_G && !ctrl) {
     _canvas->toggleGrid();
   } else if (event->key() == Qt::Key_B &&
              (event->modifiers() & Qt::ShiftModifier)) {
     _toolPanel->onActionBezier();
-  } else if (event->key() == Qt::Key_B) {
+  } else if (event->key() == Qt::Key_B && !ctrl) {
     _canvas->toggleFilledShapes();
   } else if (event->key() == Qt::Key_D &&
              (event->modifiers() & Qt::ControlModifier)) {
-    _canvas->duplicateSelectedItems();
+    onEditDuplicate();
   }
 #ifdef HAVE_QT_PDF
-  // PDF search (Ctrl+F when PDF panel is visible)
-  else if (event->key() == Qt::Key_F &&
-           (event->modifiers() & Qt::ControlModifier) && _pdfPanel &&
-           _pdfPanel->isVisible() && _pdfViewer) {
-    _pdfViewer->openSearch();
-  }
   // PDF navigation shortcuts (only work when PDF panel is visible)
   else if (event->key() == Qt::Key_PageDown && _pdfPanel &&
            _pdfPanel->isVisible() && _pdfViewer) {
@@ -1253,11 +1475,11 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
   }
   // Zoom
   else if (event->key() == Qt::Key_Plus || event->key() == Qt::Key_Equal) {
-    _canvas->zoomIn();
+    onZoomIn();
   } else if (event->key() == Qt::Key_Minus) {
-    _canvas->zoomOut();
+    onZoomOut();
   } else if (event->key() == Qt::Key_0) {
-    _canvas->zoomReset();
+    onZoomReset();
   } else {
     QMainWindow::keyPressEvent(event);
   }
@@ -1343,6 +1565,8 @@ void MainWindow::setupPdfViewer() {
   // Connect drag-drop signals from PDF viewer and canvas
   connect(_pdfViewer, &PdfViewer::pdfFileDropped, this,
           &MainWindow::onPdfFileDropped);
+  connect(_pdfViewer, &PdfViewer::documentModified, this,
+          [this]() { _pdfDirty = true; });
   connect(_canvas, &Canvas::pdfFileDropped, this,
           &MainWindow::onPdfFileDropped);
 }
@@ -1494,8 +1718,12 @@ void MainWindow::setupPdfToolBar() {
       selection-background-color: #3b82f6;
     }
   )");
-  connect(_pdfZoomCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
-          this, &MainWindow::onPdfZoomComboChanged);
+  // activated (not currentIndexChanged): re-picking the preset that is
+  // still "current" after Ctrl+wheel / fit zooming must apply it again.
+  connect(_pdfZoomCombo, QOverload<int>::of(&QComboBox::activated), this,
+          &MainWindow::onPdfZoomComboChanged);
+  // Typed values are applied on Enter; don't pile them up as new presets.
+  _pdfZoomCombo->setInsertPolicy(QComboBox::NoInsert);
   connect(_pdfZoomCombo->lineEdit(), &QLineEdit::returnPressed, this, [this]() {
     QString text = _pdfZoomCombo->currentText().remove('%');
     bool ok;
@@ -1603,11 +1831,11 @@ void MainWindow::setupPdfToolBar() {
 
   // Undo/Redo
   QAction *undoAction = _pdfToolBar->addAction(
-      makeIcon(":/ui-icons/pdf_undo.svg"), "", _pdfViewer, &PdfViewer::undo);
+      makeIcon(":/ui-icons/pdf_undo.svg"), "", this, &MainWindow::performUndo);
   undoAction->setToolTip("Undo (Ctrl+Z)");
 
   QAction *redoAction = _pdfToolBar->addAction(
-      makeIcon(":/ui-icons/pdf_redo.svg"), "", _pdfViewer, &PdfViewer::redo);
+      makeIcon(":/ui-icons/pdf_redo.svg"), "", this, &MainWindow::performRedo);
   redoAction->setToolTip("Redo (Ctrl+Y)");
 
   // Style the toolbar
@@ -1621,10 +1849,12 @@ void MainWindow::onPdfPageSpinBoxChanged(int page) {
 }
 
 void MainWindow::onPdfZoomComboChanged(int index) {
-  static const int zoomLevels[] = {50, 75, 100, 125, 150, 200, 300};
-  if (index >= 0 && index < 7 && _pdfViewer) {
-    _pdfViewer->setZoomPercent(zoomLevels[index]);
-  }
+  if (!_pdfViewer || index < 0)
+    return;
+  bool ok = false;
+  const int zoom = _pdfZoomCombo->itemText(index).remove('%').toInt(&ok);
+  if (ok)
+    _pdfViewer->setZoomPercent(zoom);
 }
 
 void MainWindow::updatePdfZoomCombo(double zoomPercent) {
@@ -1636,9 +1866,10 @@ void MainWindow::updatePdfZoomCombo(double zoomPercent) {
 }
 
 void MainWindow::showPdfPanel() {
-  // Split ratio: canvas gets 60%, PDF panel gets 40%
-  static constexpr double CANVAS_RATIO = 0.6;
-  static constexpr double PDF_RATIO = 0.4;
+  // Split ratio: the PDF panel also hosts the page-thumbnail strip, so it
+  // needs the larger share for the page itself to stay readable.
+  static constexpr double CANVAS_RATIO = 0.35;
+  static constexpr double PDF_RATIO = 0.65;
 
   if (_pdfPanel) {
     _pdfPanel->show();
@@ -1651,7 +1882,14 @@ void MainWindow::showPdfPanel() {
 
   // Sync PDF viewer settings with canvas settings
   if (_pdfViewer && _canvas) {
-    _pdfViewer->setPenColor(_canvas->getCurrentColor());
+    // The canvas defaults to white ink on black; on a light PDF page that
+    // ink would be invisible, so fall back to a colour that shows up.
+    QColor penColor = _canvas->getCurrentColor();
+    if (!_pdfViewer->darkMode() && penColor.lightnessF() > 0.9) {
+      penColor = QColor(220, 38, 38);
+    }
+    _pdfViewer->setOpacity(_canvas->getCurrentOpacity());
+    _pdfViewer->setPenColor(penColor);
     _pdfViewer->setPenWidth(_canvas->getCurrentBrushSize());
     _pdfViewer->setFilledShapes(_canvas->isFilledShapes());
   }
@@ -1676,16 +1914,25 @@ void MainWindow::onOpenPdf() {
   if (fileName.isEmpty()) {
     return;
   }
+  if (!maybeDiscardPdfAnnotations()) {
+    return;
+  }
 
-  if (!_pdfViewer->openPdf(fileName)) {
+  if (_pdfViewer->openPdf(fileName)) {
+    _pdfDirty = false;
+  } else {
     statusBar()->showMessage("Failed to open PDF file", 3000);
   }
 }
 
 void MainWindow::onClosePdf() {
+  if (!maybeDiscardPdfAnnotations()) {
+    return;
+  }
   if (_pdfViewer) {
     _pdfViewer->closePdf();
   }
+  _pdfDirty = false;
   hidePdfPanel();
 }
 
@@ -1715,7 +1962,11 @@ void MainWindow::onPdfDarkModeChanged(bool enabled) {
 }
 
 void MainWindow::onPdfFileDropped(const QString &filePath) {
+  if (!maybeDiscardPdfAnnotations()) {
+    return;
+  }
   if (_pdfViewer && _pdfViewer->openPdf(filePath)) {
+    _pdfDirty = false;
     statusBar()->showMessage(
         QString("Opened PDF: %1").arg(QFileInfo(filePath).fileName()), 3000);
   } else {
@@ -1736,6 +1987,7 @@ void MainWindow::onExportAnnotatedPdf() {
   }
 
   if (_pdfViewer->exportAnnotatedPdf(fileName)) {
+    _pdfDirty = false;
     statusBar()->showMessage(
         QString("Exported annotated PDF to: %1").arg(fileName), 3000);
   } else {

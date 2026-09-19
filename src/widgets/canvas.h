@@ -37,6 +37,7 @@
 #include <QTabletEvent>
 #include <QVector>
 #include <QWheelEvent>
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -108,6 +109,17 @@ public:
 
   // Layer management
   LayerManager *layerManager() const { return layerManager_; }
+  /**
+   * @brief Called before an operation replaces the whole document (opening a
+   *        project); returning false cancels the operation.
+   */
+  void setDiscardChangesHandler(std::function<bool()> handler) {
+    discardChangesHandler_ = std::move(handler);
+  }
+  /// Commit every open inline text/mermaid editor except @p except.
+  void finishInlineEditing(const QGraphicsItem *except = nullptr);
+  /// Load a .fspd file, replacing the document (after confirming).
+  bool loadProjectFile(const QString &fileName, bool addToRecentFiles = true);
 
   // Action management - implements SceneRenderer interface
   void addDrawAction(QGraphicsItem *item) override;
@@ -162,6 +174,8 @@ public:
   bool cancelActiveGesture();
 
 public slots:
+  /// Rebuild/refresh selection handles, e.g. after undo/redo moved items.
+  void updateTransformHandles();
   void setShape(const QString &shapeType);
   void deselectAll();
   void setPenTool();
@@ -293,6 +307,8 @@ private:
   QGraphicsScene *scene_;
   SceneController *sceneController_;
   LayerManager *layerManager_;
+  int wheelZoomAccum_ = 0; ///< Partial Ctrl+wheel delta (1/8 degrees)
+  std::function<bool()> discardChangesHandler_;
   QPen currentPen_;
   QPen eraserPen_;
   QBrush fillBrush_;
@@ -357,6 +373,8 @@ private:
   qreal tabletPressure_ = 1.0;
   bool tabletActive_ = false;
   QVector<qreal> pressureBuffer_;
+  QPainterPath pressureCommitted_; ///< Frozen start of a long pressure stroke
+  QPainterPath pressureOutline(int begin, int end) const;
 
   // Eraser gesture: one composite undo entry per stroke sweep
   std::unique_ptr<CompositeAction> eraserStrokeAction_;
@@ -393,14 +411,25 @@ private:
                                   int tolerance, bool contiguous) const;
   void refreshColorSelectionOverlay();
   void resetColorSelection();
-  QRectF getSelectionBoundingRect() const;
+  // Export helpers
+  QList<QGraphicsItem *> documentItems() const;
+  QList<QGraphicsItem *> exportableSelection() const;
+  static QRectF visibleBounds(const QList<QGraphicsItem *> &items);
+  QRectF documentExportRect(const QList<QGraphicsItem *> &items) const;
+  void renderItems(QPainter *painter, const QRectF &target,
+                   const QRectF &source, const QList<QGraphicsItem *> &items);
+  QImage renderItemsToImage(const QList<QGraphicsItem *> &items,
+                            const QRectF &source, QImage::Format format,
+                            const QColor &fill);
+  void exportSelectionImage(const QString &title, const QString &filter,
+                            const char *format, QImage::Format imageFormat,
+                            const QColor &fill);
   QPointF snapToGridPoint(const QPointF &point) const;
   QPointF snapPoint(const QPointF &point,
                     const QSet<QGraphicsItem *> &excludeItems = {});
   QPointF calculateSmartDuplicateOffset() const;
   void drawRuler(QPainter *painter, const QRectF &rect);
   QString calculateDistance(const QPointF &p1, const QPointF &p2) const;
-  void updateTransformHandles();
   void clearTransformHandles();
   void applyResizeToOtherItems(QGraphicsItem *sourceItem, qreal scaleX,
                                qreal scaleY, const QPointF &anchor);
@@ -439,6 +468,12 @@ private:
   QGraphicsPathItem *wireTempPath_ = nullptr;    // Manhattan-routed preview
   QGraphicsEllipseItem *pinHighlight_ = nullptr; // hover highlight ring
   void cleanupTransientToolState();
+  /// Remove every item and the undo history without asking.
+  void resetDocument();
+  /// fitInView() that keeps currentZoom_ and the zoom display in sync.
+  void fitRectInView(const QRectF &rect);
+  /// True if @p item (or its top-level group) or its layer is locked.
+  bool isItemLocked(QGraphicsItem *item) const;
 
   /**
    * @brief Drop every in-progress drawing gesture and its preview items.

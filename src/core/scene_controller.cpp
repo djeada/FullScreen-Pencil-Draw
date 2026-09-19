@@ -159,18 +159,18 @@ int SceneController::scaleLayer(Layer *layer, qreal sx, qreal sy) {
 
   // Scale each item around the common center
   for (QGraphicsItem *item : validItems) {
-    QTransform t = item->transform();
-    QPointF pos = item->pos();
-
-    // Apply scale to existing transform
-    QTransform newTransform = t;
-    newTransform.scale(sx, sy);
-    item->setTransform(newTransform);
-
-    // Adjust position relative to center
-    QPointF offset = pos - center;
-    QPointF newPos = center + QPointF(offset.x() * sx, offset.y() * sy);
-    item->setPos(newPos);
+    // Compose a scale about the common centre onto the item's full scene
+    // mapping (transform, then pos) and keep pos: pre-multiplying the scale
+    // into transform() left its translation unscaled, so items that had
+    // been rotated (rotations carry a translation) drifted away.
+    const QPointF pos = item->pos();
+    const QTransform aboutCenter =
+        QTransform::fromTranslate(-center.x(), -center.y()) *
+        QTransform::fromScale(sx, sy) *
+        QTransform::fromTranslate(center.x(), center.y());
+    item->setTransform(
+        item->transform() * QTransform::fromTranslate(pos.x(), pos.y()) *
+        aboutCenter * QTransform::fromTranslate(-pos.x(), -pos.y()));
 
     ItemId id = itemStore_->idForItem(item);
     if (id.isValid()) {

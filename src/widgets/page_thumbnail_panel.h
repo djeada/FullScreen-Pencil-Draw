@@ -14,6 +14,7 @@
 
 class PdfViewer;
 class QLabel;
+class QTimer;
 
 /**
  * @brief A collapsible panel showing page thumbnails for PDF navigation.
@@ -74,6 +75,10 @@ private:
   QLabel *header_;
   QListWidget *thumbnailList_;
   QVBoxLayout *layout_;
+  // Thumbnails render one page per event-loop turn so opening a large PDF
+  // (or toggling dark mode) never freezes the UI.
+  QTimer *thumbnailTimer_ = nullptr;
+  int nextThumbnail_ = 0;
 
   static constexpr int THUMBNAIL_WIDTH = 120;
   static constexpr int THUMBNAIL_HEIGHT = 160;
@@ -82,6 +87,7 @@ private:
   void applyTheme();
   void generateThumbnails();
   QPixmap renderThumbnail(int pageIndex);
+  void renderNextThumbnail();
 };
 
 #endif // HAVE_QT_PDF

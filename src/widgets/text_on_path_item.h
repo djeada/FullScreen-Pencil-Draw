@@ -53,6 +53,8 @@ public:
 
 signals:
   void textChanged();
+  /// Emitted after the user edited the text (double-click dialog).
+  void textEdited(const QString &oldText, const QString &newText);
 
 protected:
   void mouseDoubleClickEvent(QGraphicsSceneMouseEvent *event) override;

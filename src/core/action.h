@@ -125,6 +125,33 @@ private:
 /**
  * @brief Composite action that groups multiple actions together.
  */
+/**
+ * @brief Undoable change of state that isn't an item (e.g. the canvas
+ *        size), expressed as a pair of callbacks.
+ */
+class CallbackAction : public Action {
+public:
+  CallbackAction(QString description, std::function<void()> undoFn,
+                 std::function<void()> redoFn)
+      : description_(std::move(description)), undo_(std::move(undoFn)),
+        redo_(std::move(redoFn)) {}
+
+  void undo() override {
+    if (undo_)
+      undo_();
+  }
+  void redo() override {
+    if (redo_)
+      redo_();
+  }
+  QString description() const override { return description_; }
+
+private:
+  QString description_;
+  std::function<void()> undo_;
+  std::function<void()> redo_;
+};
+
 class CompositeAction : public Action {
 public:
   CompositeAction();

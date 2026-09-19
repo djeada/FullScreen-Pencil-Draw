@@ -45,6 +45,18 @@ private:
   ItemId id_;
 };
 
+// Action whose undo pushes another action (like a replay callback that
+// commits an in-progress gesture).
+class PushingAction : public Action {
+public:
+  explicit PushingAction(UndoRedoManager *mgr) : mgr_(mgr) {}
+  void undo() override { mgr_->push(std::make_unique<StubAction>()); }
+  void redo() override {}
+
+private:
+  UndoRedoManager *mgr_;
+};
+
 class TestUndoRedoManager : public QObject {
   Q_OBJECT
 
@@ -208,6 +220,66 @@ private slots:
     QCOMPARE(discarded.size(), 2);
     QVERIFY(!mgr.canUndo());
     QVERIFY(!mgr.canRedo());
+  }
+
+  // Delete -> undo -> delete again: the invalidated first delete references
+  // the same item as the new one, so it must not be reported (its snapshot
+  // is still needed to undo the second delete).
+  void testDiscardSkipsItemsStillReferenced() {
+    UndoRedoManager mgr;
+    QVector<ItemId> discarded;
+    mgr.addDiscardListener(
+        [&discarded](const ItemId &id) { discarded.append(id); });
+
+    const ItemId item = ItemId::generate();
+    mgr.push(std::make_unique<StubItemAction>(item));
+    mgr.undo();
+    mgr.push(std::make_unique<StubItemAction>(item));
+    QVERIFY(discarded.isEmpty());
+
+    // Same for history eviction: an older entry for an item that a newer
+    // entry still references stays quiet.
+    for (std::size_t i = 0; i < UndoRedoManager::kMaxUndoSteps - 2; ++i) {
+      mgr.push(std::make_unique<StubItemAction>(ItemId::generate()));
+    }
+    mgr.push(std::make_unique<StubItemAction>(item));
+    QVERIFY(!discarded.contains(item));
+  }
+
+  // Canvas and PDF viewer share one history; closing the PDF must only drop
+  // the PDF's own actions.
+  void testClearOwnedByKeepsOtherOwners() {
+    UndoRedoManager mgr;
+    int canvasOwner = 0, pdfOwner = 0;
+    int canvasUndos = 0;
+    mgr.push(std::make_unique<StubAction>(&canvasUndos), &canvasOwner);
+    mgr.push(std::make_unique<StubAction>(), &pdfOwner);
+    mgr.push(std::make_unique<StubAction>(), &pdfOwner);
+    mgr.undo(); // one PDF action on the redo stack
+
+    QCOMPARE(mgr.undoOwner(), static_cast<const void *>(&pdfOwner));
+    QCOMPARE(mgr.redoOwner(), static_cast<const void *>(&pdfOwner));
+    mgr.clearOwnedBy(&pdfOwner);
+    QVERIFY(mgr.canUndo());
+    QVERIFY(!mgr.canRedo());
+    mgr.undo();
+    QCOMPARE(canvasUndos, 1);
+    QVERIFY(!mgr.canUndo());
+  }
+
+  // A push from inside undo() is queued until the replay finished, so the
+  // undone action still lands on the redo stack first (and is then
+  // invalidated by the new action, as for any regular push).
+  void testPushDuringReplayIsDeferred() {
+    UndoRedoManager mgr;
+    mgr.push(std::make_unique<StubAction>());
+    mgr.push(std::make_unique<PushingAction>(&mgr));
+    mgr.undo();
+    QVERIFY(!mgr.canRedo()); // the deferred push invalidated redo
+    QVERIFY(mgr.canUndo());
+    mgr.undo(); // the pushed stub
+    mgr.undo(); // the first stub
+    QVERIFY(!mgr.canUndo());
   }
 };
 

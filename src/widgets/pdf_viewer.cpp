@@ -8,6 +8,7 @@
 
 #include "../tools/tool.h"
 #include "../tools/tool_manager.h"
+#include "item_painting.h"
 #include "pdf_search_bar.h"
 #include <QApplication>
 #include <QFileDialog>
@@ -22,7 +23,9 @@
 #include <QPdfSearchModel>
 #include <QPdfWriter>
 #include <QPointer>
+#include <QScopedValueRollback>
 #include <QScrollBar>
+#include <QSignalBlocker>
 #include <QStyleOptionGraphicsItem>
 #include <QUrl>
 #include <QWheelEvent>
@@ -104,6 +107,12 @@ PdfViewer::PdfViewer(QWidget *parent)
   searchModel_ = new QPdfSearchModel(this);
   connect(document_.get(), &PdfDocument::documentLoaded, this,
           [this]() { searchModel_->setDocument(document_->document()); });
+  // QPdfSearchModel fills in results asynchronously (in timer-driven
+  // batches), so react to model updates rather than reading rowCount() once.
+  connect(searchModel_, &QAbstractItemModel::rowsInserted, this,
+          &PdfViewer::onSearchResultsChanged);
+  connect(searchModel_, &QAbstractItemModel::modelReset, this,
+          &PdfViewer::onSearchResultsChanged);
 
   // Initialize search bar
   searchBar_ = new PdfSearchBar(viewport());
@@ -115,7 +124,17 @@ PdfViewer::PdfViewer(QWidget *parent)
   connect(searchBar_, &PdfSearchBar::closed, this, &PdfViewer::closeSearch);
 }
 
-PdfViewer::~PdfViewer() = default;
+PdfViewer::~PdfViewer() {
+  // Child QObjects die in creation order, and the scene was created before
+  // the tool manager: tear the tools down first, or an unfinished Bezier /
+  // text-on-path gesture would delete its preview items a second time.
+  if (toolManager_) {
+    if (Tool *tool = toolManager_->activeTool())
+      tool->cancelGesture();
+    delete toolManager_;
+    toolManager_ = nullptr;
+  }
+}
 
 void PdfViewer::setupScene() {
   setScene(scene_);
@@ -153,7 +172,10 @@ void PdfViewer::closePdf() {
     if (Tool *tool = toolManager_->activeTool()) {
       tool->cancelGesture();
     }
-    toolManager_->setActiveTool(ToolManager::ToolType::Pen);
+    actionGroup_.reset(); // actions for items that are about to go away
+    // Reset the tool's state but keep the one the user picked (the tool
+    // panel still shows it; forcing Pen made the next PDF draw freehand).
+    toolManager_->setActiveTool(toolManager_->activeToolType());
   }
   // Cancel any in-progress special tool gesture; the scene clear below would
   // otherwise delete the rubber-band item out from under the mouse handlers.
@@ -178,12 +200,14 @@ void PdfViewer::closePdf() {
   document_->close();
   currentPage_ = 0;
   currentZoom_ = 1.0;
+  pageRotation_ = 0; // never carry a rotation over to the next document
   resetTransform();
   // Drop search state bound to the old document so stale highlights can't
   // flash against the geometry of a newly opened document.
   closeSearch();
   if (undoRedoManager_) {
-    undoRedoManager_->clear();
+    // The history is shared with the canvas: drop only the PDF's actions.
+    undoRedoManager_->clearOwnedBy(this);
   }
 
   emit pdfClosed();
@@ -202,6 +226,13 @@ void PdfViewer::goToPage(int pageIndex) {
 
   if (pageIndex < 0 || pageIndex >= pageCount()) {
     return;
+  }
+
+  if (pageIndex != currentPage_ && !navigatingForHistory_) {
+    // Commit an unfinished gesture while currentPage_ still names the page
+    // it was drawn on; otherwise it would stay on screen and be filed under
+    // the new page. (Not during undo/redo: history is committed up front.)
+    commitActiveGesture();
   }
 
   currentPage_ = pageIndex;
@@ -242,14 +273,6 @@ void PdfViewer::renderCurrentPage() {
     return;
   }
 
-  // Apply rotation if needed
-  if (pageRotation_ != 0) {
-    QTransform rotationTransform;
-    rotationTransform.rotate(pageRotation_);
-    pageImage =
-        pageImage.transformed(rotationTransform, Qt::SmoothTransformation);
-  }
-
   // Create or update page item
   if (!pageItem_) {
     pageItem_ = new PdfPageItem();
@@ -271,16 +294,9 @@ void PdfViewer::renderCurrentPage() {
 void PdfViewer::setToolType(ToolManager::ToolType toolType) {
   specialTool_ = SpecialTool::None;
 
-  // Reset drag mode
-  setDragMode(QGraphicsView::NoDrag);
-
   // Set via tool manager
   toolManager_->setActiveTool(toolType);
-
-  // Set rubber band drag for selection tool
-  if (toolType == ToolManager::ToolType::Selection) {
-    setDragMode(QGraphicsView::RubberBandDrag);
-  }
+  updateDragMode();
 
   // Update cursor based on active tool
   Tool *tool = toolManager_->activeTool();
@@ -291,23 +307,58 @@ void PdfViewer::setToolType(ToolManager::ToolType toolType) {
   scene_->clearSelection();
 }
 
+void PdfViewer::updateDragMode() {
+  // One place decides dragging from mode + special tool + active tool, so
+  // switching any of them can't leave a stale mode (e.g. View mode that no
+  // longer pans, or a Select tool without rubber-band selection).
+  if (mode_ == Mode::View) {
+    setDragMode(QGraphicsView::ScrollHandDrag);
+  } else if (specialTool_ != SpecialTool::None) {
+    setDragMode(QGraphicsView::NoDrag);
+  } else if (toolManager_ && toolManager_->activeToolType() ==
+                                 ToolManager::ToolType::Selection) {
+    setDragMode(QGraphicsView::RubberBandDrag);
+  } else {
+    setDragMode(QGraphicsView::NoDrag);
+  }
+  // In View mode clicks must pan, never grab and move annotations.
+  setInteractive(mode_ != Mode::View);
+}
+
 void PdfViewer::setScreenshotSelectionMode(bool enabled) {
   if (enabled) {
     specialTool_ = SpecialTool::ScreenshotSelection;
     QGraphicsView::setCursor(Qt::CrossCursor);
-    setDragMode(QGraphicsView::NoDrag);
+    updateDragMode();
   } else {
     specialTool_ = SpecialTool::None;
-    // Restore cursor from current tool
+    // Leaving mid-drag (Escape) must not strand the selection rectangle.
+    if (screenshotSelectionRect_) {
+      if (screenshotSelectionRect_->scene())
+        scene_->removeItem(screenshotSelectionRect_);
+      delete screenshotSelectionRect_;
+      screenshotSelectionRect_ = nullptr;
+    }
+    // Restore cursor (and rubber-band dragging) from the current tool
     Tool *tool = toolManager_->activeTool();
     if (tool) {
       QGraphicsView::setCursor(tool->cursor());
     }
+    updateDragMode();
   }
 }
 
 void PdfViewer::setPenColor(const QColor &color) {
-  currentPen_.setColor(color);
+  QColor penColor = color;
+  penColor.setAlpha(currentOpacity_);
+  currentPen_.setColor(penColor);
+}
+
+void PdfViewer::setOpacity(int opacity) {
+  currentOpacity_ = qBound(0, opacity, 255);
+  QColor penColor = currentPen_.color();
+  penColor.setAlpha(currentOpacity_);
+  currentPen_.setColor(penColor);
 }
 
 void PdfViewer::setPenWidth(int width) {
@@ -362,10 +413,19 @@ void PdfViewer::zoomIn() { applyZoom(ZOOM_FACTOR); }
 
 void PdfViewer::zoomOut() { applyZoom(1.0 / ZOOM_FACTOR); }
 
-void PdfViewer::zoomReset() {
+void PdfViewer::applyViewTransform() {
+  // Rotation lives in the view transform, not in the page bitmap, so the
+  // page and its annotations (both in scene coordinates) rotate together
+  // and search highlights / export stay in unrotated page space.
   resetTransform();
+  rotate(pageRotation_);
+  scale(currentZoom_, currentZoom_);
+}
+
+void PdfViewer::zoomReset() {
   currentZoom_ = 1.0;
   renderCurrentPage();
+  applyViewTransform();
   emit zoomChanged(100.0);
 }
 
@@ -376,9 +436,8 @@ void PdfViewer::setZoomPercent(double zoomPercent) {
   }
 
   currentZoom_ = zoomFactor;
-  resetTransform();
   renderCurrentPage();
-  scale(currentZoom_, currentZoom_);
+  applyViewTransform();
   emit zoomChanged(currentZoom_ * 100.0);
 }
 
@@ -392,14 +451,15 @@ void PdfViewer::fitToWidth() {
     return;
   }
 
-  // Calculate scale to fit width
+  // Calculate scale to fit width (a quarter turn swaps the page's sides)
+  const bool quarterTurn = pageRotation_ % 180 != 0;
   double viewWidth = viewport()->width() - 20; // Margin
-  double scale = viewWidth / pageRect.width();
+  double scale =
+      viewWidth / (quarterTurn ? pageRect.height() : pageRect.width());
 
-  resetTransform();
   currentZoom_ = scale;
   renderCurrentPage();
-  this->scale(scale, scale);
+  applyViewTransform();
   emit zoomChanged(currentZoom_ * 100.0);
 }
 
@@ -416,25 +476,27 @@ void PdfViewer::fitToPage() {
   // Calculate scale to fit entire page
   double viewWidth = viewport()->width() - 20;
   double viewHeight = viewport()->height() - 20;
-  double scaleX = viewWidth / pageRect.width();
-  double scaleY = viewHeight / pageRect.height();
+  const bool quarterTurn = pageRotation_ % 180 != 0;
+  double scaleX =
+      viewWidth / (quarterTurn ? pageRect.height() : pageRect.width());
+  double scaleY =
+      viewHeight / (quarterTurn ? pageRect.width() : pageRect.height());
   double scale = qMin(scaleX, scaleY);
 
-  resetTransform();
   currentZoom_ = scale;
   renderCurrentPage();
-  this->scale(scale, scale);
+  applyViewTransform();
   emit zoomChanged(currentZoom_ * 100.0);
 }
 
 void PdfViewer::rotatePageLeft() {
   pageRotation_ = (pageRotation_ - 90 + 360) % 360;
-  renderCurrentPage();
+  applyViewTransform();
 }
 
 void PdfViewer::rotatePageRight() {
   pageRotation_ = (pageRotation_ + 90) % 360;
-  renderCurrentPage();
+  applyViewTransform();
 }
 
 void PdfViewer::setMode(Mode mode) {
@@ -443,16 +505,15 @@ void PdfViewer::setMode(Mode mode) {
 
     if (mode_ == Mode::View) {
       // View mode: disable drawing, set cursor to arrow
-      setDragMode(QGraphicsView::ScrollHandDrag);
       QGraphicsView::setCursor(Qt::ArrowCursor);
     } else {
       // Annotate mode: restore tool cursor
-      setDragMode(QGraphicsView::NoDrag);
       Tool *tool = toolManager_->activeTool();
       if (tool) {
         QGraphicsView::setCursor(tool->cursor());
       }
     }
+    updateDragMode();
 
     emit modeChanged(mode_);
   }
@@ -555,6 +616,12 @@ void PdfViewer::addDrawAction(QGraphicsItem *item) {
   auto onAdd = [this, pageIndex](QGraphicsItem *added) {
     if (!overlayManager_ || !added)
       return;
+    // Undo/redo of an edit on another page: show that page, or the change
+    // happens out of sight and looks like undo did nothing.
+    if (pageIndex != currentPage_) {
+      const QScopedValueRollback<bool> history(navigatingForHistory_, true);
+      goToPage(pageIndex);
+    }
     if (overlayManager_->overlay(pageIndex)) {
       overlayManager_->addItemToPage(pageIndex, added);
     }
@@ -562,6 +629,10 @@ void PdfViewer::addDrawAction(QGraphicsItem *item) {
   auto onRemove = [this, pageIndex](QGraphicsItem *removed) {
     if (!overlayManager_ || !removed)
       return;
+    if (pageIndex != currentPage_) {
+      const QScopedValueRollback<bool> history(navigatingForHistory_, true);
+      goToPage(pageIndex);
+    }
     overlayManager_->removeItemFromPage(pageIndex, removed);
   };
 
@@ -572,6 +643,36 @@ void PdfViewer::addDrawAction(QGraphicsItem *item) {
   }
   overlayManager_->addItemToPage(currentPage_, item);
   emit documentModified();
+}
+
+void PdfViewer::deleteSelectedItems() {
+  if (!hasPdf() || !scene_)
+    return;
+  const QList<QGraphicsItem *> selected = scene_->selectedItems();
+  for (QGraphicsItem *item : selected) {
+    if (!item || item->parentItem() || item == pageItem_ ||
+        item == screenshotSelectionRect_)
+      continue;
+    addDeleteAction(item);
+    if (sceneController_) {
+      sceneController_->removeItem(item, true); // keep for undo
+    } else {
+      scene_->removeItem(item);
+      onItemRemoved(item);
+    }
+  }
+}
+
+void PdfViewer::selectAll() {
+  if (!hasPdf() || !overlayManager_)
+    return;
+  scene_->clearSelection();
+  if (PdfPageOverlay *overlay = overlayManager_->overlay(currentPage_)) {
+    for (QGraphicsItem *item : overlay->items()) {
+      if (item)
+        item->setSelected(true);
+    }
+  }
 }
 
 void PdfViewer::addDeleteAction(QGraphicsItem *item) {
@@ -599,6 +700,12 @@ void PdfViewer::addDeleteAction(QGraphicsItem *item) {
   auto onAdd = [this, pageIndex](QGraphicsItem *added) {
     if (!overlayManager_ || !added)
       return;
+    // Undo/redo of an edit on another page: show that page, or the change
+    // happens out of sight and looks like undo did nothing.
+    if (pageIndex != currentPage_) {
+      const QScopedValueRollback<bool> history(navigatingForHistory_, true);
+      goToPage(pageIndex);
+    }
     if (overlayManager_->overlay(pageIndex)) {
       overlayManager_->addItemToPage(pageIndex, added);
     }
@@ -606,6 +713,10 @@ void PdfViewer::addDeleteAction(QGraphicsItem *item) {
   auto onRemove = [this, pageIndex](QGraphicsItem *removed) {
     if (!overlayManager_ || !removed)
       return;
+    if (pageIndex != currentPage_) {
+      const QScopedValueRollback<bool> history(navigatingForHistory_, true);
+      goToPage(pageIndex);
+    }
     overlayManager_->removeItemFromPage(pageIndex, removed);
   };
 
@@ -616,13 +727,40 @@ void PdfViewer::addDeleteAction(QGraphicsItem *item) {
   }
 }
 
+void PdfViewer::commitActiveGesture() {
+  if (!toolManager_)
+    return;
+  if (Tool *tool = toolManager_->activeTool()) {
+    tool->deactivate();
+    tool->activate();
+  }
+}
+
+void PdfViewer::beginActionGroup() {
+  if (!actionGroup_)
+    actionGroup_ = std::make_unique<CompositeAction>();
+}
+
+void PdfViewer::endActionGroup() {
+  if (!actionGroup_)
+    return;
+  std::unique_ptr<CompositeAction> group = std::move(actionGroup_);
+  if (!group->isEmpty())
+    addAction(std::move(group));
+}
+
 void PdfViewer::addAction(std::unique_ptr<Action> action) {
   if (!hasPdf()) {
     return;
   }
+  if (actionGroup_) {
+    actionGroup_->addAction(std::move(action));
+    emit documentModified();
+    return;
+  }
 
   if (undoRedoManager_) {
-    undoRedoManager_->push(std::move(action));
+    undoRedoManager_->push(std::move(action), this);
   } else {
     if (auto *undoStack = overlayManager_->undoStack(currentPage_)) {
       undoStack->push_back(std::move(action));
@@ -655,7 +793,10 @@ bool PdfViewer::exportAnnotatedPdf(const QString &filePath) {
   }
 
   QPdfWriter pdfWriter(filePath);
-  pdfWriter.setPageSize(QPageSize::A4);
+  const QSizeF firstPagePoints = document_->pageSize(0);
+  pdfWriter.setPageSize(firstPagePoints.isEmpty()
+                            ? QPageSize(QPageSize::A4)
+                            : QPageSize(firstPagePoints, QPageSize::Point));
   pdfWriter.setPageMargins(QMarginsF(0, 0, 0, 0));
   pdfWriter.setTitle("Annotated PDF Export");
   pdfWriter.setCreator("FullScreen Pencil Draw");
@@ -674,17 +815,26 @@ bool PdfViewer::exportAnnotatedPdf(const QString &filePath) {
 
   for (int i = 0; i < pageCount(); ++i) {
     if (i > 0) {
+      // Keep each page's own size/orientation instead of forcing A4.
+      const QSizeF pagePoints = document_->pageSize(i);
+      if (!pagePoints.isEmpty()) {
+        pdfWriter.setPageSize(QPageSize(pagePoints, QPageSize::Point));
+      }
       pdfWriter.newPage();
     }
 
-    // Render PDF page
-    QImage pageImage = document_->renderPage(i, renderDpi_, darkMode_);
+    // Render the page itself; dark mode is only a viewing aid and must not
+    // end up inverted in the exported document.
+    QImage pageImage = document_->renderPage(i, renderDpi_, false);
     if (pageImage.isNull()) {
       continue;
     }
 
-    // Calculate scale to fit page
-    QRectF pageRect = painter.viewport();
+    // Calculate scale to fit page. Use the writer's current layout: the
+    // painter's viewport keeps the first page's size after a page-size
+    // change.
+    const QRectF pageRect =
+        pdfWriter.pageLayout().paintRectPixels(pdfWriter.resolution());
     double scaleX = pageRect.width() / static_cast<double>(pageImage.width());
     double scaleY = pageRect.height() / static_cast<double>(pageImage.height());
     double scale = qMin(scaleX, scaleY);
@@ -700,28 +850,20 @@ bool PdfViewer::exportAnnotatedPdf(const QString &filePath) {
     // Draw PDF background
     painter.drawImage(0, 0, pageImage);
 
-    // Draw overlay items for this page
+    // Draw overlay items for this page (children included, so grouped
+    // items such as arrows are exported too)
     if (auto *overlay = overlayManager_->overlay(i)) {
+      const QTransform pageTransform = painter.worldTransform();
       ItemStore *store = itemStore();
       if (store) {
-        QStyleOptionGraphicsItem styleOption;
         for (const ItemId &id : overlay->itemIds()) {
-          if (QGraphicsItem *item = store->item(id)) {
-            painter.save();
-            painter.setTransform(item->sceneTransform(), true);
-            item->paint(&painter, &styleOption, nullptr);
-            painter.restore();
-          }
+          paintItemTree(&painter, store->item(id), pageTransform,
+                        /*paintSelection=*/false);
         }
       } else {
-        QStyleOptionGraphicsItem styleOption;
         for (QGraphicsItem *item : overlay->items()) {
-          if (item) {
-            painter.save();
-            painter.setTransform(item->sceneTransform(), true);
-            item->paint(&painter, &styleOption, nullptr);
-            painter.restore();
-          }
+          paintItemTree(&painter, item, pageTransform,
+                        /*paintSelection=*/false);
         }
       }
     }
@@ -828,6 +970,20 @@ void PdfViewer::mousePressEvent(QMouseEvent *event) {
   Tool *tool = toolManager_->activeTool();
   if (tool && tool->usesRubberBandSelection()) {
     QGraphicsView::mousePressEvent(event);
+    // Remember where the (possibly just selected) items start, so a drag
+    // becomes one undoable move on release.
+    moveStartPositions_.clear();
+    if (event->button() == Qt::LeftButton) {
+      if (ItemStore *store = itemStore()) {
+        for (QGraphicsItem *item : scene_->selectedItems()) {
+          if (!item || item->parentItem() || item == pageItem_)
+            continue;
+          const ItemId id = store->idForItem(item);
+          if (id.isValid())
+            moveStartPositions_.insert(id, item->pos());
+        }
+      }
+    }
     return;
   }
 
@@ -901,6 +1057,9 @@ void PdfViewer::mouseReleaseEvent(QMouseEvent *event) {
 
     if (selectionRect.width() > 5 && selectionRect.height() > 5) {
       captureScreenshot(selectionRect);
+      // One capture per activation; otherwise every later drag would keep
+      // pasting screenshots into the canvas.
+      setScreenshotSelectionMode(false);
     }
     return;
   }
@@ -909,6 +1068,21 @@ void PdfViewer::mouseReleaseEvent(QMouseEvent *event) {
   Tool *tool = toolManager_->activeTool();
   if (tool && tool->usesRubberBandSelection()) {
     QGraphicsView::mouseReleaseEvent(event);
+    if (event->button() == Qt::LeftButton && !moveStartPositions_.isEmpty()) {
+      ItemStore *store = itemStore();
+      auto composite = std::make_unique<CompositeAction>();
+      for (auto it = moveStartPositions_.cbegin();
+           it != moveStartPositions_.cend(); ++it) {
+        QGraphicsItem *item = store ? store->item(it.key()) : nullptr;
+        if (item && item->pos() != it.value()) {
+          composite->addAction(std::make_unique<MoveAction>(
+              it.key(), store, it.value(), item->pos()));
+        }
+      }
+      moveStartPositions_.clear();
+      if (!composite->isEmpty())
+        addAction(std::move(composite));
+    }
     return;
   }
 
@@ -932,6 +1106,12 @@ void PdfViewer::mouseDoubleClickEvent(QMouseEvent *event) {
   // Forward to the active tool so it can implement double-click gestures
   // (e.g. finalizing a Bezier / text-on-path).
   Tool *tool = toolManager_->activeTool();
+  if (tool && !tool->usesDoubleClick() && !tool->usesRubberBandSelection()) {
+    // A fast second click arrives as a double-click; handle it as a new
+    // press or quick successive strokes/shapes would be dropped.
+    mousePressEvent(event);
+    return;
+  }
   if (tool) {
     tool->mouseDoubleClickEvent(event, mapToScene(event->pos()));
   }
@@ -955,6 +1135,37 @@ void PdfViewer::keyPressEvent(QKeyEvent *event) {
       event->accept();
       return;
     }
+  }
+  // Page navigation. QGraphicsView would consume these keys for scrolling,
+  // so the window-level shortcuts never saw them once the viewer had focus.
+  // (Not while an inline text editor has focus: it needs Home/End.)
+  if (event->modifiers() == Qt::NoModifier && !scene_->focusItem()) {
+    switch (event->key()) {
+    case Qt::Key_PageDown:
+      nextPage();
+      event->accept();
+      return;
+    case Qt::Key_PageUp:
+      previousPage();
+      event->accept();
+      return;
+    case Qt::Key_Home:
+      firstPage();
+      event->accept();
+      return;
+    case Qt::Key_End:
+      lastPage();
+      event->accept();
+      return;
+    default:
+      break;
+    }
+  }
+  if (event->key() == Qt::Key_Escape && specialTool_ != SpecialTool::None) {
+    // Leave screenshot-selection (or other special) mode.
+    setScreenshotSelectionMode(false);
+    event->accept();
+    return;
   }
   QGraphicsView::keyPressEvent(event);
 }
@@ -1095,7 +1306,11 @@ void PdfViewer::openSearch() {
 }
 
 void PdfViewer::closeSearch() {
-  searchBar_->deactivate();
+  {
+    // deactivate() emits closed(), which is connected back to this slot.
+    const QSignalBlocker blocker(searchBar_);
+    searchBar_->deactivate();
+  }
   searchModel_->setSearchString(QString());
   currentMatchIndex_ = -1;
   totalMatchCount_ = 0;
@@ -1120,23 +1335,23 @@ void PdfViewer::performSearch(const QString &text) {
     return;
   }
 
+  // Results arrive asynchronously via onSearchResultsChanged().
+  searchStartPage_ = currentPage_;
+  searchUserNavigated_ = false;
+  currentMatchIndex_ = -1;
+  totalMatchCount_ = 0;
+  currentPageHighlights_.clear();
+  highlightedMatchPage_ = -1;
+  highlightedMatchIndexOnPage_ = -1;
   searchModel_->setSearchString(text);
+  onSearchResultsChanged();
+}
 
-  // Count total matches across all pages
+void PdfViewer::onSearchResultsChanged() {
+  if (!searchModel_ || searchModel_->searchString().isEmpty())
+    return;
   totalMatchCount_ = searchModel_->rowCount(QModelIndex());
-
-  if (totalMatchCount_ > 0) {
-    // Find the first match on or after the current page
-    currentMatchIndex_ = 0;
-    for (int i = 0; i < totalMatchCount_; ++i) {
-      QPdfLink link = searchModel_->resultAtIndex(i);
-      if (link.page() >= currentPage_) {
-        currentMatchIndex_ = i;
-        break;
-      }
-    }
-    navigateToMatch(currentMatchIndex_);
-  } else {
+  if (totalMatchCount_ <= 0) {
     currentMatchIndex_ = -1;
     currentPageHighlights_.clear();
     highlightedMatchPage_ = -1;
@@ -1144,13 +1359,37 @@ void PdfViewer::performSearch(const QString &text) {
     searchBar_->setMatchInfo(0, 0);
     viewport()->update();
     scene_->invalidate(scene_->sceneRect(), QGraphicsScene::ForegroundLayer);
+    return;
   }
+  if (!searchUserNavigated_) {
+    // Results arrive in batches: until the user steps through matches, keep
+    // targeting the first match on or after the page the search started on
+    // (an early batch may only contain earlier pages).
+    int preferred = 0;
+    for (int i = 0; i < totalMatchCount_; ++i) {
+      if (searchModel_->resultAtIndex(i).page() >= searchStartPage_) {
+        preferred = i;
+        break;
+      }
+    }
+    if (preferred != currentMatchIndex_) {
+      currentMatchIndex_ = preferred;
+      navigateToMatch(currentMatchIndex_);
+      return;
+    }
+  }
+  // More results for the current target: refresh count and highlights.
+  searchBar_->setMatchInfo(currentMatchIndex_ + 1, totalMatchCount_);
+  updateSearchHighlights();
+  viewport()->update();
+  scene_->invalidate(scene_->sceneRect(), QGraphicsScene::ForegroundLayer);
 }
 
 void PdfViewer::findNext() {
   if (totalMatchCount_ <= 0) {
     return;
   }
+  searchUserNavigated_ = true;
   currentMatchIndex_ = (currentMatchIndex_ + 1) % totalMatchCount_;
   navigateToMatch(currentMatchIndex_);
 }
@@ -1159,6 +1398,7 @@ void PdfViewer::findPrevious() {
   if (totalMatchCount_ <= 0) {
     return;
   }
+  searchUserNavigated_ = true;
   currentMatchIndex_ =
       (currentMatchIndex_ - 1 + totalMatchCount_) % totalMatchCount_;
   navigateToMatch(currentMatchIndex_);
@@ -1295,8 +1535,18 @@ void PdfViewer::drawForeground(QPainter *painter, const QRectF &rect) {
 void PdfViewer::resizeEvent(QResizeEvent *event) {
   QGraphicsView::resizeEvent(event);
   // Reposition the search bar when the viewer is resized
+  // (activate() would also steal focus and re-select the typed text).
   if (searchBar_ && searchBar_->isVisible()) {
-    searchBar_->activate();
+    searchBar_->positionInParent();
+  }
+}
+
+void PdfViewer::scrollContentsBy(int dx, int dy) {
+  QGraphicsView::scrollContentsBy(dx, dy);
+  // Scrolling the viewport also moves its child widgets; keep the search
+  // bar pinned to the top-right corner instead of scrolling it away.
+  if (searchBar_ && searchBar_->isVisible()) {
+    searchBar_->positionInParent();
   }
 }
 

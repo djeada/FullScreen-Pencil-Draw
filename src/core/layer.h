@@ -116,7 +116,7 @@ public:
    * @brief Set layer lock state
    * @param locked Whether to lock the layer
    */
-  void setLocked(bool locked) { locked_ = locked; }
+  void setLocked(bool locked);
 
   /**
    * @brief Get the layer opacity
@@ -282,6 +282,7 @@ private:
 
   void updateItemsVisibility();
   void updateItemsOpacity();
+  void applyLockToItem(QGraphicsItem *item) const;
 };
 
 /**
@@ -449,6 +450,19 @@ public:
   void addItemToActiveLayer(QGraphicsItem *item);
 
   /**
+   * @brief Z distance between consecutive layers. Items take
+   *        layerIndex * kLayerZSpacing + their index within the layer, which
+   *        keeps every layer's content below tool overlays (z >= 1e8).
+   */
+  static constexpr qreal kLayerZSpacing = 100000.0;
+
+  /**
+   * @brief Re-assign every item's z-value from its layer and position
+   *        (after bulk changes such as loading a project or ungrouping).
+   */
+  void updateLayerZOrder();
+
+  /**
    * @brief Merge a layer with the one below it
    * @param index The layer index to merge down
    * @return true if merged successfully
@@ -521,8 +535,6 @@ private:
   SceneController *sceneController_;
   std::vector<std::unique_ptr<Layer>> layers_;
   int activeLayerIndex_;
-
-  void updateLayerZOrder();
 };
 
 #endif // LAYER_H

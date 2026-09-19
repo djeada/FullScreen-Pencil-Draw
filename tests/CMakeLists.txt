@@ -13,6 +13,13 @@ set(CORE_SOURCES
     ../src/core/scene_controller.cpp
     ../src/core/layer.cpp
     ../src/core/project_serializer.cpp
+    # Item types the project serializer can save/load
+    ../src/widgets/architecture_elements.cpp
+    ../src/widgets/electronics_elements.cpp
+    ../src/widgets/element_factory.cpp
+    ../src/widgets/mermaid_text_item.cpp
+    ../src/widgets/wire_item.cpp
+    ../src/core/theme_manager.cpp
 )
 
 set(CORE_HEADERS
@@ -471,6 +478,7 @@ set(CANVAS_TEST_SOURCES
     ../src/widgets/color_curves_dialog.cpp
     ../src/widgets/dock_title_bar.cpp
     ../src/widgets/electronics_elements.cpp
+    ../src/widgets/element_factory.cpp
     ../src/widgets/image_size_dialog.cpp
     ../src/widgets/latex_text_item.cpp
     ../src/widgets/layer_panel.cpp

@@ -5,6 +5,7 @@
 #include <QObject>
 #include <QString>
 #include <QTimer>
+#include <functional>
 
 class Canvas;
 
@@ -26,6 +27,11 @@ public:
   QString autoSavePath() const;
   bool hasAutoSave() const;
 
+  /// Auto-save only runs while this returns true (e.g. unsaved changes).
+  void setShouldSaveCheck(std::function<bool()> check) {
+    shouldSave_ = std::move(check);
+  }
+
 public slots:
   void setEnabled(bool enabled);
   void setIntervalMinutes(int minutes);
@@ -43,6 +49,7 @@ private:
   bool enabled_;
   int intervalMinutes_;
   QString autoSavePath_;
+  std::function<bool()> shouldSave_;
 
   void loadSettings();
   void saveSettings();

@@ -23,13 +23,13 @@ ResizeCanvasDialog::ResizeCanvasDialog(int currentWidth, int currentHeight,
                                    "padding: 6px 0; font-weight: 500; }");
 
   widthSpinBox_ = new QSpinBox(this);
-  widthSpinBox_->setRange(1, 10000);
+  widthSpinBox_->setRange(1, 100000);
   widthSpinBox_->setValue(currentWidth);
   widthSpinBox_->setSuffix(" px");
   widthSpinBox_->setMinimumHeight(40);
 
   heightSpinBox_ = new QSpinBox(this);
-  heightSpinBox_->setRange(1, 10000);
+  heightSpinBox_->setRange(1, 100000);
   heightSpinBox_->setValue(currentHeight);
   heightSpinBox_->setSuffix(" px");
   heightSpinBox_->setMinimumHeight(40);

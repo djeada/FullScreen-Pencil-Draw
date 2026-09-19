@@ -239,6 +239,21 @@ private slots:
     QCOMPARE(result.width(), 50);
     QCOMPARE(result.height(), 30);
   }
+
+  // Blurring white on a transparent background must not pull in the black
+  // colour stored in transparent pixels (dark halo around the shape).
+  void blurHasNoDarkFringeOnTransparency() {
+    QImage img(20, 20, QImage::Format_ARGB32);
+    img.fill(qRgba(0, 0, 0, 0));
+    for (int y = 5; y < 15; ++y)
+      for (int x = 5; x < 15; ++x)
+        img.setPixel(x, y, qRgba(255, 255, 255, 255));
+    QImage result = ImageFilters::blur(img, 2);
+    const QRgb edge = result.pixel(4, 10); // partially transparent now
+    QVERIFY(qAlpha(edge) > 0);
+    QVERIFY(qAlpha(edge) < 255);
+    QVERIFY(qRed(edge) >= 250);
+  }
 };
 
 QTEST_MAIN(TestImageFilters)

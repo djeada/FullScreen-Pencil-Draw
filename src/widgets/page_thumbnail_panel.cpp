@@ -15,6 +15,7 @@
 #include <QPalette>
 #include <QScrollBar>
 #include <QStyledItemDelegate>
+#include <QTimer>
 
 namespace {
 
@@ -98,6 +99,11 @@ PageThumbnailPanel::PageThumbnailPanel(PdfViewer *viewer, QWidget *parent)
     : QWidget(parent), pdfViewer_(viewer), header_(nullptr),
       thumbnailList_(nullptr), layout_(nullptr) {
   setupUI();
+
+  thumbnailTimer_ = new QTimer(this);
+  thumbnailTimer_->setInterval(0);
+  connect(thumbnailTimer_, &QTimer::timeout, this,
+          &PageThumbnailPanel::renderNextThumbnail);
 
   if (pdfViewer_) {
     connect(pdfViewer_, &PdfViewer::pdfLoaded, this,
@@ -314,6 +320,7 @@ void PageThumbnailPanel::onPdfLoaded() {
 }
 
 void PageThumbnailPanel::onPdfClosed() {
+  thumbnailTimer_->stop();
   thumbnailList_->clear();
   hide();
   emit visibilityChanged(false);
@@ -338,11 +345,14 @@ void PageThumbnailPanel::generateThumbnails() {
 
   int pageCount = doc->pageCount();
 
+  // Placeholders first (the list is usable immediately); the real images
+  // are filled in incrementally by renderNextThumbnail().
+  QPixmap placeholder(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT);
+  placeholder.fill(palette().color(QPalette::Mid));
+  const QIcon placeholderIcon(placeholder);
   for (int i = 0; i < pageCount; ++i) {
-    QPixmap thumbnail = renderThumbnail(i);
-
     QListWidgetItem *item = new QListWidgetItem();
-    item->setIcon(QIcon(thumbnail));
+    item->setIcon(placeholderIcon);
     item->setText(QString::number(i + 1));
     item->setTextAlignment(Qt::AlignHCenter | Qt::AlignBottom);
     item->setSizeHint(QSize(THUMBNAIL_WIDTH + 16, THUMBNAIL_HEIGHT + 24));
@@ -350,11 +360,25 @@ void PageThumbnailPanel::generateThumbnails() {
 
     thumbnailList_->addItem(item);
   }
+  nextThumbnail_ = 0;
+  thumbnailTimer_->start();
 
   // Select current page
   if (thumbnailList_->count() > 0) {
     setCurrentPage(pdfViewer_->currentPage());
   }
+}
+
+void PageThumbnailPanel::renderNextThumbnail() {
+  if (!pdfViewer_ || !pdfViewer_->hasPdf() ||
+      nextThumbnail_ >= thumbnailList_->count()) {
+    thumbnailTimer_->stop();
+    return;
+  }
+  if (QListWidgetItem *item = thumbnailList_->item(nextThumbnail_)) {
+    item->setIcon(QIcon(renderThumbnail(nextThumbnail_)));
+  }
+  ++nextThumbnail_;
 }
 
 QPixmap PageThumbnailPanel::renderThumbnail(int pageIndex) {

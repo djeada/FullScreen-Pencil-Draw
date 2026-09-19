@@ -12,7 +12,8 @@ LassoSelectionTool::~LassoSelectionTool() = default;
 
 void LassoSelectionTool::mousePressEvent(QMouseEvent *event,
                                          const QPointF &scenePos) {
-  if (!(event->buttons() & Qt::LeftButton))
+  if (event->button() !=
+      Qt::LeftButton) // not buttons(): extra presses mid-drag
     return;
 
   QGraphicsScene *s = renderer_->scene();

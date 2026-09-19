@@ -154,6 +154,13 @@ public:
     }
     return ItemId();
   }
+
+  /**
+   * @brief Group the actions added until endActionGroup() into a single
+   *        undo step (e.g. everything one eraser drag removes).
+   */
+  virtual void beginActionGroup() {}
+  virtual void endActionGroup() {}
 };
 
 #endif // SCENE_RENDERER_H

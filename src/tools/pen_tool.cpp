@@ -14,7 +14,8 @@ PenTool::PenTool(SceneRenderer *renderer)
 PenTool::~PenTool() = default;
 
 void PenTool::mousePressEvent(QMouseEvent *event, const QPointF &scenePos) {
-  if (!(event->buttons() & Qt::LeftButton))
+  if (event->button() !=
+      Qt::LeftButton) // not buttons(): extra presses mid-drag
     return;
 
   const BrushTip &tip = renderer_->currentBrushTip();

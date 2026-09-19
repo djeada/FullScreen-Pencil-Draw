@@ -33,6 +33,7 @@ public:
   void mouseReleaseEvent(QMouseEvent *event, const QPointF &scenePos) override;
   void mouseDoubleClickEvent(QMouseEvent *event,
                              const QPointF &scenePos) override;
+  bool usesDoubleClick() const override { return true; }
 
   void deactivate() override;
 

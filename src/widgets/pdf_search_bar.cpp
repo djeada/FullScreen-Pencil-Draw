@@ -34,7 +34,7 @@ PdfSearchBar::PdfSearchBar(QWidget *parent) : QFrame(parent) {
   searchInput_ = new QLineEdit(this);
   searchInput_->setPlaceholderText("Find in PDF…");
   searchInput_->setClearButtonEnabled(true);
-  searchInput_->setMinimumWidth(180);
+  searchInput_->setMinimumWidth(100);
   searchInput_->setStyleSheet(R"(
     QLineEdit {
       background-color: #2a2a30;
@@ -206,11 +206,14 @@ void PdfSearchBar::positionInParent() {
   if (!parentWidget()) {
     return;
   }
-  int pw = parentWidget()->width();
-  int w = qMin(380, pw - 20);
+  const int pw = parentWidget()->width();
+  // Shrink to fit narrow viewers, but never below what the layout needs
+  // (a fixed width under the minimum would be overridden and push the bar
+  // off the left edge).
+  const int w = qMax(minimumSizeHint().width(), qMin(380, pw - 20));
   setFixedWidth(w);
-  // Top-right corner with margin
-  move(pw - w - 10, 10);
+  // Top-right corner with margin, clamped to stay inside the parent.
+  move(qMax(0, pw - w - 10), 10);
 }
 
 #endif // HAVE_QT_PDF

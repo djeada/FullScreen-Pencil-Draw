@@ -15,20 +15,37 @@
 #include "../src/core/layer.h"
 #include "../src/core/project_serializer.h"
 #include "../src/core/scene_controller.h"
+#include "../src/widgets/electronics_elements.h"
+#include "../src/widgets/element_factory.h"
 #include "../src/widgets/latex_text_item.h"
 #include "../src/widgets/text_on_path_item.h"
+#include "../src/widgets/wire_item.h"
 #include <QDir>
 #include <QFile>
 #include <QGraphicsEllipseItem>
+#include <QGraphicsItemGroup>
 #include <QGraphicsLineItem>
 #include <QGraphicsPathItem>
+#include <QGraphicsPolygonItem>
 #include <QGraphicsRectItem>
 #include <QGraphicsScene>
 #include <QGraphicsTextItem>
 #include <QLinearGradient>
+#include <QPainter>
 #include <QRadialGradient>
 #include <QTemporaryDir>
 #include <QtTest/QtTest>
+
+// Item type without a dedicated project format (like BrushStrokeItem):
+// saved through the raster fallback.
+class CustomPaintedItem : public QGraphicsItem {
+public:
+  QRectF boundingRect() const override { return QRectF(-10, -5, 40, 20); }
+  void paint(QPainter *painter, const QStyleOptionGraphicsItem *,
+             QWidget *) override {
+    painter->fillRect(boundingRect(), Qt::red);
+  }
+};
 
 class TestProjectSerializer : public QObject {
   Q_OBJECT
@@ -678,6 +695,140 @@ private slots:
     QCOMPARE(loadedPathText->pos(), QPointF(10, 20));
     QCOMPARE(loadedPathText->font().pointSize(), 20);
     QVERIFY(loadedPathText->path().elementCount() > 0);
+  }
+  // Arrows are groups (line + polygon head); they, locked items, element
+  // items with their wires and layer blend modes must all survive a save.
+  void testSaveAndLoadGroupsElementsWiresAndLocks() {
+    QTemporaryDir tmpDir;
+    QVERIFY(tmpDir.isValid());
+    const QString filePath = tmpDir.path() + "/test_mixed.fspd";
+
+    QGraphicsScene scene;
+    ItemStore store(&scene);
+    LayerManager manager(&scene);
+    manager.setItemStore(&store);
+    Layer *layer = manager.activeLayer();
+    layer->setBlendMode(Layer::BlendMode::Multiply);
+
+    auto *line = new QGraphicsLineItem(0, 0, 100, 0);
+    auto *head = new QGraphicsPolygonItem(
+        QPolygonF({QPointF(100, 0), QPointF(90, -5), QPointF(90, 5)}));
+    head->setBrush(Qt::red);
+    auto *arrow = new QGraphicsItemGroup();
+    arrow->addToGroup(line);
+    arrow->addToGroup(head);
+    arrow->setPos(50, 60);
+    layer->addItem(store.registerItem(arrow), &store);
+
+    auto *locked = new QGraphicsRectItem(0, 0, 10, 10);
+    locked->setData(0, "locked");
+    layer->addItem(store.registerItem(locked), &store);
+
+    QGraphicsItem *r1 = createDiagramElement("resistor");
+    QGraphicsItem *r2 = createDiagramElement("resistor");
+    QVERIFY(r1 && r2);
+    r2->setPos(200, 0);
+    layer->addItem(store.registerItem(r1), &store);
+    layer->addItem(store.registerItem(r2), &store);
+    auto *wire = new WireItem(static_cast<ElectronicsElementItem *>(r1), 1,
+                              static_cast<ElectronicsElementItem *>(r2), 0);
+    // Save the wire before its elements to exercise deferred resolution.
+    layer->addItem(store.registerItem(wire), &store);
+    layer->moveItemToBottom(store.idForItem(wire));
+
+    QVERIFY(ProjectSerializer::saveProject(filePath, &scene, &store, &manager,
+                                           QRectF(0, 0, 800, 600), Qt::white));
+
+    QGraphicsScene scene2;
+    ItemStore store2(&scene2);
+    LayerManager manager2(&scene2);
+    manager2.setItemStore(&store2);
+    QRectF rect;
+    QColor bg;
+    QVERIFY(ProjectSerializer::loadProject(filePath, &scene2, &store2,
+                                           &manager2, rect, bg));
+
+    Layer *loaded = manager2.layer(0);
+    QCOMPARE(loaded->blendMode(), Layer::BlendMode::Multiply);
+    QCOMPARE(loaded->itemCount(), 5);
+
+    int groups = 0, elements = 0, wires = 0, lockedCount = 0;
+    for (QGraphicsItem *item : loaded->items()) {
+      if (auto *g = dynamic_cast<QGraphicsItemGroup *>(item)) {
+        ++groups;
+        QCOMPARE(g->childItems().size(), 2);
+        QCOMPARE(g->pos(), QPointF(50, 60));
+      } else if (diagramElementId(item) == "resistor") {
+        ++elements;
+      } else if (auto *w = dynamic_cast<WireItem *>(item)) {
+        ++wires;
+        QVERIFY(w->sourceElement());
+        QVERIFY(w->destElement());
+        QCOMPARE(w->sourcePin(), 1);
+        QCOMPARE(w->destPin(), 0);
+      } else if (item->data(0).toString() == "locked") {
+        ++lockedCount;
+        QVERIFY(!(item->flags() & QGraphicsItem::ItemIsMovable));
+      }
+    }
+    QCOMPARE(groups, 1);
+    QCOMPARE(elements, 2);
+    QCOMPARE(wires, 1);
+    QCOMPARE(lockedCount, 1);
+  }
+  // The raster fallback must survive repeated save/load cycles without the
+  // bitmap changing size or position.
+  void testRasterFallbackIsStableAcrossSaves() {
+    QTemporaryDir tmpDir;
+    QVERIFY(tmpDir.isValid());
+
+    QGraphicsScene scene;
+    ItemStore store(&scene);
+    LayerManager manager(&scene);
+    manager.setItemStore(&store);
+    auto *custom = new CustomPaintedItem();
+    custom->setPos(100, 50);
+    manager.activeLayer()->addItem(store.registerItem(custom), &store);
+    const QRectF expected = custom->sceneBoundingRect();
+
+    QGraphicsScene *current = &scene;
+    ItemStore *currentStore = &store;
+    LayerManager *currentManager = &manager;
+    std::vector<std::unique_ptr<QGraphicsScene>> scenes;
+    std::vector<std::unique_ptr<ItemStore>> stores;
+    std::vector<std::unique_ptr<LayerManager>> managers;
+    for (int round = 0; round < 2; ++round) {
+      const QString path = tmpDir.path() + QString("/raster%1.fspd").arg(round);
+      QVERIFY(ProjectSerializer::saveProject(
+          path, current, currentStore, currentManager, QRectF(0, 0, 800, 600),
+          Qt::white));
+      scenes.push_back(std::make_unique<QGraphicsScene>());
+      stores.push_back(std::make_unique<ItemStore>(scenes.back().get()));
+      managers.push_back(std::make_unique<LayerManager>(scenes.back().get()));
+      managers.back()->setItemStore(stores.back().get());
+      QRectF rect;
+      QColor bg;
+      QVERIFY(ProjectSerializer::loadProject(path, scenes.back().get(),
+                                             stores.back().get(),
+                                             managers.back().get(), rect, bg));
+      current = scenes.back().get();
+      currentStore = stores.back().get();
+      currentManager = managers.back().get();
+      QCOMPARE(currentManager->layer(0)->itemCount(), 1);
+      const QRectF loaded =
+          currentManager->layer(0)->items().first()->sceneBoundingRect();
+      // QGraphicsPixmapItem pads its bounds by half a pixel on each side.
+      QVERIFY2(qAbs(loaded.width() - expected.width()) <= 1.0 &&
+                   qAbs(loaded.height() - expected.height()) <= 1.0 &&
+                   (loaded.topLeft() - expected.topLeft()).manhattanLength() <=
+                       1.0,
+               qPrintable(QString("round %1: %2,%3 %4x%5")
+                              .arg(round)
+                              .arg(loaded.x())
+                              .arg(loaded.y())
+                              .arg(loaded.width())
+                              .arg(loaded.height())));
+    }
   }
 };
 

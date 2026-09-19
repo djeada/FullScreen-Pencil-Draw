@@ -17,7 +17,22 @@ MermaidTool::~MermaidTool() = default;
 void MermaidTool::mousePressEvent(QMouseEvent *event, const QPointF &scenePos) {
   if (event->button() == Qt::LeftButton) {
     // Check if we clicked on an existing MermaidTextItem
+    // The inline editor is a proxy-widget child, so walk up to the owner.
     QGraphicsItem *item = renderer_->scene()->itemAt(scenePos, QTransform());
+    while (item && !dynamic_cast<MermaidTextItem *>(item))
+      item = item->parentItem();
+    // Commit any other open editor first: the next editor grabs focus with
+    // OtherFocusReason, which the focus-out handler deliberately ignores, so
+    // the previous one would otherwise stay open forever.
+    if (currentEditingItem_ &&
+        static_cast<QGraphicsItem *>(currentEditingItem_.data()) != item) {
+      QPointer<MermaidTextItem> previous = currentEditingItem_;
+      currentEditingItem_ = nullptr;
+      currentEditingItemId_ = ItemId();
+      if (previous->isEditing())
+        previous->finishEditing();
+    }
+
     if (auto *mermaidItem = dynamic_cast<MermaidTextItem *>(item)) {
       // If item is not editing, start editing it
       if (!mermaidItem->isEditing()) {
@@ -33,13 +48,6 @@ void MermaidTool::mousePressEvent(QMouseEvent *event, const QPointF &scenePos) {
         }
       }
       return;
-    }
-
-    // If there's a currently editing item, finish editing first
-    if (currentEditingItem_ && currentEditingItem_->isEditing()) {
-      // The editing will be finished by the focus out event
-      currentEditingItem_ = nullptr;
-      currentEditingItemId_ = ItemId();
     }
 
     // Create a new MermaidTextItem with inline editing

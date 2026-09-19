@@ -69,10 +69,20 @@ public:
                           ItemStore *itemStore, LayerManager *layerManager,
                           QRectF &sceneRect, QColor &backgroundColor);
 
-private:
+  /**
+   * @brief Serialize one item (and its children) to the project format.
+   * @return An empty object for items that cannot be represented.
+   */
   static QJsonObject serializeItem(QGraphicsItem *item);
+
+  /**
+   * @brief Recreate an item from serializeItem() output.
+   * @return A new, unregistered item, or nullptr (e.g. for wires, which need
+   *         their elements and are only resolved by loadProject()).
+   */
   static QGraphicsItem *deserializeItem(const QJsonObject &obj);
 
+private:
   static QJsonObject serializePen(const QPen &pen);
   static QPen deserializePen(const QJsonObject &obj);
 

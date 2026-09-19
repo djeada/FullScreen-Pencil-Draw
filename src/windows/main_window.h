@@ -51,6 +51,15 @@ private slots:
   void onMeasurementToolChanged(bool enabled);
   void onMeasurementUpdated(const QString &measurement);
   void onNewCanvas();
+  void onEditDelete();
+  void onEditSelectAll();
+  void onEditCut();
+  void onEditCopy();
+  void onEditPaste();
+  void onEditDuplicate();
+  void onZoomIn();
+  void onZoomOut();
+  void onZoomReset();
   void onToggleTheme();
   void onRecentFilesChanged();
   void openRecentFile();
@@ -69,6 +78,13 @@ private slots:
 #endif
 
 private:
+  /// Offer to save unsaved drawing changes; false means "cancel".
+  bool maybeSaveChanges();
+  /// Confirm discarding unexported PDF annotations; false means "cancel".
+  bool maybeDiscardPdfAnnotations();
+  void markOwnerDirty(const void *owner);
+  void commitGesturesBeforeHistory();
+  bool pdfIsActive() const;
   enum class ActiveSurface { Canvas, Pdf };
 
   Canvas *_canvas;
@@ -85,6 +101,7 @@ private:
   QAction *_rulerAction;
   QAction *_measurementAction;
   bool _documentDirty = false;
+  bool _pdfDirty = false; ///< PDF annotations not yet exported
   std::unique_ptr<UndoRedoManager> _undoRedoManager;
   ActiveSurface _activeSurface = ActiveSurface::Canvas;
 
