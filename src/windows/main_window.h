@@ -39,6 +39,7 @@ protected:
   void keyPressEvent(QKeyEvent *event) override;
 
 private slots:
+  void onHistorySettings();
   void onBrushSizeChanged(int size);
   void onColorChanged(const QColor &color);
   void onZoomChanged(double zoom);
@@ -101,6 +102,7 @@ private:
   QAction *_rulerAction;
   QAction *_measurementAction;
   bool _documentDirty = false;
+  void applyHistorySettings();
   bool _pdfDirty = false; ///< PDF annotations not yet exported
   std::unique_ptr<UndoRedoManager> _undoRedoManager;
   ActiveSurface _activeSurface = ActiveSurface::Canvas;

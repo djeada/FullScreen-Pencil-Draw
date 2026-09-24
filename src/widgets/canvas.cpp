@@ -3,6 +3,7 @@
  * @brief Implementation of the main drawing canvas widget.
  */
 #include "canvas.h"
+#include "../core/document_exporter.h"
 #include "../core/fill_utils.h"
 #include "../core/image_filters.h"
 #include "../core/item_store.h"
@@ -16,6 +17,7 @@
 #include "../tools/text_on_path_tool.h"
 #include "alignment_dialog.h"
 #include "architecture_elements.h"
+#include "brush_stroke_item.h"
 #include "busy_spinner_overlay.h"
 #include "color_curves_dialog.h"
 #include "electronics_elements.h"
@@ -25,6 +27,7 @@
 #include "latex_text_item.h"
 #include "mermaid_text_item.h"
 #include "perspective_transform_dialog.h"
+#include "raster_layer_item.h"
 #include "resize_canvas_dialog.h"
 #include "rotation_dialog.h"
 #include "scale_dialog.h"
@@ -36,6 +39,7 @@
 #include <QClipboard>
 #include <QColorDialog>
 #include <QDebug>
+#include <QDir>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QGraphicsEllipseItem>
@@ -52,8 +56,10 @@
 #include <QMouseEvent>
 #include <QPageSize>
 #include <QPaintEvent>
+#include <QPainterPathStroker>
 #include <QPdfWriter>
 #include <QPointer>
+#include <QPushButton>
 #include <QQueue>
 #include <QRubberBand>
 #include <QScrollBar>
@@ -460,18 +466,30 @@ std::unique_ptr<DeleteAction> Canvas::prepareDeleteAction(QGraphicsItem *item) {
   }
 
   QUuid layerId;
+  int layerIndex = -1;
   if (layerManager_) {
     if (Layer *layer = layerManager_->findLayerForItem(item)) {
       layerId = layer->id();
+      layerIndex = layer->indexOfItem(itemId);
     }
   }
 
-  auto onAdd = [this, layerId](QGraphicsItem *added) {
+  auto onAdd = [this, layerId, layerIndex](QGraphicsItem *added) {
     if (!layerManager_ || !added)
       return;
     if (!layerId.isNull()) {
       if (Layer *layer = layerManager_->layer(layerId)) {
         layer->addItem(added);
+        // Undo puts the object back where it was in its layer's stack,
+        // not on top of it.
+        const ItemId addedId =
+            itemStore() ? itemStore()->idForItem(added) : ItemId();
+        const int current = layer->indexOfItem(addedId);
+        const int target = qBound(0, layerIndex, layer->itemCount() - 1);
+        if (layerIndex >= 0 && current >= 0 && current != target) {
+          layer->moveItem(current, target);
+          emit layerManager_->itemOrderChanged();
+        }
         return;
       }
     }
@@ -721,7 +739,7 @@ void Canvas::setShape(const QString &shapeType) {
   }
   if (!scene_)
     return;
-  if (currentShape_ != Eraser) {
+  if (currentShape_ != Eraser && currentShape_ != PixelEraser) {
     hideEraserPreview();
     // Collected once: a per-item layer lookup would be quadratic.
     QSet<QGraphicsItem *> onLockedLayers;
@@ -740,7 +758,8 @@ void Canvas::setShape(const QString &shapeType) {
         continue;
       if (item != eraserPreview_ && item != backgroundImage_ &&
           item != colorSelectionOverlay_ &&
-          item->type() != TransformHandleItem::Type) {
+          item->type() != TransformHandleItem::Type &&
+          item->type() != RasterLayerItem::Type) {
         // Keep locked items (and items on locked layers) pinned.
         QGraphicsItem *top = item->topLevelItem();
         const bool locked =
@@ -813,6 +832,10 @@ void Canvas::abortInProgressDrawing() {
 // ---------------------------------------------------------------------------
 
 void Canvas::cleanupTransientToolState() {
+  // Pixel edits are applied live; switching tools mid-drag commits them as
+  // one undo step rather than leaving them outside the history.
+  endPixelErase();
+  endRasterStroke();
   // End an in-progress Bezier / text-on-path gesture before switching away,
   // so no half-built preview items are left in the scene.
   if (activePathTool_) {
@@ -964,6 +987,20 @@ void Canvas::setEraserTool() {
     colorSelectionOverlay_->hide();
   setCursor(Qt::BlankCursor);
   isPanning_ = false;
+}
+
+void Canvas::setPixelEraserTool() {
+  setEraserTool(); // same pointer handling and preview
+  currentShape_ = PixelEraser;
+  pixelEraseHinted_ = false;
+}
+
+void Canvas::setPixelEraserStrength(int percent) {
+  pixelEraserStrength_ = qBound(1, percent, 100) / 100.0;
+}
+
+void Canvas::setPixelEraserHardness(int percent) {
+  pixelEraserHardness_ = qBound(0, percent, 100) / 100.0;
 }
 
 void Canvas::setTextTool() {
@@ -1165,7 +1202,8 @@ void Canvas::increaseBrushSize() {
     int newSize = currentPen_.width() + BRUSH_SIZE_STEP;
     currentPen_.setWidth(newSize);
     eraserPen_.setWidth(eraserPen_.width() + BRUSH_SIZE_STEP);
-    if (currentShape_ == Eraser && eraserPreview_)
+    if ((currentShape_ == Eraser || currentShape_ == PixelEraser) &&
+        eraserPreview_)
       eraserPreview_->setRect(eraserPreview_->rect().x(),
                               eraserPreview_->rect().y(), eraserPen_.width(),
                               eraserPen_.width());
@@ -1179,7 +1217,8 @@ void Canvas::decreaseBrushSize() {
     currentPen_.setWidth(newSize);
     eraserPen_.setWidth(
         qMax(eraserPen_.width() - BRUSH_SIZE_STEP, MIN_BRUSH_SIZE));
-    if (currentShape_ == Eraser && eraserPreview_)
+    if ((currentShape_ == Eraser || currentShape_ == PixelEraser) &&
+        eraserPreview_)
       eraserPreview_->setRect(eraserPreview_->rect().x(),
                               eraserPreview_->rect().y(), eraserPen_.width(),
                               eraserPen_.width());
@@ -1270,6 +1309,7 @@ void Canvas::newCanvas(int width, int height, const QColor &bgColor) {
   // The caller already confirmed discarding the current document; a second
   // "clear canvas?" prompt whose "No" still resized the canvas made no sense.
   resetDocument();
+  currentFilePath_.clear();
   backgroundColor_ = bgColor;
   eraserPen_.setColor(backgroundColor_);
   scene_->setSceneRect(0, 0, width, height);
@@ -2229,87 +2269,65 @@ void Canvas::saveToFile() {
   // Commit text still open in an inline editor, or it would be saved
   // (or exported) without what the user just typed.
   finishInlineEditing();
+  QString selectedFilter;
   QString fileName = QFileDialog::getSaveFileName(
-      this, "Save Image", "",
+      this, "Export", "",
 #ifdef HAVE_QT_SVG
       "PNG (*.png);;JPEG (*.jpg);;BMP (*.bmp);;WebP (*.webp);;TIFF "
       "(*.tiff *.tif);;PDF (*.pdf);;SVG (*.svg);;"
-      "Project (*.fspd)");
+      "Project (*.fspd)",
 #else
       "PNG (*.png);;JPEG (*.jpg);;BMP (*.bmp);;WebP (*.webp);;TIFF "
-      "(*.tiff *.tif);;PDF (*.pdf);;Project (*.fspd)");
+      "(*.tiff *.tif);;PDF (*.pdf);;Project (*.fspd)",
 #endif
+      &selectedFilter);
   if (fileName.isEmpty())
     return;
+  // No extension typed: take it from the chosen filter ("PNG (*.png)").
+  if (DocumentExporter::formatForFileName(fileName) == ExportFormat::Unknown) {
+    const int star = selectedFilter.indexOf(QLatin1String("*."));
+    const QString ext = star >= 0 ? selectedFilter.mid(star + 1)
+                                        .section(QLatin1Char(' '), 0, 0)
+                                        .remove(QLatin1Char(')'))
+                                  : QStringLiteral(".png");
+    fileName += ext;
+  }
 
-  // Check if saving as project file
+  // Choosing the project format here is a native Save As.
   if (fileName.endsWith(".fspd", Qt::CaseInsensitive)) {
-    showBusySpinner(tr("Saving project…"));
-    if (ProjectSerializer::saveProject(fileName, scene_, itemStore(),
-                                       layerManager_, scene_->sceneRect(),
-                                       backgroundColor_)) {
-      RecentFilesManager::instance().addRecentFile(fileName);
-      emit documentSaved();
-    } else {
-      QMessageBox::warning(this, "Error",
-                           QString("Could not save project: %1").arg(fileName));
-    }
-    hideBusySpinner();
+    saveProjectTo(fileName);
     return;
   }
 
-  // Check if saving as PDF - pass the filename to avoid double dialog
-  if (fileName.endsWith(".pdf", Qt::CaseInsensitive)) {
-    exportToPDFWithFilename(fileName);
-    return;
-  }
-
-#ifdef HAVE_QT_SVG
-  // Check if saving as SVG
-  if (fileName.endsWith(".svg", Qt::CaseInsensitive)) {
-    showBusySpinner(tr("Exporting SVG…"));
-    const QList<QGraphicsItem *> items = documentItems();
-    QRectF sr = documentExportRect(items);
-
-    QSvgGenerator generator;
-    generator.setFileName(fileName);
-    generator.setSize(sr.size().toSize());
-    generator.setViewBox(QRect(0, 0, sr.width(), sr.height()));
-    generator.setTitle("FullScreen Pencil Draw Export");
-    generator.setDescription("Exported from FullScreen Pencil Draw");
-
-    QPainter svgPainter;
-    svgPainter.begin(&generator);
-    svgPainter.setRenderHint(QPainter::Antialiasing);
-    svgPainter.setRenderHint(QPainter::TextAntialiasing);
-    svgPainter.fillRect(QRectF(QPointF(), sr.size()), backgroundColor_);
-    renderItems(&svgPainter, QRectF(QPointF(), sr.size()), sr, items);
-    svgPainter.end();
-
-    hideBusySpinner();
-    RecentFilesManager::instance().addRecentFile(fileName);
-    emit documentSaved();
-    return;
-  }
-#endif
-
-  showBusySpinner(tr("Saving image…"));
-  const QList<QGraphicsItem *> items = documentItems();
-  const QImage img =
-      renderItemsToImage(items, documentExportRect(items),
-                         QImage::Format_ARGB32, backgroundColor_);
-  const bool saved = img.save(fileName);
+  // Everything else is an export: a copy in another format. It never marks
+  // the document as saved, since it cannot be reopened with its layers and
+  // editable objects.
+  showBusySpinner(tr("Exporting…"));
+  DocumentExporter exporter(layerManager_, backgroundImage_, backgroundColor_);
+  exporter.setFallbackRect(scene_->sceneRect());
+  const ExportResult result = exporter.exportToFile(fileName);
   hideBusySpinner();
-  if (!saved) {
-    // Keep the document dirty so the exit prompt still protects the work.
-    QMessageBox::warning(this, "Error",
-                         QString("Could not save image: %1").arg(fileName));
+  reportExportResult(fileName, result);
+  if (result.ok)
+    RecentFilesManager::instance().addRecentFile(fileName);
+}
+
+void Canvas::reportExportResult(const QString &fileName,
+                                const ExportResult &result) {
+  if (!result.ok) {
+    emit saveFailed(result.error);
+    QMessageBox::warning(this, tr("Export Failed"), result.error);
     return;
   }
-
-  // Add to recent files
-  RecentFilesManager::instance().addRecentFile(fileName);
-  emit documentSaved();
+  if (!result.warnings.isEmpty()) {
+    QMessageBox box(QMessageBox::Information, tr("Export Notes"),
+                    tr("Exported %1. Some content could not be kept exactly "
+                       "as it is in the drawing:")
+                        .arg(QDir::toNativeSeparators(fileName)),
+                    QMessageBox::Ok, this);
+    box.setInformativeText(result.warnings.join(QStringLiteral("\n\n")));
+    box.exec();
+  }
 }
 
 void Canvas::openFile() {
@@ -2412,23 +2430,82 @@ void Canvas::openRecentFile(const QString &filePath) {
 
 void Canvas::saveProject() {
   finishInlineEditing(); // include text still being typed
-  QString fileName = QFileDialog::getSaveFileName(
-      this, "Save Project", "", ProjectSerializer::fileFilter());
+  QString fileName =
+      QFileDialog::getSaveFileName(this, "Save Project As", currentFilePath_,
+                                   ProjectSerializer::fileFilter());
   if (fileName.isEmpty())
     return;
   if (!fileName.endsWith(".fspd", Qt::CaseInsensitive))
     fileName += ".fspd";
-  showBusySpinner(tr("Saving project…"));
-  if (ProjectSerializer::saveProject(fileName, scene_, itemStore(),
-                                     layerManager_, scene_->sceneRect(),
-                                     backgroundColor_)) {
-    RecentFilesManager::instance().addRecentFile(fileName);
-    emit documentSaved();
-  } else {
-    QMessageBox::warning(this, "Error",
-                         QString("Could not save project: %1").arg(fileName));
+  saveProjectTo(fileName);
+}
+
+void Canvas::saveDocument() {
+  finishInlineEditing(); // include text still being typed
+  if (currentFilePath_.isEmpty()) {
+    saveProject(); // never saved (or recovered): ask where
+    return;
   }
+  saveProjectTo(currentFilePath_);
+}
+
+bool Canvas::saveProjectTo(const QString &fileName, bool interactive) {
+  if (!scene_ || !layerManager_)
+    return false;
+  finishInlineEditing(); // include text still being typed
+  ProjectSerializer::SaveOptions options;
+  options.backgroundImage = backgroundImage_;
+
+  // Preflight: everything must have an editable representation, or the
+  // user decides whether flattening it into an image is acceptable.
+  const QStringList unsupported =
+      ProjectSerializer::findUnsupportedItems(itemStore(), layerManager_);
+  if (!unsupported.isEmpty()) {
+    if (!interactive) {
+      emit saveFailed(tr("%1 object(s) have no editable project format.")
+                          .arg(unsupported.size()));
+      return false;
+    }
+    QMessageBox box(QMessageBox::Warning, tr("Flatten Objects?"),
+                    tr("%1 object(s) cannot be saved in an editable form. "
+                       "They can be saved as images instead (they will "
+                       "look the same but can no longer be edited as "
+                       "objects).")
+                        .arg(unsupported.size()),
+                    QMessageBox::NoButton, this);
+    box.setDetailedText(unsupported.join(QLatin1Char('\n')));
+    QPushButton *flatten =
+        box.addButton(tr("Save as Images"), QMessageBox::AcceptRole);
+    box.addButton(QMessageBox::Cancel);
+    box.setDefaultButton(QMessageBox::Cancel);
+    box.exec();
+    if (box.clickedButton() != flatten)
+      return false; // document stays modified
+    options.allowRasterFallback = true;
+  }
+
+  showBusySpinner(tr("Saving project…"));
+  ProjectSerializer::SaveStatus status;
+  const bool saved = ProjectSerializer::saveProject(
+      fileName, scene_, itemStore(), layerManager_, scene_->sceneRect(),
+      backgroundColor_, options, &status);
   hideBusySpinner();
+  if (!saved) {
+    // The previous file (if any) is untouched and the document stays
+    // modified, so the exit prompt keeps protecting the work.
+    emit saveFailed(status.message);
+    if (interactive)
+      QMessageBox::warning(this, tr("Save Failed"),
+                           status.message.isEmpty()
+                               ? tr("Could not save project: %1")
+                                     .arg(QDir::toNativeSeparators(fileName))
+                               : status.message);
+    return false;
+  }
+  currentFilePath_ = fileName;
+  RecentFilesManager::instance().addRecentFile(fileName);
+  emit documentSaved();
+  return true;
 }
 
 void Canvas::openProject() {
@@ -2440,7 +2517,8 @@ void Canvas::openProject() {
   loadProjectFile(fileName);
 }
 
-bool Canvas::loadProjectFile(const QString &fileName, bool addToRecentFiles) {
+bool Canvas::loadProjectFile(const QString &fileName, bool addToRecentFiles,
+                             bool recovered) {
   if (discardChangesHandler_ && !discardChangesHandler_())
     return false;
   QRectF loadedRect;
@@ -2450,8 +2528,11 @@ bool Canvas::loadProjectFile(const QString &fileName, bool addToRecentFiles) {
   // handles so no tool keeps pointing at items from the old one.
   abortInProgressDrawing();
   clearTransformHandles();
+  ProjectSerializer::LoadExtras extras;
+  QString loadError;
   const bool loaded = ProjectSerializer::loadProject(
-      fileName, scene_, itemStore(), layerManager_, loadedRect, loadedBg);
+      fileName, scene_, itemStore(), layerManager_, loadedRect, loadedBg,
+      &extras, &loadError);
   if (loaded) {
     backgroundColor_ = loadedBg;
     eraserPen_.setColor(backgroundColor_);
@@ -2464,18 +2545,34 @@ bool Canvas::loadProjectFile(const QString &fileName, bool addToRecentFiles) {
       delete backgroundImage_;
       backgroundImage_ = nullptr;
     }
+    // ...but the project may carry its own base image.
+    if (extras.hasBackgroundImage) {
+      backgroundImage_ = scene_->addPixmap(extras.backgroundImage);
+      backgroundImage_->setPos(extras.backgroundImagePos);
+      backgroundImage_->setZValue(extras.backgroundImageZ);
+      backgroundImage_->setFlag(QGraphicsItem::ItemIsSelectable, false);
+      backgroundImage_->setFlag(QGraphicsItem::ItemIsMovable, false);
+    }
     if (addToRecentFiles)
       RecentFilesManager::instance().addRecentFile(fileName);
     // The old document's history is meaningless now; drop it so undo can
     // never interleave actions across documents.
     if (undoRedoManager_)
       undoRedoManager_->clearOwnedBy(this);
-    emit documentSaved();
+    // A recovery snapshot is not the user's file: saving must ask where
+    // rather than overwrite the snapshot (or the original document).
+    currentFilePath_ = recovered ? QString() : fileName;
+    if (recovered)
+      emit documentRecovered();
+    else
+      emit documentLoaded();
   }
   hideBusySpinner();
   if (!loaded) {
-    QMessageBox::warning(this, "Error",
-                         QString("Could not open project: %1").arg(fileName));
+    QMessageBox::warning(this, tr("Open Failed"),
+                         loadError.isEmpty()
+                             ? tr("Could not open project: %1").arg(fileName)
+                             : loadError);
   }
   return loaded;
 }
@@ -2491,44 +2588,14 @@ void Canvas::exportToPDF() {
 void Canvas::exportToPDFWithFilename(const QString &fileName) {
   finishInlineEditing(); // include text still being typed
   showBusySpinner(tr("Exporting PDF…"));
-  const QList<QGraphicsItem *> items = documentItems();
-  const QRectF sr = documentExportRect(items);
-
-  QPdfWriter pdfWriter(fileName);
-  // A4 with 10mm margins; the drawing is scaled to fit and centred.
-  pdfWriter.setPageSize(QPageSize(QPageSize::A4));
-  pdfWriter.setPageMargins(QMarginsF(10, 10, 10, 10), QPageLayout::Millimeter);
-  pdfWriter.setTitle("FullScreen Pencil Draw Export");
-  pdfWriter.setCreator("FullScreen Pencil Draw");
-  pdfWriter.setResolution(300);
-
-  QPainter painter(&pdfWriter);
-  if (!painter.isActive()) {
-    hideBusySpinner();
-    QMessageBox::warning(this, "Export Failed",
-                         QString("Could not write %1.").arg(fileName));
-    return;
-  }
-  painter.setRenderHint(QPainter::Antialiasing);
-  painter.setRenderHint(QPainter::TextAntialiasing);
-  painter.setRenderHint(QPainter::SmoothPixmapTransform);
-
-  const QRectF pageRect = painter.viewport();
-  painter.fillRect(pageRect, backgroundColor_);
-  const double scale =
-      qMin(pageRect.width() / sr.width(), pageRect.height() / sr.height());
-  const QSizeF fitted(sr.width() * scale, sr.height() * scale);
-  const QRectF target(QPointF((pageRect.width() - fitted.width()) / 2.0,
-                              (pageRect.height() - fitted.height()) / 2.0),
-                      fitted);
-  // render() maps source to target itself; no extra painter transform (the
-  // old code scaled twice, clipping or shrinking the drawing).
-  renderItems(&painter, target, sr, items);
-  painter.end();
+  DocumentExporter exporter(layerManager_, backgroundImage_, backgroundColor_);
+  exporter.setFallbackRect(scene_->sceneRect());
+  const ExportResult result =
+      exporter.exportToFile(fileName, ExportFormat::Pdf);
   hideBusySpinner();
-
-  // Add to recent files
-  RecentFilesManager::instance().addRecentFile(fileName);
+  reportExportResult(fileName, result);
+  if (result.ok)
+    RecentFilesManager::instance().addRecentFile(fileName);
 }
 
 void Canvas::createTextItem(const QPointF &pos) {
@@ -3358,7 +3425,14 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
     beginEraseStroke();
     eraseAt(sp);
     break;
+  case PixelEraser:
+    beginPixelErase();
+    pixelEraseAt(sp);
+    break;
   case Pen: {
+    // On a raster layer the pen paints pixels instead of creating paths.
+    if (beginRasterStroke(sp))
+      break;
     currentPath_ = new QGraphicsPathItem();
     if (pressureSensitive_ && tabletActive_) {
       // Use a no-stroke pen and fill with the pen color for pressure strokes
@@ -3558,6 +3632,11 @@ void Canvas::mouseMoveEvent(QMouseEvent *event) {
   switch (currentShape_) {
   case Pen:
   case Highlighter:
+    if (rasterStrokeActive_) {
+      if (event->buttons() & Qt::LeftButton)
+        continueRasterStroke(cp);
+      break;
+    }
     if (event->buttons() & Qt::LeftButton) {
       if (currentShape_ == Pen && pressureSensitive_ && tabletActive_)
         addPressurePoint(cp, tabletPressure_);
@@ -3568,6 +3647,11 @@ void Canvas::mouseMoveEvent(QMouseEvent *event) {
   case Eraser:
     if (event->buttons() & Qt::LeftButton)
       eraseAt(cp);
+    updateEraserPreview(cp);
+    break;
+  case PixelEraser:
+    if (event->buttons() & Qt::LeftButton)
+      pixelEraseAt(cp);
     updateEraserPreview(cp);
     break;
   case Rectangle:
@@ -3853,6 +3937,10 @@ void Canvas::mouseReleaseEvent(QMouseEvent *event) {
     addDrawAction(committed);
     return;
   }
+  if (rasterStrokeActive_) {
+    endRasterStroke();
+    return;
+  }
   if (currentShape_ == Pen || currentShape_ == Highlighter) {
     if (currentPath_) {
       const bool pressureStroke = currentPath_->pen().style() == Qt::NoPen;
@@ -3898,6 +3986,10 @@ void Canvas::mouseReleaseEvent(QMouseEvent *event) {
   }
   if (currentShape_ == Eraser) {
     endEraseStroke();
+    return;
+  }
+  if (currentShape_ == PixelEraser) {
+    endPixelErase();
     return;
   }
   tempShapeItem_ = nullptr;
@@ -4613,6 +4705,7 @@ void Canvas::endEraseStroke() {
 }
 
 void Canvas::eraseAt(const QPointF &point) {
+  // Object Eraser: deletes whole objects the dab really touches.
   if (!scene_)
     return;
   clearTransformHandles();
@@ -4620,11 +4713,23 @@ void Canvas::eraseAt(const QPointF &point) {
   QRectF er(point.x() - sz / 2, point.y() - sz / 2, sz, sz);
   QPainterPath ep;
   ep.addEllipse(er);
+  // Hidden and locked layers are off limits.
+  QSet<QGraphicsItem *> protectedItems;
+  if (layerManager_) {
+    for (int i = 0; i < layerManager_->layerCount(); ++i) {
+      Layer *layer = layerManager_->layer(i);
+      if (layer && (!layer->isVisible() || layer->isLocked())) {
+        const QList<QGraphicsItem *> layerItems = layer->items();
+        for (QGraphicsItem *layerItem : layerItems)
+          protectedItems.insert(layerItem);
+      }
+    }
+  }
   // Copy the list to avoid modifying the scene while iterating
   QList<QGraphicsItem *> itemsToCheck = scene_->items(er);
   QList<QGraphicsItem *> itemsToRemove;
   for (QGraphicsItem *item : itemsToCheck) {
-    if (!item)
+    if (!item || !item->isVisible())
       continue;
     // A group's shape() is its whole bounding box; test its children's real
     // shapes instead (they are in itemsToCheck too).
@@ -4638,15 +4743,26 @@ void Canvas::eraseAt(const QPointF &point) {
       continue;
     if (target->type() == TransformHandleItem::Type)
       continue;
-    if (itemsToRemove.contains(target) || isItemLocked(target))
+    // A raster layer's pixels are not an object: only the Pixel Eraser
+    // removes them.
+    if (target->type() == RasterLayerItem::Type)
       continue;
-    QPainterPath itemShape = item->sceneTransform().map(item->shape());
-    // item->shape() already includes outlined geometry for line-based items,
-    // so a single intersection test is sufficient (stroking it again adds
-    // cost without changing what is hit).
-    if (ep.intersects(itemShape)) {
-      itemsToRemove.append(target);
+    if (itemsToRemove.contains(target) || protectedItems.contains(target) ||
+        isItemLocked(target) || !target->isVisible())
+      continue;
+    bool hit = false;
+    if (dynamic_cast<QGraphicsPixmapItem *>(item) ||
+        dynamic_cast<BrushStrokeItem *>(item)) {
+      // Raster objects: only their visible pixels count.
+      hit = ep.intersects(item->sceneBoundingRect()) &&
+            PixelEditAction::hitsOpaquePixels(item, ep);
+    } else {
+      // item->shape() already includes outlined geometry for line-based
+      // items, so a single intersection test is sufficient.
+      hit = ep.intersects(item->sceneTransform().map(item->shape()));
     }
+    if (hit)
+      itemsToRemove.append(target);
   }
   itemsToRemove = withConnectedWires(itemsToRemove);
   // Now safely remove items after iteration is complete
@@ -4666,6 +4782,262 @@ void Canvas::eraseAt(const QPointF &point) {
       onItemRemoved(item);
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Pixel Eraser
+// ---------------------------------------------------------------------------
+
+void Canvas::beginPixelErase() {
+  endPixelErase(); // a lost release must not merge two gestures
+  pixelEraseActive_ = true;
+  pixelEraseHasLast_ = false;
+  clearTransformHandles();
+}
+
+void Canvas::pixelEraseAt(const QPointF &scenePos) {
+  if (!pixelEraseActive_ || !scene_ || !layerManager_)
+    return;
+  Layer *layer = layerManager_->activeLayer();
+  if (!layer || !layer->isVisible() || layer->isLocked()) {
+    if (!pixelEraseHinted_) {
+      pixelEraseHinted_ = true;
+      emit statusMessage(tr("Pixel Eraser: the active layer is hidden or "
+                            "locked."));
+    }
+    return;
+  }
+  // Erase along the whole segment since the last event, so fast drags
+  // leave no gaps: one capsule for a hard edge (uniform strength), closely
+  // spaced soft dabs otherwise.
+  const qreal diameter = qMax<qreal>(1.0, eraserPen_.widthF());
+  const QPointF from = pixelEraseHasLast_ ? pixelEraseLast_ : scenePos;
+  pixelEraseLast_ = scenePos;
+  pixelEraseHasLast_ = true;
+  QList<QPainterPath> dabs;
+  if (pixelEraserHardness_ >= 1.0) {
+    QPainterPath capsule;
+    capsule.addEllipse(scenePos, diameter / 2.0, diameter / 2.0);
+    if (from != scenePos) {
+      QPainterPath line(from);
+      line.lineTo(scenePos);
+      QPainterPathStroker stroker;
+      stroker.setWidth(diameter);
+      stroker.setCapStyle(Qt::RoundCap);
+      capsule = capsule.united(stroker.createStroke(line));
+    }
+    dabs.append(capsule);
+  } else {
+    const qreal spacing = qMax<qreal>(1.0, diameter * 0.25);
+    const qreal length = QLineF(from, scenePos).length();
+    const int steps = qMax(1, qCeil(length / spacing));
+    for (int i = (from == scenePos ? steps : 1); i <= steps; ++i) {
+      QPainterPath dab;
+      dab.addEllipse(from + (scenePos - from) * (qreal(i) / steps),
+                     diameter / 2.0, diameter / 2.0);
+      dabs.append(dab);
+    }
+  }
+  QRectF dabRect;
+  for (const QPainterPath &dab : dabs)
+    dabRect = dabRect.united(dab.boundingRect());
+
+  bool anyRaster = false;
+  for (QGraphicsItem *item : layer->items()) {
+    if (!item || !item->isVisible() || isItemLocked(item))
+      continue;
+    auto *raster = dynamic_cast<RasterLayerItem *>(item);
+    const bool image = dynamic_cast<QGraphicsPixmapItem *>(item) ||
+                       dynamic_cast<BrushStrokeItem *>(item);
+    if (!raster && !image)
+      continue; // vector objects are never touched by the Pixel Eraser
+    anyRaster = true;
+    if (!item->sceneBoundingRect().intersects(dabRect))
+      continue;
+    const ItemId id = itemStore() ? itemStore()->idForItem(item) : ItemId();
+    if (!id.isValid())
+      continue;
+    bool invertible = false;
+    const QTransform toItem = item->sceneTransform().inverted(&invertible);
+    if (!invertible)
+      continue;
+
+    auto it = pixelEraseTargets_.find(id);
+    if (raster) {
+      if (it == pixelEraseTargets_.end()) {
+        raster->surface().beginEdit();
+        PixelEraseTarget target;
+        target.tiled = true;
+        pixelEraseTargets_.insert(id, target);
+      }
+      for (const QPainterPath &dab : dabs)
+        raster->surface().erase(toItem.map(dab), pixelEraserStrength_,
+                                pixelEraserHardness_);
+      raster->surfaceChanged();
+      continue;
+    }
+
+    if (it == pixelEraseTargets_.end()) {
+      PixelEraseTarget target;
+      target.before = PixelEditAction::itemImage(item);
+      target.working = target.before;
+      it = pixelEraseTargets_.insert(id, target);
+    }
+    PixelEraseTarget &target = it.value();
+    if (target.working.isNull())
+      continue;
+    QPointF offset;
+    if (auto *pixmapItem = dynamic_cast<QGraphicsPixmapItem *>(item))
+      offset = pixmapItem->offset();
+    else if (auto *stroke = dynamic_cast<BrushStrokeItem *>(item))
+      offset = stroke->imageRect().topLeft();
+    const qreal dpr = target.working.devicePixelRatio();
+    const QTransform toImage =
+        toItem * QTransform::fromTranslate(-offset.x(), -offset.y()) *
+        QTransform::fromScale(dpr, dpr);
+    // A colour selection on this image limits erasing to its pixels.
+    const bool masked = colorSelectionHasPixels_ &&
+                        colorSelectionItemId_ == id &&
+                        colorSelectionMask_.size() == target.working.size();
+    const QImage preDab = masked ? target.working.copy() : QImage();
+    QRectF touched;
+    {
+      QPainter p(&target.working);
+      for (const QPainterPath &dab : dabs) {
+        const QPainterPath local = toImage.map(dab);
+        touched = touched.united(local.boundingRect());
+        RasterSurface::erasePath(p, local, pixelEraserStrength_,
+                                 pixelEraserHardness_);
+      }
+    }
+    if (masked) {
+      const QRect area =
+          touched.toAlignedRect().intersected(target.working.rect());
+      for (int y = area.top(); y <= area.bottom(); ++y) {
+        const uchar *maskRow = colorSelectionMask_.constScanLine(y);
+        auto *row = reinterpret_cast<QRgb *>(target.working.scanLine(y));
+        const auto *orig =
+            reinterpret_cast<const QRgb *>(preDab.constScanLine(y));
+        for (int x = area.left(); x <= area.right(); ++x) {
+          if (maskRow[x] == 0)
+            row[x] = orig[x];
+        }
+      }
+    }
+    PixelEditAction::setItemImage(item, target.working);
+  }
+  if (!anyRaster && !pixelEraseHinted_) {
+    pixelEraseHinted_ = true;
+    emit statusMessage(
+        tr("Pixel Eraser removes pixels from images, brush strokes and "
+           "raster layers on the active layer. Use the Object Eraser (E) "
+           "to delete vector objects."));
+  }
+}
+
+void Canvas::endPixelErase() {
+  if (!pixelEraseActive_)
+    return;
+  pixelEraseActive_ = false;
+  pixelEraseHasLast_ = false;
+  auto composite = std::make_unique<CompositeAction>();
+  for (auto it = pixelEraseTargets_.begin(); it != pixelEraseTargets_.end();
+       ++it) {
+    QGraphicsItem *item = itemStore() ? itemStore()->item(it.key()) : nullptr;
+    if (it.value().tiled) {
+      auto *raster = dynamic_cast<RasterLayerItem *>(item);
+      if (!raster || !raster->surface().isRecording())
+        continue;
+      RasterTileDiff diff = raster->surface().endEdit();
+      if (!diff.isEmpty())
+        composite->addAction(std::make_unique<PixelEditAction>(
+            it.key(), itemStore(), std::move(diff), tr("Pixel Erase")));
+    } else if (it.value().before != it.value().working) {
+      composite->addAction(std::make_unique<PixelEditAction>(
+          it.key(), itemStore(), it.value().before, it.value().working,
+          tr("Pixel Erase")));
+    }
+  }
+  pixelEraseTargets_.clear();
+  // The whole drag is one undo step.
+  if (!composite->isEmpty()) {
+    addAction(std::move(composite));
+    emit canvasModified();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Painting on raster layers
+// ---------------------------------------------------------------------------
+
+bool Canvas::beginRasterStroke(const QPointF &scenePos) {
+  endRasterStroke();
+  if (!layerManager_ || !itemStore())
+    return false;
+  Layer *layer = layerManager_->activeLayer();
+  if (!layer || layer->type() != Layer::Type::Raster)
+    return false;
+  if (!layer->isVisible() || layer->isLocked()) {
+    emit statusMessage(tr("The active raster layer is hidden or locked."));
+    return true; // consumed: never draw vector strokes on it instead
+  }
+  RasterLayerItem *raster = nullptr;
+  for (QGraphicsItem *item : layer->items()) {
+    raster = dynamic_cast<RasterLayerItem *>(item);
+    if (raster)
+      break;
+  }
+  rasterStrokeCreated_ = false;
+  if (!raster) {
+    raster = new RasterLayerItem();
+    raster->setZValue(0);
+    const ItemId id = itemStore()->registerItem(raster);
+    layer->addItem(id, itemStore());
+    layerManager_->updateLayerZOrder();
+    rasterStrokeCreated_ = true;
+  }
+  rasterStrokeItemId_ = itemStore()->idForItem(raster);
+  rasterStrokeActive_ = true;
+  rasterStrokeLast_ = raster->mapFromScene(scenePos);
+  raster->surface().beginEdit();
+  raster->paintStroke(rasterStrokeLast_, rasterStrokeLast_, currentPen_);
+  return true;
+}
+
+void Canvas::continueRasterStroke(const QPointF &scenePos) {
+  if (!rasterStrokeActive_ || !itemStore())
+    return;
+  auto *raster =
+      dynamic_cast<RasterLayerItem *>(itemStore()->item(rasterStrokeItemId_));
+  if (!raster)
+    return;
+  const QPointF local = raster->mapFromScene(scenePos);
+  raster->paintStroke(rasterStrokeLast_, local, currentPen_);
+  rasterStrokeLast_ = local;
+}
+
+void Canvas::endRasterStroke() {
+  if (!rasterStrokeActive_)
+    return;
+  rasterStrokeActive_ = false;
+  auto *raster = itemStore() ? dynamic_cast<RasterLayerItem *>(
+                                   itemStore()->item(rasterStrokeItemId_))
+                             : nullptr;
+  if (!raster || !raster->surface().isRecording())
+    return;
+  RasterTileDiff diff = raster->surface().endEdit();
+  if (diff.isEmpty() && !rasterStrokeCreated_)
+    return;
+  auto composite = std::make_unique<CompositeAction>();
+  if (rasterStrokeCreated_) {
+    if (std::unique_ptr<DrawAction> draw = prepareDrawAction(raster))
+      composite->addAction(std::move(draw));
+  }
+  if (!diff.isEmpty())
+    composite->addAction(std::make_unique<PixelEditAction>(
+        rasterStrokeItemId_, itemStore(), std::move(diff), tr("Paint")));
+  addAction(std::move(composite));
+  emit canvasModified();
 }
 
 void Canvas::dragEnterEvent(QDragEnterEvent *event) {
@@ -5019,30 +5391,14 @@ void Canvas::exportSelectionToSVG() {
   if (fileName.isEmpty())
     return;
 
-  QRectF boundingRect = visibleBounds(items);
-  if (boundingRect.isEmpty())
-    return;
-  boundingRect.adjust(-10, -10, 10, 10);
-
   showBusySpinner(tr("Exporting SVG…"));
-
-  QSvgGenerator generator;
-  generator.setFileName(fileName);
-  generator.setSize(boundingRect.size().toSize());
-  generator.setViewBox(
-      QRect(0, 0, boundingRect.width(), boundingRect.height()));
-  generator.setTitle("Exported Selection");
-  generator.setDescription(
-      "Selected items exported from FullScreen Pencil Draw");
-
-  QPainter painter;
-  painter.begin(&generator);
-  painter.setRenderHint(QPainter::Antialiasing);
-  painter.setRenderHint(QPainter::TextAntialiasing);
-  renderItems(&painter, QRectF(QPointF(), boundingRect.size()), boundingRect,
-              items);
-  painter.end();
+  // Selections export on a transparent background.
+  DocumentExporter exporter(layerManager_, nullptr, Qt::transparent);
+  exporter.setItems(items);
+  const ExportResult result =
+      exporter.exportToFile(fileName, ExportFormat::Svg);
   hideBusySpinner();
+  reportExportResult(fileName, result);
 #endif
 }
 
@@ -5152,19 +5508,16 @@ void Canvas::exportSelectionImage(const QString &title, const QString &filter,
   QString fileName = QFileDialog::getSaveFileName(this, title, "", filter);
   if (fileName.isEmpty())
     return;
-  QRectF bounds = visibleBounds(items);
-  if (bounds.isEmpty())
-    return;
-  bounds.adjust(-10, -10, 10, 10);
-
+  Q_UNUSED(imageFormat);
+  // The dialog's filter decides the format when no extension was typed.
+  if (DocumentExporter::formatForFileName(fileName) == ExportFormat::Unknown)
+    fileName += QLatin1Char('.') + QString::fromLatin1(format).toLower();
   showBusySpinner(tr("Exporting…"));
-  const QImage image = renderItemsToImage(items, bounds, imageFormat, fill);
-  const bool saved = image.save(fileName, format);
+  DocumentExporter exporter(layerManager_, nullptr, fill);
+  exporter.setItems(items);
+  const ExportResult result = exporter.exportToFile(fileName);
   hideBusySpinner();
-  if (!saved) {
-    QMessageBox::warning(this, "Export Failed",
-                         QString("Could not write %1.").arg(fileName));
-  }
+  reportExportResult(fileName, result);
 }
 
 void Canvas::exportSelectionToPNG() {

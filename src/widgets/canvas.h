@@ -59,6 +59,7 @@ class BusySpinnerOverlay;
 class UndoRedoManager;
 class ElectronicsElementItem;
 class WireItem;
+struct ExportResult;
 
 /**
  * @brief The main drawing canvas widget.
@@ -89,6 +90,10 @@ public:
   bool isRulerVisible() const;
   bool isMeasurementToolEnabled() const;
   bool isPressureSensitive() const override { return pressureSensitive_; }
+  int pixelEraserStrength() const { return qRound(pixelEraserStrength_ * 100); }
+  int pixelEraserHardness() const { return qRound(pixelEraserHardness_ * 100); }
+  bool isPixelEraserActive() const { return currentShape_ == PixelEraser; }
+  bool isObjectEraserActive() const { return currentShape_ == Eraser; }
   int colorSelectTolerance() const { return colorSelectTolerance_; }
   bool isColorSelectContiguous() const { return colorSelectContiguous_; }
   bool hasActiveColorSelection() const;
@@ -118,8 +123,26 @@ public:
   }
   /// Commit every open inline text/mermaid editor except @p except.
   void finishInlineEditing(const QGraphicsItem *except = nullptr);
-  /// Load a .fspd file, replacing the document (after confirming).
-  bool loadProjectFile(const QString &fileName, bool addToRecentFiles = true);
+  /**
+   * @brief Load a .fspd file, replacing the document (after confirming).
+   * @param recovered The file is a crash-recovery snapshot: the document
+   *        opens as unsaved work with no file name (so saving asks where
+   *        instead of overwriting anything) and documentRecovered() is
+   *        emitted instead of documentLoaded().
+   */
+  bool loadProjectFile(const QString &fileName, bool addToRecentFiles = true,
+                       bool recovered = false);
+  /// Native project file the document was last opened from / saved to.
+  QString currentFilePath() const { return currentFilePath_; }
+  /**
+   * @brief Save the document as a native project to @p fileName.
+   *
+   * Objects without an editable project format are listed to the user,
+   * who can cancel or approve flattening them; failures are reported and
+   * leave the document marked modified.
+   * @param interactive Show confirmation/error dialogs.
+   */
+  bool saveProjectTo(const QString &fileName, bool interactive = true);
 
   // Action management - implements SceneRenderer interface
   void addDrawAction(QGraphicsItem *item) override;
@@ -151,7 +174,16 @@ signals:
   void snapToGridChanged(bool enabled);
   void snapToObjectChanged(bool enabled);
   void canvasModified();
+  /// The document was completely written to its native project file.
   void documentSaved();
+  /// A native project replaced the document (it matches its file again).
+  void documentLoaded();
+  /// A recovery snapshot replaced the document (it is unsaved work).
+  void documentRecovered();
+  /// A save or export failed; the document keeps its modified state.
+  void saveFailed(const QString &message);
+  /// Short user-facing hint (e.g. why a tool did nothing).
+  void statusMessage(const QString &message);
   void rulerVisibilityChanged(bool visible);
   void measurementToolChanged(bool enabled);
   void measurementUpdated(const QString &measurement);
@@ -180,7 +212,15 @@ public slots:
   void deselectAll();
   void setPenTool();
   void setHighlighterTool();
+  /// Object Eraser: deletes whole objects it touches (E).
   void setEraserTool();
+  void setObjectEraserTool() { setEraserTool(); }
+  /// Pixel Eraser: removes pixels from raster content on the active layer
+  /// (images, brush strokes, raster layers) and never deletes objects.
+  void setPixelEraserTool();
+  /// Pixel Eraser strength (alpha removed per dab) and edge hardness, %.
+  void setPixelEraserStrength(int percent);
+  void setPixelEraserHardness(int percent);
   void setTextTool();
   void setMermaidTool();
   void setFillTool();
@@ -206,9 +246,13 @@ public slots:
   void zoomIn();
   void zoomOut();
   void zoomReset();
+  /// Export dialog (images, PDF, SVG); a .fspd choice saves the project.
   void saveToFile();
   void openFile();
+  /// Save As for the native project format.
   void saveProject();
+  /// Save to the current project file, or ask for one (Ctrl+S).
+  void saveDocument();
   void openProject();
   void newCanvas(int width, int height, const QColor &bgColor);
   void toggleGrid();
@@ -300,7 +344,8 @@ private:
     CurvedArrow,
     Bezier,
     TextOnPath,
-    Wire
+    Wire,
+    PixelEraser
   };
 
   // Member variables
@@ -320,6 +365,7 @@ private:
   QColor backgroundColor_;
   QGraphicsEllipseItem *eraserPreview_;
   QGraphicsPixmapItem *backgroundImage_;
+  QString currentFilePath_;
 
   // Transform handles for selected items
   QList<TransformHandleItem *> transformHandles_;
@@ -379,6 +425,33 @@ private:
   // Eraser gesture: one composite undo entry per stroke sweep
   std::unique_ptr<CompositeAction> eraserStrokeAction_;
 
+  // Pixel Eraser gesture: every raster target touched so far, with its
+  // state before the gesture (tiles are recorded by the surface itself).
+  struct PixelEraseTarget {
+    bool tiled = false;
+    QImage before;
+    QImage working;
+  };
+  QHash<ItemId, PixelEraseTarget> pixelEraseTargets_;
+  bool pixelEraseActive_ = false;
+  bool pixelEraseHasLast_ = false;
+  QPointF pixelEraseLast_;
+  bool pixelEraseHinted_ = false;
+  qreal pixelEraserStrength_ = 1.0;
+  qreal pixelEraserHardness_ = 1.0;
+  void beginPixelErase();
+  void pixelEraseAt(const QPointF &scenePos);
+  void endPixelErase();
+
+  // Painting on a raster layer (Pen tool with a Raster layer active).
+  ItemId rasterStrokeItemId_;
+  bool rasterStrokeCreated_ = false;
+  bool rasterStrokeActive_ = false;
+  QPointF rasterStrokeLast_;
+  bool beginRasterStroke(const QPointF &scenePos);
+  void continueRasterStroke(const QPointF &scenePos);
+  void endRasterStroke();
+
   // Brush tip
   BrushTip brushTip_;
 
@@ -404,6 +477,7 @@ private:
   void createMermaidItem(const QPointF &position);
   void loadDroppedImage(const QString &filePath, const QPointF &dropPosition);
   void exportToPDFWithFilename(const QString &fileName);
+  void reportExportResult(const QString &fileName, const ExportResult &result);
   bool selectByColorAt(const QPointF &scenePoint,
                        Qt::KeyboardModifiers modifiers);
   QGraphicsPixmapItem *findPixmapItemAt(const QPointF &scenePoint) const;

@@ -72,10 +72,18 @@ ToolPanel::ToolPanel(QWidget *parent)
   connect(actionHighlighter, &QAction::triggered, this,
           &ToolPanel::onActionHighlighter);
 
-  actionEraser = new QAction("⌫ Eraser", this);
-  actionEraser->setToolTip("Erase items (E)");
+  actionEraser = new QAction("⌫ Obj Eraser", this);
+  actionEraser->setToolTip("Object Eraser (E): delete whole objects you touch");
   actionEraser->setCheckable(true);
   connect(actionEraser, &QAction::triggered, this, &ToolPanel::onActionEraser);
+
+  actionPixelEraser = new QAction("▨ Px Eraser", this);
+  actionPixelEraser->setToolTip(
+      "Pixel Eraser (Shift+E): erase pixels of images, brush strokes and "
+      "raster layers on the active layer; vector objects are not touched");
+  actionPixelEraser->setCheckable(true);
+  connect(actionPixelEraser, &QAction::triggered, this,
+          &ToolPanel::onActionPixelEraser);
 
   actionText = new QAction("T Text", this);
   actionText->setToolTip("Add text (T)");
@@ -113,6 +121,8 @@ ToolPanel::ToolPanel(QWidget *parent)
   drawGrid->addWidget(createToolButton(actionMermaid, drawGridWidget), 2, 1);
   drawGrid->addWidget(createToolButton(actionColorSelect, drawGridWidget), 3,
                       0);
+  drawGrid->addWidget(createToolButton(actionPixelEraser, drawGridWidget), 3,
+                      1);
   drawGridWidget->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
   mainLayout->addWidget(drawGridWidget, 0, Qt::AlignHCenter);
 
@@ -912,6 +922,7 @@ void ToolPanel::clearActiveToolStyles() {
   actionPen->setChecked(false);
   actionHighlighter->setChecked(false);
   actionEraser->setChecked(false);
+  actionPixelEraser->setChecked(false);
   actionText->setChecked(false);
   actionMermaid->setChecked(false);
   actionFill->setChecked(false);
@@ -931,12 +942,13 @@ void ToolPanel::clearActiveToolStyles() {
 
 void ToolPanel::setActiveTool(const QString &toolName) {
   static const QHash<QString, QString> toolIcons = {
-      {"Pen", "✎"},         {"Highlighter", "▉"}, {"Eraser", "⌫"},
-      {"Text", "T"},        {"Mermaid", "⬡"},     {"Fill", "◉"},
-      {"ColorSelect", "◎"}, {"Line", "╱"},        {"Arrow", "➤"},
-      {"CurvedArrow", "↪"}, {"Wire", "⏚"},        {"Rectangle", "▢"},
-      {"Circle", "◯"},      {"Select", "⬚"},      {"LassoSelect", "⛶"},
-      {"Pan", "☰"},         {"Bezier", "⌇"},      {"TextOnPath", "⌇T"}};
+      {"Pen", "✎"},          {"Highlighter", "▉"}, {"Object Eraser", "⌫"},
+      {"Pixel Eraser", "▨"}, {"Text", "T"},        {"Mermaid", "⬡"},
+      {"Fill", "◉"},         {"ColorSelect", "◎"}, {"Line", "╱"},
+      {"Arrow", "➤"},        {"CurvedArrow", "↪"}, {"Wire", "⏚"},
+      {"Rectangle", "▢"},    {"Circle", "◯"},      {"Select", "⬚"},
+      {"LassoSelect", "⛶"},  {"Pan", "☰"},         {"Bezier", "⌇"},
+      {"TextOnPath", "⌇T"}};
   QString icon = toolIcons.value(toolName, "•");
   activeToolLabel->setText(icon + " " + toolName);
 }
@@ -998,8 +1010,14 @@ void ToolPanel::onActionHighlighter() {
 void ToolPanel::onActionEraser() {
   clearActiveToolStyles();
   actionEraser->setChecked(true);
-  setActiveTool("Eraser");
+  setActiveTool("Object Eraser");
   emit eraserSelected();
+}
+void ToolPanel::onActionPixelEraser() {
+  clearActiveToolStyles();
+  actionPixelEraser->setChecked(true);
+  setActiveTool("Pixel Eraser");
+  emit pixelEraserSelected();
 }
 void ToolPanel::onActionText() {
   clearActiveToolStyles();

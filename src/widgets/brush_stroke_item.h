@@ -30,6 +30,25 @@ public:
    */
   void addPoint(const QPointF &scenePoint);
 
+  // Accessors used by project serialization and the Pixel Eraser.
+  const BrushTip &tip() const { return tip_; }
+  qreal brushSize() const { return brushSize_; }
+  QColor color() const { return color_; }
+  qreal strokeOpacity() const { return opacity_; }
+  const QVector<QPointF> &points() const { return points_; }
+  /// Rendered stroke pixels; imageRect() is their item-local placement.
+  const QImage &image() const { return buffer_; }
+  QRectF imageRect() const { return bounds_; }
+
+  /**
+   * @brief Restore a saved stroke exactly (pixels and parameters) without
+   *        re-stamping, so reopening a file reproduces what was saved.
+   */
+  void restore(const QVector<QPointF> &points, const QImage &image,
+               const QRectF &imageRect);
+  /// Replace the rendered pixels (same placement), e.g. after pixel erasing.
+  void setImage(const QImage &image);
+
   QRectF boundingRect() const override;
   void paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
              QWidget *widget) override;

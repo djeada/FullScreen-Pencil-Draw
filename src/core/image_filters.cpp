@@ -4,6 +4,7 @@
  */
 #include "image_filters.h"
 
+#include <QtMath> // M_PI on MSVC
 #include <algorithm>
 #include <cmath>
 

@@ -18,6 +18,7 @@
 #include <QPointer>
 #include <QString>
 #include <QUuid>
+#include <cstddef>
 #include <functional>
 #include <memory>
 #include <vector>
@@ -47,6 +48,20 @@ public:
   virtual void collectReferencedItems(QVector<ItemId> &out) const {
     Q_UNUSED(out);
   }
+
+  /**
+   * @brief Approximate memory this history entry keeps alive (captured
+   *        images, parked snapshot items), in bytes.
+   *
+   * UndoRedoManager evicts the oldest entries once the sum exceeds its
+   * memory budget. The default covers small bookkeeping-only actions.
+   */
+  virtual std::size_t memoryCost() const { return kBaseActionCost; }
+
+  static constexpr std::size_t kBaseActionCost = 256;
+
+  /// Rough heap size of an item tree (pixmap pixels, path elements).
+  static std::size_t estimateItemBytes(const QGraphicsItem *item);
 };
 
 /**
@@ -93,8 +108,11 @@ public:
   void collectReferencedItems(QVector<ItemId> &out) const override {
     out.append(itemId_);
   }
+  /// Includes the parked snapshot of the deleted item.
+  std::size_t memoryCost() const override { return memoryCost_; }
 
 private:
+  std::size_t memoryCost_ = kBaseActionCost;
   ItemId itemId_;
   ItemStore *itemStore_;
   ItemCallback onAdd_;
@@ -164,6 +182,7 @@ public:
   void redo() override;
   QString description() const override { return "Composite Action"; }
   void collectReferencedItems(QVector<ItemId> &out) const override;
+  std::size_t memoryCost() const override;
 
 private:
   std::vector<std::unique_ptr<Action>> actions_;
@@ -241,6 +260,10 @@ public:
   void undo() override;
   void redo() override;
   QString description() const override { return "Raster Edit"; }
+  std::size_t memoryCost() const override {
+    return kBaseActionCost + static_cast<std::size_t>(oldImage_.sizeInBytes()) +
+           static_cast<std::size_t>(newImage_.sizeInBytes());
+  }
 
 private:
   ItemId itemId_;
