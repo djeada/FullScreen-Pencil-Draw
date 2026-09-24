@@ -797,11 +797,30 @@ private slots:
     std::vector<std::unique_ptr<QGraphicsScene>> scenes;
     std::vector<std::unique_ptr<ItemStore>> stores;
     std::vector<std::unique_ptr<LayerManager>> managers;
+    // Without the user's consent an item with no native format is never
+    // flattened silently: the save fails and names the item.
+    {
+      const QString refused = tmpDir.path() + "/refused.fspd";
+      ProjectSerializer::SaveStatus status;
+      QVERIFY(!ProjectSerializer::saveProject(
+          refused, &scene, &store, &manager, QRectF(0, 0, 800, 600), Qt::white,
+          ProjectSerializer::SaveOptions(), &status));
+      QCOMPARE(status.error, ProjectSerializer::SaveError::UnsupportedContent);
+      QCOMPARE(status.unsupportedItems.size(), 1);
+      QVERIFY(!QFile::exists(refused));
+      QCOMPARE(ProjectSerializer::findUnsupportedItems(&store, &manager).size(),
+               1);
+    }
+    ProjectSerializer::SaveOptions approved;
+    approved.allowRasterFallback = true;
     for (int round = 0; round < 2; ++round) {
       const QString path = tmpDir.path() + QString("/raster%1.fspd").arg(round);
+      ProjectSerializer::SaveStatus status;
       QVERIFY(ProjectSerializer::saveProject(
           path, current, currentStore, currentManager, QRectF(0, 0, 800, 600),
-          Qt::white));
+          Qt::white, approved, &status));
+      // Only the first round has a custom item; afterwards it is an image.
+      QCOMPARE(status.rasterizedItems.size(), round == 0 ? 1 : 0);
       scenes.push_back(std::make_unique<QGraphicsScene>());
       stores.push_back(std::make_unique<ItemStore>(scenes.back().get()));
       managers.push_back(std::make_unique<LayerManager>(scenes.back().get()));

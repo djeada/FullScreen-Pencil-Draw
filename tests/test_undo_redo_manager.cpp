@@ -1,7 +1,7 @@
 /**
  * @file test_undo_redo_manager.cpp
- * @brief Tests for UndoRedoManager, including the max-30-action limit
- *        on the undo stack.
+ * @brief Tests for UndoRedoManager, including the configurable
+ *        step / memory-budget history policy.
  */
 #include <QtTest/QtTest>
 
@@ -45,6 +45,24 @@ private:
   ItemId id_;
 };
 
+// Action with a configurable memory footprint (like a raster edit).
+class HeavyAction : public Action {
+public:
+  HeavyAction(std::size_t bytes, const ItemId &id = ItemId())
+      : bytes_(bytes), id_(id) {}
+  void undo() override {}
+  void redo() override {}
+  std::size_t memoryCost() const override { return bytes_; }
+  void collectReferencedItems(QVector<ItemId> &out) const override {
+    if (id_.isValid())
+      out.append(id_);
+  }
+
+private:
+  std::size_t bytes_;
+  ItemId id_;
+};
+
 // Action whose undo pushes another action (like a replay callback that
 // commits an in-progress gesture).
 class PushingAction : public Action {
@@ -84,10 +102,10 @@ private slots:
     QVERIFY(!mgr.canRedo());
   }
 
-  // Pushing more than kMaxUndoSteps drops the oldest actions.
+  // Pushing more than the step limit drops the oldest actions.
   void testPushEnforcesLimit() {
     UndoRedoManager mgr;
-    constexpr std::size_t limit = UndoRedoManager::kMaxUndoSteps;
+    constexpr std::size_t limit = UndoRedoManager::kDefaultMaxSteps;
 
     for (std::size_t i = 0; i < limit + 10; ++i) {
       mgr.push(std::make_unique<StubAction>());
@@ -105,7 +123,7 @@ private slots:
   // Redo that re-fills the undo stack also respects the limit.
   void testRedoEnforcesLimit() {
     UndoRedoManager mgr;
-    constexpr std::size_t limit = UndoRedoManager::kMaxUndoSteps;
+    constexpr std::size_t limit = UndoRedoManager::kDefaultMaxSteps;
 
     // Fill the undo stack to capacity.
     for (std::size_t i = 0; i < limit; ++i) {
@@ -129,9 +147,13 @@ private slots:
     QCOMPARE(undone, limit);
   }
 
-  // The constant itself must be 30.
-  void testMaxIs30() {
-    QCOMPARE(UndoRedoManager::kMaxUndoSteps, std::size_t(30));
+  // The default policy matches the documented values.
+  void testDefaultPolicy() {
+    UndoRedoManager mgr;
+    QCOMPARE(mgr.policy().maxSteps, UndoRedoManager::kDefaultMaxSteps);
+    QCOMPARE(mgr.policy().memoryBudgetBytes,
+             UndoRedoManager::kDefaultMemoryBudgetBytes);
+    QCOMPARE(HistoryPolicy().maxSteps, UndoRedoManager::kDefaultMaxSteps);
   }
 
   // clear() empties both stacks.
@@ -151,7 +173,7 @@ private slots:
   // Oldest action is the one dropped when the limit is exceeded.
   void testOldestActionDropped() {
     UndoRedoManager mgr;
-    constexpr std::size_t limit = UndoRedoManager::kMaxUndoSteps;
+    constexpr std::size_t limit = UndoRedoManager::kDefaultMaxSteps;
 
     int firstUndos = 0;
     mgr.push(std::make_unique<StubAction>(&firstUndos, nullptr));
@@ -178,7 +200,7 @@ private slots:
 
     const ItemId first = ItemId::generate();
     mgr.push(std::make_unique<StubItemAction>(first));
-    for (std::size_t i = 0; i < UndoRedoManager::kMaxUndoSteps; ++i) {
+    for (std::size_t i = 0; i < UndoRedoManager::kDefaultMaxSteps; ++i) {
       mgr.push(std::make_unique<StubItemAction>(ItemId::generate()));
     }
 
@@ -239,7 +261,7 @@ private slots:
 
     // Same for history eviction: an older entry for an item that a newer
     // entry still references stays quiet.
-    for (std::size_t i = 0; i < UndoRedoManager::kMaxUndoSteps - 2; ++i) {
+    for (std::size_t i = 0; i < UndoRedoManager::kDefaultMaxSteps - 2; ++i) {
       mgr.push(std::make_unique<StubItemAction>(ItemId::generate()));
     }
     mgr.push(std::make_unique<StubItemAction>(item));
@@ -280,6 +302,95 @@ private slots:
     mgr.undo(); // the pushed stub
     mgr.undo(); // the first stub
     QVERIFY(!mgr.canUndo());
+  }
+
+  // ---- History policy (#168) ----
+
+  void testMemoryBudgetEvictsOldestFirst() {
+    UndoRedoManager mgr;
+    constexpr std::size_t mb = 1024 * 1024;
+    mgr.setPolicy({/*maxSteps=*/0, /*memoryBudgetBytes=*/10 * mb});
+    QVector<ItemId> discarded;
+    mgr.addDiscardListener(
+        [&discarded](const ItemId &id) { discarded.append(id); });
+    QList<ItemId> ids;
+    for (int i = 0; i < 10; ++i) {
+      ids.append(ItemId::generate());
+      mgr.push(std::make_unique<HeavyAction>(3 * mb, ids.last()));
+    }
+    // 3 MiB steps under a 10 MiB budget: three stay, oldest go first.
+    QCOMPARE(mgr.undoCount(), std::size_t(3));
+    QVERIFY(mgr.memoryUsage() <= 10 * mb);
+    QCOMPARE(discarded.size(), 7);
+    QCOMPARE(discarded.first(), ids.first());
+    QVERIFY(!discarded.contains(ids.last()));
+  }
+
+  void testLatestActionSurvivesAnOversizedBudget() {
+    UndoRedoManager mgr;
+    mgr.setPolicy({0, 1000});
+    mgr.push(std::make_unique<HeavyAction>(5000));
+    mgr.push(std::make_unique<HeavyAction>(5000));
+    // The most recent step always stays undoable.
+    QCOMPARE(mgr.undoCount(), std::size_t(1));
+    QVERIFY(mgr.canUndo());
+  }
+
+  void testUnlimitedStepsWithSmallActions() {
+    UndoRedoManager mgr;
+    mgr.setPolicy({0, 0}); // both limits disabled
+    for (int i = 0; i < 1000; ++i)
+      mgr.push(std::make_unique<StubAction>());
+    QCOMPARE(mgr.undoCount(), std::size_t(1000));
+  }
+
+  void testTighterPolicyTrimsExistingHistoryAndReleasesSnapshots() {
+    UndoRedoManager mgr;
+    QVector<ItemId> discarded;
+    mgr.addDiscardListener(
+        [&discarded](const ItemId &id) { discarded.append(id); });
+    for (int i = 0; i < 20; ++i)
+      mgr.push(std::make_unique<StubItemAction>(ItemId::generate()));
+    mgr.setPolicy({5, 0});
+    QCOMPARE(mgr.undoCount(), std::size_t(5));
+    QCOMPARE(discarded.size(), 15);
+  }
+
+  void testRedoStackIsTrimmedWhenOverBudget() {
+    UndoRedoManager mgr;
+    mgr.setPolicy({0, 0});
+    for (int i = 0; i < 5; ++i)
+      mgr.push(std::make_unique<HeavyAction>(1000));
+    for (int i = 0; i < 4; ++i)
+      mgr.undo();
+    QCOMPARE(mgr.redoCount(), std::size_t(4));
+    mgr.setPolicy({0, 2500});
+    // One undo step is kept; redo steps furthest from now are dropped.
+    QCOMPARE(mgr.undoCount(), std::size_t(1));
+    QVERIFY(mgr.memoryUsage() <= 2500);
+    QCOMPARE(mgr.redoCount(), std::size_t(1));
+  }
+
+  void testRedoInvalidationReleasesMemory() {
+    UndoRedoManager mgr;
+    mgr.setPolicy({0, 0});
+    mgr.push(std::make_unique<HeavyAction>(4000));
+    mgr.push(std::make_unique<HeavyAction>(4000));
+    mgr.undo();
+    QCOMPARE(mgr.memoryUsage(), std::size_t(8000));
+    mgr.push(std::make_unique<HeavyAction>(10));
+    QCOMPARE(mgr.memoryUsage(), std::size_t(4010));
+    QVERIFY(!mgr.canRedo());
+  }
+
+  void testCompositeCostIsTheSumOfItsSteps() {
+    auto composite = std::make_unique<CompositeAction>();
+    composite->addAction(std::make_unique<HeavyAction>(1000));
+    composite->addAction(std::make_unique<HeavyAction>(2000));
+    QVERIFY(composite->memoryCost() >= 3000);
+    UndoRedoManager mgr;
+    mgr.push(std::move(composite));
+    QVERIFY(mgr.memoryUsage() >= 3000);
   }
 };
 

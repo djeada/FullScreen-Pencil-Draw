@@ -82,6 +82,12 @@ public:
    */
   QUuid id() const { return id_; }
 
+  /// Restore a saved identity (project loading only).
+  void setId(const QUuid &id) {
+    if (!id.isNull())
+      id_ = id;
+  }
+
   /**
    * @brief Get the layer name
    * @return The display name
@@ -153,6 +159,8 @@ public:
    * @return The layer type
    */
   Type type() const { return type_; }
+
+  void setType(Type type) { type_ = type; }
 
   /**
    * @brief Add an item to this layer

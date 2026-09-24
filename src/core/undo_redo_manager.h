@@ -10,9 +10,39 @@
 
 class Action;
 
+/**
+ * @brief How much undo history is kept.
+ *
+ * History is trimmed oldest-first as soon as either limit is exceeded;
+ * the most recent action always stays undoable. 0 disables a limit.
+ * Memory is what actions report through Action::memoryCost() (captured
+ * pixels, parked snapshots of deleted objects), so a few huge raster edits
+ * cannot pin gigabytes while many small vector edits keep deep history.
+ */
+struct HistoryPolicy {
+  std::size_t maxSteps = 100;
+  std::size_t memoryBudgetBytes = std::size_t(256) * 1024 * 1024;
+
+  bool operator==(const HistoryPolicy &o) const {
+    return maxSteps == o.maxSteps && memoryBudgetBytes == o.memoryBudgetBytes;
+  }
+};
+
 class UndoRedoManager {
 public:
-  static constexpr std::size_t kMaxUndoSteps = 30;
+  /// Defaults of HistoryPolicy (100 steps, 256 MiB).
+  static constexpr std::size_t kDefaultMaxSteps = 100;
+  static constexpr std::size_t kDefaultMemoryBudgetBytes =
+      std::size_t(256) * 1024 * 1024;
+
+  /// Apply a new policy; trims existing history if it is now over.
+  void setPolicy(const HistoryPolicy &policy);
+  const HistoryPolicy &policy() const { return policy_; }
+
+  std::size_t undoCount() const { return undoStack_.size(); }
+  std::size_t redoCount() const { return redoStack_.size(); }
+  /// Sum of Action::memoryCost() over the undo and redo stacks.
+  std::size_t memoryUsage() const;
 
   /**
    * @brief Invoked for every ItemId referenced by an action that is being
@@ -51,6 +81,7 @@ private:
   void evictOverLimit(std::vector<std::unique_ptr<Action>> &discarded);
   void notifyDiscarded(const std::vector<std::unique_ptr<Action>> &discarded);
 
+  HistoryPolicy policy_;
   std::vector<std::unique_ptr<Action>> undoStack_;
   std::vector<std::unique_ptr<Action>> redoStack_;
   std::vector<DiscardListener> discardListeners_;

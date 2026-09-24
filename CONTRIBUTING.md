@@ -211,11 +211,24 @@ These invariants MUST be maintained in all contributions:
 
 ## Testing Guidelines
 
+### Running Tests Locally
+```bash
+cmake -S . -B build -DBUILD_TESTING=ON
+cmake --build build -j$(nproc)
+ctest --test-dir build --output-on-failure
+```
+Every test runs with `QT_QPA_PLATFORM=offscreen` (set by `tests/CMakeLists.txt`),
+so no display is needed. CI runs exactly this on each pull request and fails on
+any failing test.
+
 ### Required Test Coverage
-- Erase/undo/redo cycles
+- Erase/undo/redo cycles (Object Eraser and Pixel Eraser)
 - Layer delete with items
 - Overlay switch operations
 - Rapid create/delete/move sequences
+- Document integrity: anything new that lives in a document must round-trip
+  through `.fspd` (add it to `tests/test_document_integrity.cpp`) and be
+  handled by `DocumentExporter` (see `docs/FILE_FORMAT.md`, `docs/EXPORT.md`)
 
 ### Sanitizer Testing
 Before submitting a PR, run with sanitizers if possible:
