@@ -5,6 +5,8 @@
 #include "eraser_tool.h"
 #include "../core/scene_controller.h"
 #include "../core/scene_renderer.h"
+#include "../widgets/brush_stroke_item.h"
+#include "../widgets/raster_layer_item.h"
 #include "../widgets/transform_handle_item.h"
 #include <QGraphicsItemGroup>
 #include <QGraphicsPixmapItem>
@@ -82,14 +84,21 @@ void EraserTool::eraseAt(const QPointF &point) {
     QGraphicsItem *target = item->topLevelItem();
     if (target == eraserPreview_ || target == background ||
         target->type() == TransformHandleItem::Type ||
+        target->type() == RasterLayerItem::Type ||
         itemsToRemove.contains(target))
+      continue;
+    // Hidden or locked objects are never erased.
+    if (!target->isVisible() ||
+        target->data(0).toString() == QLatin1String("locked"))
       continue;
 
     bool hit = false;
-    if (dynamic_cast<QGraphicsPixmapItem *>(item)) {
-      // A pixmap's shape() traces opaque pixels and is unreliable for
-      // hit-testing; its bounds are what the user sees.
-      hit = erasePath.intersects(item->sceneBoundingRect());
+    if (dynamic_cast<QGraphicsPixmapItem *>(item) ||
+        dynamic_cast<BrushStrokeItem *>(item)) {
+      // Raster objects: only their visible pixels count, so touching the
+      // transparent part of a large image does not delete it.
+      hit = erasePath.intersects(item->sceneBoundingRect()) &&
+            PixelEditAction::hitsOpaquePixels(item, erasePath);
     } else {
       // Test the actual (stroked) shape, not the bounding box: touching the
       // empty inside of a diagonal line's box must not erase it.

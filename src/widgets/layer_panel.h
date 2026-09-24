@@ -66,6 +66,9 @@ public:
   void setItemStore(ItemStore *store);
 
 public slots:
+  /// Add a raster (pixel) layer: the Pen paints pixels on it and the
+  /// Pixel Eraser erases them.
+  void onAddRasterLayer();
   /**
    * @brief Refresh the layer list display
    */
