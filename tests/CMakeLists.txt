@@ -565,33 +565,33 @@ set_target_properties(test_canvas_interaction PROPERTIES
 
 add_test(NAME TestCanvasInteraction COMMAND test_canvas_interaction)
 
-# PdfPageCache tests
-add_executable(test_pdf_page_cache
-    test_pdf_page_cache.cpp
-    ../src/core/pdf_document.cpp
-    ../src/core/pdf_document.h
-)
-
-target_include_directories(test_pdf_page_cache PRIVATE
-    ../src/core
-)
-
-target_link_libraries(test_pdf_page_cache PRIVATE
-    Qt${QT_VERSION_MAJOR}::Widgets
-    Qt${QT_VERSION_MAJOR}::Test
-)
-
+# PdfPageCache tests (the cache only exists when Qt PDF is available)
 if(Qt${QT_VERSION_MAJOR}Pdf_FOUND)
+    add_executable(test_pdf_page_cache
+        test_pdf_page_cache.cpp
+        ../src/core/pdf_document.cpp
+        ../src/core/pdf_document.h
+    )
+
+    target_include_directories(test_pdf_page_cache PRIVATE
+        ../src/core
+    )
+
+    target_link_libraries(test_pdf_page_cache PRIVATE
+        Qt${QT_VERSION_MAJOR}::Widgets
+        Qt${QT_VERSION_MAJOR}::Test
+    )
+
     target_link_libraries(test_pdf_page_cache PRIVATE
         Qt${QT_VERSION_MAJOR}::Pdf
     )
+
+    set_target_properties(test_pdf_page_cache PROPERTIES
+        AUTOMOC ON
+    )
+
+    add_test(NAME TestPdfPageCache COMMAND test_pdf_page_cache)
 endif()
-
-set_target_properties(test_pdf_page_cache PROPERTIES
-    AUTOMOC ON
-)
-
-add_test(NAME TestPdfPageCache COMMAND test_pdf_page_cache)
 
 # Tiled raster engine tests
 add_executable(test_raster_surface
@@ -646,6 +646,9 @@ set_tests_properties(${_fspd_tests} PROPERTIES
 # Add custom target to run all tests
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-    DEPENDS test_item_store test_project_serializer test_image_filters test_perspective_transform test_snap_engine test_text_whitespace test_latex_unicode test_busy_spinner_overlay test_brush_tip test_rotation_dialog test_alignment_dialog test_transform_action test_group_clipboard test_side_tab_bar test_undo_redo_manager test_pdf_page_cache test_canvas_interaction test_raster_surface test_document_integrity
+    DEPENDS test_item_store test_project_serializer test_image_filters test_perspective_transform test_snap_engine test_text_whitespace test_latex_unicode test_busy_spinner_overlay test_brush_tip test_rotation_dialog test_alignment_dialog test_transform_action test_group_clipboard test_side_tab_bar test_undo_redo_manager test_canvas_interaction test_raster_surface test_document_integrity
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
+if(TARGET test_pdf_page_cache)
+    add_dependencies(run_tests test_pdf_page_cache)
+endif()
