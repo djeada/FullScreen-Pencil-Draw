@@ -10,6 +10,7 @@
 #include <QFontDatabase>
 #include <QGraphicsScene>
 #include <QGraphicsView>
+#include <QPaintEngine>
 #include <QPainter>
 #include <QPointer>
 #include <QRegularExpression>
@@ -353,6 +354,9 @@ static QString plainTextToHtmlPreservingNewlines(QString text) {
 }
 
 // LatexTextEdit implementation
+// No font in the stylesheet: it would override setFont(), and the editor must
+// show the item's own font and size so text does not change on commit.
+// (Qt style sheets also have no box-shadow / line-height; they only warned.)
 LatexTextEdit::LatexTextEdit(QWidget *parent) : QTextEdit(parent) {
   setFrameStyle(QFrame::Box);
   setLineWidth(2);
@@ -365,15 +369,10 @@ LatexTextEdit::LatexTextEdit(QWidget *parent) : QTextEdit(parent) {
       "  padding: 10px 12px;"
       "  selection-background-color: #3d4f6f;"
       "  selection-color: #ffffff;"
-      "  font-family: 'STIX Two Math', 'Cambria Math', 'DejaVu Serif', "
-      "'Liberation Serif', serif;"
-      "  font-size: 14px;"
-      "  line-height: 1.4;"
       "}"
       "QTextEdit:focus {"
       "  border: 1.5px solid #6b8cce;"
       "  background-color: #1e1e2e;"
-      "  box-shadow: 0 0 8px rgba(107, 140, 206, 0.3);"
       "}"
       "QScrollBar:vertical {"
       "  background: #252535;"
@@ -595,8 +594,24 @@ void LatexTextItem::paint(QPainter *painter,
     return;
   }
 
-  // Draw the rendered content
-  if (!renderedContent_.isNull()) {
+  // Vector targets (SVG / PDF export, printing) get real text for plain
+  // text, so it stays selectable and sharp; only LaTeX math is an image.
+  const QPaintEngine *engine = painter->paintEngine();
+  const bool vectorTarget = engine && (engine->type() == QPaintEngine::SVG ||
+                                       engine->type() == QPaintEngine::Pdf ||
+                                       engine->type() == QPaintEngine::Picture);
+  if (vectorTarget && !text_.isEmpty() && !hasLatex()) {
+    QTextDocument doc;
+    doc.setDefaultFont(font_);
+    doc.setHtml(plainTextToHtmlPreservingNewlines(text_));
+    doc.setTextWidth(-1); // No word wrap, same as renderLatex()
+    QAbstractTextDocumentLayout::PaintContext ctx;
+    ctx.palette.setColor(QPalette::Text, textColor_);
+    painter->save();
+    painter->translate(PADDING, PADDING);
+    doc.documentLayout()->draw(painter, ctx);
+    painter->restore();
+  } else if (!renderedContent_.isNull()) {
     painter->drawPixmap(PADDING, PADDING, renderedContent_);
   } else if (!text_.isEmpty()) {
     // Fallback: draw plain text if rendering failed
@@ -759,6 +774,14 @@ QVariant LatexTextItem::itemChange(GraphicsItemChange change,
 void LatexTextItem::onEditingFinished() { finishEditing(); }
 
 void LatexTextItem::onEditingCancelled() {
+  // Esc on a brand-new item that already has typed text keeps the text:
+  // "reverting" a new item deletes it, silently throwing the typing away.
+  // (Re-editing existing text still reverts to what it was.)
+  if (text_.isEmpty() && textEdit_ &&
+      !textEdit_->toPlainText().trimmed().isEmpty()) {
+    finishEditing();
+    return;
+  }
   // Revert to previous text and stop editing
   isEditing_ = false;
   if (proxyWidget_) {

@@ -20,6 +20,15 @@ class TextOnPathItem : public QGraphicsObject {
   Q_OBJECT
 
 public:
+  /// Where each character is drawn: centred on the path at its arc length.
+  struct GlyphPlacement {
+    QChar character;
+    QPointF position;
+    qreal angle; ///< degrees, as QPainterPath::angleAtPercent()
+    qreal width;
+  };
+  QList<GlyphPlacement> glyphPlacements() const;
+
   explicit TextOnPathItem(QGraphicsItem *parent = nullptr);
   ~TextOnPathItem() override;
 

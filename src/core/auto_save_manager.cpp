@@ -104,7 +104,11 @@ bool AutoSaveManager::performAutoSave() {
   }
 
   RecoverySnapshot info;
-  info.originalPath = canvas_->currentFilePath();
+  // A recovered document has no file yet, but it still belongs to the file
+  // it was recovered from; keep naming it so a second crash is clear too.
+  info.originalPath = canvas_->currentFilePath().isEmpty()
+                          ? canvas_->suggestedSavePath()
+                          : canvas_->currentFilePath();
   info.displayName = info.originalPath.isEmpty()
                          ? tr("Untitled drawing")
                          : QFileInfo(info.originalPath).fileName();
@@ -126,11 +130,21 @@ bool AutoSaveManager::performAutoSave() {
 
 void AutoSaveManager::clearAutoSave() {
   store_->discard(documentId_);
+  // If the recovered session could not be adopted, its snapshot still
+  // holds the same work and would be offered again as stale.
+  if (!recoveredDocumentId_.isEmpty()) {
+    store_->discard(recoveredDocumentId_);
+    recoveredDocumentId_.clear();
+  }
   clearLegacyAutoSave();
 }
 
 void AutoSaveManager::startNewDocument() {
   store_->discard(documentId_);
+  if (!recoveredDocumentId_.isEmpty()) {
+    store_->discard(recoveredDocumentId_);
+    recoveredDocumentId_.clear();
+  }
   store_->releaseSession(documentId_);
   documentId_ = store_->createSession();
 }
@@ -165,9 +179,11 @@ bool AutoSaveManager::recoverSnapshot(const RecoverySnapshot &snapshot) {
       restored = true;
     }
     if (restored) {
-      // Its content now lives in this session's snapshots.
-      clearLegacyAutoSave();
       emit documentRecovered(snapshot);
+      // Its content only moves to this session once a new snapshot is on
+      // disk; until then the old file is the only copy.
+      if (performAutoSave())
+        clearLegacyAutoSave();
     }
     return restored;
   }
@@ -177,11 +193,16 @@ bool AutoSaveManager::recoverSnapshot(const RecoverySnapshot &snapshot) {
     return false; // keep the snapshot; the user can try again next time
   // Continue in the recovered session: further autosaves update this
   // snapshot, and it survives until the user saves or discards the work.
+  canvas_->setSuggestedSavePath(snapshot.originalPath);
   if (store_->adoptSession(snapshot.documentId)) {
     const QString previous = documentId_;
     documentId_ = snapshot.documentId;
     store_->discard(previous);
     store_->releaseSession(previous);
+  } else {
+    // Keep autosaving into our own session, and remember the recovered
+    // snapshot so saving or discarding the work removes it as well.
+    recoveredDocumentId_ = snapshot.documentId;
   }
   emit documentRecovered(snapshot);
   return true;

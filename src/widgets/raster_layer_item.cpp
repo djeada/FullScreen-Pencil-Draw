@@ -36,13 +36,43 @@ void RasterLayerItem::paintStroke(const QPointF &from, const QPointF &to,
   QPen roundPen = pen;
   roundPen.setCapStyle(Qt::RoundCap);
   roundPen.setJoinStyle(Qt::RoundJoin);
-  surface_.paint(area, [&](QPainter &p) {
-    p.setPen(roundPen);
-    if (from == to)
-      p.drawPoint(from);
-    else
-      p.drawLine(from, to);
-  });
+  if (from == to)
+    prevSegment_ = QPainterPath(); // a stroke starts with a single dab
+  if (pen.color().alpha() < 255) {
+    // Consecutive segments overlap in their round end caps; painting a
+    // translucent colour there twice left darker beads along the stroke.
+    // Paint only what the previous segment did not already cover.
+    QPainterPath outline;
+    if (from == to) {
+      outline.addEllipse(from, pen.widthF() / 2.0, pen.widthF() / 2.0);
+    } else {
+      QPainterPath line(from);
+      line.lineTo(to);
+      QPainterPathStroker stroker;
+      stroker.setWidth(qMax<qreal>(1.0, pen.widthF()));
+      stroker.setCapStyle(Qt::RoundCap);
+      stroker.setJoinStyle(Qt::RoundJoin);
+      outline = stroker.createStroke(line);
+    }
+    const QPainterPath fresh =
+        prevSegment_.isEmpty() ? outline : outline.subtracted(prevSegment_);
+    prevSegment_ = outline;
+    if (fresh.isEmpty())
+      return;
+    surface_.paint(area, [&](QPainter &p) {
+      p.setPen(Qt::NoPen);
+      p.setBrush(pen.color());
+      p.drawPath(fresh);
+    });
+  } else {
+    surface_.paint(area, [&](QPainter &p) {
+      p.setPen(roundPen);
+      if (from == to)
+        p.drawPoint(from);
+      else
+        p.drawLine(from, to);
+    });
+  }
   surfaceChanged();
 }
 

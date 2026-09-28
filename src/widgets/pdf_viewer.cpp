@@ -6,9 +6,12 @@
 
 #ifdef HAVE_QT_PDF
 
+#include "../core/item_store.h"
 #include "../tools/tool.h"
 #include "../tools/tool_manager.h"
 #include "item_painting.h"
+#include "latex_text_item.h"
+#include "mermaid_text_item.h"
 #include "pdf_search_bar.h"
 #include <QApplication>
 #include <QFileDialog>
@@ -88,6 +91,18 @@ PdfViewer::PdfViewer(QWidget *parent)
   // Initialize scene controller (single source of truth)
   sceneController_ = new SceneController(scene_, this);
   overlayManager_->setItemStore(sceneController_->itemStore());
+  // Re-editing an existing text or diagram annotation changes the PDF's
+  // annotations too (new ones are recorded when their editor closes).
+  connect(sceneController_->itemStore(), &ItemStore::itemRegistered, this,
+          [this](const ItemId &id) {
+            QGraphicsItem *item = itemStore()->item(id);
+            if (auto *text = dynamic_cast<LatexTextItem *>(item))
+              connect(text, &LatexTextItem::textChanged, this,
+                      &PdfViewer::documentModified, Qt::UniqueConnection);
+            else if (auto *mermaid = dynamic_cast<MermaidTextItem *>(item))
+              connect(mermaid, &MermaidTextItem::codeChanged, this,
+                      &PdfViewer::documentModified, Qt::UniqueConnection);
+          });
 
   // Initialize tool manager
   toolManager_ = new ToolManager(this, this);
@@ -96,8 +111,12 @@ PdfViewer::PdfViewer(QWidget *parent)
   // Connect document signals
   connect(document_.get(), &PdfDocument::documentLoaded, this, [this]() {
     overlayManager_->initialize(document_->pageCount());
+    // Open at actual size (the page as big as it would be printed).
+    currentZoom_ = actualSizeZoom();
     goToPage(0);
+    applyViewTransform();
     emit pdfLoaded();
+    emit zoomChanged(zoomLevel());
   });
 
   connect(document_.get(), &PdfDocument::errorOccurred, this,
@@ -422,15 +441,28 @@ void PdfViewer::applyViewTransform() {
   scale(currentZoom_, currentZoom_);
 }
 
+qreal PdfViewer::actualSizeZoom() const {
+  // The scene is in renderDpi_ pixels; the screen shows logicalDpiX()
+  // pixels per inch. 100% means the page at its real (printed) size, as
+  // in other PDF viewers, not "one scene pixel per screen pixel" (which
+  // showed the page at 150/96 = 156% while claiming 100%).
+  return static_cast<qreal>(qMax(1, logicalDpiX())) /
+         static_cast<qreal>(qMax(1, renderDpi_));
+}
+
+double PdfViewer::zoomLevel() const {
+  return currentZoom_ / actualSizeZoom() * 100.0;
+}
+
 void PdfViewer::zoomReset() {
-  currentZoom_ = 1.0;
+  currentZoom_ = actualSizeZoom();
   renderCurrentPage();
   applyViewTransform();
-  emit zoomChanged(100.0);
+  emit zoomChanged(zoomLevel());
 }
 
 void PdfViewer::setZoomPercent(double zoomPercent) {
-  const double zoomFactor = zoomPercent / 100.0;
+  const double zoomFactor = zoomPercent / 100.0 * actualSizeZoom();
   if (zoomFactor < MIN_ZOOM || zoomFactor > MAX_ZOOM) {
     return;
   }
@@ -438,7 +470,7 @@ void PdfViewer::setZoomPercent(double zoomPercent) {
   currentZoom_ = zoomFactor;
   renderCurrentPage();
   applyViewTransform();
-  emit zoomChanged(currentZoom_ * 100.0);
+  emit zoomChanged(zoomLevel());
 }
 
 void PdfViewer::fitToWidth() {
@@ -460,7 +492,7 @@ void PdfViewer::fitToWidth() {
   currentZoom_ = scale;
   renderCurrentPage();
   applyViewTransform();
-  emit zoomChanged(currentZoom_ * 100.0);
+  emit zoomChanged(zoomLevel());
 }
 
 void PdfViewer::fitToPage() {
@@ -486,7 +518,7 @@ void PdfViewer::fitToPage() {
   currentZoom_ = scale;
   renderCurrentPage();
   applyViewTransform();
-  emit zoomChanged(currentZoom_ * 100.0);
+  emit zoomChanged(zoomLevel());
 }
 
 void PdfViewer::rotatePageLeft() {
@@ -527,7 +559,7 @@ void PdfViewer::applyZoom(double factor) {
   currentZoom_ = newZoom;
   renderCurrentPage();
   scale(factor, factor);
-  emit zoomChanged(currentZoom_ * 100.0);
+  emit zoomChanged(zoomLevel());
 }
 
 int PdfViewer::effectiveRenderDpi() const {
@@ -924,8 +956,55 @@ void PdfViewer::drawBackground(QPainter *painter, const QRectF &rect) {
   }
 }
 
+QGraphicsItem *PdfViewer::openEditorAt(const QPoint &viewPos) const {
+  // The inline editor is a proxy-widget child, so walk up to its owner.
+  QGraphicsItem *hit = itemAt(viewPos);
+  while (hit && !dynamic_cast<LatexTextItem *>(hit) &&
+         !dynamic_cast<MermaidTextItem *>(hit))
+    hit = hit->parentItem();
+  auto *text = dynamic_cast<LatexTextItem *>(hit);
+  auto *mermaid = dynamic_cast<MermaidTextItem *>(hit);
+  return (text && text->isEditing()) || (mermaid && mermaid->isEditing())
+             ? hit
+             : nullptr;
+}
+
+void PdfViewer::commitPendingEdits() {
+  if (!scene_)
+    return;
+  // Collect first: finishing a still-empty new item removes it.
+  QList<QPointer<QGraphicsObject>> editing;
+  for (QGraphicsItem *item : scene_->items()) {
+    if (auto *text = dynamic_cast<LatexTextItem *>(item)) {
+      if (text->isEditing())
+        editing.append(text);
+    } else if (auto *mermaid = dynamic_cast<MermaidTextItem *>(item)) {
+      if (mermaid->isEditing())
+        editing.append(mermaid);
+    }
+  }
+  for (const QPointer<QGraphicsObject> &obj : editing) {
+    if (auto *text = qobject_cast<LatexTextItem *>(obj.data()))
+      text->finishEditing();
+    else if (auto *mermaid = qobject_cast<MermaidTextItem *>(obj.data()))
+      mermaid->finishEditing();
+  }
+  if (toolManager_) {
+    if (Tool *tool = toolManager_->activeTool())
+      if (tool->hasActiveGesture())
+        tool->finishGesture();
+  }
+}
+
 void PdfViewer::mousePressEvent(QMouseEvent *event) {
   if (!hasPdf()) {
+    QGraphicsView::mousePressEvent(event);
+    return;
+  }
+  // Clicks inside an open text/diagram editor place the caret or select
+  // text; the tools would otherwise swallow them.
+  editorGesture_ = mode_ != Mode::View && openEditorAt(event->pos());
+  if (editorGesture_) {
     QGraphicsView::mousePressEvent(event);
     return;
   }
@@ -998,6 +1077,10 @@ void PdfViewer::mouseMoveEvent(QMouseEvent *event) {
     QGraphicsView::mouseMoveEvent(event);
     return;
   }
+  if (editorGesture_) {
+    QGraphicsView::mouseMoveEvent(event);
+    return;
+  }
 
   QPointF cp = mapToScene(event->pos());
   emit cursorPositionChanged(cp);
@@ -1031,6 +1114,11 @@ void PdfViewer::mouseMoveEvent(QMouseEvent *event) {
 
 void PdfViewer::mouseReleaseEvent(QMouseEvent *event) {
   if (!hasPdf()) {
+    QGraphicsView::mouseReleaseEvent(event);
+    return;
+  }
+  if (editorGesture_) {
+    editorGesture_ = false;
     QGraphicsView::mouseReleaseEvent(event);
     return;
   }
@@ -1103,10 +1191,16 @@ void PdfViewer::mouseDoubleClickEvent(QMouseEvent *event) {
     return;
   }
 
+  // Inside an open editor a double-click selects a word; with a selection
+  // tool it opens a text / diagram / text-on-path annotation for editing.
+  Tool *tool = toolManager_->activeTool();
+  if (openEditorAt(event->pos()) || (tool && tool->usesRubberBandSelection())) {
+    QGraphicsView::mouseDoubleClickEvent(event);
+    return;
+  }
   // Forward to the active tool so it can implement double-click gestures
   // (e.g. finalizing a Bezier / text-on-path).
-  Tool *tool = toolManager_->activeTool();
-  if (tool && !tool->usesDoubleClick() && !tool->usesRubberBandSelection()) {
+  if (tool && !tool->usesDoubleClick()) {
     // A fast second click arrives as a double-click; handle it as a new
     // press or quick successive strokes/shapes would be dropped.
     mousePressEvent(event);
@@ -1172,7 +1266,18 @@ void PdfViewer::keyPressEvent(QKeyEvent *event) {
 
 void PdfViewer::wheelEvent(QWheelEvent *event) {
   if (event->modifiers() & Qt::ControlModifier) {
-    event->angleDelta().y() > 0 ? zoomIn() : zoomOut();
+    // Trackpads send many small deltas: one zoom step per notch (120),
+    // like the canvas, instead of one per event (and none for sideways
+    // scrolling).
+    wheelZoomAccum_ += event->angleDelta().y();
+    while (wheelZoomAccum_ >= 120) {
+      wheelZoomAccum_ -= 120;
+      zoomIn();
+    }
+    while (wheelZoomAccum_ <= -120) {
+      wheelZoomAccum_ += 120;
+      zoomOut();
+    }
     event->accept();
   } else {
     QGraphicsView::wheelEvent(event);

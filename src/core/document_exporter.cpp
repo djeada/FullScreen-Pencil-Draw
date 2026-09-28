@@ -6,6 +6,7 @@
 #include "../widgets/item_painting.h"
 #include "../widgets/latex_text_item.h"
 #include "../widgets/mermaid_text_item.h"
+#include "../widgets/raster_layer_item.h"
 #include <QBuffer>
 #include <QDir>
 #include <QFileInfo>
@@ -186,9 +187,18 @@ QList<DocumentExporter::ExportLayer> DocumentExporter::exportLayers() const {
 QRectF DocumentExporter::contentRect(qreal margin) const {
   QRectF bounds;
   for (const ExportLayer &layer : exportLayers())
-    for (QGraphicsItem *item : layer.items)
-      bounds = bounds.isNull() ? item->sceneBoundingRect()
-                               : bounds.united(item->sceneBoundingRect());
+    for (QGraphicsItem *item : layer.items) {
+      QRectF itemBounds = item->sceneBoundingRect();
+      // Raster layers allocate whole tiles; crop to what is painted so a
+      // small doodle does not export padded to 256-px tile edges.
+      if (auto *raster = dynamic_cast<RasterLayerItem *>(item)) {
+        const QRect opaque = raster->surface().opaqueBounds();
+        if (opaque.isEmpty())
+          continue;
+        itemBounds = item->sceneTransform().mapRect(QRectF(opaque));
+      }
+      bounds = bounds.isNull() ? itemBounds : bounds.united(itemBounds);
+    }
   if (bounds.isEmpty())
     bounds = fallbackRect_.isEmpty() ? QRectF(0, 0, 1, 1) : fallbackRect_;
   return bounds.adjusted(-margin, -margin, margin, margin);
@@ -233,9 +243,11 @@ QStringList DocumentExporter::imageOnlyItems(const QList<ExportLayer> &layers) {
       QGraphicsItem *item = stack.takeLast();
       if (!item->isVisible())
         continue;
-      if (dynamic_cast<LatexTextItem *>(item))
-        ++latex;
-      else if (dynamic_cast<MermaidTextItem *>(item))
+      if (auto *text = dynamic_cast<LatexTextItem *>(item)) {
+        // Plain text is drawn as vector text; only math is an image.
+        if (text->hasLatex())
+          ++latex;
+      } else if (dynamic_cast<MermaidTextItem *>(item))
         ++mermaid;
       stack.append(item->childItems());
     }
@@ -243,7 +255,7 @@ QStringList DocumentExporter::imageOnlyItems(const QList<ExportLayer> &layers) {
   QStringList warnings;
   if (latex > 0)
     warnings << QStringLiteral("%1 text object(s) were embedded as rendered "
-                               "images (LaTeX-capable text is rendered, not "
+                               "images (LaTeX math is rendered, not "
                                "outlined).")
                     .arg(latex);
   if (mermaid > 0)

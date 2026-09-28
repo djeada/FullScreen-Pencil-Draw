@@ -101,7 +101,7 @@ ToolPanel::ToolPanel(QWidget *parent)
   actionFill->setCheckable(true);
   connect(actionFill, &QAction::triggered, this, &ToolPanel::onActionFill);
 
-  actionColorSelect = new QAction("◎ Select", this);
+  actionColorSelect = new QAction("◎ By Color", this);
   actionColorSelect->setToolTip("Select pixels by color (Q)");
   actionColorSelect->setCheckable(true);
   connect(actionColorSelect, &QAction::triggered, this,
@@ -562,15 +562,15 @@ ToolPanel::ToolPanel(QWidget *parent)
   connect(actionNew, &QAction::triggered, this, &ToolPanel::onActionNew);
 
   actionOpen = new QAction("📂 Open", this);
-  actionOpen->setToolTip("Open image (Ctrl+O)");
+  actionOpen->setToolTip("Open project, image or SVG (Ctrl+O)");
   connect(actionOpen, &QAction::triggered, this, &ToolPanel::onActionOpen);
 
   actionSave = new QAction("💾 Save", this);
-  actionSave->setToolTip("Save (Ctrl+S)");
+  actionSave->setToolTip("Save project (Ctrl+S)");
   connect(actionSave, &QAction::triggered, this, &ToolPanel::onActionSave);
 
   actionClear = new QAction("🗑 Clear", this);
-  actionClear->setToolTip("Clear canvas");
+  actionClear->setToolTip("Clear canvas (removes every item; can be undone)");
   connect(actionClear, &QAction::triggered, this, &ToolPanel::onActionClear);
 
   QWidget *fileGridWidget = new QWidget(container);
@@ -942,13 +942,13 @@ void ToolPanel::clearActiveToolStyles() {
 
 void ToolPanel::setActiveTool(const QString &toolName) {
   static const QHash<QString, QString> toolIcons = {
-      {"Pen", "✎"},          {"Highlighter", "▉"}, {"Object Eraser", "⌫"},
-      {"Pixel Eraser", "▨"}, {"Text", "T"},        {"Mermaid", "⬡"},
-      {"Fill", "◉"},         {"ColorSelect", "◎"}, {"Line", "╱"},
-      {"Arrow", "➤"},        {"CurvedArrow", "↪"}, {"Wire", "⏚"},
-      {"Rectangle", "▢"},    {"Circle", "◯"},      {"Select", "⬚"},
-      {"LassoSelect", "⛶"},  {"Pan", "☰"},         {"Bezier", "⌇"},
-      {"TextOnPath", "⌇T"}};
+      {"Pen", "✎"},          {"Highlighter", "▉"},  {"Object Eraser", "⌫"},
+      {"Pixel Eraser", "▨"}, {"Text", "T"},         {"Mermaid", "⬡"},
+      {"Fill", "◉"},         {"Color Select", "◎"}, {"Line", "╱"},
+      {"Arrow", "➤"},        {"Curved Arrow", "↪"}, {"Wire", "⏚"},
+      {"Rectangle", "▢"},    {"Circle", "◯"},       {"Select", "⬚"},
+      {"Lasso Select", "⛶"}, {"Pan", "☰"},          {"Bezier", "⌇"},
+      {"Text on Path", "⌇T"}};
   QString icon = toolIcons.value(toolName, "•");
   activeToolLabel->setText(icon + " " + toolName);
 }
@@ -993,6 +993,10 @@ void ToolPanel::updatePositionDisplay(const QPointF &pos) {
 }
 void ToolPanel::updateFilledShapesDisplay(bool filled) {
   actionFilledShapes->setChecked(filled);
+}
+
+void ToolPanel::updateGridDisplay(bool visible) {
+  actionGrid->setChecked(visible);
 }
 
 void ToolPanel::onActionPen() {
@@ -1040,7 +1044,7 @@ void ToolPanel::onActionFill() {
 void ToolPanel::onActionColorSelect() {
   clearActiveToolStyles();
   actionColorSelect->setChecked(true);
-  setActiveTool("ColorSelect");
+  setActiveTool("Color Select");
   emit colorSelectSelected();
 }
 void ToolPanel::onActionLine() {
@@ -1059,7 +1063,7 @@ void ToolPanel::onActionArrow() {
 void ToolPanel::onActionCurvedArrow() {
   clearActiveToolStyles();
   actionCurvedArrow->setChecked(true);
-  setActiveTool("CurvedArrow");
+  setActiveTool("Curved Arrow");
   emit curvedArrowSelected();
 }
 void ToolPanel::onActionWire() {
@@ -1092,7 +1096,7 @@ void ToolPanel::onActionSelection() {
 void ToolPanel::onActionLassoSelection() {
   clearActiveToolStyles();
   actionLassoSelection->setChecked(true);
-  setActiveTool("LassoSelect");
+  setActiveTool("Lasso Select");
   emit shapeSelected("LassoSelection");
   emit lassoSelectionSelected();
 }
@@ -1111,12 +1115,14 @@ void ToolPanel::onActionBezier() {
 void ToolPanel::onActionTextOnPath() {
   clearActiveToolStyles();
   actionTextOnPath->setChecked(true);
-  setActiveTool("TextOnPath");
+  setActiveTool("Text on Path");
   emit textOnPathSelected();
 }
 
 void ToolPanel::onActionColor() {
-  QColor color = QColorDialog::getColor(Qt::white, this, "Select Color");
+  QColor color = QColorDialog::getColor(
+      currentColor_.isValid() ? currentColor_ : QColor(Qt::white), this,
+      "Select Color", QColorDialog::ShowAlphaChannel);
   if (color.isValid()) {
     updateColorDisplay(color);
     emit colorSelected(color);

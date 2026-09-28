@@ -26,6 +26,7 @@ public:
   void updateOpacityDisplay(int opacity);
   void updatePositionDisplay(const QPointF &pos);
   void updateFilledShapesDisplay(bool filled);
+  void updateGridDisplay(bool visible);
   void setActiveTool(const QString &toolName);
 
 signals:

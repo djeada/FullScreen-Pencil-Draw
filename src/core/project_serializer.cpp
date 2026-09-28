@@ -277,7 +277,10 @@ QString encodePng(const QImage &image) {
   QByteArray ba;
   QBuffer buf(&ba);
   buf.open(QIODevice::WriteOnly);
-  image.save(&buf, "PNG");
+  // An empty string makes the item fail to load, so callers treat it as a
+  // serialization failure instead of writing an unreadable file.
+  if (image.isNull() || !image.save(&buf, "PNG"))
+    return QString();
   return QString::fromLatin1(ba.toBase64());
 }
 
@@ -314,11 +317,13 @@ QJsonObject rasterizeItem(QGraphicsItem *item) {
   const QRectF bounds = item->boundingRect();
   if (bounds.isEmpty())
     return QJsonObject();
-  constexpr qreal kScale = 2.0; // keep edges crisp when zoomed in
-  const QSize size(qCeil(bounds.width() * kScale),
-                   qCeil(bounds.height() * kScale));
-  if (size.width() > 16384 || size.height() > 16384)
-    return QJsonObject();
+  // 2x keeps edges crisp when zoomed in; very large items are scaled down
+  // to stay within image limits rather than being dropped.
+  constexpr qreal kMaxSide = 16384.0;
+  const qreal kScale =
+      qMin<qreal>(2.0, kMaxSide / qMax(bounds.width(), bounds.height()));
+  const QSize size(qMax(1, qCeil(bounds.width() * kScale)),
+                   qMax(1, qCeil(bounds.height() * kScale)));
   QImage image(size, QImage::Format_ARGB32_Premultiplied);
   image.fill(Qt::transparent);
   {
@@ -333,6 +338,8 @@ QJsonObject rasterizeItem(QGraphicsItem *item) {
   QJsonObject obj;
   obj["type"] = "pixmap";
   obj["data"] = encodePng(image);
+  if (obj["data"].toString().isEmpty())
+    return QJsonObject();
   obj["offsetX"] = bounds.x();
   obj["offsetY"] = bounds.y();
   obj["dpr"] = kScale;
@@ -435,7 +442,10 @@ QJsonObject ProjectSerializer::serializeItem(QGraphicsItem *item,
   } else if (auto *raster = dynamic_cast<RasterLayerItem *>(item)) {
     obj["type"] = "raster";
     obj["tileSize"] = RasterSurface::kTileSize;
-    obj["tiles"] = raster->surface().toJson();
+    bool tilesOk = true;
+    obj["tiles"] = raster->surface().toJson(&tilesOk);
+    if (!tilesOk)
+      return QJsonObject(); // reported as a failed item by the caller
   } else if (auto *stroke = dynamic_cast<BrushStrokeItem *>(item)) {
     // Keep the exact pixels plus everything needed to know how they were
     // made (tip, size, colour, recorded points).
@@ -458,8 +468,11 @@ QJsonObject ProjectSerializer::serializeItem(QGraphicsItem *item,
     const QRectF r = stroke->imageRect();
     obj["imageX"] = r.x();
     obj["imageY"] = r.y();
-    if (!stroke->image().isNull())
+    if (!stroke->image().isNull()) {
       obj["image"] = encodePng(stroke->image());
+      if (obj["image"].toString().isEmpty())
+        return QJsonObject(); // reported as a failed item by the caller
+    }
   } else if (auto *polygonItem = dynamic_cast<QGraphicsPolygonItem *>(item)) {
     obj["type"] = "polygon";
     obj["pen"] = serializePen(polygonItem->pen());
@@ -515,6 +528,8 @@ QJsonObject ProjectSerializer::serializeItem(QGraphicsItem *item,
     // Encode pixmap as PNG in base64
     const QPixmap pm = pixItem->pixmap();
     obj["data"] = encodePng(pm.toImage());
+    if (obj["data"].toString().isEmpty())
+      return QJsonObject(); // reported as a failed item by the caller
     // Rasterized items (see rasterizeItem) are high-DPI and offset; keep
     // both or they come back at twice the size after the next save.
     obj["dpr"] = pm.devicePixelRatio();
@@ -564,6 +579,34 @@ QJsonObject ProjectSerializer::serializeItem(QGraphicsItem *item,
   }
 
   return obj;
+}
+
+// State every saved item carries (see serializeItem); shared by
+// deserializeItem() and the wires loadProject() creates itself.
+void ProjectSerializer::applyCommonItemProperties(QGraphicsItem *item,
+                                                  const QJsonObject &obj) {
+  item->setPos(obj["x"].toDouble(), obj["y"].toDouble());
+  item->setZValue(obj["z"].toDouble(item->zValue()));
+  item->setVisible(obj["visible"].toBool(true));
+  item->setOpacity(obj["opacity"].toDouble(1.0));
+  item->setTransform(deserializeTransform(obj["transform"].toObject()));
+  if (obj.contains("originX") || obj.contains("originY"))
+    item->setTransformOriginPoint(obj["originX"].toDouble(),
+                                  obj["originY"].toDouble());
+  if (obj.contains("rotation"))
+    item->setRotation(obj["rotation"].toDouble());
+  if (obj.contains("scale"))
+    item->setScale(obj["scale"].toDouble(1.0));
+
+  // Make items interactive (unless they were saved locked). Raster layer
+  // content is edited with the raster tools, never dragged around.
+  const bool locked = obj["locked"].toBool(false);
+  if (locked)
+    item->setData(0, "locked");
+  const bool interactive =
+      !locked && obj["type"].toString() != QLatin1String("raster");
+  item->setFlag(QGraphicsItem::ItemIsSelectable, interactive);
+  item->setFlag(QGraphicsItem::ItemIsMovable, interactive);
 }
 
 QGraphicsItem *ProjectSerializer::deserializeItem(const QJsonObject &obj,
@@ -735,29 +778,7 @@ QGraphicsItem *ProjectSerializer::deserializeItem(const QJsonObject &obj,
     return fail(QStringLiteral("unknown item type '%1'").arg(type));
   }
 
-  // Apply common properties
-  item->setPos(obj["x"].toDouble(), obj["y"].toDouble());
-  item->setZValue(obj["z"].toDouble());
-  item->setVisible(obj["visible"].toBool(true));
-  item->setOpacity(obj["opacity"].toDouble(1.0));
-  item->setTransform(deserializeTransform(obj["transform"].toObject()));
-  if (obj.contains("originX") || obj.contains("originY"))
-    item->setTransformOriginPoint(obj["originX"].toDouble(),
-                                  obj["originY"].toDouble());
-  if (obj.contains("rotation"))
-    item->setRotation(obj["rotation"].toDouble());
-  if (obj.contains("scale"))
-    item->setScale(obj["scale"].toDouble(1.0));
-
-  // Make items interactive (unless they were saved locked). Raster layer
-  // content is edited with the raster tools, never dragged around.
-  const bool locked = obj["locked"].toBool(false);
-  if (locked)
-    item->setData(0, "locked");
-  const bool interactive = !locked && type != QLatin1String("raster");
-  item->setFlag(QGraphicsItem::ItemIsSelectable, interactive);
-  item->setFlag(QGraphicsItem::ItemIsMovable, interactive);
-
+  applyCommonItemProperties(item, obj);
   return item;
 }
 
@@ -824,6 +845,8 @@ QByteArray ProjectSerializer::serializeProject(ItemStore *itemStore,
 
   // Layers
   QStringList unsupported;
+  // Items that could not be written at all (not even flattened).
+  QStringList failed;
   QJsonArray layersArray;
   for (int i = 0; i < layerManager->layerCount(); ++i) {
     Layer *layer = layerManager->layer(i);
@@ -850,11 +873,15 @@ QByteArray ProjectSerializer::serializeProject(ItemStore *itemStore,
       QJsonObject itemObj =
           serializeItem(gItem, options.allowRasterFallback, &unsupported);
       if (itemObj.isEmpty()) {
-        // Only blank text leftovers may be skipped; everything else that
-        // failed to serialize is reported.
-        if (unsupported.size() == before &&
-            !dynamic_cast<LatexTextItem *>(gItem))
+        // Only blank text leftovers (and items that draw nothing) may be
+        // skipped; everything else that failed to serialize is reported.
+        auto *latex = dynamic_cast<LatexTextItem *>(gItem);
+        if ((latex && latex->text().trimmed().isEmpty()) ||
+            gItem->boundingRect().isEmpty())
+          continue;
+        if (unsupported.size() == before)
           unsupported.append(describeItem(gItem));
+        failed.append(describeItem(gItem));
         continue;
       }
       if (unsupported.size() > before)
@@ -878,6 +905,16 @@ QByteArray ProjectSerializer::serializeProject(ItemStore *itemStore,
                                 "images:\n%2")
                      .arg(unsupported.size())
                      .arg(unsupported.mid(0, 10).join(QLatin1Char('\n')));
+    return QByteArray();
+  }
+  if (!failed.isEmpty()) {
+    // Even an approved flatten must never silently drop artwork.
+    st.error = SaveError::SerializationFailed;
+    st.unsupportedItems = failed;
+    st.message = QStringLiteral("%1 object(s) could not be saved, not even "
+                                "as images:\n%2")
+                     .arg(failed.size())
+                     .arg(failed.mid(0, 10).join(QLatin1Char('\n')));
     return QByteArray();
   }
 
@@ -1028,7 +1065,8 @@ bool ProjectSerializer::loadProject(const QString &filePath,
     QJsonObject obj;
     QList<QGraphicsItem *> items;
     QList<ItemId> savedIds;
-    QList<QJsonObject> wires;
+    /// Wires with their position in the layer's saved stacking order.
+    QList<QPair<int, QJsonObject>> wires;
   };
   QList<PendingLayer> pendingLayers;
   auto discardPending = [&pendingLayers]() {
@@ -1039,10 +1077,11 @@ bool ProjectSerializer::loadProject(const QString &filePath,
   for (const QJsonValue &lv : root["layers"].toArray()) {
     PendingLayer pl;
     pl.obj = lv.toObject();
-    for (const QJsonValue &iv : pl.obj["items"].toArray()) {
-      const QJsonObject itemObj = iv.toObject();
+    const QJsonArray itemValues = pl.obj["items"].toArray();
+    for (int index = 0; index < itemValues.size(); ++index) {
+      const QJsonObject itemObj = itemValues.at(index).toObject();
       if (itemObj["type"].toString() == QLatin1String("wire")) {
-        pl.wires.append(itemObj);
+        pl.wires.append({index, itemObj});
         continue;
       }
       QString itemError;
@@ -1080,6 +1119,7 @@ bool ProjectSerializer::loadProject(const QString &filePath,
     loadedExtras.backgroundImagePos =
         QPointF(bgObj["x"].toDouble(), bgObj["y"].toDouble());
     loadedExtras.backgroundImageZ = bgObj["z"].toDouble(-1000);
+    loadedExtras.backgroundImageVisible = bgObj["visible"].toBool(true);
   }
 
   // Clear existing state
@@ -1099,6 +1139,7 @@ bool ProjectSerializer::loadProject(const QString &filePath,
   struct PendingWire {
     QJsonObject obj;
     Layer *layer;
+    int index; ///< position in the layer's saved stacking order
   };
   QList<PendingWire> pendingWires;
   QList<QGraphicsItem *> loadedItems;
@@ -1142,8 +1183,8 @@ bool ProjectSerializer::loadProject(const QString &filePath,
       loadedItems.append(gItem);
     }
     pl.items.clear(); // owned by the scene now
-    for (const QJsonObject &wireObj : pl.wires)
-      pendingWires.append({wireObj, layer});
+    for (const auto &wire : pl.wires)
+      pendingWires.append({wire.second, layer, wire.first});
   }
 
   // Wires connect elements that may live in any layer (or inside a group),
@@ -1165,17 +1206,30 @@ bool ProjectSerializer::loadProject(const QString &filePath,
         elementsByKey.value(obj["srcKey"].toString()));
     auto *dst = dynamic_cast<ElectronicsElementItem *>(
         elementsByKey.value(obj["dstKey"].toString()));
-    if (!src || !dst)
+    if (!src || !dst) {
+      loadedExtras.warnings.append(
+          QStringLiteral("A wire whose connected elements are missing was "
+                         "not restored."));
       continue;
+    }
     auto *wire =
         new WireItem(src, obj["srcPin"].toInt(), dst, obj["dstPin"].toInt());
-    wire->setZValue(obj["z"].toDouble(wire->zValue()));
+    applyCommonItemProperties(wire, obj);
+    // Wires are routed from their pins in scene coordinates.
+    wire->setPos(QPointF());
+    wire->setTransform(QTransform());
     if (obj.contains("pen"))
       wire->setPen(deserializePen(obj["pen"].toObject()));
     ItemId id =
         itemStore->registerItem(wire, ItemId::fromString(obj["id"].toString()));
     wire->updatePath();
     pending.layer->addItem(id, itemStore);
+    // Put it back where it was in the stacking order (pending wires are in
+    // ascending saved order per layer, so earlier ones are already placed).
+    const int from = pending.layer->indexOfItem(id);
+    const int to = qBound(0, pending.index, pending.layer->itemCount() - 1);
+    if (from >= 0 && from != to)
+      pending.layer->moveItem(from, to);
   }
 
   // Saved z-values may come from an older layer spacing; derive them from

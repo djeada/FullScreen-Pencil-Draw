@@ -3,16 +3,19 @@
  * @brief Implementation of the layer panel widget.
  */
 #include "layer_panel.h"
+#include "../core/action.h"
 #include "../core/item_store.h"
 #include "../core/layer.h"
 #include "../core/scene_controller.h"
 #include "../core/theme_manager.h"
 #include "animated_button.h"
 #include "architecture_elements.h"
+#include "brush_stroke_item.h"
 #include "canvas.h"
 #include "electronics_elements.h"
 #include "latex_text_item.h"
 #include "mermaid_text_item.h"
+#include "raster_layer_item.h"
 #include "text_on_path_item.h"
 #include "wire_item.h"
 #include <QDropEvent>
@@ -33,6 +36,7 @@
 #include <QMenu>
 #include <QMessageBox>
 #include <QPainter>
+#include <QPointer>
 #include <QScrollArea>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -264,13 +268,16 @@ void LayerPanel::setupUI() {
   layerTree_->setDropIndicatorShown(true);
   layerTree_->setExpandsOnDoubleClick(false);
   layerTree_->setIndentation(16);
-  layerTree_->setMaximumHeight(320);
+  // The tree is what grows with the dock (it used to be capped while an
+  // empty stretch below the controls took the space, so tall docks still
+  // showed only a few rows); a minimum keeps several rows visible.
+  layerTree_->setMinimumHeight(160);
   layerTree_->setContextMenuPolicy(Qt::CustomContextMenu);
   connect(layerTree_, &QTreeWidget::itemSelectionChanged, this,
           &LayerPanel::onTreeSelectionChanged);
   connect(layerTree_, &QWidget::customContextMenuRequested, this,
           &LayerPanel::onLayerTreeContextMenuRequested);
-  mainLayout->addWidget(layerTree_);
+  mainLayout->addWidget(layerTree_, 1);
 
   // Layer controls row 1 - Add/Delete/Duplicate/Merge
   QHBoxLayout *controlsRow1 = new QHBoxLayout();
@@ -449,8 +456,6 @@ void LayerPanel::setupUI() {
 
   mainLayout->addWidget(blendGroup);
 
-  mainLayout->addStretch();
-
   container->setLayout(mainLayout);
 
   // The panel's contents (tree + buttons + opacity + blend controls) can be
@@ -614,10 +619,11 @@ void LayerPanel::applyTheme() {
         padding-right: 8px;
       }
       QComboBox::down-arrow {
-        image: none;
-        border-left: 4px solid transparent;
-        border-right: 4px solid transparent;
-        border-top: 5px solid #d0c4b7;
+        /* Qt style sheets cannot draw CSS border triangles (that showed
+           a bar); use the arrow image. */
+        image: url(:/ui-icons/arrow_down_dark.png);
+        width: 10px;
+        height: 6px;
       }
       QComboBox QAbstractItemView {
         background-color: #17212b;
@@ -759,10 +765,11 @@ void LayerPanel::applyTheme() {
         padding-right: 8px;
       }
       QComboBox::down-arrow {
-        image: none;
-        border-left: 4px solid transparent;
-        border-right: 4px solid transparent;
-        border-top: 5px solid #7a6858;
+        /* Qt style sheets cannot draw CSS border triangles (that showed
+           a bar); use the arrow image. */
+        image: url(:/ui-icons/arrow_down_light.png);
+        width: 10px;
+        height: 6px;
       }
       QComboBox QAbstractItemView {
         background-color: #fffaf4;
@@ -814,7 +821,20 @@ void LayerPanel::refreshLayerList() {
     const QString prefix = QString("[%1] ").arg(statusTokens.join("|"));
 
     QTreeWidgetItem *layerItem = new QTreeWidgetItem(layerTree_);
-    layerItem->setText(0, prefix + layer->name());
+    const bool isActive = i == layerManager_->activeLayerIndex();
+    const bool isRaster = layer->type() == Layer::Type::Raster;
+    // The active layer (where new drawing goes) gets its own marker: the
+    // row highlight follows the tree selection, which may be an object.
+    layerItem->setText(0, (isActive ? QStringLiteral("\u25CF ") : QString()) +
+                              prefix + layer->name() +
+                              (isRaster ? tr(" (pixels)") : QString()));
+    layerItem->setToolTip(
+        0, tr("%1 layer%2\n[V] visible, [H] hidden, [L] locked")
+               .arg(isRaster ? tr("Raster (pixel)") : tr("Vector"),
+                    isActive ? tr(" - active: new drawing goes here")
+                             : QString()));
+    if (isActive)
+      layerItem->setBackground(0, QColor(249, 115, 22, 45));
     layerItem->setData(0, LayerIdRole, layer->id().toString());
     layerItem->setData(0, IsLayerRole, true);
     // Layers accept drops (items can be reordered within)
@@ -1024,10 +1044,41 @@ void LayerPanel::onDuplicateLayer() {
 }
 
 void LayerPanel::onMergeDown() {
-  if (layerManager_) {
-    int activeIndex = layerManager_->activeLayerIndex();
-    layerManager_->mergeDown(activeIndex);
+  if (!layerManager_)
+    return;
+  const int activeIndex = layerManager_->activeLayerIndex();
+  Layer *source = layerManager_->layer(activeIndex);
+  Layer *target = layerManager_->layer(activeIndex - 1);
+  if (!source || !target)
+    return;
+  if (!source->isVisible() || !target->isVisible()) {
+    // Merging would reveal hidden content (or hide visible content).
+    QMessageBox::information(this, tr("Merge Down"),
+                             tr("Show both layers before merging them."));
+    return;
   }
+  const LayerStackState before = layerManager_->captureState();
+  if (layerManager_->mergeDown(activeIndex))
+    recordLayerStructureChange(tr("Merge Down"), before);
+}
+
+void LayerPanel::recordLayerStructureChange(const QString &description,
+                                            const LayerStackState &before) {
+  if (!canvas_ || !layerManager_)
+    return;
+  const LayerStackState after = layerManager_->captureState();
+  QPointer<LayerManager> layers(layerManager_);
+  canvas_->addAction(std::make_unique<CallbackAction>(
+      description,
+      [layers, before]() {
+        if (layers)
+          layers->restoreState(before);
+      },
+      [layers, after]() {
+        if (layers)
+          layers->restoreState(after);
+      }));
+  refreshLayerList();
 }
 
 void LayerPanel::onMergeSelectedItems() {
@@ -1081,15 +1132,25 @@ void LayerPanel::onFlattenAll() {
   if (layerManager_->layerCount() <= 1)
     return;
 
+  int hidden = 0;
+  for (int i = 0; i < layerManager_->layerCount(); ++i)
+    if (Layer *layer = layerManager_->layer(i); layer && !layer->isVisible())
+      ++hidden;
+  QString text = tr("Merge all visible layers into a single layer?");
+  if (hidden > 0)
+    text += tr("\n\n%n hidden layer(s) are kept as they are.", nullptr, hidden);
+  text += tr("\n\nLayer opacity and blend modes of the merged layers are "
+             "replaced by the bottom layer's. You can undo this.");
   QMessageBox::StandardButton reply = QMessageBox::question(
-      this, "Flatten All Layers",
-      "This will merge all layers into a single layer. Continue?",
-      QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+      this, "Flatten All Layers", text, QMessageBox::Yes | QMessageBox::No,
+      QMessageBox::No);
   if (reply != QMessageBox::Yes) {
     return;
   }
 
-  layerManager_->flattenAll();
+  const LayerStackState before = layerManager_->captureState();
+  if (layerManager_->flattenAll())
+    recordLayerStructureChange(tr("Flatten"), before);
 }
 
 void LayerPanel::onTreeSelectionChanged() {
@@ -1156,6 +1217,7 @@ void LayerPanel::onOpacityChanged(int value) {
     if (layer) {
       layer->setOpacity(value / 100.0);
       opacityLabel_->setText(QString("%1%").arg(value));
+      layerManager_->notifyLayerChanged(layer);
     }
   }
 }
@@ -1167,6 +1229,7 @@ void LayerPanel::onBlendModeChanged(int index) {
       auto mode = static_cast<Layer::BlendMode>(
           blendModeCombo_->itemData(index).toInt());
       layer->setBlendMode(mode);
+      layerManager_->notifyLayerChanged(layer);
       if (canvas_) {
         canvas_->viewport()->update();
       }
@@ -1179,6 +1242,7 @@ void LayerPanel::onVisibilityToggled() {
     Layer *layer = layerManager_->activeLayer();
     if (layer) {
       layer->setVisible(!layer->isVisible());
+      layerManager_->notifyLayerChanged(layer);
       visibilityButton_->setChecked(layer->isVisible());
       refreshLayerList();
     }
@@ -1190,6 +1254,7 @@ void LayerPanel::onLockToggled() {
     Layer *layer = layerManager_->activeLayer();
     if (layer) {
       layer->setLocked(!layer->isLocked());
+      layerManager_->notifyLayerChanged(layer);
       lockButton_->setChecked(layer->isLocked());
       refreshLayerList();
     }
@@ -1409,6 +1474,7 @@ void LayerPanel::onRenameLayer() {
   }
 
   layer->setName(name);
+  layerManager_->notifyLayerChanged(layer);
   refreshLayerList();
 }
 
@@ -1469,5 +1535,9 @@ QString LayerPanel::itemDescription(const ItemId &id) const {
     return t.isEmpty() ? "Path Text" : QString("Path Text: %1").arg(t);
   }
 
+  if (dynamic_cast<RasterLayerItem *>(item))
+    return tr("Pixels");
+  if (dynamic_cast<BrushStrokeItem *>(item))
+    return tr("Brush Stroke");
   return "Element";
 }

@@ -56,6 +56,9 @@ struct ProjectLoadExtras {
   QPixmap backgroundImage;
   QPointF backgroundImagePos;
   qreal backgroundImageZ = -1000;
+  bool backgroundImageVisible = true;
+  /// Non-fatal problems found while loading, to show to the user.
+  QStringList warnings;
 };
 
 /**
@@ -188,6 +191,8 @@ private:
 
   static QJsonObject serializeTransform(const QTransform &t);
   static QTransform deserializeTransform(const QJsonObject &obj);
+  static void applyCommonItemProperties(QGraphicsItem *item,
+                                        const QJsonObject &obj);
 };
 
 #endif // PROJECT_SERIALIZER_H

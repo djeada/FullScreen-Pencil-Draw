@@ -188,6 +188,24 @@ private slots:
       QVERIFY2(e->pins().size() >= 1, qPrintable(e->label() + " has no pins"));
     }
   }
+
+  void crossedStubsRouteBetweenPinsWhenThereIsRoom() {
+    // Right pin of an upper part to the left pin of a lower part that sits
+    // slightly to its left: the stubs cross. With 48 px between the pins
+    // the route must pass between them, not loop around the upper part
+    // (whose body spans x 640..700 around y 446).
+    const QPointF p1(704, 446), p2(687, 494);
+    const QPainterPath path =
+        WireItem::routeManhattan(p1, PinDir::Right, p2, PinDir::Left);
+    const QRectF bounds = path.boundingRect();
+    QVERIFY2(bounds.top() >= p1.y() - 0.5,
+             "route must not detour above the upper pin");
+    bool hasMidChannel = false;
+    for (int i = 0; i < path.elementCount(); ++i)
+      if (qFuzzyCompare(path.elementAt(i).y, (p1.y() + p2.y()) / 2.0))
+        hasMidChannel = true;
+    QVERIFY(hasMidChannel);
+  }
 };
 
 QTEST_MAIN(TestWireItem)

@@ -109,6 +109,11 @@ void ThemeManager::applyDarkTheme() {
       background-color: #3b82f6;
       color: #ffffff;
     }
+    /* The QMenu color above also applies to disabled items; dim them. */
+    QMenu::item:disabled {
+      color: #6b6b76;
+      background-color: transparent;
+    }
     QMenu::item:hover {
       background-color: rgba(59, 130, 246, 0.15);
     }
@@ -416,6 +421,18 @@ void ThemeManager::applyDarkTheme() {
       background-color: rgba(59, 130, 246, 0.3);
     }
 
+    /* Styled buttons lose the native arrows: draw them explicitly. */
+    QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {
+      image: url(:/ui-icons/arrow_up_dark.png);
+      width: 10px;
+      height: 6px;
+    }
+    QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {
+      image: url(:/ui-icons/arrow_down_dark.png);
+      width: 10px;
+      height: 6px;
+    }
+
     /* ===== COMBO BOXES ===== */
     QComboBox {
       background-color: #303036;
@@ -428,6 +445,11 @@ void ThemeManager::applyDarkTheme() {
     QComboBox:hover {
       background-color: #3c3c44;
       border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+    QComboBox::down-arrow {
+      image: url(:/ui-icons/arrow_down_dark.png);
+      width: 10px;
+      height: 6px;
     }
     QComboBox::drop-down {
       border: none;
@@ -638,6 +660,10 @@ void ThemeManager::applyLightTheme() {
     QMenu::item:selected {
       background-color: #4285f4;
       color: #ffffff;
+    }
+    QMenu::item:disabled {
+      color: #adb5bd;
+      background-color: transparent;
     }
     QMenu::separator {
       height: 1px;
@@ -933,6 +959,18 @@ void ThemeManager::applyLightTheme() {
       background-color: #dee2e6;
     }
 
+    /* Styled buttons lose the native arrows: draw them explicitly. */
+    QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {
+      image: url(:/ui-icons/arrow_up_light.png);
+      width: 10px;
+      height: 6px;
+    }
+    QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {
+      image: url(:/ui-icons/arrow_down_light.png);
+      width: 10px;
+      height: 6px;
+    }
+
     /* ===== COMBO BOXES ===== */
     QComboBox {
       background-color: #e9ecef;
@@ -944,6 +982,11 @@ void ThemeManager::applyLightTheme() {
     }
     QComboBox:hover {
       background-color: #dee2e6;
+    }
+    QComboBox::down-arrow {
+      image: url(:/ui-icons/arrow_down_light.png);
+      width: 10px;
+      height: 6px;
     }
     QComboBox::drop-down {
       border: none;

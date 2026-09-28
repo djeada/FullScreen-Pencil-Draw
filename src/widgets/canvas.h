@@ -134,6 +134,8 @@ public:
                        bool recovered = false);
   /// Native project file the document was last opened from / saved to.
   QString currentFilePath() const { return currentFilePath_; }
+  void setSuggestedSavePath(const QString &path) { suggestedSavePath_ = path; }
+  QString suggestedSavePath() const { return suggestedSavePath_; }
   /**
    * @brief Save the document as a native project to @p fileName.
    *
@@ -170,6 +172,7 @@ signals:
   void opacityChanged(int opacity);
   void cursorPositionChanged(const QPointF &pos);
   void filledShapesChanged(bool filled);
+  void gridVisibilityChanged(bool visible);
   void fillBrushChanged(const QBrush &brush);
   void snapToGridChanged(bool enabled);
   void snapToObjectChanged(bool enabled);
@@ -299,6 +302,8 @@ public slots:
   void exportSingleElementToPNG();
   void openSingleImage();
   void placeElement(const QString &elementId);
+  /// Add a library element centred on @p sceneCenter (e.g. a drop).
+  void placeElementAt(const QString &elementId, const QPointF &sceneCenter);
 
 protected:
   void mousePressEvent(QMouseEvent *event) override;
@@ -366,6 +371,12 @@ private:
   QGraphicsEllipseItem *eraserPreview_;
   QGraphicsPixmapItem *backgroundImage_;
   QString currentFilePath_;
+  /// Where "Save As" starts when the document has no file yet (e.g. the
+  /// original location of a recovered document).
+  QString suggestedSavePath_;
+  QList<ItemId> selectionOrder_; ///< selected items, oldest first
+  /// Manager our snapshot-reclaiming discard listener is registered with.
+  UndoRedoManager *discardListenerManager_ = nullptr;
 
   // Transform handles for selected items
   QList<TransformHandleItem *> transformHandles_;
@@ -436,7 +447,9 @@ private:
   bool pixelEraseActive_ = false;
   bool pixelEraseHasLast_ = false;
   QPointF pixelEraseLast_;
+  QPainterPath pixelErasePrevDab_; ///< last hard capsule, not re-erased
   bool pixelEraseHinted_ = false;
+  bool rasterVectorHintShown_ = false; ///< see mousePressEvent
   qreal pixelEraserStrength_ = 1.0;
   qreal pixelEraserHardness_ = 1.0;
   void beginPixelErase();
@@ -448,7 +461,8 @@ private:
   bool rasterStrokeCreated_ = false;
   bool rasterStrokeActive_ = false;
   QPointF rasterStrokeLast_;
-  bool beginRasterStroke(const QPointF &scenePos);
+  QPen rasterStrokePen_; ///< pen of the stroke in progress
+  bool beginRasterStroke(const QPointF &scenePos, const QPen &pen);
   void continueRasterStroke(const QPointF &scenePos);
   void endRasterStroke();
 
@@ -542,6 +556,18 @@ private:
   QGraphicsPathItem *wireTempPath_ = nullptr;    // Manhattan-routed preview
   QGraphicsEllipseItem *pinHighlight_ = nullptr; // hover highlight ring
   void cleanupTransientToolState();
+  /// Record a pending selection drag as one undoable move.
+  void commitSelectionMove();
+  /// Lock or unlock items (data + interaction flags), without history.
+  void setItemsLocked(const QList<ItemId> &ids, bool locked);
+  /// Apply a lock change and record it as one undoable step.
+  void recordLockChange(const QList<ItemId> &ids, bool locked);
+  /// Put an image file under the drawing as the document's base image.
+  bool openBaseImage(const QString &fileName);
+  /// Tools that add new items to the active layer.
+  static bool createsItems(ShapeType shape);
+  /// False (with a status message) when the active layer is hidden/locked.
+  bool activeLayerAcceptsNewItems();
   /// Remove every item and the undo history without asking.
   void resetDocument();
   /// fitInView() that keeps currentZoom_ and the zoom display in sync.

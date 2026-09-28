@@ -453,13 +453,17 @@ void TransformHandleItem::mouseMoveEvent(QGraphicsSceneMouseEvent *event) {
 
   event->accept();
 
+  bool applied = true;
   if (activeHandle_ == HandleType::Rotate) {
     applyRotation(event->scenePos());
   } else {
-    applyResize(event->scenePos());
+    applied = applyResize(event->scenePos());
   }
 
-  lastMousePos_ = event->scenePos();
+  // A rejected step (below the minimum size) keeps the reference point, so
+  // the handle stays under the cursor instead of drifting away from it.
+  if (applied)
+    lastMousePos_ = event->scenePos();
   updateHandles();
 }
 
@@ -488,10 +492,10 @@ void TransformHandleItem::mouseReleaseEvent(QGraphicsSceneMouseEvent *event) {
   emit transformCompleted();
 }
 
-void TransformHandleItem::applyResize(const QPointF &mousePos) {
+bool TransformHandleItem::applyResize(const QPointF &mousePos) {
   QGraphicsItem *target = resolveTargetItem();
   if (!target)
-    return;
+    return false;
 
   QRectF currentBounds = targetBoundsInScene();
   QPointF delta = mousePos - lastMousePos_;
@@ -525,13 +529,23 @@ void TransformHandleItem::applyResize(const QPointF &mousePos) {
     newBounds.setBottomRight(newBounds.bottomRight() + delta);
     break;
   default:
-    return;
+    return false;
   }
 
-  // Ensure minimum size
+  // Ensure a minimum size, but only along the axes this handle changes and
+  // only for extents that were at least that big: a thin horizontal line
+  // must still be resizable from its side handles.
   const qreal minSize = 10.0;
-  if (newBounds.width() < minSize || newBounds.height() < minSize)
-    return;
+  const bool changesWidth = activeHandle_ != HandleType::TopCenter &&
+                            activeHandle_ != HandleType::BottomCenter;
+  const bool changesHeight = activeHandle_ != HandleType::MiddleLeft &&
+                             activeHandle_ != HandleType::MiddleRight;
+  if ((changesWidth && currentBounds.width() >= minSize &&
+       newBounds.width() < minSize) ||
+      (changesHeight && currentBounds.height() >= minSize &&
+       newBounds.height() < minSize) ||
+      newBounds.width() <= 0.0 || newBounds.height() <= 0.0)
+    return false;
 
   // Calculate scale factors, guarding against degenerate source bounds
   // (e.g., a zero-length line) which would produce infinite scales.
@@ -595,7 +609,7 @@ void TransformHandleItem::applyResize(const QPointF &mousePos) {
     }
     // Emit signal for other selected items
     emit resizeApplied(scaleX, scaleY, anchor);
-    return;
+    return true;
   }
 
   // Apply scale transformation for non-text items
@@ -617,6 +631,7 @@ void TransformHandleItem::applyResize(const QPointF &mousePos) {
 
   // Emit signal for other selected items to follow
   emit resizeApplied(scaleX, scaleY, anchor);
+  return true;
 }
 
 void TransformHandleItem::applyRotation(const QPointF &mousePos) {

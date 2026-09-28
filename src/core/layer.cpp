@@ -123,8 +123,9 @@ void Layer::addItem(QGraphicsItem *item) {
     itemIds_.append(id);
     item->setVisible(visible_);
     item->setOpacity(opacity_);
-    if (locked_)
-      applyLockToItem(item);
+    // Also when unlocked: an item coming from a locked layer (merge,
+    // flatten, undo) must become selectable again.
+    applyLockToItem(item);
   }
 }
 
@@ -142,8 +143,9 @@ void Layer::addItem(const ItemId &id, ItemStore *store) {
   if (item) {
     item->setVisible(visible_);
     item->setOpacity(opacity_);
-    if (locked_)
-      applyLockToItem(item);
+    // Also when unlocked: an item coming from a locked layer (merge,
+    // flatten, undo) must become selectable again.
+    applyLockToItem(item);
   }
 }
 
@@ -358,8 +360,11 @@ bool LayerManager::deleteLayer(int index) {
 
   layers_.erase(layers_.begin() + index);
 
-  // Adjust active layer index
-  if (activeLayerIndex_ >= static_cast<int>(layers_.size())) {
+  // Keep the same layer active when one below it disappears; otherwise the
+  // next drawing would silently land on a different layer.
+  if (index < activeLayerIndex_) {
+    --activeLayerIndex_;
+  } else if (activeLayerIndex_ >= static_cast<int>(layers_.size())) {
     activeLayerIndex_ = static_cast<int>(layers_.size()) - 1;
   }
 
@@ -564,7 +569,11 @@ bool LayerManager::mergeDown(int index) {
   source->clear();
 
   // Delete the source layer
-  return deleteLayer(index);
+  if (!deleteLayer(index))
+    return false;
+  // The merged result is the layer below: make it the active one.
+  setActiveLayer(index - 1);
+  return true;
 }
 
 ItemId LayerManager::mergeItems(const QList<ItemId> &ids) {
@@ -623,32 +632,48 @@ ItemId LayerManager::mergeItems(const QList<ItemId> &ids) {
 }
 
 Layer *LayerManager::flattenAll() {
-  if (layers_.empty()) {
-    return nullptr;
-  }
-
-  // Move all items to the first layer
-  for (size_t i = 1; i < layers_.size(); ++i) {
-    for (const ItemId &id : layers_[i]->itemIds()) {
-      layers_[0]->addItem(id, itemStore_);
+  // Only visible layers are flattened, into the lowest visible one: hidden
+  // content would otherwise suddenly appear (or everything would vanish
+  // into a hidden bottom layer). Hidden layers are kept as they are.
+  int targetIndex = -1;
+  for (int i = 0; i < static_cast<int>(layers_.size()); ++i) {
+    if (layers_[i]->isVisible()) {
+      targetIndex = i;
+      break;
     }
-    layers_[i]->clear();
+  }
+  if (targetIndex < 0)
+    return nullptr;
+  Layer *target = layers_[targetIndex].get();
+
+  // Bottom-up, so upper layers' items stay stacked above lower ones.
+  QList<int> merged;
+  for (int i = targetIndex + 1; i < static_cast<int>(layers_.size()); ++i) {
+    Layer *layer = layers_[i].get();
+    if (!layer->isVisible())
+      continue;
+    for (const ItemId &id : layer->itemIds())
+      target->addItem(id, itemStore_);
+    layer->clear();
+    merged.append(i);
+  }
+  for (int k = merged.size() - 1; k >= 0; --k) {
+    const int i = merged.at(k);
+    emit layerRemoved(layers_[i].get());
+    layers_.erase(layers_.begin() + i);
   }
 
-  // Remove all layers except the first
-  while (layers_.size() > 1) {
-    emit layerRemoved(layers_.back().get());
-    layers_.pop_back();
-  }
-
+  target->setName("Flattened");
   activeLayerIndex_ = 0;
-  layers_[0]->setName("Flattened");
+  for (int i = 0; i < static_cast<int>(layers_.size()); ++i)
+    if (layers_[i].get() == target)
+      activeLayerIndex_ = i;
 
   updateLayerZOrder();
   emit layerOrderChanged();
   emit activeLayerChanged(activeLayer());
 
-  return layers_[0].get();
+  return target;
 }
 
 Layer *LayerManager::duplicateLayer(int index) {
@@ -728,4 +753,69 @@ void LayerManager::updateLayerZOrder() {
       }
     }
   }
+}
+
+LayerStackState LayerManager::captureState() const {
+  LayerStackState state;
+  state.activeIndex = activeLayerIndex_;
+  for (const auto &layer : layers_) {
+    LayerState ls;
+    ls.id = layer->id();
+    ls.name = layer->name();
+    ls.type = layer->type();
+    ls.visible = layer->isVisible();
+    ls.locked = layer->isLocked();
+    ls.opacity = layer->opacity();
+    ls.blendMode = layer->blendMode();
+    ls.itemIds = layer->itemIds();
+    state.layers.append(ls);
+  }
+  return state;
+}
+
+void LayerManager::restoreState(const LayerStackState &state) {
+  if (state.layers.isEmpty())
+    return;
+  std::vector<std::unique_ptr<Layer>> rebuilt;
+  QList<Layer *> added;
+  for (const LayerState &ls : state.layers) {
+    std::unique_ptr<Layer> layer;
+    for (auto &existing : layers_) {
+      if (existing && existing->id() == ls.id) {
+        layer = std::move(existing);
+        break;
+      }
+    }
+    if (!layer) {
+      layer = std::make_unique<Layer>(ls.name, ls.type);
+      layer->setId(ls.id);
+      layer->setItemStore(itemStore_);
+      added.append(layer.get());
+    }
+    layer->clear();
+    layer->setName(ls.name);
+    layer->setType(ls.type);
+    layer->setBlendMode(ls.blendMode);
+    // Properties first: addItem() applies them to each item.
+    layer->setVisible(ls.visible);
+    layer->setLocked(ls.locked);
+    layer->setOpacity(ls.opacity);
+    for (const ItemId &id : ls.itemIds)
+      layer->addItem(id, itemStore_);
+    rebuilt.push_back(std::move(layer));
+  }
+  // Layers the state does not know about are gone (their items were moved
+  // into the restored layers above).
+  for (auto &leftover : layers_) {
+    if (leftover)
+      emit layerRemoved(leftover.get());
+  }
+  layers_ = std::move(rebuilt);
+  for (Layer *layer : added)
+    emit layerAdded(layer);
+  activeLayerIndex_ =
+      qBound(0, state.activeIndex, static_cast<int>(layers_.size()) - 1);
+  updateLayerZOrder();
+  emit layerOrderChanged();
+  emit activeLayerChanged(activeLayer());
 }

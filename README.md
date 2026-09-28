@@ -70,11 +70,11 @@ A vector and raster graphics editor built with C++ and Qt6. This application pro
 - **Zoom Level Display**: Real-time zoom percentage indicator
 - **Cursor Position**: Live X/Y coordinate display
 - **Undo/Redo**: Configurable history (Tools → History Settings): by default the last 100 steps, within a 256 MiB memory budget for captured pixels and deleted objects; the oldest steps are dropped first and the latest step always stays undoable. History is not stored in saved files
-- **Clear Canvas Confirmation**: Confirmation dialog to prevent accidental canvas clearing
+- **Clear Canvas**: Removes every object on unlocked layers after a confirmation; it is one undo step, so `Ctrl+Z` brings everything back
 
 ### Layer System
 - **Layer Panel**: Dockable panel for layer management
-- **Vector and Raster Layers**: Vector layers hold editable objects; raster (pixel) layers (Layer → New Raster Layer) store pixels in tiles, so the Pen paints pixels there and the Pixel Eraser removes them. Both kinds live in one document and stay editable
+- **Vector and Raster Layers**: Vector layers hold editable objects; raster (pixel) layers (Layer → New Raster Layer) store pixels in tiles, so the Pen and Highlighter paint pixels there and the Pixel Eraser removes them. Both kinds live in one document and stay editable
 - **Blend Modes**: Normal, Multiply, Screen, Overlay and more, applied identically on screen and in bitmap exports
 - **Add/Delete Layers**: Create new layers or remove existing ones
 - **Layer Visibility**: Toggle eye icon to show/hide layers
@@ -82,19 +82,20 @@ A vector and raster graphics editor built with C++ and Qt6. This application pro
 - **Layer Opacity**: Adjust individual layer transparency
 - **Layer Ordering**: Move layers up/down in the stack
 - **Duplicate Layers**: Create copies of existing layers
-- **Merge Down**: Merge a layer with the one below it
+- **Merge Down**: Merge a layer with the one below it (both must be visible); undoable
+- **Flatten**: Merge all visible layers into one; hidden layers are kept as they are; undoable
 
 ### File Operations
-- **New Canvas**: Create custom-sized canvas with background color choice
+- **New Canvas**: One dialog for size and background colour; remembers your last choice
 - **Open Image**: Import PNG, JPG, BMP, GIF as background layer
 - **Open PDF**: Load PDF documents for annotation (requires Qt PDF module)
 - **Drag-and-Drop Upload**: Drag images directly from file system with dimension specification dialog
 - **Save / Save As** (`Ctrl+S` / `Ctrl+Shift+S`): Writes the editable native project (`.fspd`): layers, vector objects, text and raster pixels. Saves are atomic and verified: a failed save leaves the previous file untouched and the document marked as modified. See [docs/FILE_FORMAT.md](docs/FILE_FORMAT.md)
 - **Export** (File → Export): SVG and PDF keep vector geometry and embed raster content; PNG, JPEG, WebP, TIFF and BMP are flattened composites. Exports never mark the document as saved. See [docs/EXPORT.md](docs/EXPORT.md) for what each format keeps
-- **Crash Recovery**: Auto-save keeps an editable project snapshot per document; after a crash you can recover, discard or decide later, and the original file is never overwritten without you saving
+- **Crash Recovery**: Auto-save keeps an editable project snapshot per document; after a crash you can recover, discard or decide later, and the original file is never overwritten without you saving (Tools → Auto-Save Interval sets how often, 1-60 minutes; default 5)
 - **Export Selection**: Right-click on selected items to export in SVG, PNG, or JPG formats
 - **Export Annotated PDF**: Save annotated PDF documents to new files
-- **Clear Canvas**: Reset to blank state
+- **Clear Canvas**: Remove all unlocked objects (undoable); layers and the base image stay
 
 ### Edit Operations
 - **Copy/Cut/Paste**: Clipboard support for items
@@ -116,6 +117,7 @@ A vector and raster graphics editor built with C++ and Qt6. This application pro
 | | `Q` | Color select tool |
 | | `L` | Line tool |
 | | `A` | Arrow tool |
+| | `Shift+A` | Curved arrow tool |
 | | `R` | Rectangle tool |
 | | `C` | Circle tool |
 | | `S` | Selection tool |
@@ -130,6 +132,7 @@ A vector and raster graphics editor built with C++ and Qt6. This application pro
 | | `]` | Increase brush size |
 | **File** | `Ctrl+S` | Save project |
 | | `Ctrl+Shift+S` | Save project as |
+| | `Ctrl+E` | Export (image, SVG, PDF) |
 | **Edit** | `Ctrl+Z` | Undo |
 | | `Ctrl+Y` | Redo |
 | | `Ctrl+C` | Copy |
@@ -137,13 +140,17 @@ A vector and raster graphics editor built with C++ and Qt6. This application pro
 | | `Ctrl+V` | Paste |
 | | `Ctrl+D` | Duplicate |
 | | `Ctrl+Shift+J` | Extract color selection to new layer |
+| | `Ctrl+Alt+S` | Resize selected elements |
+| | `Ctrl+Alt+C` | Resize canvas |
+| | `Ctrl+Shift+N` | New vector layer |
 | | `Ctrl+A` | Select all |
 | | `Delete` | Delete selected |
 | **File** | `Ctrl+N` | New canvas |
-| | `Ctrl+O` | Open image |
+| | `Ctrl+O` | Open project, image or SVG |
 | | `Ctrl+Shift+O` | Open PDF |
 | | `Ctrl+S` | Save |
-| | `Esc` | Exit |
+| | `Esc` | Cancel the current gesture / deselect |
+| | `Ctrl+Q` | Exit |
 | **PDF Navigation** | `Page Down` | Next page |
 | | `Page Up` | Previous page |
 | | `Home` | First page |

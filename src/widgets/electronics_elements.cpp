@@ -767,6 +767,9 @@ ElectronicsElementItem::ElectronicsElementItem(const QString &label,
   setFlag(QGraphicsItem::ItemIsSelectable, true);
   setFlag(QGraphicsItem::ItemIsMovable, true);
   setFlag(QGraphicsItem::ItemSendsGeometryChanges, true);
+  // Also hear about moves of a parent group: wires are routed in scene
+  // coordinates and must follow the element wherever it goes.
+  setFlag(QGraphicsItem::ItemSendsScenePositionChanges, true);
   initPins();
   initPaintCache();
 }
@@ -1019,7 +1022,8 @@ QVariant ElectronicsElementItem::itemChange(GraphicsItemChange change,
   // Rotating/scaling via the transform handles changes the pin positions
   // without moving the item, so follow transform changes too.
   if (change == ItemPositionHasChanged || change == ItemTransformHasChanged ||
-      change == ItemRotationHasChanged || change == ItemScaleHasChanged) {
+      change == ItemRotationHasChanged || change == ItemScaleHasChanged ||
+      change == ItemScenePositionHasChanged) {
     for (WireItem *w : connectedWires_)
       w->updatePath();
   }

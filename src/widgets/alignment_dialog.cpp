@@ -28,12 +28,12 @@ AlignmentDialog::AlignmentDialog(int selectedCount, QWidget *parent)
   alignToAxesRadio_->setChecked(true);
   groupLayout->addWidget(alignToAxesRadio_);
 
-  alignParallelRadio_ =
-      new QRadioButton("Make parallel (match rotation of first item)", group);
+  alignParallelRadio_ = new QRadioButton(
+      "Make parallel (match rotation of the first selected item)", group);
   groupLayout->addWidget(alignParallelRadio_);
 
   alignPerpendicularRadio_ = new QRadioButton(
-      "Make perpendicular (90° offset from first item)", group);
+      "Make perpendicular (90° from the first selected item)", group);
   groupLayout->addWidget(alignPerpendicularRadio_);
 
   // Disable multi-item options when fewer than 2 items are selected

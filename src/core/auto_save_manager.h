@@ -82,6 +82,8 @@ private:
   std::unique_ptr<RecoveryStore> store_;
   QString documentId_;
   QString legacyAutoSavePath_; ///< "autosave.fspd/png" of older versions
+  /// Recovered session we could not take over (still on disk).
+  QString recoveredDocumentId_;
   std::function<bool()> shouldSave_;
 
   void loadSettings();

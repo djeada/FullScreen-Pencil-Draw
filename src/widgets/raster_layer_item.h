@@ -53,6 +53,8 @@ public:
 
 private:
   RasterSurface surface_;
+  /// Outline of the previous translucent stroke segment (see paintStroke).
+  QPainterPath prevSegment_;
   QRectF bounds_;
 };
 

@@ -392,6 +392,22 @@ private slots:
     mgr.push(std::move(composite));
     QVERIFY(mgr.memoryUsage() >= 3000);
   }
+
+  void testPushListenerSeesEveryPushWithItsOwner() {
+    UndoRedoManager mgr;
+    int owner = 0;
+    QList<const void *> seen;
+    mgr.setPushListener([&seen](const void *o) { seen.append(o); });
+    mgr.push(std::make_unique<StubAction>(), &owner);
+    mgr.push(std::make_unique<StubAction>());
+    QCOMPARE(seen.size(), 2);
+    QCOMPARE(seen.at(0), static_cast<const void *>(&owner));
+    QCOMPARE(seen.at(1), nullptr);
+    // Undo / redo replay history; they are not new pushes.
+    mgr.undo();
+    mgr.redo();
+    QCOMPARE(seen.size(), 2);
+  }
 };
 
 QTEST_MAIN(TestUndoRedoManager)

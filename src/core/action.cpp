@@ -7,6 +7,7 @@
 #include "action.h"
 #include "../widgets/latex_text_item.h"
 #include "../widgets/mermaid_text_item.h"
+#include "../widgets/raster_layer_item.h"
 #include "../widgets/text_on_path_item.h"
 #include "item_store.h"
 #include "layer.h"
@@ -25,7 +26,11 @@ std::size_t Action::estimateItemBytes(const QGraphicsItem *item) {
   if (!item)
     return 0;
   std::size_t bytes = kBaseActionCost;
-  if (auto *pixmapItem = dynamic_cast<const QGraphicsPixmapItem *>(item)) {
+  if (auto *raster = dynamic_cast<const RasterLayerItem *>(item)) {
+    // Sparse tiles: only allocated tiles hold pixels.
+    bytes += raster->surface().memoryBytes();
+  } else if (auto *pixmapItem =
+                 dynamic_cast<const QGraphicsPixmapItem *>(item)) {
     const QPixmap &pm = pixmapItem->pixmap();
     bytes += static_cast<std::size_t>(pm.width()) * pm.height() * 4;
   } else if (auto *pathItem = dynamic_cast<const QGraphicsPathItem *>(item)) {
@@ -56,6 +61,9 @@ void DrawAction::undo() {
     return;
 
   QGraphicsItem *item = itemStore_->item(itemId_);
+  // Undone, the item is parked for redo and its memory counts against the
+  // history budget; while it is live it belongs to the document instead.
+  memoryCost_ = estimateItemBytes(item);
   if (item && onRemove_) {
     onRemove_(item);
   }
@@ -67,6 +75,7 @@ void DrawAction::redo() {
     return;
 
   itemStore_->restoreItem(itemId_);
+  memoryCost_ = kBaseActionCost;
   QGraphicsItem *item = itemStore_->item(itemId_);
   if (item && onAdd_) {
     onAdd_(item);
@@ -398,8 +407,12 @@ void GroupAction::undo() {
       if (i < originalPositions_.size()) {
         item->setPos(originalPositions_[i]);
       }
-      item->setFlags(QGraphicsItem::ItemIsSelectable |
-                     QGraphicsItem::ItemIsMovable);
+      // Only toggle interaction: replacing all flags would drop e.g.
+      // ItemSendsGeometryChanges that circuit elements need for wires.
+      const bool interactiveItem =
+          item->data(0).toString() != QLatin1String("locked");
+      item->setFlag(QGraphicsItem::ItemIsSelectable, interactiveItem);
+      item->setFlag(QGraphicsItem::ItemIsMovable, interactiveItem);
       if (onAdd_) {
         onAdd_(item);
       }
@@ -552,8 +565,12 @@ void UngroupAction::redo() {
       if (i < scenePositions.size()) {
         item->setPos(scenePositions[i]);
       }
-      item->setFlags(QGraphicsItem::ItemIsSelectable |
-                     QGraphicsItem::ItemIsMovable);
+      // Only toggle interaction: replacing all flags would drop e.g.
+      // ItemSendsGeometryChanges that circuit elements need for wires.
+      const bool interactiveItem =
+          item->data(0).toString() != QLatin1String("locked");
+      item->setFlag(QGraphicsItem::ItemIsSelectable, interactiveItem);
+      item->setFlag(QGraphicsItem::ItemIsMovable, interactiveItem);
       if (onAdd_) {
         onAdd_(item);
       }

@@ -28,32 +28,38 @@ void TextOnPathItem::paint(QPainter *painter,
 
   painter->setFont(font_);
   painter->setPen(textColor_);
-
-  QFontMetricsF fm(font_);
-  qreal totalLen = path_.length();
-  qreal pos = 0.0;
-
-  for (int i = 0; i < text_.size(); ++i) {
-    QChar ch = text_.at(i);
-    qreal charWidth = fm.horizontalAdvance(ch);
-
-    qreal mid = pos + charWidth / 2.0;
-    if (mid > totalLen)
-      break;
-
-    qreal pct = mid / totalLen;
-    QPointF pt = path_.pointAtPercent(pct);
-    qreal angle = path_.angleAtPercent(pct);
-
+  const QFontMetricsF fm(font_);
+  for (const GlyphPlacement &g : glyphPlacements()) {
     painter->save();
-    painter->translate(pt);
-    painter->rotate(-angle);
-    painter->drawText(QPointF(-charWidth / 2.0, fm.ascent() / 2.0),
-                      QString(ch));
+    painter->translate(g.position);
+    painter->rotate(-g.angle);
+    painter->drawText(QPointF(-g.width / 2.0, fm.ascent() / 2.0),
+                      QString(g.character));
     painter->restore();
+  }
+}
 
+QList<TextOnPathItem::GlyphPlacement> TextOnPathItem::glyphPlacements() const {
+  QList<GlyphPlacement> glyphs;
+  if (text_.isEmpty() || path_.isEmpty())
+    return glyphs;
+  const QFontMetricsF fm(font_);
+  const qreal totalLen = path_.length();
+  qreal pos = 0.0;
+  for (const QChar ch : text_) {
+    const qreal charWidth = fm.horizontalAdvance(ch);
+    const qreal mid = pos + charWidth / 2.0;
+    if (mid > totalLen)
+      break; // the rest of the text does not fit on the path
+    // pointAtPercent() takes a curve *parameter*, not a length fraction; on
+    // curved paths the two differ a lot and letters piled up or spread
+    // out. Convert the arc length explicitly.
+    const qreal pct = path_.percentAtLength(mid);
+    glyphs.append(
+        {ch, path_.pointAtPercent(pct), path_.angleAtPercent(pct), charWidth});
     pos += charWidth;
   }
+  return glyphs;
 }
 
 void TextOnPathItem::setPath(const QPainterPath &path) {

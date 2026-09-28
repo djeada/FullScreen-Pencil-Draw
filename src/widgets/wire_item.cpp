@@ -201,6 +201,13 @@ QPainterPath WireItem::routeManhattan(const QPointF &p1, PinDir d1,
         const qreal mx = (s1.x() + s2.x()) / 2.0;
         pp.lineTo(mx, s1.y());
         pp.lineTo(mx, s2.y());
+      } else if (qAbs(p1.y() - p2.y()) >= STUB * 2) {
+        // Stubs crossed, but the pins are far enough apart vertically: pass
+        // between them. The outer channel's vertical leg ran straight
+        // through one of the two components.
+        const qreal my = (p1.y() + p2.y()) / 2.0;
+        pp.lineTo(s1.x(), my);
+        pp.lineTo(s2.x(), my);
       } else {
         // Stubs crossed or diverging: bypass via a Y-offset channel.
         const qreal yMin = qMin(p1.y(), p2.y());
@@ -232,6 +239,11 @@ QPainterPath WireItem::routeManhattan(const QPointF &p1, PinDir d1,
         const qreal my = (s1.y() + s2.y()) / 2.0;
         pp.lineTo(s1.x(), my);
         pp.lineTo(s2.x(), my);
+      } else if (qAbs(p1.x() - p2.x()) >= STUB * 2) {
+        // Same idea for vertical pins: pass between them.
+        const qreal mx = (p1.x() + p2.x()) / 2.0;
+        pp.lineTo(mx, s1.y());
+        pp.lineTo(mx, s2.y());
       } else {
         const qreal xMin = qMin(p1.x(), p2.x());
         const qreal xMax = qMax(p1.x(), p2.x());
