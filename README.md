@@ -10,7 +10,8 @@ A vector and raster graphics editor built with C++ and Qt6. This application pro
 
 ### Drawing Tools
 - **Pen Tool**: Freehand drawing with Catmull-Rom spline interpolation
-- **Eraser Tool**: Remove items with preview cursor
+- **Object Eraser** (`E`): Deletes whole objects it touches (shapes, paths, text, images, groups). Only visible, unlocked objects whose real outline or visible pixels are hit are removed; a drag is one undo step and undo puts objects back in their layer and stacking position
+- **Pixel Eraser** (`Shift+E`): Erases pixels from raster content on the active layer (raster layers, images, brush strokes) without deleting the object or touching vector objects. Adjustable strength and hardness (Tools menu), clipped to an active colour selection, one undo step per drag. See [docs/ERASERS.md](docs/ERASERS.md)
 - **Text Tool**: Add text annotations with LaTeX math support (`$...$` syntax)
 - **Fill Tool**: Fill closed shapes with current color
 - **Color Select Tool**: Select pixels by sampled color with tolerance
@@ -68,11 +69,13 @@ A vector and raster graphics editor built with C++ and Qt6. This application pro
 - **Filled Shapes Toggle**: Draw filled or outlined rectangles and circles (B key)
 - **Zoom Level Display**: Real-time zoom percentage indicator
 - **Cursor Position**: Live X/Y coordinate display
-- **Undo/Redo**: Action history with unlimited undo levels (including fill operations)
+- **Undo/Redo**: Configurable history (Tools → History Settings): by default the last 100 steps, within a 256 MiB memory budget for captured pixels and deleted objects; the oldest steps are dropped first and the latest step always stays undoable. History is not stored in saved files
 - **Clear Canvas Confirmation**: Confirmation dialog to prevent accidental canvas clearing
 
 ### Layer System
 - **Layer Panel**: Dockable panel for layer management
+- **Vector and Raster Layers**: Vector layers hold editable objects; raster (pixel) layers (Layer → New Raster Layer) store pixels in tiles, so the Pen paints pixels there and the Pixel Eraser removes them. Both kinds live in one document and stay editable
+- **Blend Modes**: Normal, Multiply, Screen, Overlay and more, applied identically on screen and in bitmap exports
 - **Add/Delete Layers**: Create new layers or remove existing ones
 - **Layer Visibility**: Toggle eye icon to show/hide layers
 - **Layer Lock**: Lock layers to prevent edits
@@ -86,7 +89,9 @@ A vector and raster graphics editor built with C++ and Qt6. This application pro
 - **Open Image**: Import PNG, JPG, BMP, GIF as background layer
 - **Open PDF**: Load PDF documents for annotation (requires Qt PDF module)
 - **Drag-and-Drop Upload**: Drag images directly from file system with dimension specification dialog
-- **Save/Export**: Export to PNG, JPG, or BMP formats
+- **Save / Save As** (`Ctrl+S` / `Ctrl+Shift+S`): Writes the editable native project (`.fspd`): layers, vector objects, text and raster pixels. Saves are atomic and verified: a failed save leaves the previous file untouched and the document marked as modified. See [docs/FILE_FORMAT.md](docs/FILE_FORMAT.md)
+- **Export** (File → Export): SVG and PDF keep vector geometry and embed raster content; PNG, JPEG, WebP, TIFF and BMP are flattened composites. Exports never mark the document as saved. See [docs/EXPORT.md](docs/EXPORT.md) for what each format keeps
+- **Crash Recovery**: Auto-save keeps an editable project snapshot per document; after a crash you can recover, discard or decide later, and the original file is never overwritten without you saving
 - **Export Selection**: Right-click on selected items to export in SVG, PNG, or JPG formats
 - **Export Annotated PDF**: Save annotated PDF documents to new files
 - **Clear Canvas**: Reset to blank state
@@ -103,7 +108,8 @@ A vector and raster graphics editor built with C++ and Qt6. This application pro
 | Category | Shortcut | Action |
 |----------|----------|--------|
 | **Tools** | `P` | Pen tool |
-| | `E` | Eraser tool |
+| | `E` | Object Eraser (delete whole objects) |
+| | `Shift+E` | Pixel Eraser (erase raster pixels) |
 | | `T` | Text tool |
 | | `M` | Mermaid diagram tool |
 | | `F` | Fill tool |
@@ -122,6 +128,8 @@ A vector and raster graphics editor built with C++ and Qt6. This application pro
 | | `Ctrl+Scroll` | Zoom with mouse |
 | **Brush** | `[` | Decrease brush size |
 | | `]` | Increase brush size |
+| **File** | `Ctrl+S` | Save project |
+| | `Ctrl+Shift+S` | Save project as |
 | **Edit** | `Ctrl+Z` | Undo |
 | | `Ctrl+Y` | Redo |
 | | `Ctrl+C` | Copy |
@@ -167,7 +175,7 @@ You can also launch the application by double-clicking the `FullScreen-Pencil-Dr
 
 2. **Select a Tool**
 
-Use the toolbar or keyboard shortcuts to select drawing tools, eraser, or other functions.
+Use the toolbar or keyboard shortcuts to select drawing tools, the Object or Pixel Eraser, or other functions.
 
 3. **Draw on the Canvas**
 
@@ -179,7 +187,7 @@ If you make a mistake, use the Undo button or Ctrl+Z to revert the last action. 
 
 5. **Save Your Artwork**
 
-Click the Save button on the toolbar or use Ctrl+S. Select your preferred image format (PNG, JPG, or BMP) and choose the destination folder to save your creation.
+Use Ctrl+S to save an editable project (`.fspd`); the first save asks where. To share a picture, use File → Export and choose SVG, PDF, PNG, JPEG, WebP, TIFF or BMP.
 
 6. **Import Images via Drag-and-Drop**
 
@@ -209,7 +217,7 @@ cd FullScreen-Pencil-Draw
 On Ubuntu/Debian:
 ```bash
 sudo apt-get update
-sudo apt-get install -y build-essential cmake qt6-base-dev qt6-tools-dev qt6-tools-dev-tools libgl1-mesa-dev xvfb
+sudo apt-get install -y build-essential cmake qt6-base-dev qt6-tools-dev qt6-tools-dev-tools qt6-svg-dev qt6-pdf-dev libgl1-mesa-dev xvfb
 ```
 
 **Optional: For high-quality LaTeX math rendering, install Qt WebEngine:**
@@ -247,6 +255,21 @@ The `-j$(nproc)` flag enables parallel compilation using all available CPU cores
 ```
 
 You can also double-click the executable in the `build` directory.
+
+### Running the Tests
+
+Tests are built when `BUILD_TESTING` is on and run headless (no display
+needed); CI runs the same commands on every pull request:
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+cmake --build build -j$(nproc)
+ctest --test-dir build --output-on-failure
+```
+
+`make test` does the same through the top-level Makefile. Run one suite
+directly for more detail, e.g. `./build/tests/test_document_integrity`
+(native round trips, atomic saves, crash recovery and export fidelity).
 
 ## Troubleshooting
 

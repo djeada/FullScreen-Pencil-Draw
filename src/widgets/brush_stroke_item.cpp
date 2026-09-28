@@ -59,6 +59,23 @@ void BrushStrokeItem::addPoint(const QPointF &scenePoint) {
   update();
 }
 
+void BrushStrokeItem::restore(const QVector<QPointF> &points,
+                              const QImage &image, const QRectF &imageRect) {
+  prepareGeometryChange();
+  points_ = points;
+  buffer_ = image.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+  bounds_ = QRectF(imageRect.topLeft(), QSizeF(buffer_.size()));
+  update();
+}
+
+void BrushStrokeItem::setImage(const QImage &image) {
+  if (image.size() != buffer_.size())
+    prepareGeometryChange();
+  buffer_ = image.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+  bounds_ = QRectF(bounds_.topLeft(), QSizeF(buffer_.size()));
+  update();
+}
+
 QRectF BrushStrokeItem::boundingRect() const { return bounds_; }
 
 void BrushStrokeItem::paint(QPainter *painter,

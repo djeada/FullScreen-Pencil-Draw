@@ -14,11 +14,34 @@
 #include <QGraphicsColorizeEffect>
 #include <QGraphicsItemGroup>
 #include <QGraphicsLineItem>
+#include <QGraphicsPathItem>
 #include <QGraphicsPixmapItem>
 #include <QGraphicsTextItem>
 #include <utility>
 
 Action::~Action() = default;
+
+std::size_t Action::estimateItemBytes(const QGraphicsItem *item) {
+  if (!item)
+    return 0;
+  std::size_t bytes = kBaseActionCost;
+  if (auto *pixmapItem = dynamic_cast<const QGraphicsPixmapItem *>(item)) {
+    const QPixmap &pm = pixmapItem->pixmap();
+    bytes += static_cast<std::size_t>(pm.width()) * pm.height() * 4;
+  } else if (auto *pathItem = dynamic_cast<const QGraphicsPathItem *>(item)) {
+    bytes += static_cast<std::size_t>(pathItem->path().elementCount()) * 24;
+  } else {
+    // Custom raster items (brush strokes, raster layers) cache pixels the
+    // size of their bounds.
+    const QRectF r = item->boundingRect();
+    if (item->type() > QGraphicsItem::UserType && r.isValid() &&
+        r.width() * r.height() < 1e9)
+      bytes += static_cast<std::size_t>(r.width() * r.height()) * 4;
+  }
+  for (const QGraphicsItem *child : item->childItems())
+    bytes += estimateItemBytes(child);
+  return bytes;
+}
 
 // DrawAction implementation
 DrawAction::DrawAction(const ItemId &id, ItemStore *store, ItemCallback onAdd,
@@ -54,7 +77,11 @@ void DrawAction::redo() {
 DeleteAction::DeleteAction(const ItemId &id, ItemStore *store,
                            ItemCallback onAdd, ItemCallback onRemove)
     : itemId_(id), itemStore_(store), onAdd_(std::move(onAdd)),
-      onRemove_(std::move(onRemove)) {}
+      onRemove_(std::move(onRemove)) {
+  // Created while the item is still live; afterwards it is parked.
+  if (itemStore_)
+    memoryCost_ = estimateItemBytes(itemStore_->item(itemId_));
+}
 
 DeleteAction::~DeleteAction() = default;
 
@@ -129,6 +156,13 @@ void CompositeAction::redo() {
   for (auto &action : actions_) {
     action->redo();
   }
+}
+
+std::size_t CompositeAction::memoryCost() const {
+  std::size_t cost = kBaseActionCost;
+  for (const auto &action : actions_)
+    cost += action->memoryCost();
+  return cost;
 }
 
 void CompositeAction::collectReferencedItems(QVector<ItemId> &out) const {

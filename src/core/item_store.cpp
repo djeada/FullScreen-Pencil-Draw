@@ -61,6 +61,10 @@ ItemStore::~ItemStore() {
 }
 
 ItemId ItemStore::registerItem(QGraphicsItem *item) {
+  return registerItem(item, ItemId());
+}
+
+ItemId ItemStore::registerItem(QGraphicsItem *item, const ItemId &preferredId) {
   if (!item) {
     return ItemId();
   }
@@ -74,8 +78,14 @@ ItemId ItemStore::registerItem(QGraphicsItem *item) {
     return reverseIt->second;
   }
 
-  // Generate a new ID
-  ItemId id = ItemId::generate();
+  bool preferredFree = preferredId.isValid() &&
+                       items_.find(preferredId) == items_.end() &&
+                       snapshotItems_.find(preferredId) == snapshotItems_.end();
+  for (const auto &pending : deletionQueue_) {
+    if (pending.first == preferredId)
+      preferredFree = false;
+  }
+  ItemId id = preferredFree ? preferredId : ItemId::generate();
 
   // Add to maps
   items_[id] = item;

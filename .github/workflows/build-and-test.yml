@@ -1,36 +1,34 @@
 name: Build and Test
 
-# Trigger the workflow on push events to main or master branches
+# Every pull request and every push to the main branches builds the app,
+# runs the full CTest suite (including the document-integrity gates) and a
+# bounded launch smoke test. A failing test fails the workflow; a
+# successful app launch cannot hide it.
 on:
   push:
     branches:
       - main
       - master
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build-and-test:
+  linux:
+    name: Linux (tests + smoke)
     runs-on: ubuntu-latest
-    
-    permissions:
-      contents: read
+    timeout-minutes: 45
 
     steps:
-      # Step 1: Checkout the repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Step 2: Cache CMake and Qt Dependencies
-      - name: Cache CMake and Qt
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cmake
-            ~/.cache
-          key: ${{ runner.os }}-cmake-qt-${{ hashFiles('**/CMakeLists.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-cmake-qt-
-
-      # Step 3: Install Dependencies
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -45,86 +43,106 @@ jobs:
             libgl1-mesa-dev \
             xvfb
 
-      # Step 4: Verify Qt6 Installation (Optional)
-      - name: Verify Qt6 Installation
+      - name: Configure (with tests)
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+
+      - name: Build app and tests
+        run: cmake --build build --parallel "$(nproc)"
+
+      - name: Run tests
+        env:
+          QT_QPA_PLATFORM: offscreen
         run: |
-          # Check if qmake6 is available
-          if command -v qmake6 >/dev/null 2>&1; then
-            echo "qmake6 is installed."
-            qmake6 --version
-          else
-            echo "qmake6 is not found. Listing available qmake binaries:"
-            find /usr -name "qmake*" -executable -type f
+          ctest --test-dir build --output-on-failure --timeout 300 \
+            --output-junit ctest-results.xml
+
+      - name: Launch smoke test
+        run: |
+          set -u
+          # The app must still be running after 10 s: `timeout` then stops
+          # it with exit code 124. Any other status means it exited or
+          # crashed on its own. HOME is isolated so no stale settings or
+          # recovery snapshots can open modal dialogs.
+          export HOME="$(mktemp -d)"
+          set +e
+          timeout --signal=TERM --kill-after=5 10 \
+            xvfb-run --auto-servernum --server-args="-screen 0 1280x800x24" \
+            ./build/FullScreen-Pencil-Draw > build/app_output.log 2>&1
+          status=$?
+          set -e
+          echo "Application exit status: $status"
+          cat build/app_output.log
+          if [ "$status" -ne 124 ]; then
+            echo "::error::The application exited early (status $status)."
             exit 1
           fi
 
-      # Step 5: Configure CMake
-      - name: Configure CMake
-        run: |
-          mkdir -p build
-          cd build
-          cmake -DCMAKE_BUILD_TYPE=Release ..
-
-      # Step 6: Build the Project
-      - name: Build
-        run: |
-          cd build
-          cmake --build . -- -j$(nproc)
-
-      # Step 7: Run the Application with Xvfb
-      - name: Run the application with Xvfb
-        run: |
-          cd build
-          # Start Xvfb in the background
-          Xvfb :99 -screen 0 1024x768x24 &
-          XVFB_PID=$!
-          export DISPLAY=:99
-          
-          # Wait for Xvfb to be ready
-          sleep 2
-          
-          # Run the application in the background and redirect output to a log file
-          ./FullScreen-Pencil-Draw > app_output.log 2>&1 &
-          APP_PID=$!
-          echo "Application PID: $APP_PID"
-          
-          # Wait for 10 seconds
-          sleep 10
-          
-          # Check if the application is still running
-          if ps -p $APP_PID > /dev/null
-          then
-            echo "Application is still running. Terminating it."
-            kill $APP_PID
-          else
-            echo "Application exited before 10 seconds."
-          fi
-          
-          # Clean up Xvfb process
-          if ps -p $XVFB_PID > /dev/null; then
-            echo "Terminating Xvfb (PID: $XVFB_PID)"
-            kill $XVFB_PID
-          fi
-          
-          # Check the log file for any errors
-          if [ -f app_output.log ]; then
-            echo "Log file contents:"
-            cat app_output.log
-            if grep -i "error" app_output.log; then
-              echo "Errors detected in application output."
-              exit 1
-            else
-              echo "No errors found in application output."
-            fi
-          else
-            echo "Log file not found."
-            exit 1
-          fi
-
-      # Step 8: Upload Logs if the Previous Step Failed
-      - name: Upload logs
-        if: failure()
+      - name: Upload test and app logs
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: application-logs
-          path: build/app_output.log
+          name: linux-test-logs
+          path: |
+            build/ctest-results.xml
+            build/Testing/Temporary/LastTest.log
+            build/app_output.log
+          if-no-files-found: ignore
+
+  platforms:
+    name: ${{ matrix.os }} (tests)
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    # Informational until the suite has a track record on these runners;
+    # the Linux job above is the required gate.
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macOS 15's SDK no longer ships the AGL framework that Qt's
+          # OpenGL wrapper still links, so build on macOS 14.
+          - os: macos-14
+            qt_arch: clang_64
+          - os: windows-latest
+            qt_arch: win64_msvc2022_64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup MSVC (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.8.2
+          arch: ${{ matrix.qt_arch }}
+          cache: true
+
+      - name: Configure (with tests)
+        shell: bash
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+
+      - name: Build app and tests
+        shell: bash
+        run: cmake --build build --config Release --parallel 4
+
+      - name: Run tests
+        shell: bash
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          ctest --test-dir build -C Release --output-on-failure --timeout 300 \
+            --output-junit ctest-results.xml
+
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}-test-logs
+          path: |
+            build/ctest-results.xml
+            build/Testing/Temporary/LastTest.log
+          if-no-files-found: ignore

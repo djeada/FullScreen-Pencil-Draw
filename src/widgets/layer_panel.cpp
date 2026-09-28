@@ -961,6 +961,16 @@ void LayerPanel::onAddLayer() {
   }
 }
 
+void LayerPanel::onAddRasterLayer() {
+  if (layerManager_) {
+    int count = layerManager_->layerCount();
+    layerManager_->createLayer(QString("Raster %1").arg(count + 1),
+                               Layer::Type::Raster);
+    layerManager_->setActiveLayer(layerManager_->layerCount() - 1);
+    emit addLayerRequested();
+  }
+}
+
 void LayerPanel::onDeleteLayer() {
   if (!layerManager_)
     return;
@@ -1204,10 +1214,13 @@ void LayerPanel::onLayerTreeContextMenuRequested(const QPoint &pos) {
   QMenu menu(this);
 
   if (!clickedItem) {
-    QAction *addLayerAction = menu.addAction("Add Layer");
+    QAction *addLayerAction = menu.addAction("Add Vector Layer");
+    QAction *addRasterAction = menu.addAction("Add Raster (Pixel) Layer");
     QAction *chosen = menu.exec(globalPos);
     if (chosen == addLayerAction) {
       onAddLayer();
+    } else if (chosen == addRasterAction) {
+      onAddRasterLayer();
     }
     return;
   }

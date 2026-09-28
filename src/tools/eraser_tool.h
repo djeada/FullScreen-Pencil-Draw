@@ -9,17 +9,18 @@
 #include <QGraphicsEllipseItem>
 
 /**
- * @brief Eraser tool for removing items from the canvas.
+ * @brief Object Eraser: removes whole objects touched by its circular area.
  *
- * The eraser tool removes any items that intersect with the eraser's
- * circular area. It displays a preview cursor showing the eraser size.
+ * Only visible, unlocked objects whose real shape (or visible pixels, for
+ * images and brush strokes) is touched are removed; a whole drag is one
+ * undo step. Raster layer pixels are left to the Pixel Eraser.
  */
 class EraserTool : public Tool {
 public:
   explicit EraserTool(SceneRenderer *renderer);
   ~EraserTool() override;
 
-  QString name() const override { return "Eraser"; }
+  QString name() const override { return "Object Eraser"; }
   QCursor cursor() const override { return Qt::BlankCursor; }
 
   void activate() override;

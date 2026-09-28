@@ -49,6 +49,15 @@ public:
   ItemId registerItem(QGraphicsItem *item);
 
   /**
+   * @brief Register @p item under @p preferredId when that id is free.
+   *
+   * Used when reopening a document so items keep the identity they were
+   * saved with. Falls back to a fresh id if @p preferredId is invalid or
+   * already in use (live, parked for undo, or pending deletion).
+   */
+  ItemId registerItem(QGraphicsItem *item, const ItemId &preferredId);
+
+  /**
    * @brief Unregister an item from the store
    * @param id The ItemId to unregister
    * @return The item pointer (or nullptr if not found)

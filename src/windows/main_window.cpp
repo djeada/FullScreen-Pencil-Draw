@@ -1,5 +1,6 @@
 // main_window.cpp
 #include "main_window.h"
+#include "../core/app_constants.h"
 #include "../core/auto_save_manager.h"
 #include "../core/layer.h"
 #include "../core/recent_files_manager.h"
@@ -15,8 +16,11 @@
 #include <QApplication>
 #include <QCloseEvent>
 #include <QColorDialog>
+#include <QDialogButtonBox>
+#include <QDir>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QFormLayout>
 #include <QFrame>
 #include <QInputDialog>
 #include <QKeyEvent>
@@ -24,6 +28,7 @@
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QPainter>
+#include <QSettings>
 #include <QShortcut>
 #include <QSpinBox>
 #include <QSplitter>
@@ -73,6 +78,7 @@ MainWindow::MainWindow(QWidget *parent)
 #endif
 {
   _canvas->setUndoRedoManager(_undoRedoManager.get());
+  applyHistorySettings();
 #ifdef HAVE_QT_PDF
   // Split ratio constants for canvas/PDF panel
   static constexpr double PDF_PANEL_SPLIT_RATIO =
@@ -142,10 +148,28 @@ MainWindow::MainWindow(QWidget *parent)
   // again – otherwise the exit prompt would keep firing after a save.
   connect(_canvas, &Canvas::documentSaved, this, [this]() {
     _documentDirty = false;
-    // The document is safely on disk (or freshly loaded): a recovery copy
-    // would only produce a stale "restore?" prompt on the next launch.
+    // The document is safely on disk: a recovery copy would only produce a
+    // stale "restore?" prompt on the next launch.
     if (_autoSaveManager)
       _autoSaveManager->clearAutoSave();
+    statusBar()->showMessage(
+        tr("Saved %1")
+            .arg(QDir::toNativeSeparators(_canvas->currentFilePath())),
+        3000);
+  });
+  // Another document replaced this one (the user already chose to save or
+  // discard the old one): it gets a fresh recovery session.
+  connect(_canvas, &Canvas::documentLoaded, this, [this]() {
+    _documentDirty = false;
+    if (_autoSaveManager)
+      _autoSaveManager->startNewDocument();
+  });
+  // Recovered work was never saved by the user; keep its snapshot until
+  // they save or discard it.
+  connect(_canvas, &Canvas::documentRecovered, this,
+          [this]() { _documentDirty = true; });
+  connect(_canvas, &Canvas::saveFailed, this, [this](const QString &message) {
+    statusBar()->showMessage(tr("Save failed: %1").arg(message), 8000);
   });
   // Opening a project replaces the drawing; give the user a chance to save.
   _canvas->setDiscardChangesHandler([this]() { return maybeSaveChanges(); });
@@ -167,7 +191,7 @@ bool MainWindow::maybeSaveChanges() {
   if (response == QMessageBox::Save) {
     // Save as a project so nothing (layers, text, groups) is flattened;
     // a cancelled or failed save leaves the document dirty.
-    _canvas->saveProject();
+    _canvas->saveDocument();
     return !_documentDirty;
   }
   return true;
@@ -212,7 +236,8 @@ MainWindow::~MainWindow() {
 
 void MainWindow::setupStatusBar() {
   _statusLabel = new QLabel(
-      "✦ Ready | P:Pen I:Highlight E:Eraser T:Text F:Fill Q:ColorSelect "
+      "✦ Ready | P:Pen I:Highlight E:Object Eraser Shift+E:Pixel Eraser "
+      "T:Text F:Fill Q:ColorSelect "
       "L:Line A:Arrow R:Rect C:Circle S/V:Select H:Pan M:Mermaid W:Wire "
       "K:Color | Shift+B:Bezier Shift+T:TextOnPath (Enter finishes, Esc "
       "cancels) | G:Grid B:Filled | Ctrl+Scroll:Zoom",
@@ -668,6 +693,10 @@ void MainWindow::setupConnections() {
           &Canvas::setHighlighterTool);
   connect(_toolPanel, &ToolPanel::eraserSelected, _canvas,
           &Canvas::setEraserTool);
+  connect(_toolPanel, &ToolPanel::pixelEraserSelected, _canvas,
+          &Canvas::setPixelEraserTool);
+  connect(_canvas, &Canvas::statusMessage, this,
+          [this](const QString &msg) { statusBar()->showMessage(msg, 6000); });
   connect(_toolPanel, &ToolPanel::textSelected, _canvas, &Canvas::setTextTool);
   connect(_toolPanel, &ToolPanel::mermaidSelected, _canvas,
           &Canvas::setMermaidTool);
@@ -700,6 +729,15 @@ void MainWindow::setupConnections() {
     });
     connect(_toolPanel, &ToolPanel::eraserSelected, this, [this]() {
       _pdfViewer->setToolType(ToolManager::ToolType::Eraser);
+    });
+    // PDF annotations are vector objects only: there are no pixels to
+    // erase, so the PDF keeps its current tool.
+    connect(_toolPanel, &ToolPanel::pixelEraserSelected, this, [this]() {
+      if (_pdfPanel && _pdfPanel->isVisible())
+        statusBar()->showMessage(
+            tr("PDF annotations have no pixels; use the Object Eraser (E) "
+               "to remove them."),
+            6000);
     });
     connect(_toolPanel, &ToolPanel::textSelected, this,
             [this]() { _pdfViewer->setToolType(ToolManager::ToolType::Text); });
@@ -855,7 +893,7 @@ void MainWindow::setupConnections() {
           &MainWindow::onMeasurementUpdated);
 
   // File operations
-  connect(_toolPanel, &ToolPanel::saveAction, _canvas, &Canvas::saveToFile);
+  connect(_toolPanel, &ToolPanel::saveAction, _canvas, &Canvas::saveDocument);
   connect(_toolPanel, &ToolPanel::openAction, _canvas, &Canvas::openFile);
   connect(_toolPanel, &ToolPanel::newCanvasAction, this,
           &MainWindow::onNewCanvas);
@@ -892,9 +930,14 @@ void MainWindow::setupMenuBar() {
 
   fileMenu->addSeparator();
 
-  createAction(fileMenu, "&Save...", QKeySequence::Save, _canvas,
-               SLOT(saveToFile()));
-  fileMenu->addAction("Save Pro&ject...", _canvas, SLOT(saveProject()));
+  // Save / Save As write the editable native project; exports write other
+  // formats and never mark the document as saved.
+  createAction(fileMenu, "&Save", QKeySequence::Save, _canvas,
+               SLOT(saveDocument()));
+  createAction(fileMenu, "Save Project &As...", QKeySequence::SaveAs, _canvas,
+               SLOT(saveProject()));
+  fileMenu->addAction("&Export (Image, SVG, PDF)...", _canvas,
+                      SLOT(saveToFile()));
   fileMenu->addAction("Export to &PDF...", _canvas, SLOT(exportToPDF()));
   fileMenu->addAction("Export Single &Element...", _canvas,
                       SLOT(exportSingleElementToPNG()));
@@ -1056,6 +1099,21 @@ void MainWindow::setupMenuBar() {
   editMenu->addSeparator();
   editMenu->addAction("Resize &Canvas...", _canvas, SLOT(resizeCanvas()));
 
+  // Layer menu: vector and raster layers live side by side.
+  QMenu *layerMenu = menuBar->addMenu(tr("&Layer"));
+  layerMenu->addAction(tr("New &Vector Layer"), this, [this]() {
+    if (LayerManager *layers = _canvas->layerManager()) {
+      layers->createLayer(tr("Layer %1").arg(layers->layerCount() + 1));
+      layers->setActiveLayer(layers->layerCount() - 1);
+      if (_layerPanel)
+        _layerPanel->refreshLayerList();
+    }
+  });
+  layerMenu->addAction(tr("New &Raster (Pixel) Layer"), this, [this]() {
+    if (_layerPanel)
+      _layerPanel->onAddRasterLayer();
+  });
+
   // Tools menu
   QMenu *toolsMenu = menuBar->addMenu("&Tools");
 
@@ -1068,6 +1126,29 @@ void MainWindow::setupMenuBar() {
   });
   _autoSaveAction->setCheckable(true);
   _autoSaveAction->setChecked(true); // Enabled by default
+
+  toolsMenu->addAction(tr("&History Settings..."), this,
+                       &MainWindow::onHistorySettings);
+
+  toolsMenu->addSeparator();
+
+  toolsMenu->addAction(tr("Pixel Eraser &Strength..."), this, [this]() {
+    bool ok = false;
+    const int value = QInputDialog::getInt(
+        this, tr("Pixel Eraser Strength"), tr("Alpha removed per pass (%):"),
+        _canvas->pixelEraserStrength(), 1, 100, 5, &ok);
+    if (ok)
+      _canvas->setPixelEraserStrength(value);
+  });
+  toolsMenu->addAction(tr("Pixel Eraser &Hardness..."), this, [this]() {
+    bool ok = false;
+    const int value =
+        QInputDialog::getInt(this, tr("Pixel Eraser Hardness"),
+                             tr("Edge hardness (%, 100 = hard edge):"),
+                             _canvas->pixelEraserHardness(), 0, 100, 5, &ok);
+    if (ok)
+      _canvas->setPixelEraserHardness(value);
+  });
 
   toolsMenu->addSeparator();
 
@@ -1274,8 +1355,17 @@ void MainWindow::setupAutoSave() {
   // Only auto-save when there is something the user could lose.
   _autoSaveManager->setShouldSaveCheck([this]() { return _documentDirty; });
 
-  // Check for recovery on startup
-  if (_autoSaveManager->hasAutoSave() && _autoSaveManager->restoreAutoSave()) {
+  connect(_autoSaveManager, &AutoSaveManager::autoSaveFailed, this,
+          [this](const QString &message) {
+            statusBar()->showMessage(
+                tr("Auto-save failed (the previous recovery copy is kept): "
+                   "%1")
+                    .arg(message),
+                8000);
+          });
+
+  // Offer work left behind by sessions that did not close normally.
+  if (_autoSaveManager->restoreAutoSave()) {
     // The recovered work was never saved by the user.
     _documentDirty = true;
   }
@@ -1284,6 +1374,67 @@ void MainWindow::setupAutoSave() {
   if (_autoSaveAction) {
     _autoSaveAction->setChecked(_autoSaveManager->isEnabled());
   }
+}
+
+void MainWindow::applyHistorySettings() {
+  QSettings settings(AppConstants::OrganizationName,
+                     AppConstants::ApplicationName);
+  HistoryPolicy policy;
+  policy.maxSteps = static_cast<std::size_t>(qMax(
+      0,
+      settings.value("history/maxSteps", int(UndoRedoManager::kDefaultMaxSteps))
+          .toInt()));
+  const int budgetMb =
+      qMax(0, settings
+                  .value("history/memoryBudgetMB",
+                         int(UndoRedoManager::kDefaultMemoryBudgetBytes >> 20))
+                  .toInt());
+  policy.memoryBudgetBytes = static_cast<std::size_t>(budgetMb) << 20;
+  if (_undoRedoManager)
+    _undoRedoManager->setPolicy(policy);
+}
+
+void MainWindow::onHistorySettings() {
+  if (!_undoRedoManager)
+    return;
+  const HistoryPolicy current = _undoRedoManager->policy();
+  QDialog dialog(this);
+  dialog.setWindowTitle(tr("History Settings"));
+  auto *form = new QFormLayout(&dialog);
+  auto *steps = new QSpinBox(&dialog);
+  steps->setRange(0, 100000);
+  steps->setSpecialValueText(tr("Unlimited"));
+  steps->setValue(static_cast<int>(current.maxSteps));
+  auto *budget = new QSpinBox(&dialog);
+  budget->setRange(0, 65536);
+  budget->setSuffix(tr(" MiB"));
+  budget->setSpecialValueText(tr("Unlimited"));
+  budget->setValue(static_cast<int>(current.memoryBudgetBytes >> 20));
+  form->addRow(tr("Undo steps to keep:"), steps);
+  form->addRow(tr("Memory for undo history:"), budget);
+  auto *usage = new QLabel(
+      tr("Currently used: %1 steps, %2 MiB. The oldest steps are dropped "
+         "first when either limit is reached; history is not stored in "
+         "saved files.")
+          .arg(_undoRedoManager->undoCount() + _undoRedoManager->redoCount())
+          .arg(QString::number(double(_undoRedoManager->memoryUsage()) /
+                                   (1024.0 * 1024.0),
+                               'f', 1)),
+      &dialog);
+  usage->setWordWrap(true);
+  form->addRow(usage);
+  auto *buttons = new QDialogButtonBox(
+      QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+  connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+  connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+  form->addRow(buttons);
+  if (dialog.exec() != QDialog::Accepted)
+    return;
+  QSettings settings(AppConstants::OrganizationName,
+                     AppConstants::ApplicationName);
+  settings.setValue("history/maxSteps", steps->value());
+  settings.setValue("history/memoryBudgetMB", budget->value());
+  applyHistorySettings();
 }
 
 void MainWindow::onAutoSavePerformed(const QString &path) {
@@ -1308,6 +1459,8 @@ void MainWindow::onNewCanvas() {
   _canvas->newCanvas(width, height, bgColor);
   // A brand new empty canvas holds nothing worth warning about on exit.
   _documentDirty = false;
+  if (_autoSaveManager)
+    _autoSaveManager->startNewDocument();
   // Refresh layer panel after new canvas
   if (_layerPanel) {
     _layerPanel->refreshLayerList();
@@ -1341,8 +1494,10 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
     performUndo();
   } else if (event->matches(QKeySequence::Redo)) {
     performRedo();
+  } else if (event->matches(QKeySequence::SaveAs)) {
+    _canvas->saveProject();
   } else if (event->matches(QKeySequence::Save)) {
-    _canvas->saveToFile();
+    _canvas->saveDocument();
   } else if (event->matches(QKeySequence::Open)) {
     _canvas->openFile();
   } else if (event->matches(QKeySequence::New)) {
@@ -1401,6 +1556,9 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
     _toolPanel->onActionPen();
   } else if (event->key() == Qt::Key_I && !ctrl) {
     _toolPanel->onActionHighlighter();
+  } else if (event->key() == Qt::Key_E && !ctrl &&
+             (event->modifiers() & Qt::ShiftModifier)) {
+    _toolPanel->onActionPixelEraser();
   } else if (event->key() == Qt::Key_E && !ctrl) {
     _toolPanel->onActionEraser();
   } else if (event->key() == Qt::Key_T &&

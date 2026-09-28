@@ -13,7 +13,14 @@ set(CORE_SOURCES
     ../src/core/scene_controller.cpp
     ../src/core/layer.cpp
     ../src/core/project_serializer.cpp
+    ../src/core/raster_surface.cpp
+    ../src/core/brush_tip.cpp
+    ../src/core/action.cpp
     # Item types the project serializer can save/load
+    ../src/widgets/brush_stroke_item.cpp
+    ../src/widgets/raster_layer_item.cpp
+    ../src/widgets/latex_text_item.cpp
+    ../src/widgets/text_on_path_item.cpp
     ../src/widgets/architecture_elements.cpp
     ../src/widgets/electronics_elements.cpp
     ../src/widgets/element_factory.cpp
@@ -36,9 +43,7 @@ add_executable(test_item_store
     test_item_store.cpp
     ${CORE_SOURCES}
     ${CORE_HEADERS}
-    ../src/widgets/latex_text_item.cpp
     ../src/widgets/latex_text_item.h
-    ../src/widgets/text_on_path_item.cpp
     ../src/widgets/text_on_path_item.h
 )
 
@@ -65,9 +70,7 @@ add_executable(test_project_serializer
     test_project_serializer.cpp
     ${CORE_SOURCES}
     ${CORE_HEADERS}
-    ../src/widgets/latex_text_item.cpp
     ../src/widgets/latex_text_item.h
-    ../src/widgets/text_on_path_item.cpp
     ../src/widgets/text_on_path_item.h
 )
 
@@ -277,15 +280,12 @@ add_executable(test_transform_action
     test_transform_action.cpp
     ../src/core/transform_action.cpp
     ../src/core/transform_action.h
-    ../src/core/action.cpp
     ../src/core/action.h
     ${CORE_SOURCES}
     ${CORE_HEADERS}
-    ../src/widgets/latex_text_item.cpp
     ../src/widgets/latex_text_item.h
     ../src/widgets/mermaid_text_item.cpp
     ../src/widgets/mermaid_text_item.h
-    ../src/widgets/text_on_path_item.cpp
     ../src/widgets/text_on_path_item.h
 )
 
@@ -422,15 +422,12 @@ add_executable(test_undo_redo_manager
     test_undo_redo_manager.cpp
     ../src/core/undo_redo_manager.cpp
     ../src/core/undo_redo_manager.h
-    ../src/core/action.cpp
     ../src/core/action.h
     ${CORE_SOURCES}
     ${CORE_HEADERS}
-    ../src/widgets/latex_text_item.cpp
     ../src/widgets/latex_text_item.h
     ../src/widgets/mermaid_text_item.cpp
     ../src/widgets/mermaid_text_item.h
-    ../src/widgets/text_on_path_item.cpp
     ../src/widgets/text_on_path_item.h
 )
 
@@ -455,6 +452,7 @@ set(CANVAS_TEST_SOURCES
     ../src/core/action.cpp
     ../src/core/auto_save_manager.cpp
     ../src/core/brush_tip.cpp
+    ../src/core/document_exporter.cpp
     ../src/core/fill_utils.cpp
     ../src/core/image_filters.cpp
     ../src/core/item_store.cpp
@@ -464,7 +462,9 @@ set(CANVAS_TEST_SOURCES
     ../src/core/pdf_document.cpp
     ../src/core/pdf_overlay.cpp
     ../src/core/project_serializer.cpp
+    ../src/core/raster_surface.cpp
     ../src/core/recent_files_manager.cpp
+    ../src/core/recovery_store.cpp
     ../src/core/scene_controller.cpp
     ../src/core/snap_engine.cpp
     ../src/core/theme_manager.cpp
@@ -497,6 +497,7 @@ set(CANVAS_TEST_SOURCES
     ../src/widgets/wire_item.cpp
     ../src/widgets/brush_preview.cpp
     ../src/widgets/brush_stroke_item.cpp
+    ../src/widgets/raster_layer_item.cpp
     ../src/widgets/element_bank_panel.cpp
     ../src/widgets/tool_panel.cpp
     ../src/windows/main_window.cpp
@@ -543,6 +544,7 @@ if(HAVE_QT_SVG)
     target_link_libraries(test_canvas_interaction PRIVATE
         Qt${QT_VERSION_MAJOR}::Svg
     )
+    target_compile_definitions(test_canvas_interaction PRIVATE HAVE_QT_SVG)
 endif()
 
 if(Qt${QT_VERSION_MAJOR}Pdf_FOUND)
@@ -563,37 +565,90 @@ set_target_properties(test_canvas_interaction PROPERTIES
 
 add_test(NAME TestCanvasInteraction COMMAND test_canvas_interaction)
 
-# PdfPageCache tests
-add_executable(test_pdf_page_cache
-    test_pdf_page_cache.cpp
-    ../src/core/pdf_document.cpp
-    ../src/core/pdf_document.h
-)
-
-target_include_directories(test_pdf_page_cache PRIVATE
-    ../src/core
-)
-
-target_link_libraries(test_pdf_page_cache PRIVATE
-    Qt${QT_VERSION_MAJOR}::Widgets
-    Qt${QT_VERSION_MAJOR}::Test
-)
-
+# PdfPageCache tests (the cache only exists when Qt PDF is available)
 if(Qt${QT_VERSION_MAJOR}Pdf_FOUND)
+    add_executable(test_pdf_page_cache
+        test_pdf_page_cache.cpp
+        ../src/core/pdf_document.cpp
+        ../src/core/pdf_document.h
+    )
+
+    target_include_directories(test_pdf_page_cache PRIVATE
+        ../src/core
+    )
+
+    target_link_libraries(test_pdf_page_cache PRIVATE
+        Qt${QT_VERSION_MAJOR}::Widgets
+        Qt${QT_VERSION_MAJOR}::Test
+    )
+
     target_link_libraries(test_pdf_page_cache PRIVATE
         Qt${QT_VERSION_MAJOR}::Pdf
     )
+
+    set_target_properties(test_pdf_page_cache PROPERTIES
+        AUTOMOC ON
+    )
+
+    add_test(NAME TestPdfPageCache COMMAND test_pdf_page_cache)
 endif()
 
-set_target_properties(test_pdf_page_cache PROPERTIES
-    AUTOMOC ON
+# Tiled raster engine tests
+add_executable(test_raster_surface
+    test_raster_surface.cpp
+    ${CORE_SOURCES}
+    ${CORE_HEADERS}
 )
+target_include_directories(test_raster_surface PRIVATE
+    ../src/core
+    ../src/widgets
+)
+target_link_libraries(test_raster_surface PRIVATE
+    Qt${QT_VERSION_MAJOR}::Widgets
+    Qt${QT_VERSION_MAJOR}::Test
+)
+set_target_properties(test_raster_surface PROPERTIES AUTOMOC ON)
+add_test(NAME TestRasterSurface COMMAND test_raster_surface)
 
-add_test(NAME TestPdfPageCache COMMAND test_pdf_page_cache)
+# Document integrity gates: native round trips, atomic saves, recovery,
+# export fidelity
+add_executable(test_document_integrity
+    test_document_integrity.cpp
+    ${CORE_SOURCES}
+    ${CORE_HEADERS}
+    ../src/core/document_exporter.cpp
+    ../src/core/recovery_store.cpp
+)
+target_include_directories(test_document_integrity PRIVATE
+    ../src/core
+    ../src/widgets
+)
+target_link_libraries(test_document_integrity PRIVATE
+    Qt${QT_VERSION_MAJOR}::Widgets
+    Qt${QT_VERSION_MAJOR}::Test
+)
+if(HAVE_QT_SVG)
+    target_link_libraries(test_document_integrity PRIVATE
+        Qt${QT_VERSION_MAJOR}::Svg
+    )
+    target_compile_definitions(test_document_integrity PRIVATE HAVE_QT_SVG)
+endif()
+set_target_properties(test_document_integrity PROPERTIES AUTOMOC ON)
+add_test(NAME TestDocumentIntegrity COMMAND test_document_integrity)
+
+# Every test is headless: no display server is needed locally or in CI.
+get_property(_fspd_tests DIRECTORY PROPERTY TESTS)
+set_tests_properties(${_fspd_tests} PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    TIMEOUT 300
+)
 
 # Add custom target to run all tests
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-    DEPENDS test_item_store test_project_serializer test_image_filters test_perspective_transform test_snap_engine test_text_whitespace test_latex_unicode test_busy_spinner_overlay test_brush_tip test_rotation_dialog test_alignment_dialog test_transform_action test_group_clipboard test_side_tab_bar test_undo_redo_manager test_pdf_page_cache test_canvas_interaction
+    DEPENDS test_item_store test_project_serializer test_image_filters test_perspective_transform test_snap_engine test_text_whitespace test_latex_unicode test_busy_spinner_overlay test_brush_tip test_rotation_dialog test_alignment_dialog test_transform_action test_group_clipboard test_side_tab_bar test_undo_redo_manager test_canvas_interaction test_raster_surface test_document_integrity
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
+if(TARGET test_pdf_page_cache)
+    add_dependencies(run_tests test_pdf_page_cache)
+endif()

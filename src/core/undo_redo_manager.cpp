@@ -1,6 +1,7 @@
 #include "undo_redo_manager.h"
 #include "action.h"
 #include <QSet>
+#include <algorithm>
 
 void UndoRedoManager::push(std::unique_ptr<Action> action, const void *owner) {
   if (!action) {
@@ -112,11 +113,43 @@ void UndoRedoManager::enforceLimit() {
   notifyDiscarded(discarded);
 }
 
+void UndoRedoManager::setPolicy(const HistoryPolicy &policy) {
+  policy_ = policy;
+  enforceLimit();
+}
+
+std::size_t UndoRedoManager::memoryUsage() const {
+  std::size_t bytes = 0;
+  for (const auto &action : undoStack_)
+    bytes += action->memoryCost();
+  for (const auto &action : redoStack_)
+    bytes += action->memoryCost();
+  return bytes;
+}
+
 void UndoRedoManager::evictOverLimit(
     std::vector<std::unique_ptr<Action>> &discarded) {
-  while (undoStack_.size() > kMaxUndoSteps) {
+  // Step limit: oldest undoable actions go first.
+  if (policy_.maxSteps > 0) {
+    while (undoStack_.size() > policy_.maxSteps) {
+      discarded.push_back(std::move(undoStack_.front()));
+      undoStack_.erase(undoStack_.begin());
+    }
+  }
+  if (policy_.memoryBudgetBytes == 0)
+    return;
+  std::size_t used = memoryUsage();
+  // Memory budget: drop the oldest undo steps, keeping the latest one...
+  while (used > policy_.memoryBudgetBytes && undoStack_.size() > 1) {
+    used -= std::min(used, undoStack_.front()->memoryCost());
     discarded.push_back(std::move(undoStack_.front()));
     undoStack_.erase(undoStack_.begin());
+  }
+  // ...then the redo steps furthest away from the current state.
+  while (used > policy_.memoryBudgetBytes && !redoStack_.empty()) {
+    used -= std::min(used, redoStack_.front()->memoryCost());
+    discarded.push_back(std::move(redoStack_.front()));
+    redoStack_.erase(redoStack_.begin());
   }
 }
 

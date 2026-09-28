@@ -37,7 +37,8 @@ signals:
   void lassoSelectionSelected();
   void penSelected();
   void highlighterSelected();
-  void eraserSelected();
+  void eraserSelected(); ///< Object Eraser
+  void pixelEraserSelected();
   void textSelected();
   void fillSelected();
   void colorSelectSelected();
@@ -81,7 +82,8 @@ private:
   QAction *actionLassoSelection;
   QAction *actionPen;
   QAction *actionHighlighter;
-  QAction *actionEraser;
+  QAction *actionEraser; ///< Object Eraser
+  QAction *actionPixelEraser;
   QAction *actionText;
   QAction *actionMermaid;
   QAction *actionFill;
@@ -153,6 +155,7 @@ public slots:
   void onActionPen();
   void onActionHighlighter();
   void onActionEraser();
+  void onActionPixelEraser();
   void onActionText();
   void onActionMermaid();
   void onActionFill();
