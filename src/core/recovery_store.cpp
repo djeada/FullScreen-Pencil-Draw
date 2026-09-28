@@ -29,6 +29,19 @@ RecoveryStore::RecoveryStore(const QString &directory) : directory_(directory) {
         QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
         QStringLiteral("/recovery");
   QDir().mkpath(directory_);
+  // Sessions that ended without cleaning up (crash, kill) leave their lock
+  // file behind even when there was nothing to recover; without this the
+  // folder collected one stray .lock per such session, forever.
+  const QDir dir(directory_);
+  for (const QString &name :
+       dir.entryList({QStringLiteral("*.lock")}, QDir::Files)) {
+    const QString id = QFileInfo(name).completeBaseName();
+    if (!isValidId(id) || QFileInfo::exists(snapshotPath(id)) ||
+        QFileInfo::exists(metadataPath(id)))
+      continue; // still offered for recovery
+    if (!isLiveElsewhere(id))
+      QFile::remove(lockPath(id));
+  }
 }
 
 RecoveryStore::~RecoveryStore() = default;
@@ -127,20 +140,25 @@ bool RecoveryStore::writeSnapshot(const QString &documentId,
 QList<RecoverySnapshot> RecoveryStore::recoverableSnapshots() const {
   QList<RecoverySnapshot> result;
   const QDir dir(directory_);
-  const QStringList metas =
-      dir.entryList({QStringLiteral("*.json")}, QDir::Files);
-  for (const QString &metaName : metas) {
-    const QString id = QFileInfo(metaName).completeBaseName();
+  // A crash between committing a snapshot and writing its metadata leaves
+  // a snapshot without metadata; it is still the user's work, so look at
+  // the snapshots themselves and treat metadata as optional.
+  QStringList ids;
+  for (const QString &name : dir.entryList(
+           {QStringLiteral("*.json"), QStringLiteral("*.fspd")}, QDir::Files)) {
+    const QString id = QFileInfo(name).completeBaseName();
+    if (!ids.contains(id))
+      ids.append(id);
+  }
+  for (const QString &id : ids) {
     if (!isValidId(id) || isLiveElsewhere(id))
       continue;
+    QJsonObject meta;
     QFile metaFile(metadataPath(id));
-    if (!metaFile.open(QIODevice::ReadOnly))
-      continue;
-    const QJsonObject meta =
-        QJsonDocument::fromJson(metaFile.readAll()).object();
+    if (metaFile.open(QIODevice::ReadOnly))
+      meta = QJsonDocument::fromJson(metaFile.readAll()).object();
     const QString path = snapshotPath(id);
-    // The metadata is only written after its snapshot committed, but check
-    // that the snapshot really is a readable project anyway.
+    // Check that the snapshot really is a readable project.
     QFile snap(path);
     if (!snap.open(QIODevice::ReadOnly))
       continue;
@@ -174,8 +192,8 @@ bool RecoveryStore::hasSnapshot(const QString &documentId) const {
 void RecoveryStore::discard(const QString &documentId) {
   if (!isValidId(documentId))
     return;
-  // Metadata first: without it the snapshot is never offered again, even
-  // if deleting the (larger) project file fails.
-  QFile::remove(metadataPath(documentId));
+  // Snapshots are discovered even without metadata, so the snapshot goes
+  // first; a failed delete keeps offering it rather than orphaning it.
   QFile::remove(snapshotPath(documentId));
+  QFile::remove(metadataPath(documentId));
 }

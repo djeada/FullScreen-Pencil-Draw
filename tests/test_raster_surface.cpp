@@ -296,6 +296,37 @@ private slots:
     QCOMPARE(copy.boundingRect(), stroke.boundingRect());
     QCOMPARE(copy.points(), stroke.points());
   }
+
+  void opaqueBoundsIgnoreTheTransparentRestOfTheTile() {
+    RasterSurface surface;
+    QVERIFY(surface.opaqueBounds().isEmpty());
+    fillRect(surface, QRect(300, 40, 10, 5), Qt::red);
+    fillRect(surface, QRect(-20, 500, 4, 4), Qt::blue);
+    QCOMPARE(surface.opaqueBounds(), QRect(QPoint(-20, 40), QPoint(309, 503)));
+    QVERIFY(surface.boundingRect().contains(surface.opaqueBounds()));
+  }
+
+  void translucentStrokeSegmentsDoNotDoubleUpAtJoints() {
+    RasterLayerItem item;
+    QPen pen(QColor(255, 0, 0, 100), 10);
+    item.paintStroke(QPointF(10, 20), QPointF(10, 20), pen);
+    for (int x = 10; x < 200; x += 5)
+      item.paintStroke(QPointF(x, 20), QPointF(x + 5, 20), pen);
+    const int a1 = qAlpha(item.surface().pixel(QPoint(50, 20))); // a joint
+    const int a2 = qAlpha(item.surface().pixel(QPoint(52, 20))); // mid-segment
+    QVERIFY2(qAbs(a1 - a2) <= 3,
+             qPrintable(QStringLiteral("%1 vs %2").arg(a1).arg(a2)));
+    QVERIFY(qAbs(a1 - 100) <= 3);
+  }
+
+  void toJsonReportsSuccessForAnEncodableLayer() {
+    RasterSurface surface;
+    fillRect(surface, QRect(0, 0, 10, 10), Qt::red);
+    bool ok = false;
+    const QJsonArray tiles = surface.toJson(&ok);
+    QVERIFY(ok);
+    QCOMPARE(tiles.size(), 1);
+  }
 };
 
 QTEST_MAIN(TestRasterSurface)

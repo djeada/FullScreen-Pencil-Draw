@@ -10,6 +10,7 @@
 #include <QGraphicsScene>
 #include <QGraphicsView>
 #include <QPainter>
+#include <QPalette>
 #include <QStyleOptionGraphicsItem>
 #include <QTextDocument>
 #include <atomic>
@@ -25,7 +26,22 @@
 MermaidTextEdit::MermaidTextEdit(QWidget *parent) : QTextEdit(parent) {
   setAcceptRichText(false);
   setLineWrapMode(QTextEdit::NoWrap);
-  setFont(QFont("Monospace", 10));
+  QFont mono("Monospace", 10);
+  mono.setStyleHint(QFont::Monospace);
+  setFont(mono);
+  // Same look as the text editor; the example in the placeholder used the
+  // theme's dim placeholder colour and was nearly invisible on dark.
+  setStyleSheet("QTextEdit {"
+                "  background-color: #1a1a24;"
+                "  color: #e0e6f4;"
+                "  border: 1px solid #6b8cce;"
+                "  border-radius: 8px;"
+                "  padding: 8px 10px;"
+                "  selection-background-color: #3d4f6f;"
+                "}");
+  QPalette pal = palette();
+  pal.setColor(QPalette::PlaceholderText, QColor(0x9a, 0xa4, 0xb8));
+  setPalette(pal);
   setPlaceholderText(
       "Enter Mermaid diagram code...\nExample:\ngraph TD\n    A[Start] --> "
       "B{Decision}\n    B -->|Yes| C[OK]\n    B -->|No| D[End]");
@@ -183,6 +199,7 @@ void MermaidTextItem::finishEditing() {
   prepareGeometryChange();
 
   // Get the text from the editor
+  const QString previousCode = mermaidCode_;
   if (textEdit_) {
     mermaidCode_ = textEdit_->toPlainText();
   }
@@ -196,12 +213,23 @@ void MermaidTextItem::finishEditing() {
   renderContent();
 
   emit editingFinished();
+  // Like LatexTextItem::textChanged: re-edited diagrams mark the document
+  // modified.
+  if (mermaidCode_ != previousCode)
+    emit codeChanged();
   update();
 }
 
 void MermaidTextItem::onEditingFinished() { finishEditing(); }
 
 void MermaidTextItem::onEditingCancelled() {
+  // Like LatexTextItem: Esc keeps what was typed into a brand-new diagram
+  // instead of deleting it.
+  if (mermaidCode_.isEmpty() && textEdit_ &&
+      !textEdit_->toPlainText().trimmed().isEmpty()) {
+    finishEditing();
+    return;
+  }
   // Cancel editing without saving changes
   isEditing_ = false;
   prepareGeometryChange();

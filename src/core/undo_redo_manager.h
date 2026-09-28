@@ -76,6 +76,16 @@ public:
     discardListeners_.push_back(std::move(listener));
   }
 
+  /**
+   * @brief Invoked after every action lands on the undo stack, with the
+   * owner tag it was pushed with. Every recorded edit changes the
+   * document, so this is the single place that marks it modified.
+   */
+  using PushListener = std::function<void(const void *owner)>;
+  void setPushListener(PushListener listener) {
+    pushListener_ = std::move(listener);
+  }
+
 private:
   void enforceLimit();
   void evictOverLimit(std::vector<std::unique_ptr<Action>> &discarded);
@@ -85,6 +95,7 @@ private:
   std::vector<std::unique_ptr<Action>> undoStack_;
   std::vector<std::unique_ptr<Action>> redoStack_;
   std::vector<DiscardListener> discardListeners_;
+  PushListener pushListener_;
   std::unordered_map<const Action *, const void *> owners_;
   // Actions pushed while an action is being replayed (e.g. a callback
   // commits an in-progress gesture) are queued until the replay finished:

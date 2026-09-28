@@ -10,6 +10,10 @@
 
 #include <QString>
 
+/// MIME type of an element dragged from the element library onto a canvas;
+/// the payload is the element id (UTF-8).
+inline constexpr char kElementMimeType[] = "application/x-fspd-element";
+
 class QGraphicsItem;
 
 /**

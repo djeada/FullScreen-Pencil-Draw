@@ -16,6 +16,7 @@
 #include <QUuid>
 
 class LayerManager;
+struct LayerStackState;
 class Layer;
 class ItemStore;
 class Canvas;
@@ -115,6 +116,9 @@ private slots:
   void onRenameLayer();
 
 private:
+  /// Push an undo step restoring the layer stack to @p before.
+  void recordLayerStructureChange(const QString &description,
+                                  const LayerStackState &before);
   LayerManager *layerManager_;
   ItemStore *itemStore_;
   Canvas *canvas_;

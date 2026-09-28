@@ -107,6 +107,9 @@ public:
    * @brief Close the current PDF
    */
   void closePdf();
+  /// Finish open text/diagram editors and in-progress path gestures, so
+  /// they are recorded (and count as unsaved) before closing or exporting.
+  void commitPendingEdits();
 
   /**
    * @brief Check if a PDF is loaded
@@ -285,7 +288,10 @@ public:
    * @brief Get the current zoom level
    * @return Zoom as percentage (100.0 = 100%)
    */
-  double zoomLevel() const { return currentZoom_ * 100.0; }
+  /// Zoom in percent of the page's actual (printed) size.
+  double zoomLevel() const;
+  /// View scale at which the page appears at its actual size.
+  qreal actualSizeZoom() const;
 
   // Rotation
   /**
@@ -589,6 +595,10 @@ protected:
   void dropEvent(QDropEvent *event) override;
 
 private:
+  /// The editing text/diagram item under @p viewPos, if any.
+  QGraphicsItem *openEditorAt(const QPoint &viewPos) const;
+  bool editorGesture_ = false; ///< mouse gesture inside an inline editor
+  int wheelZoomAccum_ = 0;     ///< Ctrl+wheel delta not yet zoomed
   // Document and overlay management
   std::unique_ptr<PdfDocument> document_;
   std::unique_ptr<PdfOverlayManager> overlayManager_;

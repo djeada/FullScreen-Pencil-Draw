@@ -111,6 +111,9 @@ public:
   QImage tile(const RasterTileKey &key) const { return tiles_.value(key); }
   /// Surface pixel bounds covered by allocated tiles.
   QRect boundingRect() const;
+  /// Tight bounds of the non-transparent pixels (scans every tile; meant
+  /// for occasional use such as export, not per-frame painting).
+  QRect opaqueBounds() const;
   std::size_t memoryBytes() const;
   QRgb pixel(const QPoint &p) const;
 
@@ -121,7 +124,9 @@ public:
   static QList<RasterTileKey> tilesFor(const QRect &area);
 
   /// Serialize as an array of {tx, ty, png(base64)} objects.
-  QJsonArray toJson() const;
+  /// @param ok Set to false when a tile cannot be encoded or the layer is
+  ///        too large to be reopened (see kMaxLoadedTiles).
+  QJsonArray toJson(bool *ok = nullptr) const;
   /// Replace the contents from toJson() output; validates tile sizes,
   /// coordinates and count. On failure the surface is left unchanged.
   bool fromJson(const QJsonArray &tiles, QString *error = nullptr);

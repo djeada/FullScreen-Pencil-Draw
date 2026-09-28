@@ -2,6 +2,7 @@
 #include "main_window.h"
 #include "../core/app_constants.h"
 #include "../core/auto_save_manager.h"
+#include "../core/file_dialogs.h"
 #include "../core/layer.h"
 #include "../core/recent_files_manager.h"
 #include "../core/theme_manager.h"
@@ -16,23 +17,28 @@
 #include <QApplication>
 #include <QCloseEvent>
 #include <QColorDialog>
+#include <QDialog>
 #include <QDialogButtonBox>
 #include <QDir>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
 #include <QFrame>
+#include <QIcon>
 #include <QInputDialog>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QPainter>
+#include <QPixmap>
+#include <QPushButton>
 #include <QSettings>
 #include <QShortcut>
 #include <QSpinBox>
 #include <QSplitter>
 #include <QStatusBar>
+#include <QTimer>
 #include <QToolBar>
 #include <QToolButton>
 #include <QVBoxLayout>
@@ -104,7 +110,7 @@ MainWindow::MainWindow(QWidget *parent)
   this->addDockWidget(Qt::RightDockWidgetArea, _elementBankPanel);
   installDockTitleBar(_toolPanel);
   installDockTitleBar(_elementBankPanel);
-  this->setWindowTitle("FullScreen Pencil Draw - Professional Edition");
+  updateWindowTitle();
   this->resize(1400, 900);
 
   setupMenuBar();
@@ -135,19 +141,22 @@ MainWindow::MainWindow(QWidget *parent)
 
   // Add global shortcut for Backspace delete (Delete key is owned by the
   // Edit-menu QAction; registering both creates ambiguous-shortcut warnings).
+#ifndef Q_OS_MACOS
+  // (On macOS QKeySequence::Delete already includes Backspace.)
   QShortcut *backspaceShortcut =
       new QShortcut(QKeySequence(Qt::Key_Backspace), this);
   connect(backspaceShortcut, &QShortcut::activated, this,
           &MainWindow::onEditDelete);
+#endif
 
   // Track dirty state so the exit confirmation only appears when work could
   // actually be lost.
   connect(_canvas, &Canvas::canvasModified, this,
-          [this]() { _documentDirty = true; });
+          [this]() { setDocumentDirty(true); });
   // Saving (or loading a document) makes the in-memory state match a file
   // again – otherwise the exit prompt would keep firing after a save.
   connect(_canvas, &Canvas::documentSaved, this, [this]() {
-    _documentDirty = false;
+    setDocumentDirty(false);
     // The document is safely on disk: a recovery copy would only produce a
     // stale "restore?" prompt on the next launch.
     if (_autoSaveManager)
@@ -160,19 +169,41 @@ MainWindow::MainWindow(QWidget *parent)
   // Another document replaced this one (the user already chose to save or
   // discard the old one): it gets a fresh recovery session.
   connect(_canvas, &Canvas::documentLoaded, this, [this]() {
-    _documentDirty = false;
+    setDocumentDirty(false);
     if (_autoSaveManager)
       _autoSaveManager->startNewDocument();
   });
   // Recovered work was never saved by the user; keep its snapshot until
   // they save or discard it.
   connect(_canvas, &Canvas::documentRecovered, this,
-          [this]() { _documentDirty = true; });
+          [this]() { setDocumentDirty(true); });
   connect(_canvas, &Canvas::saveFailed, this, [this](const QString &message) {
     statusBar()->showMessage(tr("Save failed: %1").arg(message), 8000);
   });
   // Opening a project replaces the drawing; give the user a chance to save.
   _canvas->setDiscardChangesHandler([this]() { return maybeSaveChanges(); });
+  // Every edit that lands in the history (delete, cut, fill, group, lock,
+  // layer operations, ...) modifies the document, whether or not the code
+  // path that recorded it also remembered to emit canvasModified.
+  _undoRedoManager->setPushListener(
+      [this](const void *owner) { markOwnerDirty(owner); });
+}
+
+void MainWindow::setDocumentDirty(bool dirty) {
+  _documentDirty = dirty;
+  updateWindowTitle();
+}
+
+void MainWindow::updateWindowTitle() {
+  const QString path = _canvas ? _canvas->currentFilePath() : QString();
+  const QString name =
+      path.isEmpty() ? tr("Untitled") : QFileInfo(path).fileName();
+  const QString mode = _pdfModeTitle ? tr("FullScreen Pencil Draw - PDF "
+                                          "Annotation Mode")
+                                     : tr("FullScreen Pencil Draw");
+  // "[*]" is replaced by Qt with the platform's modified marker.
+  setWindowTitle(QStringLiteral("%1[*] \u2014 %2").arg(name, mode));
+  setWindowModified(_documentDirty);
 }
 
 bool MainWindow::maybeSaveChanges() {
@@ -199,13 +230,22 @@ bool MainWindow::maybeSaveChanges() {
 
 bool MainWindow::maybeDiscardPdfAnnotations() {
 #ifdef HAVE_QT_PDF
+  // Text still being typed (or a path being drawn) only counts once
+  // committed; otherwise closing the PDF would drop it without asking.
+  if (_pdfViewer && _pdfViewer->hasPdf())
+    _pdfViewer->commitPendingEdits();
   if (!_pdfDirty || !_pdfViewer || !_pdfViewer->hasPdf())
     return true;
-  const QMessageBox::StandardButton response = QMessageBox::warning(
-      this, tr("Unsaved PDF Annotations"),
-      tr("The PDF annotations have not been exported. Export them now?"),
-      QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
-      QMessageBox::Save);
+  // Annotations are exported, not saved: label the buttons accordingly.
+  QMessageBox box(
+      QMessageBox::Warning, tr("Unsaved PDF Annotations"),
+      tr("The PDF annotations have not been exported. Export "
+         "them now?"),
+      QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel, this);
+  box.setDefaultButton(QMessageBox::Save);
+  box.button(QMessageBox::Save)->setText(tr("Export..."));
+  box.button(QMessageBox::Discard)->setText(tr("Discard Annotations"));
+  const auto response = static_cast<QMessageBox::StandardButton>(box.exec());
   if (response == QMessageBox::Cancel)
     return false;
   if (response == QMessageBox::Save) {
@@ -230,17 +270,16 @@ MainWindow::~MainWindow() {
   }
 #endif
   if (_undoRedoManager) {
+    _undoRedoManager->setPushListener(nullptr);
     _undoRedoManager->clear();
   }
 }
 
 void MainWindow::setupStatusBar() {
+  // A full shortcut list here was cut off at any normal window width; it
+  // lives in Help > Keyboard Shortcuts (F1) instead.
   _statusLabel = new QLabel(
-      "✦ Ready | P:Pen I:Highlight E:Object Eraser Shift+E:Pixel Eraser "
-      "T:Text F:Fill Q:ColorSelect "
-      "L:Line A:Arrow R:Rect C:Circle S/V:Select H:Pan M:Mermaid W:Wire "
-      "K:Color | Shift+B:Bezier Shift+T:TextOnPath (Enter finishes, Esc "
-      "cancels) | G:Grid B:Filled | Ctrl+Scroll:Zoom",
+      tr("\u2726 Ready  |  F1: keyboard shortcuts  |  Ctrl+Scroll: zoom"),
       this);
   _measurementLabel = new QLabel("", this);
   statusBar()->addWidget(_statusLabel);
@@ -391,10 +430,9 @@ void MainWindow::applyTheme() {
                   width: 20px;
                 }
                 QComboBox::down-arrow {
-                  image: none;
-                  border-left: 4px solid transparent;
-                  border-right: 4px solid transparent;
-                  border-top: 5px solid #d0c4b7;
+                  image: url(:/ui-icons/arrow_down_dark.png);
+                  width: 10px;
+                  height: 6px;
                   margin-right: 5px;
                 }
                 QComboBox QAbstractItemView {
@@ -419,10 +457,9 @@ void MainWindow::applyTheme() {
                   width: 20px;
                 }
                 QComboBox::down-arrow {
-                  image: none;
-                  border-left: 4px solid transparent;
-                  border-right: 4px solid transparent;
-                  border-top: 5px solid #7a6858;
+                  image: url(:/ui-icons/arrow_down_light.png);
+                  width: 10px;
+                  height: 6px;
                   margin-right: 5px;
                 }
                 QComboBox QAbstractItemView {
@@ -439,15 +476,15 @@ void MainWindow::applyTheme() {
                 QToolBar {
                   background-color: #10161d;
                   border-bottom: 1px solid rgba(255, 244, 230, 0.08);
-                  padding: 8px 10px;
-                  spacing: 6px;
+                  padding: 6px 8px;
+                  spacing: 4px;
                 }
                 QToolButton {
                   background-color: #17212b;
                   color: #fff7ed;
                   border: 1px solid rgba(255, 244, 230, 0.08);
                   border-radius: 12px;
-                  padding: 8px 12px;
+                  padding: 6px 8px;
                   min-width: 32px;
                   min-height: 32px;
                   font-size: 15px;
@@ -465,6 +502,18 @@ void MainWindow::applyTheme() {
                   color: #fffaf4;
                   border: 1px solid rgba(255, 244, 230, 0.22);
                 }
+                /* Qt reserves a narrow slot for the overflow ("more")
+                   button; the padded button style made it spill off the
+                   window edge. */
+                QToolButton#qt_toolbar_ext_button {
+                  min-width: 0px;
+                  min-height: 0px;
+                  padding: 2px;
+                  border-radius: 6px;
+                }
+                QToolButton#pdfModeButton {
+                  min-width: 118px;
+                }
                 QToolBar::separator {
                   background-color: rgba(249, 115, 22, 0.22);
                   width: 1px;
@@ -475,15 +524,15 @@ void MainWindow::applyTheme() {
                 QToolBar {
                   background-color: #f5efe6;
                   border-bottom: 1px solid #ddcfbc;
-                  padding: 8px 10px;
-                  spacing: 6px;
+                  padding: 6px 8px;
+                  spacing: 4px;
                 }
                 QToolButton {
                   background-color: #fff9f1;
                   color: #31261d;
                   border: 1px solid #ddcfbc;
                   border-radius: 12px;
-                  padding: 8px 12px;
+                  padding: 6px 8px;
                   min-width: 32px;
                   min-height: 32px;
                   font-size: 15px;
@@ -500,6 +549,18 @@ void MainWindow::applyTheme() {
                   background-color: #f97316;
                   color: #fffaf4;
                   border: 1px solid rgba(117, 59, 19, 0.15);
+                }
+                /* Qt reserves a narrow slot for the overflow ("more")
+                   button; the padded button style made it spill off the
+                   window edge. */
+                QToolButton#qt_toolbar_ext_button {
+                  min-width: 0px;
+                  min-height: 0px;
+                  padding: 2px;
+                  border-radius: 6px;
+                }
+                QToolButton#pdfModeButton {
+                  min-width: 118px;
                 }
                 QToolBar::separator {
                   background-color: rgba(234, 88, 12, 0.18);
@@ -649,13 +710,13 @@ void MainWindow::markOwnerDirty(const void *owner) {
   }
 #endif
   if (owner && owner == _canvas) {
-    _documentDirty = true;
+    setDocumentDirty(true);
     return;
   }
   if (_activeSurface == ActiveSurface::Pdf)
     _pdfDirty = true;
   else
-    _documentDirty = true;
+    setDocumentDirty(true);
 }
 
 void MainWindow::performUndo() {
@@ -875,6 +936,13 @@ void MainWindow::setupConnections() {
   // Filled shapes feedback
   connect(_canvas, &Canvas::filledShapesChanged, this,
           &MainWindow::onFilledShapesChanged);
+  // The grid can be toggled from the menu, the tool panel or the G key;
+  // keep every checkable control in step.
+  connect(_canvas, &Canvas::gridVisibilityChanged, this, [this](bool visible) {
+    _toolPanel->updateGridDisplay(visible);
+    if (_gridAction)
+      _gridAction->setChecked(visible);
+  });
 
   // Snap to grid feedback
   connect(_canvas, &Canvas::snapToGridChanged, this,
@@ -936,16 +1004,19 @@ void MainWindow::setupMenuBar() {
                SLOT(saveDocument()));
   createAction(fileMenu, "Save Project &As...", QKeySequence::SaveAs, _canvas,
                SLOT(saveProject()));
-  fileMenu->addAction("&Export (Image, SVG, PDF)...", _canvas,
-                      SLOT(saveToFile()));
+  createAction(fileMenu, "&Export (Image, SVG, PDF)...",
+               QKeySequence(Qt::CTRL | Qt::Key_E), _canvas, SLOT(saveToFile()));
   fileMenu->addAction("Export to &PDF...", _canvas, SLOT(exportToPDF()));
   fileMenu->addAction("Export Single &Element...", _canvas,
                       SLOT(exportSingleElementToPNG()));
 
 #ifdef HAVE_QT_PDF
-  fileMenu->addAction("Export &Annotated PDF...", this,
-                      SLOT(onExportAnnotatedPdf()));
-  fileMenu->addAction("&Close PDF", this, SLOT(onClosePdf()));
+  _exportAnnotatedPdfAction = fileMenu->addAction(
+      "Export &Annotated PDF...", this, SLOT(onExportAnnotatedPdf()));
+  _closePdfAction = fileMenu->addAction("&Close PDF", this, SLOT(onClosePdf()));
+  // Only meaningful while a PDF is open (see show/hidePdfPanel).
+  _exportAnnotatedPdfAction->setEnabled(false);
+  _closePdfAction->setEnabled(false);
 #endif
 
   fileMenu->addSeparator();
@@ -995,11 +1066,10 @@ void MainWindow::setupMenuBar() {
                SLOT(onZoomReset()));
   viewMenu->addSeparator();
 
-  QAction *gridAction =
-      createAction(viewMenu, "Toggle &Grid", QKeySequence(Qt::Key_G), _canvas,
-                   SLOT(toggleGrid()));
-  gridAction->setCheckable(true);
-  gridAction->setChecked(_canvas->isGridVisible());
+  _gridAction = createAction(viewMenu, "Toggle &Grid", QKeySequence(Qt::Key_G),
+                             _canvas, SLOT(toggleGrid()));
+  _gridAction->setCheckable(true);
+  _gridAction->setChecked(_canvas->isGridVisible());
 
   _snapToGridAction = createAction(viewMenu, "&Snap to Grid",
                                    QKeySequence(Qt::SHIFT | Qt::Key_G), _canvas,
@@ -1014,11 +1084,11 @@ void MainWindow::setupMenuBar() {
   _snapToObjectAction->setCheckable(true);
   _snapToObjectAction->setChecked(_canvas->isSnapToObjectEnabled());
 
-  QAction *filledAction =
+  _filledAction =
       createAction(viewMenu, "Toggle &Filled Shapes", QKeySequence(Qt::Key_B),
                    _canvas, SLOT(toggleFilledShapes()));
-  filledAction->setCheckable(true);
-  filledAction->setChecked(_canvas->isFilledShapes());
+  _filledAction->setCheckable(true);
+  _filledAction->setChecked(_canvas->isFilledShapes());
 
   viewMenu->addSeparator();
 
@@ -1076,8 +1146,9 @@ void MainWindow::setupMenuBar() {
 
   // Edit menu - scaling (elements)
   editMenu->addSeparator();
+  // Ctrl+Shift+S is Save As on every platform, so resizing uses Ctrl+Alt+S.
   createAction(editMenu, "Resize Selected &Elements...",
-               QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_S), _canvas,
+               QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_S), _canvas,
                SLOT(scaleSelectedItems()));
   createAction(editMenu, "Resize Active &Layer...",
                QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_R), _canvas,
@@ -1097,18 +1168,22 @@ void MainWindow::setupMenuBar() {
 
   // Edit menu - canvas resize
   editMenu->addSeparator();
-  editMenu->addAction("Resize &Canvas...", _canvas, SLOT(resizeCanvas()));
+  createAction(editMenu, "Resize &Canvas...",
+               QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_C), _canvas,
+               SLOT(resizeCanvas()));
 
   // Layer menu: vector and raster layers live side by side.
   QMenu *layerMenu = menuBar->addMenu(tr("&Layer"));
-  layerMenu->addAction(tr("New &Vector Layer"), this, [this]() {
-    if (LayerManager *layers = _canvas->layerManager()) {
-      layers->createLayer(tr("Layer %1").arg(layers->layerCount() + 1));
-      layers->setActiveLayer(layers->layerCount() - 1);
-      if (_layerPanel)
-        _layerPanel->refreshLayerList();
-    }
-  });
+  QAction *newVectorLayer =
+      layerMenu->addAction(tr("New &Vector Layer"), this, [this]() {
+        if (LayerManager *layers = _canvas->layerManager()) {
+          layers->createLayer(tr("Layer %1").arg(layers->layerCount() + 1));
+          layers->setActiveLayer(layers->layerCount() - 1);
+          if (_layerPanel)
+            _layerPanel->refreshLayerList();
+        }
+      });
+  newVectorLayer->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_N));
   layerMenu->addAction(tr("New &Raster (Pixel) Layer"), this, [this]() {
     if (_layerPanel)
       _layerPanel->onAddRasterLayer();
@@ -1116,6 +1191,22 @@ void MainWindow::setupMenuBar() {
 
   // Tools menu
   QMenu *toolsMenu = menuBar->addMenu("&Tools");
+
+  // The two erasers do different things and must both be discoverable. The
+  // "\t" text only displays the key: E / Shift+E are handled in
+  // keyPressEvent so they never steal letters from text editing.
+  QMenu *eraserMenu = toolsMenu->addMenu(tr("&Erasers"));
+  QAction *objectEraserAction =
+      eraserMenu->addAction(tr("&Object Eraser (delete whole objects)\tE"),
+                            _toolPanel, &ToolPanel::onActionEraser);
+  objectEraserAction->setStatusTip(
+      tr("Delete every editable object the eraser touches"));
+  QAction *pixelEraserAction =
+      eraserMenu->addAction(tr("&Pixel Eraser (erase raster pixels)\tShift+E"),
+                            _toolPanel, &ToolPanel::onActionPixelEraser);
+  pixelEraserAction->setStatusTip(
+      tr("Make pixels of raster layers, images and brush strokes transparent"));
+  toolsMenu->addSeparator();
 
   _autoSaveAction = toolsMenu->addAction("Enable &Auto-Save");
   connect(_autoSaveAction, &QAction::triggered, this, [this]() {
@@ -1125,7 +1216,21 @@ void MainWindow::setupMenuBar() {
     }
   });
   _autoSaveAction->setCheckable(true);
-  _autoSaveAction->setChecked(true); // Enabled by default
+  _autoSaveAction->setChecked(true); // synced in setupAutoSave()
+  toolsMenu->addAction(tr("Auto-Save &Interval..."), this, [this]() {
+    if (!_autoSaveManager)
+      return;
+    bool ok = false;
+    const int minutes = QInputDialog::getInt(
+        this, tr("Auto-Save Interval"),
+        tr("Save a recovery copy of unsaved work every (minutes):"),
+        _autoSaveManager->intervalMinutes(), 1, 60, 1, &ok);
+    if (ok) {
+      _autoSaveManager->setIntervalMinutes(minutes);
+      statusBar()->showMessage(
+          tr("Auto-save every %n minute(s)", nullptr, minutes), 3000);
+    }
+  });
 
   toolsMenu->addAction(tr("&History Settings..."), this,
                        &MainWindow::onHistorySettings);
@@ -1175,16 +1280,56 @@ void MainWindow::setupMenuBar() {
 
   // Filters menu
   QMenu *filtersMenu = menuBar->addMenu("F&ilters");
-  filtersMenu->addAction("&Blur", _canvas, SLOT(applyBlurToSelection()));
-  filtersMenu->addAction("&Sharpen", _canvas, SLOT(applySharpenToSelection()));
-  filtersMenu->addAction("Scan &Document", _canvas,
+  filtersMenu->addAction("&Blur...", _canvas, SLOT(applyBlurToSelection()));
+  filtersMenu->addAction("&Sharpen...", _canvas,
+                         SLOT(applySharpenToSelection()));
+  filtersMenu->addAction("Scan &Document...", _canvas,
                          SLOT(applyScanDocumentToSelection()));
-  filtersMenu->addAction("Color Curves / &Levels", _canvas,
+  filtersMenu->addAction("Color Curves / &Levels...", _canvas,
                          SLOT(applyColorCurvesToSelection()));
 
   // Help menu
   QMenu *helpMenu = menuBar->addMenu("&Help");
 
+  QAction *shortcutsAction =
+      helpMenu->addAction(tr("&Keyboard Shortcuts"), this, [this]() {
+        QMessageBox box(this);
+        box.setWindowTitle(tr("Keyboard Shortcuts"));
+        box.setTextFormat(Qt::RichText);
+        box.setText(tr(
+            "<table cellspacing='4'>"
+            "<tr><td colspan='2'><b>Tools</b></td></tr>"
+            "<tr><td>P / I</td><td>Pen / Highlighter</td></tr>"
+            "<tr><td>E / Shift+E</td><td>Object Eraser / Pixel Eraser</td></tr>"
+            "<tr><td>T / Shift+T</td><td>Text / Text on Path</td></tr>"
+            "<tr><td>M</td><td>Mermaid diagram</td></tr>"
+            "<tr><td>F / Q</td><td>Fill / Select by Color</td></tr>"
+            "<tr><td>L / A / Shift+A</td><td>Line / Arrow / Curved "
+            "Arrow</td></tr>"
+            "<tr><td>R / C</td><td>Rectangle / Circle</td></tr>"
+            "<tr><td>Shift+B / W</td><td>Bezier / Wire</td></tr>"
+            "<tr><td>S or V / Shift+S</td><td>Select / Lasso</td></tr>"
+            "<tr><td>H / K</td><td>Pan / Color</td></tr>"
+            "<tr><td>[ / ]</td><td>Brush size</td></tr>"
+            "<tr><td>Enter / Esc</td><td>Finish / cancel a path</td></tr>"
+            "<tr><td colspan='2'><b>View</b></td></tr>"
+            "<tr><td>G / Shift+G</td><td>Grid / Snap to grid</td></tr>"
+            "<tr><td>B</td><td>Filled shapes</td></tr>"
+            "<tr><td>Ctrl+Scroll, + / - / 0</td><td>Zoom</td></tr>"
+            "<tr><td colspan='2'><b>Edit and file</b></td></tr>"
+            "<tr><td>Ctrl+Z / Ctrl+Y</td><td>Undo / Redo</td></tr>"
+            "<tr><td>Ctrl+C / X / V / D</td><td>Copy / Cut / Paste / "
+            "Duplicate</td></tr>"
+            "<tr><td>Ctrl+G / Ctrl+Shift+U</td><td>Group / Ungroup</td></tr>"
+            "<tr><td>Ctrl+L / Ctrl+Shift+L</td><td>Lock / Unlock all</td></tr>"
+            "<tr><td>Ctrl+S / Ctrl+Shift+S</td><td>Save / Save As</td></tr>"
+            "<tr><td>Ctrl+E</td><td>Export</td></tr>"
+            "<tr><td>Ctrl+Shift+N</td><td>New layer</td></tr>"
+            "</table>"));
+        box.exec();
+      });
+  shortcutsAction->setShortcut(QKeySequence(Qt::Key_F1));
+  helpMenu->addSeparator();
   helpMenu->addAction("&About", this, [this]() {
     QMessageBox::about(
         this, "About FullScreen Pencil Draw",
@@ -1308,6 +1453,8 @@ void MainWindow::onOpacityChanged(int opacity) {
 }
 void MainWindow::onFilledShapesChanged(bool filled) {
   _toolPanel->updateFilledShapesDisplay(filled);
+  if (_filledAction)
+    _filledAction->setChecked(filled);
 }
 void MainWindow::onCursorPositionChanged(const QPointF &pos) {
   _toolPanel->updatePositionDisplay(pos);
@@ -1348,6 +1495,9 @@ void MainWindow::onMeasurementUpdated(const QString &measurement) {
 
 void MainWindow::setupAutoSave() {
   _autoSaveManager = new AutoSaveManager(_canvas, this);
+  // The menu is built first; show the saved setting, not "on" regardless.
+  if (_autoSaveAction)
+    _autoSaveAction->setChecked(_autoSaveManager->isEnabled());
 
   connect(_autoSaveManager, &AutoSaveManager::autoSavePerformed, this,
           &MainWindow::onAutoSavePerformed);
@@ -1367,7 +1517,7 @@ void MainWindow::setupAutoSave() {
   // Offer work left behind by sessions that did not close normally.
   if (_autoSaveManager->restoreAutoSave()) {
     // The recovered work was never saved by the user.
-    _documentDirty = true;
+    setDocumentDirty(true);
   }
 
   // Update the menu action state
@@ -1444,21 +1594,62 @@ void MainWindow::onAutoSavePerformed(const QString &path) {
 void MainWindow::onNewCanvas() {
   if (!maybeSaveChanges())
     return;
-  bool ok;
-  int width = QInputDialog::getInt(this, "New Canvas", "Width:", 1920, 100,
-                                   10000, 100, &ok);
-  if (!ok)
-    return;
-  int height = QInputDialog::getInt(this, "New Canvas", "Height:", 1080, 100,
-                                    10000, 100, &ok);
-  if (!ok)
-    return;
-  QColor bgColor = QColorDialog::getColor(Qt::black, this, "Background Color");
+  // One dialog for size and background (it used to be three prompts in a
+  // row); remembers the last choice.
+  QSettings settings(AppConstants::OrganizationName,
+                     AppConstants::ApplicationName);
+  QDialog dialog(this);
+  dialog.setWindowTitle(tr("New Canvas"));
+  auto *widthBox = new QSpinBox(&dialog);
+  auto *heightBox = new QSpinBox(&dialog);
+  for (QSpinBox *box : {widthBox, heightBox}) {
+    box->setRange(1, 20000); // same order as Resize Canvas, bounded memory
+    box->setSingleStep(100);
+    box->setSuffix(tr(" px"));
+  }
+  widthBox->setValue(settings.value("newCanvas/width", 1920).toInt());
+  heightBox->setValue(settings.value("newCanvas/height", 1080).toInt());
+  QColor bgColor(settings
+                     .value("newCanvas/background",
+                            _canvas->backgroundColor().name(QColor::HexArgb))
+                     .toString());
   if (!bgColor.isValid())
+    bgColor = _canvas->backgroundColor();
+  auto *colorButton = new QPushButton(&dialog);
+  auto showColor = [colorButton](const QColor &c) {
+    QPixmap swatch(28, 16);
+    swatch.fill(c);
+    colorButton->setIcon(QIcon(swatch));
+    colorButton->setText(c.name(QColor::HexRgb).toUpper());
+  };
+  showColor(bgColor);
+  connect(colorButton, &QPushButton::clicked, &dialog, [&]() {
+    const QColor chosen =
+        QColorDialog::getColor(bgColor, &dialog, tr("Background Color"));
+    if (chosen.isValid()) {
+      bgColor = chosen;
+      showColor(bgColor);
+    }
+  });
+  auto *form = new QFormLayout;
+  form->addRow(tr("Width:"), widthBox);
+  form->addRow(tr("Height:"), heightBox);
+  form->addRow(tr("Background:"), colorButton);
+  auto *buttons = new QDialogButtonBox(
+      QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+  connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+  connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+  auto *layout = new QVBoxLayout(&dialog);
+  layout->addLayout(form);
+  layout->addWidget(buttons);
+  if (dialog.exec() != QDialog::Accepted)
     return;
-  _canvas->newCanvas(width, height, bgColor);
+  settings.setValue("newCanvas/width", widthBox->value());
+  settings.setValue("newCanvas/height", heightBox->value());
+  settings.setValue("newCanvas/background", bgColor.name(QColor::HexArgb));
+  _canvas->newCanvas(widthBox->value(), heightBox->value(), bgColor);
   // A brand new empty canvas holds nothing worth warning about on exit.
-  _documentDirty = false;
+  setDocumentDirty(false);
   if (_autoSaveManager)
     _autoSaveManager->startNewDocument();
   // Refresh layer panel after new canvas
@@ -1478,6 +1669,23 @@ void MainWindow::closeEvent(QCloseEvent *event) {
     _autoSaveManager->clearAutoSave();
   event->accept();
   QMainWindow::closeEvent(event);
+}
+
+void MainWindow::showEvent(QShowEvent *event) {
+  QMainWindow::showEvent(event);
+  if (_docksSized)
+    return;
+  _docksSized = true;
+  // By default the element library got a single row of cards while the
+  // layer list below it stood mostly empty; give the library room for a
+  // few rows. Done on the first show (not from the constructor): dock sizes
+  // only apply once the window is laid out, which is later when a recovery
+  // prompt is shown first.
+  QTimer::singleShot(0, this, [this]() {
+    if (_elementBankPanel && _layerPanel && _elementBankPanel->isVisible() &&
+        _layerPanel->isVisible())
+      resizeDocks({_elementBankPanel, _layerPanel}, {340, 560}, Qt::Vertical);
+  });
 }
 
 void MainWindow::keyPressEvent(QKeyEvent *event) {
@@ -1575,8 +1783,10 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
     _toolPanel->onActionColorSelect();
   } else if (event->key() == Qt::Key_L && !ctrl) {
     _toolPanel->onActionLine();
-  } else if (event->key() == Qt::Key_A &&
-             !(event->modifiers() & Qt::ControlModifier)) {
+  } else if (event->key() == Qt::Key_A && !ctrl &&
+             (event->modifiers() & Qt::ShiftModifier)) {
+    _toolPanel->onActionCurvedArrow();
+  } else if (event->key() == Qt::Key_A && !ctrl) {
     _toolPanel->onActionArrow();
   } else if (event->key() == Qt::Key_R && !ctrl) {
     _toolPanel->onActionRectangle();
@@ -1864,10 +2074,9 @@ void MainWindow::setupPdfToolBar() {
       width: 20px;
     }
     QComboBox::down-arrow {
-      image: none;
-      border-left: 4px solid transparent;
-      border-right: 4px solid transparent;
-      border-top: 5px solid #a0a0a8;
+      image: url(:/ui-icons/arrow_down_dark.png);
+      width: 10px;
+      height: 6px;
       margin-right: 5px;
     }
     QComboBox QAbstractItemView {
@@ -1960,10 +2169,22 @@ void MainWindow::setupPdfToolBar() {
   _pdfModeAction->setToolTip("Toggle View/Annotate mode");
   _pdfModeAction->setCheckable(true);
   _pdfModeAction->setChecked(true);
+  // The mode switch is the most important control on this bar: put it
+  // first (after the page-list toggle) so a narrow window pushes the
+  // rarely used buttons into the overflow menu, not this one.
+  if (_pdfToolBar->actions().size() > 1) {
+    QAction *first = _pdfToolBar->actions().at(1);
+    _pdfToolBar->removeAction(_pdfModeAction);
+    _pdfToolBar->insertAction(first, _pdfModeAction);
+  }
   // Show label beside icon for this button.
   if (auto *btn = qobject_cast<QToolButton *>(
-          _pdfToolBar->widgetForAction(_pdfModeAction)))
+          _pdfToolBar->widgetForAction(_pdfModeAction))) {
     btn->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    // The style sheet's min-width would override setMinimumWidth(); name
+    // the button so the sheet can give its label room ("An...te").
+    btn->setObjectName(QStringLiteral("pdfModeButton"));
+  }
 
   // Connect mode change to update button
   connect(_pdfViewer, &PdfViewer::modeChanged, this,
@@ -2053,7 +2274,12 @@ void MainWindow::showPdfPanel() {
   }
 
   _pdfToolBar->show();
-  setWindowTitle("FullScreen Pencil Draw - PDF Annotation Mode");
+  _pdfModeTitle = true;
+  updateWindowTitle();
+  if (_exportAnnotatedPdfAction)
+    _exportAnnotatedPdfAction->setEnabled(true);
+  if (_closePdfAction)
+    _closePdfAction->setEnabled(true);
 }
 
 void MainWindow::hidePdfPanel() {
@@ -2063,12 +2289,17 @@ void MainWindow::hidePdfPanel() {
     _centralSplitter->setSizes({1, 0});
   }
   _pdfToolBar->hide();
-  setWindowTitle("FullScreen Pencil Draw - Professional Edition");
+  _pdfModeTitle = false;
+  updateWindowTitle();
+  if (_exportAnnotatedPdfAction)
+    _exportAnnotatedPdfAction->setEnabled(false);
+  if (_closePdfAction)
+    _closePdfAction->setEnabled(false);
 }
 
 void MainWindow::onOpenPdf() {
-  QString fileName = QFileDialog::getOpenFileName(
-      this, "Open PDF File", "", "PDF Files (*.pdf);;All Files (*)");
+  QString fileName = FileDialogs::getOpen(this, "Open PDF File", "",
+                                          "PDF Files (*.pdf);;All Files (*)");
   if (fileName.isEmpty()) {
     return;
   }
@@ -2137,9 +2368,10 @@ void MainWindow::onExportAnnotatedPdf() {
     statusBar()->showMessage("No PDF loaded to export", 3000);
     return;
   }
+  _pdfViewer->commitPendingEdits(); // include what is still being typed
 
-  QString fileName = QFileDialog::getSaveFileName(this, "Export Annotated PDF",
-                                                  "", "PDF Files (*.pdf)");
+  QString fileName = FileDialogs::getSave(this, "Export Annotated PDF", "",
+                                          "PDF Files (*.pdf)");
   if (fileName.isEmpty()) {
     return;
   }

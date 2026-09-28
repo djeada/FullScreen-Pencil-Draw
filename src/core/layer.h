@@ -299,6 +299,24 @@ private:
  * The LayerManager provides centralized control over all layers,
  * including creation, deletion, reordering, and selection.
  */
+/// Everything about one layer except its items' own content, for undoing
+/// structural edits (merge, flatten) that only move items between layers.
+struct LayerState {
+  QUuid id;
+  QString name;
+  Layer::Type type = Layer::Type::Vector;
+  bool visible = true;
+  bool locked = false;
+  qreal opacity = 1.0;
+  Layer::BlendMode blendMode = Layer::BlendMode::Normal;
+  QList<ItemId> itemIds;
+};
+
+struct LayerStackState {
+  QList<LayerState> layers; ///< bottom to top
+  int activeIndex = 0;
+};
+
 class LayerManager : public QObject {
   Q_OBJECT
 
@@ -501,6 +519,17 @@ public:
    * @brief Clear all layers
    */
   void clear();
+
+  /// Announce that @p layer's name, visibility, lock, opacity or blend mode
+  /// was changed from outside (Layer itself is not a QObject).
+  void notifyLayerChanged(Layer *layer) { emit layerChanged(layer); }
+
+  /// Snapshot of the layer stack (see LayerState).
+  LayerStackState captureState() const;
+  /// Rebuild the layer stack from @p state: layers are reused by id,
+  /// recreated or removed, and every item goes back to its layer and
+  /// position. Items themselves are not created or deleted.
+  void restoreState(const LayerStackState &state);
 
 signals:
   /**

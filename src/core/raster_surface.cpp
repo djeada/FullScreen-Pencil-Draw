@@ -4,7 +4,9 @@
  */
 #include "raster_surface.h"
 #include <QBuffer>
+#include <QImageReader>
 #include <QJsonObject>
+#include <QPaintEngine>
 #include <QPainter>
 #include <QRadialGradient>
 #include <QtMath>
@@ -183,6 +185,27 @@ void RasterSurface::render(QPainter *painter, const QRectF &exposed) const {
   const QRect area = exposed.isNull()
                          ? boundingRect()
                          : exposed.toAlignedRect().adjusted(-1, -1, 1, 1);
+  // Vector exports (PDF / SVG) would embed one image per tile, and viewers
+  // scale adjacent images independently, leaving hairline seams: embed one
+  // image of the painted area instead.
+  const QPaintEngine *engine = painter->paintEngine();
+  if (engine && (engine->type() == QPaintEngine::SVG ||
+                 engine->type() == QPaintEngine::Pdf ||
+                 engine->type() == QPaintEngine::Picture)) {
+    QPoint origin;
+    const QImage composite = toImage(&origin);
+    if (!composite.isNull())
+      painter->drawImage(origin, composite);
+    return;
+  }
+  // Zoomed in, smooth scaling blends each tile's edge with the transparent
+  // outside and shows the tile grid; pixel art should look like pixels.
+  const QTransform &t = painter->worldTransform();
+  const bool magnified =
+      qMax(qAbs(t.m11()) + qAbs(t.m21()), qAbs(t.m12()) + qAbs(t.m22())) > 1.0;
+  const bool smooth = painter->testRenderHint(QPainter::SmoothPixmapTransform);
+  if (magnified && smooth)
+    painter->setRenderHint(QPainter::SmoothPixmapTransform, false);
   // Iterate the smaller set: allocated tiles or tiles in the exposed area.
   const QList<RasterTileKey> candidates = tilesFor(area);
   if (candidates.size() < tiles_.size()) {
@@ -198,6 +221,8 @@ void RasterSurface::render(QPainter *painter, const QRectF &exposed) const {
         painter->drawImage(tr.topLeft(), it.value());
     }
   }
+  if (magnified && smooth)
+    painter->setRenderHint(QPainter::SmoothPixmapTransform, true);
 }
 
 void RasterSurface::setImage(const QImage &image, const QPoint &offset) {
@@ -241,6 +266,29 @@ QRect RasterSurface::boundingRect() const {
   return bounds;
 }
 
+QRect RasterSurface::opaqueBounds() const {
+  QRect bounds;
+  for (auto it = tiles_.constBegin(); it != tiles_.constEnd(); ++it) {
+    const QImage &tile = it.value();
+    int minX = kTileSize, minY = kTileSize, maxX = -1, maxY = -1;
+    for (int y = 0; y < tile.height(); ++y) {
+      const auto *row = reinterpret_cast<const QRgb *>(tile.constScanLine(y));
+      for (int x = 0; x < tile.width(); ++x) {
+        if (qAlpha(row[x]) == 0)
+          continue;
+        minX = qMin(minX, x);
+        maxX = qMax(maxX, x);
+        minY = qMin(minY, y);
+        maxY = qMax(maxY, y);
+      }
+    }
+    if (maxX >= 0)
+      bounds = bounds.united(QRect(QPoint(minX, minY), QPoint(maxX, maxY))
+                                 .translated(tileRect(it.key()).topLeft()));
+  }
+  return bounds;
+}
+
 std::size_t RasterSurface::memoryBytes() const {
   std::size_t bytes = 0;
   for (const QImage &tile : tiles_)
@@ -258,8 +306,17 @@ QRgb RasterSurface::pixel(const QPoint &p) const {
   return it.value().pixel(local);
 }
 
-QJsonArray RasterSurface::toJson() const {
+QJsonArray RasterSurface::toJson(bool *ok) const {
+  if (ok)
+    *ok = true;
   QJsonArray array;
+  // A layer fromJson() would refuse must not be written: the file would
+  // save "successfully" and then fail to reopen.
+  if (static_cast<std::size_t>(tiles_.size()) > kMaxLoadedTiles) {
+    if (ok)
+      *ok = false;
+    return array;
+  }
   // Stable order keeps saved files diffable and deterministic.
   QList<RasterTileKey> keys = tiles_.keys();
   std::sort(keys.begin(), keys.end(),
@@ -270,7 +327,11 @@ QJsonArray RasterSurface::toJson() const {
     QByteArray ba;
     QBuffer buf(&ba);
     buf.open(QIODevice::WriteOnly);
-    tiles_.value(key).save(&buf, "PNG");
+    if (!tiles_.value(key).save(&buf, "PNG")) {
+      if (ok)
+        *ok = false;
+      return QJsonArray();
+    }
     QJsonObject tile;
     tile["tx"] = key.x();
     tile["ty"] = key.y();
@@ -297,9 +358,19 @@ bool RasterSurface::fromJson(const QJsonArray &array, QString *error) {
     const int ty = obj["ty"].toInt(INT_MIN);
     if (tx < -kMaxTile || tx > kMaxTile || ty < -kMaxTile || ty > kMaxTile)
       return fail(QStringLiteral("raster tile coordinates out of range"));
+    // Check the header before decoding so a hostile file cannot make us
+    // allocate a huge image for one "tile".
+    QByteArray png = QByteArray::fromBase64(obj["png"].toString().toLatin1());
+    QBuffer pngBuffer(&png);
+    QImageReader reader(&pngBuffer, "PNG");
+    if (reader.size() != QSize(kTileSize, kTileSize))
+      return fail(QStringLiteral("raster tile (%1, %2) is not a valid %3x%3 "
+                                 "PNG")
+                      .arg(tx)
+                      .arg(ty)
+                      .arg(kTileSize));
     QImage image;
-    if (!image.loadFromData(
-            QByteArray::fromBase64(obj["png"].toString().toLatin1()), "PNG"))
+    if (!reader.read(&image))
       return fail(QStringLiteral("raster tile (%1, %2) is not a valid PNG")
                       .arg(tx)
                       .arg(ty));

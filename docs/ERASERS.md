@@ -30,16 +30,19 @@ Removes **pixels** from raster content on the **active layer** only:
 
 It never deletes the image, stroke or layer and never changes vector
 objects. If the active layer holds only vector objects, the status bar
-explains this instead of deleting or rasterizing anything. A hidden or
+explains this (once per stroke) instead of deleting or rasterizing
+anything. A hidden or
 locked active layer is left alone.
 
 - **Size**: the eraser size (`[` / `]`).
 - **Strength**: Tools → Pixel Eraser Strength (how much alpha one pass
-  removes).
+  removes). A single stroke removes that much once, however slowly you
+  drag; go over an area again with a new stroke to erase more.
 - **Hardness**: Tools → Pixel Eraser Hardness (100 = hard edge, lower =
   soft falloff).
 - **Selection clipping**: with a colour selection active on an image, only
-  selected pixels are erased.
+  selected pixels are erased. (Raster layers are not clipped by selections
+  yet.)
 - Fast strokes are erased along the whole path, without gaps.
 - One drag is one undo step. On raster layers the undo step stores only the
   256×256 tiles the drag touched, not the whole layer.

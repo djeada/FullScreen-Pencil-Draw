@@ -5,9 +5,13 @@
  */
 #include "element_bank_panel.h"
 #include "../core/theme_manager.h"
+#include "element_factory.h"
+#include <QApplication>
+#include <QDrag>
 #include <QEnterEvent>
 #include <QGridLayout>
 #include <QIcon>
+#include <QMimeData>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
@@ -241,6 +245,8 @@ void ElementCard::leaveEvent(QEvent *) {
 
 void ElementCard::mousePressEvent(QMouseEvent *e) {
   if (e->button() == Qt::LeftButton) {
+    dragStartPos_ = e->pos();
+    dragArmed_ = true;
     pressed_ = true;
     pressAnim_.stop();
     pressAnim_.setStartValue(pressProgress_);
@@ -249,7 +255,37 @@ void ElementCard::mousePressEvent(QMouseEvent *e) {
   }
 }
 
+void ElementCard::mouseMoveEvent(QMouseEvent *e) {
+  // Dragging a card onto the canvas places the element where it is
+  // dropped (a click still places it in the middle of the view).
+  if (!dragArmed_ || !(e->buttons() & Qt::LeftButton) ||
+      (e->pos() - dragStartPos_).manhattanLength() <
+          QApplication::startDragDistance()) {
+    QWidget::mouseMoveEvent(e);
+    return;
+  }
+  dragArmed_ = false;
+  pressed_ = false;
+  auto *mime = new QMimeData();
+  mime->setData(kElementMimeType, info_.id.toUtf8());
+  auto *drag = new QDrag(this);
+  drag->setMimeData(mime);
+  drag->setPixmap(grab());
+  drag->setHotSpot(e->pos());
+  drag->exec(Qt::CopyAction);
+  // The drag swallowed the release/leave events: settle the pressed and
+  // hover highlights, or the card stays tinted.
+  for (QVariantAnimation *anim : {&pressAnim_, &hoverAnim_}) {
+    anim->stop();
+    anim->setStartValue(anim == &pressAnim_ ? pressProgress_ : hoverProgress_);
+    anim->setEndValue(anim == &hoverAnim_ && underMouse() ? 1.0 : 0.0);
+    anim->start();
+  }
+  update();
+}
+
 void ElementCard::mouseReleaseEvent(QMouseEvent *e) {
+  dragArmed_ = false;
   if (pressed_ && e->button() == Qt::LeftButton) {
     pressed_ = false;
     pressAnim_.stop();
@@ -279,6 +315,10 @@ CategorySection::CategorySection(const QString &title,
   auto *headerSpacer = new QWidget(this);
   headerSpacer->setFixedHeight(kCategoryHeaderHeight);
   headerSpacer->setAttribute(Qt::WA_TransparentForMouseEvents);
+  // The panel style sheet gives every QWidget an opaque background, which
+  // painted this spacer over the header (title and chevron) we draw
+  // ourselves - the category headers were invisible.
+  headerSpacer->setStyleSheet(QStringLiteral("background: transparent;"));
   vbox->addWidget(headerSpacer);
 
   // Card container
@@ -307,7 +347,7 @@ void CategorySection::setCollapsed(bool collapsed) {
 
   chevronAnim_.stop();
   chevronAnim_.setStartValue(chevronAngle_);
-  chevronAnim_.setEndValue(collapsed_ ? 90.0 : 0.0);
+  chevronAnim_.setEndValue(collapsed_ ? -90.0 : 0.0);
   chevronAnim_.start();
 }
 

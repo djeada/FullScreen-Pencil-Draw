@@ -37,6 +37,7 @@ public:
 protected:
   void closeEvent(QCloseEvent *event) override;
   void keyPressEvent(QKeyEvent *event) override;
+  void showEvent(QShowEvent *event) override;
 
 private slots:
   void onHistorySettings();
@@ -100,8 +101,18 @@ private:
   QAction *_snapToObjectAction;
   QAction *_autoSaveAction;
   QAction *_rulerAction;
+  QAction *_gridAction = nullptr;
+  QAction *_exportAnnotatedPdfAction = nullptr;
+  QAction *_closePdfAction = nullptr;
+  QAction *_filledAction = nullptr;
   QAction *_measurementAction;
   bool _documentDirty = false;
+  bool _pdfModeTitle = false;
+  bool _docksSized = false; ///< initial dock split applied (showEvent)
+  /// Set the drawing's dirty state and refresh the window title.
+  void setDocumentDirty(bool dirty);
+  /// Title shows the document name, a modified marker and the mode.
+  void updateWindowTitle();
   void applyHistorySettings();
   bool _pdfDirty = false; ///< PDF annotations not yet exported
   std::unique_ptr<UndoRedoManager> _undoRedoManager;

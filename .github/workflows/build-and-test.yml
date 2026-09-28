@@ -137,6 +137,24 @@ jobs:
           ctest --test-dir build -C Release --output-on-failure --timeout 300 \
             --output-junit ctest-results.xml
 
+      # On Windows the QtTest report never reaches CTest's captured output,
+      # so a failing suite showed no failing function. Re-run the suites
+      # writing the report to a file and print the failures.
+      - name: Show Qt test failures (Windows)
+        if: failure() && runner.os == 'Windows'
+        shell: bash
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          for exe in build/tests/Release/test_*.exe; do
+            report="${exe%.exe}-report.txt"
+            if ! "$exe" -o "$report,txt" > /dev/null 2>&1; then
+              echo "=== $exe"
+              grep -E "FAIL!|Loc:|Actual|Expected|Totals" "$report" \
+                || tail -n 40 "$report" || true
+            fi
+          done
+
       - name: Upload test logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -145,4 +163,5 @@ jobs:
           path: |
             build/ctest-results.xml
             build/Testing/Temporary/LastTest.log
+            build/tests/Release/*-report.txt
           if-no-files-found: ignore

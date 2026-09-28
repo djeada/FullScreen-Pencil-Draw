@@ -57,9 +57,12 @@ protected:
   void leaveEvent(QEvent *event) override;
   void mousePressEvent(QMouseEvent *event) override;
   void mouseReleaseEvent(QMouseEvent *event) override;
+  void mouseMoveEvent(QMouseEvent *event) override;
 
 private:
   void rebuildIconPixmap();
+  QPoint dragStartPos_;
+  bool dragArmed_ = false; ///< left button went down on this card
 
   ElementInfo info_;
   QIcon icon_;
@@ -109,7 +112,7 @@ private:
   QWidget *cardContainer_;
   QGridLayout *cardGrid_;
   QVariantAnimation chevronAnim_;
-  qreal chevronAngle_ = 0.0; ///< 0 = expanded (▼), 90 = collapsed (▶)
+  qreal chevronAngle_ = 0.0; ///< 0 = expanded (▼), -90 = collapsed (▶)
 };
 
 // ---------------------------------------------------------------------------

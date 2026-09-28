@@ -3,15 +3,26 @@
  * @brief Interaction tests for Canvas selection and dragging.
  */
 #include "../src/core/auto_save_manager.h"
+#include "../src/core/document_exporter.h"
 #include "../src/core/fill_utils.h"
 #include "../src/core/item_store.h"
 #include "../src/core/project_serializer.h"
 #include "../src/core/raster_surface.h"
+#include "../src/core/recovery_store.h"
 #include "../src/widgets/canvas.h"
+#include "../src/widgets/electronics_elements.h"
+#include "../src/widgets/element_factory.h"
 #include "../src/widgets/latex_text_item.h"
 #include "../src/widgets/layer_panel.h"
+#ifdef HAVE_QT_PDF
+#include "../src/tools/tool_manager.h"
+#include "../src/widgets/pdf_viewer.h"
+#include <QPdfWriter>
+#endif
 #include "../src/widgets/raster_layer_item.h"
+#include "../src/widgets/text_on_path_item.h"
 #include "../src/widgets/transform_handle_item.h"
+#include "../src/widgets/wire_item.h"
 #include "../src/windows/main_window.h"
 #include <QApplication>
 #include <QGraphicsEllipseItem>
@@ -19,11 +30,14 @@
 #include <QGraphicsPixmapItem>
 #include <QGraphicsProxyWidget>
 #include <QGraphicsRectItem>
+#include <QMessageBox>
+#include <QPushButton>
 #include <QScrollArea>
 #include <QSignalSpy>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QTimer>
 
 namespace {
 template <typename T> int countItems(QGraphicsScene *scene) {
@@ -121,6 +135,19 @@ void showCanvas(Canvas &canvas) {
   QVERIFY(QTest::qWaitForWindowExposed(&canvas));
   canvas.scene()->setSceneRect(0, 0, 800, 600);
   canvas.centerOn(400, 300);
+}
+
+// Answer the next modal message box with @p button once it is open.
+void answerNextMessageBox(QMessageBox::StandardButton button) {
+  QTimer::singleShot(0, [button]() {
+    auto *box = qobject_cast<QMessageBox *>(QApplication::activeModalWidget());
+    if (!box) {
+      answerNextMessageBox(button); // not open yet: try again
+      return;
+    }
+    if (QAbstractButton *b = box->button(button))
+      b->click();
+  });
 }
 } // namespace
 
@@ -752,6 +779,575 @@ private slots:
     // A clean close (after saving) removes it.
     autosave.clearAutoSave();
     QVERIFY(autosave.recoverableSnapshots().isEmpty());
+  }
+  // ---- Regression tests for glitches found in review ----
+
+  void copyPasteKeepsDiagramElementsAndTheirWireFlags() {
+    Canvas canvas;
+    showCanvas(canvas);
+    QGraphicsItem *resistor = createDiagramElement("resistor");
+    QVERIFY(resistor);
+    resistor->setPos(150, 150);
+    canvas.registerItem(resistor);
+    resistor->setSelected(true);
+    canvas.copySelectedItems();
+    canvas.pasteItems();
+    QCOMPARE(countItems<ResistorElement>(canvas.scene()), 2);
+    for (QGraphicsItem *item : canvas.scene()->items())
+      if (dynamic_cast<ResistorElement *>(item))
+        QVERIFY(item->flags() & QGraphicsItem::ItemSendsGeometryChanges);
+    canvas.undoLastAction();
+    QCOMPARE(countItems<ResistorElement>(canvas.scene()), 1);
+  }
+
+  void drawingOnAHiddenOrLockedLayerIsRefused() {
+    Canvas canvas;
+    showCanvas(canvas);
+    Layer *layer = canvas.layerManager()->activeLayer();
+    QSignalSpy message(&canvas, &Canvas::statusMessage);
+    layer->setVisible(false);
+    canvas.setShape("Rectangle");
+    dragScene(canvas, QPointF(100, 100), QPointF(200, 200));
+    QCOMPARE(countItems<QGraphicsRectItem>(canvas.scene()), 0);
+    QVERIFY(message.count() >= 1);
+    layer->setVisible(true);
+    layer->setLocked(true);
+    canvas.setPenTool();
+    dragScene(canvas, QPointF(100, 100), QPointF(200, 200));
+    QCOMPARE(countItems<QGraphicsPathItem>(canvas.scene()), 0);
+    layer->setLocked(false);
+    dragScene(canvas, QPointF(100, 100), QPointF(200, 200));
+    QCOMPARE(countItems<QGraphicsPathItem>(canvas.scene()), 1);
+  }
+
+  void deletingALayerBelowKeepsTheSameLayerActive() {
+    Canvas canvas;
+    LayerManager *layers = canvas.layerManager();
+    layers->createLayer("B");
+    Layer *c = layers->createLayer("C");
+    layers->createLayer("D");
+    layers->setActiveLayer(2);
+    QCOMPARE(layers->activeLayer(), c);
+    QVERIFY(layers->deleteLayer(1));
+    QCOMPARE(layers->activeLayer(), c);
+    // Merging C down makes the merged result (the layer below) active.
+    Layer *below = layers->layer(0);
+    QVERIFY(layers->mergeDown(1));
+    QCOMPARE(layers->activeLayer(), below);
+  }
+
+  void clearCanvasKeepsLockedContentAndIsOneUndoStep() {
+    Canvas canvas;
+    showCanvas(canvas);
+    auto *a = new QGraphicsRectItem(0, 0, 20, 20);
+    auto *b = new QGraphicsRectItem(0, 0, 20, 20);
+    canvas.registerItem(a);
+    canvas.registerItem(b);
+    Layer *locked = canvas.layerManager()->createLayer("Locked");
+    canvas.layerManager()->setActiveLayer(1);
+    auto *keep = new QGraphicsRectItem(0, 0, 20, 20);
+    canvas.registerItem(keep);
+    locked->setLocked(true);
+    answerNextMessageBox(QMessageBox::Yes);
+    canvas.clearCanvas();
+    QVERIFY(!inScene(canvas, a));
+    QVERIFY(!inScene(canvas, b));
+    QVERIFY(inScene(canvas, keep));
+    QCOMPARE(canvas.layerManager()->layerCount(), 2);
+    canvas.undoLastAction();
+    QVERIFY(inScene(canvas, a));
+    QVERIFY(inScene(canvas, b));
+  }
+
+  void everyRecordedEditMarksTheWindowModified() {
+    MainWindow window;
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    auto *canvas = window.findChild<Canvas *>();
+    QVERIFY(canvas);
+    auto *rect = new QGraphicsRectItem(0, 0, 30, 30);
+    rect->setFlag(QGraphicsItem::ItemIsSelectable);
+    canvas->registerItem(rect);
+    QVERIFY(!window.isWindowModified());
+    QVERIFY(window.windowTitle().contains(QStringLiteral("Untitled")));
+    // Delete emits no canvasModified of its own; the history marks it.
+    rect->setSelected(true);
+    canvas->deleteSelectedItems();
+    QVERIFY(!inScene(*canvas, rect));
+    QVERIFY(window.isWindowModified());
+  }
+
+  void layerPropertyChangesMarkTheWindowModified() {
+    MainWindow window;
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    auto *canvas = window.findChild<Canvas *>();
+    QVERIFY(canvas);
+    QVERIFY(!window.isWindowModified());
+    LayerManager *layers = canvas->layerManager();
+    Layer *layer = layers->activeLayer();
+    layer->setName("Renamed");
+    layers->notifyLayerChanged(layer);
+    QVERIFY(window.isWindowModified());
+  }
+
+  void switchingToolsMidDragKeepsTheMoveUndoable() {
+    Canvas canvas;
+    showCanvas(canvas);
+    auto *rect = new QGraphicsRectItem(0, 0, 80, 80);
+    rect->setBrush(Qt::blue);
+    rect->setPos(200, 200);
+    rect->setFlags(QGraphicsItem::ItemIsSelectable |
+                   QGraphicsItem::ItemIsMovable);
+    canvas.registerItem(rect);
+    canvas.setShape("Selection");
+    const QPoint start = canvas.mapFromScene(QPointF(240, 240));
+    const QPoint end = start + QPoint(60, 40);
+    QTest::mousePress(canvas.viewport(), Qt::LeftButton, Qt::NoModifier, start);
+    QTest::mouseMove(canvas.viewport(), end, 20);
+    const QPointF moved = rect->pos();
+    QVERIFY(QLineF(moved, QPointF(200, 200)).length() > 1.0);
+    canvas.setPenTool(); // e.g. "P" pressed while still dragging
+    QTest::mouseRelease(canvas.viewport(), Qt::LeftButton, Qt::NoModifier, end);
+    canvas.undoLastAction();
+    QCOMPARE(rect->pos(), QPointF(200, 200));
+  }
+
+  void hardPixelEraserStrengthAppliesOncePerStroke() {
+    Canvas canvas;
+    showCanvas(canvas);
+    QGraphicsPixmapItem *image =
+        addOpaqueImage(canvas, QRectF(100, 100, 300, 100));
+    canvas.setPixelEraserTool();
+    canvas.setPixelEraserStrength(50);
+    canvas.setPixelEraserHardness(100);
+    // Many small steps: consecutive capsules overlap at every event.
+    dragScene(canvas, QPointF(120, 150), QPointF(380, 150), 40);
+    for (int x = 140; x <= 360; x += 7) {
+      const int alpha = alphaAt(image, QPointF(x, 150));
+      QVERIFY2(
+          alpha >= 110 && alpha <= 145,
+          qPrintable(QStringLiteral("alpha %1 at x=%2").arg(alpha).arg(x)));
+    }
+  }
+
+  void translucentRasterStrokesHaveNoBeads() {
+    Canvas canvas;
+    showCanvas(canvas);
+    LayerManager *layers = canvas.layerManager();
+    layers->createLayer("Paint", Layer::Type::Raster);
+    layers->setActiveLayer(1);
+    canvas.setOpacity(128);
+    canvas.setPenTool();
+    dragScene(canvas, QPointF(120, 300), QPointF(600, 300), 40);
+    RasterLayerItem *raster = findItem<RasterLayerItem>(canvas.scene());
+    QVERIFY(raster);
+    int lo = 255, hi = 0;
+    for (int x = 150; x <= 570; x += 3) {
+      const int a = qAlpha(raster->surface().pixel(QPoint(x, 300)));
+      lo = qMin(lo, a);
+      hi = qMax(hi, a);
+    }
+    QVERIFY2(lo > 0 && hi - lo <= 8,
+             qPrintable(QStringLiteral("alpha range %1..%2").arg(lo).arg(hi)));
+  }
+
+  void highlighterPaintsPixelsOnARasterLayer() {
+    Canvas canvas;
+    showCanvas(canvas);
+    LayerManager *layers = canvas.layerManager();
+    layers->createLayer("Paint", Layer::Type::Raster);
+    layers->setActiveLayer(1);
+    canvas.setHighlighterTool();
+    dragScene(canvas, QPointF(120, 300), QPointF(400, 300));
+    RasterLayerItem *raster = findItem<RasterLayerItem>(canvas.scene());
+    QVERIFY(raster);
+    QCOMPARE(countItems<QGraphicsPathItem>(canvas.scene()), 0);
+    const int alpha = qAlpha(raster->surface().pixel(QPoint(250, 300)));
+    QVERIFY(alpha > 0 && alpha < 255); // translucent, like on vector layers
+  }
+
+  void wiresKeepTheirStackingOrderAndLockAfterReopen() {
+    QTemporaryDir dir;
+    const QString path = dir.filePath("wires.fspd");
+    {
+      Canvas canvas;
+      auto *a = static_cast<ElectronicsElementItem *>(
+          createDiagramElement("resistor"));
+      auto *b = static_cast<ElectronicsElementItem *>(
+          createDiagramElement("resistor"));
+      a->setPos(100, 100);
+      b->setPos(300, 100);
+      canvas.registerItem(a);
+      canvas.registerItem(b);
+      auto *wire = new WireItem(a, 0, b, 0);
+      canvas.scene()->addItem(wire);
+      const ItemId wireId = canvas.registerItem(wire);
+      wire->setData(0, "locked");
+      Layer *layer = canvas.layerManager()->activeLayer();
+      layer->moveItem(layer->indexOfItem(wireId), 0); // bottom of the stack
+      QVERIFY(canvas.saveProjectTo(path, false));
+    }
+    Canvas reopened;
+    QVERIFY(reopened.loadProjectFile(path, false));
+    WireItem *wire = findItem<WireItem>(reopened.scene());
+    QVERIFY(wire);
+    Layer *layer = reopened.layerManager()->activeLayer();
+    QCOMPARE(layer->indexOfItem(reopened.itemStore()->idForItem(wire)), 0);
+    QCOMPARE(wire->data(0).toString(), QStringLiteral("locked"));
+  }
+
+  void wiresStayOutOfGroupsAndFollowGroupedElements() {
+    Canvas canvas;
+    showCanvas(canvas);
+    auto *a =
+        static_cast<ElectronicsElementItem *>(createDiagramElement("resistor"));
+    auto *b =
+        static_cast<ElectronicsElementItem *>(createDiagramElement("resistor"));
+    a->setPos(100, 100);
+    b->setPos(300, 100);
+    canvas.registerItem(a);
+    canvas.registerItem(b);
+    auto *wire = new WireItem(a, 0, b, 0);
+    canvas.scene()->addItem(wire);
+    canvas.registerItem(wire);
+    for (QGraphicsItem *item :
+         {static_cast<QGraphicsItem *>(a), static_cast<QGraphicsItem *>(b),
+          static_cast<QGraphicsItem *>(wire)})
+      item->setSelected(true);
+    canvas.groupSelectedItems();
+    QVERIFY(a->parentItem());
+    QVERIFY(!wire->parentItem()); // wires are never grouped
+    // Moving the group moves the pins; the wire must follow them.
+    a->parentItem()->moveBy(50, 70);
+    const QPointF pin = a->pinScenePos(0);
+    QVERIFY(QLineF(wire->path().pointAtPercent(0), pin).length() < 1.0 ||
+            QLineF(wire->path().pointAtPercent(1), pin).length() < 1.0);
+  }
+
+  void rulerKeepsItsScreenSizeWhenZooming() {
+    Canvas canvas;
+    showCanvas(canvas);
+    canvas.toggleRuler();
+    const QColor rulerBackground(50, 50, 50);
+    auto isRuler = [&](const QImage &image, int x, int y) {
+      const QColor c = image.pixelColor(x, y);
+      return qAbs(c.red() - rulerBackground.red()) < 25 &&
+             qAbs(c.green() - rulerBackground.green()) < 25 &&
+             qAbs(c.blue() - rulerBackground.blue()) < 25;
+    };
+    for (int zoomSteps : {0, 8}) {
+      for (int i = 0; i < zoomSteps; ++i)
+        canvas.zoomIn();
+      QApplication::processEvents();
+      const QImage shot = canvas.viewport()->grab().toImage();
+      if (qEnvironmentVariableIsSet("FSPD_SAVE_RULER"))
+        shot.save(QStringLiteral("%1/ruler-%2.png")
+                      .arg(qEnvironmentVariable("FSPD_SAVE_RULER"))
+                      .arg(zoomSteps));
+      QVERIFY(isRuler(shot, 60, 3));   // top strip
+      QVERIFY(isRuler(shot, 3, 60));   // left strip
+      QVERIFY(!isRuler(shot, 60, 60)); // the canvas, at any zoom
+    }
+  }
+
+  void groupingKeepsItemsAboveLowerLayersAndUngroupKeepsFlags() {
+    Canvas canvas;
+    showCanvas(canvas);
+    LayerManager *layers = canvas.layerManager();
+    auto *bottom = new QGraphicsRectItem(0, 0, 400, 400);
+    canvas.registerItem(bottom);
+    layers->createLayer("Top");
+    layers->setActiveLayer(1);
+    QGraphicsItem *a = createDiagramElement("resistor");
+    QGraphicsItem *b = createDiagramElement("resistor");
+    a->setPos(50, 50);
+    b->setPos(150, 50);
+    canvas.registerItem(a);
+    canvas.registerItem(b);
+    a->setSelected(true);
+    b->setSelected(true);
+    canvas.groupSelectedItems();
+    QGraphicsItem *group = a->parentItem();
+    QVERIFY(group);
+    QVERIFY(group->zValue() > bottom->zValue());
+    group->setSelected(true);
+    canvas.ungroupSelectedItems();
+    QVERIFY(!a->parentItem());
+    QVERIFY(a->flags() & QGraphicsItem::ItemSendsGeometryChanges);
+    QVERIFY(a->zValue() > bottom->zValue());
+  }
+
+  void mergeAndFlattenAreUndoableAndKeepHiddenLayers() {
+    Canvas canvas;
+    showCanvas(canvas);
+    LayerManager *layers = canvas.layerManager();
+    LayerPanel panel(layers, nullptr);
+    panel.setCanvas(&canvas);
+    auto *base = new QGraphicsRectItem(0, 0, 10, 10);
+    canvas.registerItem(base);
+    Layer *locked = layers->createLayer("Locked");
+    layers->setActiveLayer(1);
+    auto *pinned = new QGraphicsRectItem(0, 0, 10, 10);
+    pinned->setFlags(QGraphicsItem::ItemIsSelectable |
+                     QGraphicsItem::ItemIsMovable);
+    canvas.registerItem(pinned);
+    locked->setLocked(true);
+    Layer *hidden = layers->createLayer("Hidden");
+    layers->setActiveLayer(2);
+    auto *secret = new QGraphicsRectItem(0, 0, 10, 10);
+    canvas.registerItem(secret);
+    hidden->setVisible(false);
+
+    answerNextMessageBox(QMessageBox::Yes);
+    QMetaObject::invokeMethod(&panel, "onFlattenAll");
+    QCOMPARE(layers->layerCount(), 2); // flattened + the hidden layer
+    QVERIFY(!secret->isVisible());     // hidden content stays hidden
+    // Items from the locked layer are editable in the unlocked result.
+    QVERIFY(pinned->flags() & QGraphicsItem::ItemIsSelectable);
+
+    canvas.undoLastAction();
+    QCOMPARE(layers->layerCount(), 3);
+    QCOMPARE(layers->findLayerForItem(pinned)->name(),
+             QStringLiteral("Locked"));
+    QVERIFY(layers->findLayerForItem(pinned)->isLocked());
+    QVERIFY(!(pinned->flags() & QGraphicsItem::ItemIsSelectable));
+    canvas.redoLastAction();
+    QCOMPARE(layers->layerCount(), 2);
+  }
+
+  void lockingIsUndoable() {
+    Canvas canvas;
+    showCanvas(canvas);
+    auto *rect = new QGraphicsRectItem(0, 0, 30, 30);
+    rect->setFlags(QGraphicsItem::ItemIsSelectable |
+                   QGraphicsItem::ItemIsMovable);
+    canvas.registerItem(rect);
+    rect->setSelected(true);
+    canvas.lockSelectedItems();
+    QCOMPARE(rect->data(0).toString(), QStringLiteral("locked"));
+    QVERIFY(!(rect->flags() & QGraphicsItem::ItemIsMovable));
+    canvas.undoLastAction();
+    QVERIFY(rect->data(0).toString().isEmpty());
+    QVERIFY(rect->flags() & QGraphicsItem::ItemIsMovable);
+  }
+
+#ifdef HAVE_QT_PDF
+  void pdfTextStillBeingTypedIsCommittedBeforeClosing() {
+    QTemporaryDir dir;
+    const QString pdfPath = dir.filePath("page.pdf");
+    {
+      QPdfWriter writer(pdfPath);
+      QPainter painter(&writer);
+      painter.drawText(100, 100, QStringLiteral("page"));
+    }
+    PdfViewer viewer;
+    viewer.resize(800, 600);
+    viewer.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&viewer));
+    QVERIFY(viewer.openPdf(pdfPath));
+    QTRY_VERIFY(viewer.hasPdf());
+    viewer.setMode(PdfViewer::Mode::Annotate);
+    viewer.setToolType(ToolManager::ToolType::Text);
+    QSignalSpy modified(&viewer, &PdfViewer::documentModified);
+    QTest::mouseClick(viewer.viewport(), Qt::LeftButton, Qt::NoModifier,
+                      QPoint(200, 200));
+    LatexTextItem *text = findItem<LatexTextItem>(viewer.scene());
+    QVERIFY(text);
+    QVERIFY(text->isEditing());
+    auto *proxy = findItem<QGraphicsProxyWidget>(viewer.scene());
+    QVERIFY(proxy && proxy->widget());
+    QTest::keyClicks(proxy->widget(), QStringLiteral("hello"));
+    QCOMPARE(modified.count(), 0); // not committed yet
+    viewer.commitPendingEdits();
+    QVERIFY(!text->isEditing());
+    QCOMPARE(text->text(), QStringLiteral("hello"));
+    QVERIFY(modified.count() >= 1);
+  }
+#endif
+
+  void escapeKeepsTextTypedIntoANewItem() {
+    Canvas canvas;
+    showCanvas(canvas);
+    canvas.setTextTool();
+    QTest::mouseClick(canvas.viewport(), Qt::LeftButton, Qt::NoModifier,
+                      QPoint(240, 200));
+    auto *text = findItem<LatexTextItem>(canvas.scene());
+    QVERIFY(text && text->isEditing());
+    auto *proxy = findItem<QGraphicsProxyWidget>(canvas.scene());
+    QVERIFY(proxy && proxy->widget());
+    QTest::keyClicks(proxy->widget(), QStringLiteral("Keep me"));
+    QTest::keyClick(proxy->widget(), Qt::Key_Escape);
+    QApplication::processEvents();
+    text = findItem<LatexTextItem>(canvas.scene());
+    QVERIFY(text);
+    QVERIFY(!text->isEditing());
+    QCOMPARE(text->text(), QStringLiteral("Keep me"));
+  }
+
+#ifdef HAVE_QT_PDF
+  void pdfOpensAtActualSizeAndSaysSo() {
+    QTemporaryDir dir;
+    const QString pdfPath = dir.filePath("page.pdf");
+    {
+      QPdfWriter writer(pdfPath);
+      QPainter painter(&writer);
+      painter.drawText(100, 100, QStringLiteral("page"));
+    }
+    PdfViewer viewer;
+    viewer.resize(800, 600);
+    viewer.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&viewer));
+    QSignalSpy zoom(&viewer, &PdfViewer::zoomChanged);
+    QVERIFY(viewer.openPdf(pdfPath));
+    QTRY_VERIFY(viewer.hasPdf());
+    QTRY_VERIFY(zoom.count() >= 1);
+    QCOMPARE(qRound(zoom.last().first().toDouble()), 100);
+    // At "100%" one PDF inch is one logical screen inch.
+    const qreal inchOnScreen = viewer.transform().m11() * viewer.renderDpi();
+    QVERIFY(qAbs(inchOnScreen - viewer.logicalDpiX()) < 1.0);
+    viewer.setZoomPercent(200);
+    QCOMPARE(qRound(viewer.zoomLevel()), 200);
+  }
+#endif
+
+  void repeatedLibraryClicksDoNotStackElements() {
+    Canvas canvas;
+    showCanvas(canvas);
+    canvas.placeElement(QStringLiteral("resistor"));
+    canvas.placeElement(QStringLiteral("resistor"));
+    QList<QPointF> positions;
+    for (QGraphicsItem *item : canvas.scene()->items())
+      if (dynamic_cast<ResistorElement *>(item))
+        positions.append(item->pos());
+    QCOMPARE(positions.size(), 2);
+    QVERIFY(QLineF(positions.at(0), positions.at(1)).length() > 10.0);
+    // A drop places the element where it was dropped.
+    canvas.placeElementAt(QStringLiteral("resistor"), QPointF(100, 500));
+    bool found = false;
+    for (QGraphicsItem *item : canvas.scene()->items())
+      if (dynamic_cast<ResistorElement *>(item) &&
+          item->sceneBoundingRect().contains(QPointF(100, 500)))
+        found = true;
+    QVERIFY(found);
+  }
+
+  void textOnPathSpacesLettersByArcLength() {
+    // A curve whose parameter runs very unevenly along its length (control
+    // points bunched at one end): percent-of-parameter placement piled the
+    // first letters on top of each other.
+    QPainterPath path(QPointF(0, 0));
+    path.cubicTo(QPointF(5, -2), QPointF(10, -4), QPointF(400, 0));
+    TextOnPathItem item;
+    item.setPath(path);
+    item.setText(QStringLiteral("Along the path"));
+    const auto glyphs = item.glyphPlacements();
+    QVERIFY(glyphs.size() >= 10);
+    for (int i = 1; i < glyphs.size(); ++i) {
+      const qreal expected = (glyphs[i - 1].width + glyphs[i].width) / 2.0;
+      const qreal actual =
+          QLineF(glyphs[i - 1].position, glyphs[i].position).length();
+      QVERIFY2(actual > expected * 0.8 && actual < expected * 1.1,
+               qPrintable(QStringLiteral("glyph %1: %2 vs %3")
+                              .arg(i)
+                              .arg(actual)
+                              .arg(expected)));
+    }
+  }
+
+  void staleRecoveryLocksAreCleanedUp() {
+    QTemporaryDir dir;
+    // A session that crashed before anything needed saving leaves only its
+    // lock. Fake one whose owner process no longer exists.
+    const QString stale = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    {
+      QFile lock(dir.filePath(stale + QStringLiteral(".lock")));
+      QVERIFY(lock.open(QIODevice::WriteOnly));
+      lock.write(QByteArray::number(0x7ffffff0) + "\nFullScreen-Pencil-Draw\n" +
+                 QSysInfo::machineHostName().toUtf8() + "\n");
+    }
+    RecoveryStore live(dir.path()); // this process owns a live session
+    const QString liveId = live.createSession();
+    RecoveryStore store(dir.path());
+    QVERIFY(!QFileInfo::exists(dir.filePath(stale + QStringLiteral(".lock"))));
+    QVERIFY(QFileInfo::exists(dir.filePath(liveId + QStringLiteral(".lock"))));
+    live.releaseSession(liveId);
+  }
+
+  void snapshotsWithoutMetadataAreStillOffered() {
+    QTemporaryDir recoveryDir;
+    QString snapshot;
+    {
+      Canvas canvas;
+      canvas.registerItem(new QGraphicsRectItem(0, 0, 40, 40));
+      AutoSaveManager autosave(&canvas, nullptr, recoveryDir.path());
+      autosave.setShouldSaveCheck([] { return true; });
+      QVERIFY(autosave.performAutoSave());
+      snapshot = autosave.autoSavePath();
+    } // crash
+    // ...right after the snapshot committed, before its metadata.
+    const QFileInfo info(snapshot);
+    QVERIFY(QFile::remove(info.dir().filePath(info.completeBaseName() +
+                                              QStringLiteral(".json"))));
+    Canvas canvas;
+    AutoSaveManager autosave(&canvas, nullptr, recoveryDir.path());
+    QCOMPARE(autosave.recoverableSnapshots().size(), 1);
+  }
+
+  void recoveredDocumentsRememberTheirOriginalFile() {
+    QTemporaryDir recoveryDir;
+    QTemporaryDir docs;
+    const QString original = docs.filePath("drawing.fspd");
+    {
+      Canvas canvas;
+      canvas.registerItem(new QGraphicsRectItem(0, 0, 40, 40));
+      QVERIFY(canvas.saveProjectTo(original, false));
+      AutoSaveManager autosave(&canvas, nullptr, recoveryDir.path());
+      autosave.setShouldSaveCheck([] { return true; });
+      QVERIFY(autosave.performAutoSave());
+    } // crash
+    Canvas canvas;
+    AutoSaveManager autosave(&canvas, nullptr, recoveryDir.path());
+    autosave.setShouldSaveCheck([] { return true; });
+    const QList<RecoverySnapshot> found = autosave.recoverableSnapshots();
+    QCOMPARE(found.size(), 1);
+    QVERIFY(autosave.recoverSnapshot(found.first()));
+    QCOMPARE(canvas.suggestedSavePath(), original);
+    // A second crash still names the original document.
+    QVERIFY(autosave.performAutoSave());
+    const QList<RecoverySnapshot> again =
+        autosave.recoveryStore().recoverableSnapshots();
+    Q_UNUSED(again); // own session is live; read the metadata directly
+    QFile meta(QFileInfo(autosave.autoSavePath())
+                   .dir()
+                   .filePath(autosave.documentId() + QStringLiteral(".json")));
+    QVERIFY(meta.open(QIODevice::ReadOnly));
+    QVERIFY(meta.readAll().contains("drawing.fspd"));
+  }
+
+  void plainTextExportsAsVectorTextInPdf() {
+    Canvas canvas;
+    auto *text = new LatexTextItem();
+    text->setText(QStringLiteral("Hello vector"));
+    text->setPos(100, 100);
+    canvas.registerItem(text);
+    QTemporaryDir dir;
+    const QString path = dir.filePath("text.pdf");
+    DocumentExporter exporter(canvas.layerManager(), nullptr, Qt::white);
+    const ExportResult result = exporter.exportToFile(path, ExportFormat::Pdf);
+    QVERIFY2(result.ok, qPrintable(result.error));
+    for (const QString &warning : result.warnings)
+      QVERIFY2(!warning.contains(QStringLiteral("text object")),
+               qPrintable(warning));
+    QFile pdf(path);
+    QVERIFY(pdf.open(QIODevice::ReadOnly));
+    // Plain text must stay vector: no image object in a text-only PDF.
+    // (Whether glyphs are written as embedded text or as outlines depends
+    // on the platform's fonts - headless Windows draws outlines - so the
+    // test checks for the absence of an image, not for text operators.)
+    const QByteArray bytes = pdf.readAll();
+    QVERIFY(!bytes.isEmpty());
+    QVERIFY(!bytes.contains("/Subtype /Image"));
   }
 };
 

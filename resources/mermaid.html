@@ -80,7 +80,21 @@
             } catch (e) {
                 console.error('Mermaid error:', e);
                 const container = document.getElementById('diagram');
-                container.innerHTML = '<pre style="color: red;">Error: ' + e.message + '</pre>';
+                // On a syntax error Mermaid leaves its own "bomb" error
+                // graphic in the page body, outside the container; it was
+                // captured half cut off. Only our message should show.
+                document.querySelectorAll('body > :not(#diagram)').forEach(n => {
+                    if (n.tagName !== 'SCRIPT') n.remove();
+                });
+                // The message quotes the user's code: escape it, or "<" in
+                // a diagram would be parsed as markup.
+                const message = String(e && e.message ? e.message : e)
+                    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;');
+                container.innerHTML =
+                    '<pre style="color: #c62828; white-space: pre-wrap; ' +
+                    'max-width: 640px; margin: 0;">Mermaid error: ' +
+                    message + '</pre>';
                 return false;
             }
         }

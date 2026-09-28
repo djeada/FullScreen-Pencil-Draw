@@ -82,8 +82,11 @@ public:
   void collectReferencedItems(QVector<ItemId> &out) const override {
     out.append(itemId_);
   }
+  /// Includes the parked item while the draw is undone (kept for redo).
+  std::size_t memoryCost() const override { return memoryCost_; }
 
 private:
+  std::size_t memoryCost_ = kBaseActionCost;
   ItemId itemId_;
   ItemStore *itemStore_;
   ItemCallback onAdd_;

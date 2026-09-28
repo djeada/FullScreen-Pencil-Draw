@@ -154,6 +154,10 @@ void MermaidRenderer::processNextRequest() {
 
   currentRequest_ = pendingRequests_.takeFirst();
   rendering_ = true;
+  // Start every render from the full default size: the view keeps the
+  // previous diagram's (possibly tiny) size, which squeezed the layout of
+  // the next one (e.g. an error message wrapped to a narrow column).
+  webView_->setFixedSize(800, 600);
 
   qDebug() << "Processing Mermaid diagram:"
            << currentRequest_.mermaidCode.left(50)

@@ -22,6 +22,8 @@ void UndoRedoManager::push(std::unique_ptr<Action> action, const void *owner) {
   undoStack_.push_back(std::move(action));
   evictOverLimit(discarded);
   notifyDiscarded(discarded);
+  if (pushListener_)
+    pushListener_(owner);
 }
 
 void UndoRedoManager::undo() {

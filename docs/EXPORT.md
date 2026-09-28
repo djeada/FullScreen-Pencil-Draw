@@ -27,9 +27,13 @@ not keep after the export finishes.
 
 ## Format-specific rules
 
-- **LaTeX text and Mermaid diagrams** are drawn from rendered images inside
-  the app, so SVG and PDF embed them as images. The export reports how many
-  there are.
+- **Text.** Plain text is written as real (selectable) text in SVG and
+  PDF. Text containing LaTeX math (`$...$`) and Mermaid diagrams are drawn
+  from rendered images inside the app, so SVG and PDF embed them as images.
+  The export reports how many there are.
+- **Raster layers** are embedded as one image of their painted area (not
+  one image per tile), and exports are cropped to the painted pixels rather
+  than to whole 256-px tiles.
 - **Blend modes in SVG/PDF.** Qt's SVG and PDF writers cannot express layer
   blend modes, so those layers are drawn as Normal and the export lists them
   by name. Use PNG, WebP or TIFF when the blended look matters.

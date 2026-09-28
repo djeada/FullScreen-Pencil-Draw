@@ -197,7 +197,8 @@ private:
   HandleType handleAtPoint(const QPointF &pos) const;
   QRectF handleRect(HandleType type) const;
   QCursor cursorForHandle(HandleType type) const;
-  void applyResize(const QPointF &mousePos);
+  /// @return false if the step was rejected (e.g. below minimum size).
+  bool applyResize(const QPointF &mousePos);
   void applyRotation(const QPointF &mousePos);
   QRectF targetBoundsInScene() const;
   void ensureSceneEventFilter();

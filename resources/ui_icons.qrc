@@ -1,6 +1,14 @@
 <!DOCTYPE RCC>
 <RCC version="1.0">
   <qresource prefix="/ui-icons">
+    <file alias="arrow_up_dark.png">ui_icons/arrow_up_dark.png</file>
+    <file alias="arrow_up_dark@2x.png">ui_icons/arrow_up_dark@2x.png</file>
+    <file alias="arrow_up_light.png">ui_icons/arrow_up_light.png</file>
+    <file alias="arrow_up_light@2x.png">ui_icons/arrow_up_light@2x.png</file>
+    <file alias="arrow_down_dark.png">ui_icons/arrow_down_dark.png</file>
+    <file alias="arrow_down_dark@2x.png">ui_icons/arrow_down_dark@2x.png</file>
+    <file alias="arrow_down_light.png">ui_icons/arrow_down_light.png</file>
+    <file alias="arrow_down_light@2x.png">ui_icons/arrow_down_light@2x.png</file>
     <file alias="layer_add.svg">ui_icons/layer_add.svg</file>
     <file alias="layer_delete.svg">ui_icons/layer_delete.svg</file>
     <file alias="layer_duplicate.svg">ui_icons/layer_duplicate.svg</file>
