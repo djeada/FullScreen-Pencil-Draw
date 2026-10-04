@@ -188,6 +188,13 @@ set_target_properties(test_latex_unicode PROPERTIES
 
 add_test(NAME TestLatexUnicode COMMAND test_latex_unicode)
 
+# Exercise the production parser without requiring a WebEngine window.
+add_executable(test_latex_source test_latex_source.cpp)
+target_link_libraries(test_latex_source PRIVATE
+    Qt${QT_VERSION_MAJOR}::Test
+)
+add_test(NAME TestLatexSource COMMAND test_latex_source)
+
 # BusySpinnerOverlay tests
 add_executable(test_busy_spinner_overlay
     test_busy_spinner_overlay.cpp
@@ -646,7 +653,7 @@ set_tests_properties(${_fspd_tests} PROPERTIES
 # Add custom target to run all tests
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-    DEPENDS test_item_store test_project_serializer test_image_filters test_perspective_transform test_snap_engine test_text_whitespace test_latex_unicode test_busy_spinner_overlay test_brush_tip test_rotation_dialog test_alignment_dialog test_transform_action test_group_clipboard test_side_tab_bar test_undo_redo_manager test_canvas_interaction test_raster_surface test_document_integrity
+    DEPENDS test_item_store test_project_serializer test_image_filters test_perspective_transform test_snap_engine test_text_whitespace test_latex_unicode test_latex_source test_busy_spinner_overlay test_brush_tip test_rotation_dialog test_alignment_dialog test_transform_action test_group_clipboard test_side_tab_bar test_undo_redo_manager test_canvas_interaction test_raster_surface test_document_integrity
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
 if(TARGET test_pdf_page_cache)

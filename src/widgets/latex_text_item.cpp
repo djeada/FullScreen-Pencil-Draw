@@ -4,6 +4,7 @@
  * editing.
  */
 #include "latex_text_item.h"
+#include "latex_source.h"
 #include <QAbstractTextDocumentLayout>
 #include <QApplication>
 #include <QFocusEvent>
@@ -440,76 +441,6 @@ void LatexTextEdit::keyPressEvent(QKeyEvent *event) {
   QTextEdit::keyPressEvent(event);
 }
 
-#ifdef HAVE_QT_WEBENGINE
-// Escape a plain-text run for use inside KaTeX's \text{...}.
-static QString escapeForKatexText(const QString &plain) {
-  QString out;
-  out.reserve(plain.size());
-  for (QChar c : plain) {
-    switch (c.unicode()) {
-    case '\\':
-      out += QStringLiteral("\\textbackslash{}");
-      break;
-    case '{':
-    case '}':
-    case '#':
-    case '%':
-    case '&':
-    case '_':
-    case '$':
-      out += QLatin1Char('\\');
-      out += c;
-      break;
-    case '^':
-      out += QStringLiteral("\\textasciicircum{}");
-      break;
-    case '~':
-      out += QStringLiteral("\\textasciitilde{}");
-      break;
-    default:
-      out += c;
-    }
-  }
-  return out;
-}
-
-// Build one KaTeX expression for mixed text: plain runs become \text{...},
-// $...$ segments stay math, and lines stack in a left-aligned array.
-static QString composeKatexSource(const QString &text) {
-  // $$...$$ (display style) or $...$ (inline).
-  static const QRegularExpression mathPattern(
-      "\\$\\$(.+?)\\$\\$|\\$([^$]+)\\$");
-  const QStringList lines = text.split(QLatin1Char('\n'));
-  QStringList rows;
-  for (const QString &line : lines) {
-    QString row;
-    qsizetype pos = 0;
-    auto it = mathPattern.globalMatch(line);
-    while (it.hasNext()) {
-      const QRegularExpressionMatch m = it.next();
-      if (m.capturedStart() > pos)
-        row += QStringLiteral("\\text{") +
-               escapeForKatexText(line.mid(pos, m.capturedStart() - pos)) +
-               QLatin1Char('}');
-      if (m.captured(1).isEmpty())
-        row += QLatin1Char('{') + m.captured(2) + QLatin1Char('}');
-      else
-        row += QStringLiteral("{\\displaystyle ") + m.captured(1) +
-               QLatin1Char('}');
-      pos = m.capturedEnd();
-    }
-    if (pos < line.size())
-      row += QStringLiteral("\\text{") + escapeForKatexText(line.mid(pos)) +
-             QLatin1Char('}');
-    rows.append(row);
-  }
-  if (rows.size() == 1)
-    return rows.first();
-  return QStringLiteral("\\begin{array}{l}") +
-         rows.join(QStringLiteral(" \\\\ ")) + QStringLiteral("\\end{array}");
-}
-#endif
-
 // Math-friendly font selection helper with optimized font stack
 static QFont selectMathFont(int pointSize) {
   // Priority list of math-friendly fonts with excellent Unicode coverage
@@ -732,8 +663,7 @@ void LatexTextItem::startEditing() {
 }
 
 bool LatexTextItem::hasLatex() const {
-  static QRegularExpression latexPattern("\\$[^$]+\\$");
-  return text_.contains(latexPattern);
+  return text_.contains(LatexSource::mathPattern());
 }
 
 void LatexTextItem::mouseDoubleClickEvent(QGraphicsSceneMouseEvent *event) {
@@ -891,7 +821,7 @@ void LatexTextItem::renderContent() {
     // KaTeX only renders math, so fold the plain-text runs and every $...$
     // segment into a single expression; otherwise surrounding words (and all
     // but the first formula) would silently disappear.
-    const QString latex = composeKatexSource(text_);
+    const QString latex = LatexSource::composeKatexSource(text_);
     // KaTeX takes a CSS pixel size and then scales its output by 1.21em;
     // the item's font is in points (1pt = 4/3 px at 96 dpi). Convert so a
     // formula matches plain text of the same font size.
@@ -934,8 +864,7 @@ void LatexTextItem::renderContent() {
 QPixmap LatexTextItem::renderLatex(const QString &text) {
   // Parse the text and convert LaTeX expressions
   QString htmlContent;
-  static QRegularExpression latexPattern("\\$([^$]+)\\$");
-  QRegularExpressionMatchIterator it = latexPattern.globalMatch(text);
+  auto it = LatexSource::mathPattern().globalMatch(text);
 
   int lastEnd = 0;
   while (it.hasNext()) {
@@ -946,7 +875,8 @@ QPixmap LatexTextItem::renderLatex(const QString &text) {
       htmlContent += plainTextToHtmlPreservingNewlines(plainPart);
     }
     // Convert LaTeX to HTML with enhanced styling for math expressions
-    QString latex = match.captured(1);
+    QString latex =
+        match.captured(1).isEmpty() ? match.captured(2) : match.captured(1);
     QString converted = latexToHtml(latex);
     // Wrap LaTeX content in styled span with letter-spacing for better visual
     // distinction
