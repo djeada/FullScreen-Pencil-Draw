@@ -49,7 +49,6 @@
                     trust: true
                 });
                 
-                console.log('Rendered:', latex, 'with color:', color);
                 return true;
             } catch (e) {
                 console.error('KaTeX error:', e);
@@ -70,6 +69,15 @@
             });
         }
         
+        // Set window.frameReady once the current DOM has been painted
+        // (the second animation frame after a change has been composited).
+        function armFrameReady() {
+            window.frameReady = false;
+            requestAnimationFrame(() => requestAnimationFrame(() => {
+                window.frameReady = true;
+            }));
+        }
+
         // Debug: show that page loaded
         console.log('KaTeX page loaded, katex available:', typeof katex !== 'undefined');
     </script>

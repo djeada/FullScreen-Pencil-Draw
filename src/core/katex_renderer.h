@@ -13,6 +13,7 @@
 #include <QHash>
 #include <QObject>
 #include <QPixmap>
+#include <QRect>
 #include <QString>
 
 #ifdef HAVE_QT_WEBENGINE
@@ -70,6 +71,14 @@ public:
                     bool displayMode) const;
 
   /**
+   * @brief Drop a queued render request that is no longer wanted.
+   *
+   * A request that is already rendering still completes (and is cached),
+   * but one waiting in the queue is discarded without being rendered.
+   */
+  void cancel(quintptr requestId);
+
+  /**
    * @brief Clear the render cache.
    */
   void clearCache();
@@ -109,9 +118,23 @@ private:
   void processNextRequest();
 
   /**
-   * @brief Capture the rendered content as a pixmap.
+   * @brief Size the capture area from the measured content, then wait for a
+   * fresh frame before grabbing.
    */
-  void captureResult(quintptr requestId);
+  void captureResult(quintptr requestId, const QString &sizeJson);
+
+  /**
+   * @brief Poll until the page has painted the new content, then grab it.
+   */
+  void pollFrameReady(quintptr requestId, const QRect &area, int attempt);
+
+  /**
+   * @brief Cache and emit a capture, then start the next request.
+   */
+  void finishRequest(quintptr requestId, const QPixmap &pixmap);
+
+  static constexpr int VIEWPORT_WIDTH = 1280;
+  static constexpr int VIEWPORT_HEIGHT = 640;
 
   QWebEngineView *webView_;
   bool initialized_;

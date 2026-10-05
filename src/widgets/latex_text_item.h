@@ -206,6 +206,7 @@ private:
   QColor textColor_;
   QFont font_;
   QPixmap renderedContent_;
+  qreal renderedPointSize_ = 0; // KaTeX font size of renderedContent_ (0: n/a)
   QRectF contentRect_;
   bool isEditing_;
   qreal lastScale_; // Track scale for re-rendering
@@ -218,13 +219,14 @@ private:
   // KaTeX async rendering
   quintptr pendingRenderId_;
   bool katexConnected_;
+  qreal pendingPointSize_ = 0; // font size of the in-flight KaTeX render
 #endif
 
   // Point kept fixed through the next re-layout (keepAnchorOnNextLayout)
   bool hasPendingAnchor_ = false;
   QPointF anchorFraction_;
   QPointF anchorScenePoint_;
-  void applyPendingAnchor();
+  void applyPendingAnchor(bool consume = true);
 
   // Layout constants for refined visual appearance
   static constexpr int MIN_WIDTH = 120;

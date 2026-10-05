@@ -499,6 +499,9 @@ LatexTextItem::~LatexTextItem() {
   // deleted
   proxyWidget_ = nullptr;
   textEdit_ = nullptr;
+#ifdef HAVE_QT_WEBENGINE
+  KatexRenderer::instance().cancel(pendingRenderId_);
+#endif
 }
 
 QRectF LatexTextItem::boundingRect() const {
@@ -543,7 +546,10 @@ void LatexTextItem::paint(QPainter *painter,
     doc.documentLayout()->draw(painter, ctx);
     painter->restore();
   } else if (!renderedContent_.isNull()) {
-    painter->drawPixmap(PADDING, PADDING, renderedContent_);
+    // Drawn into contentRect_, which is scaled ahead of a pending re-render
+    // (e.g. while resizing) so the old image tracks the new size meanwhile.
+    painter->drawPixmap(contentRect_.translated(PADDING, PADDING),
+                        renderedContent_, QRectF(renderedContent_.rect()));
   } else if (!text_.isEmpty()) {
     // Fallback: draw plain text if rendering failed
     painter->setFont(font_);
@@ -606,10 +612,13 @@ void LatexTextItem::setFont(const QFont &font) {
     textEdit_->setFont(font_);
   }
   renderContent();
+  // Applied now against the (possibly scaled preview) layout; a pending KaTeX
+  // render keeps the anchor and re-applies it to the exact final size.
 #ifdef HAVE_QT_WEBENGINE
-  if (!pendingRenderId_) // otherwise applied when the KaTeX render lands
+  applyPendingAnchor(/*consume=*/!pendingRenderId_);
+#else
+  applyPendingAnchor();
 #endif
-    applyPendingAnchor(); // rendered synchronously (cache / fallback)
   update();
 }
 
@@ -738,6 +747,7 @@ void LatexTextItem::onKatexRenderComplete(quintptr requestId,
   if (success && !pixmap.isNull()) {
     prepareGeometryChange();
     renderedContent_ = pixmap;
+    renderedPointSize_ = pendingPointSize_;
     contentRect_ = QRectF(0, 0, pixmap.width() / pixmap.devicePixelRatio(),
                           pixmap.height() / pixmap.devicePixelRatio());
     update();
@@ -745,6 +755,7 @@ void LatexTextItem::onKatexRenderComplete(quintptr requestId,
     // Fallback to Unicode rendering on failure
     prepareGeometryChange();
     renderedContent_ = renderLatex(text_);
+    renderedPointSize_ = 0;
     contentRect_ =
         QRectF(0, 0, renderedContent_.width(), renderedContent_.height());
     update();
@@ -760,10 +771,11 @@ void LatexTextItem::keepAnchorOnNextLayout(const QPointF &fraction,
   anchorScenePoint_ = scenePoint;
 }
 
-void LatexTextItem::applyPendingAnchor() {
+void LatexTextItem::applyPendingAnchor(bool consume) {
   if (!hasPendingAnchor_)
     return;
-  hasPendingAnchor_ = false;
+  if (consume)
+    hasPendingAnchor_ = false;
   const QRectF br = boundingRect();
   const QPointF local(br.left() + br.width() * anchorFraction_.x(),
                       br.top() + br.height() * anchorFraction_.y());
@@ -799,7 +811,9 @@ void LatexTextItem::renderContent() {
 #ifdef HAVE_QT_WEBENGINE
   // Any render still in flight is superseded by this one; a synchronous
   // result below (cache hit, fallback, empty text) must not be overwritten
-  // later by that older, differently sized image.
+  // later by that older, differently sized image. If it is still queued,
+  // drop it so rapid changes (resize drags) don't pile up stale renders.
+  KatexRenderer::instance().cancel(pendingRenderId_);
   pendingRenderId_ = 0;
 #endif
   if (text_.isEmpty()) {
@@ -833,6 +847,7 @@ void LatexTextItem::renderContent() {
                                                          katexPixelSize, false);
     if (!cached.isNull()) {
       renderedContent_ = cached;
+      renderedPointSize_ = pointSize;
       contentRect_ = QRectF(
           0, 0, renderedContent_.width() / renderedContent_.devicePixelRatio(),
           renderedContent_.height() / renderedContent_.devicePixelRatio());
@@ -845,17 +860,28 @@ void LatexTextItem::renderContent() {
     KatexRenderer::instance().render(latex, textColor_, katexPixelSize, false,
                                      pendingRenderId_);
 
+    pendingPointSize_ = pointSize;
+
     // Keep showing the previous rendering until the new one arrives
-    // (collapsing to a placeholder made resizing flicker); only a first
-    // render needs the placeholder.
-    if (renderedContent_.isNull())
+    // (collapsing to a placeholder made resizing flicker), scaled to the new
+    // font size so a resize follows the mouse instantly; only a first render
+    // needs the placeholder.
+    if (renderedContent_.isNull()) {
       contentRect_ = QRectF(0, 0, MIN_WIDTH, MIN_HEIGHT);
+    } else if (renderedPointSize_ > 0) {
+      const qreal k = pointSize / renderedPointSize_;
+      contentRect_ = QRectF(
+          0, 0,
+          renderedContent_.width() / renderedContent_.devicePixelRatio() * k,
+          renderedContent_.height() / renderedContent_.devicePixelRatio() * k);
+    }
     return;
   }
 #endif
 
   // Fallback to Unicode rendering
   renderedContent_ = renderLatex(text_);
+  renderedPointSize_ = 0;
   // contentRect_ represents the content area
   contentRect_ =
       QRectF(0, 0, renderedContent_.width(), renderedContent_.height());
