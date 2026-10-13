@@ -103,6 +103,9 @@ public:
    */
   bool openPdf(const QString &filePath);
 
+  /// Canonical path of the PDF opened with openPdf() (empty when none).
+  QString sourcePath() const { return sourcePath_; }
+
   /**
    * @brief Close the current PDF
    */
@@ -601,6 +604,7 @@ private:
   int wheelZoomAccum_ = 0;     ///< Ctrl+wheel delta not yet zoomed
   // Document and overlay management
   std::unique_ptr<PdfDocument> document_;
+  QString sourcePath_; ///< canonical path of the open PDF (empty if none)
   std::unique_ptr<PdfOverlayManager> overlayManager_;
   UndoRedoManager *undoRedoManager_ = nullptr;
   PdfPageItem *pageItem_;

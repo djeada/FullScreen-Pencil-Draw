@@ -155,6 +155,29 @@ class TestCanvasInteraction : public QObject {
   Q_OBJECT
 
 private slots:
+  // Bounding-box resize works along the scene axes even for a rotated item.
+  void resizeOfRotatedItemFollowsSceneAxes() {
+    QGraphicsScene scene;
+    auto *rect = new QGraphicsRectItem(0, 0, 100, 20);
+    rect->setPos(200, 200);
+    QTransform rotate;
+    rotate.translate(50, 10);
+    rotate.rotate(90);
+    rotate.translate(-50, -10);
+    rect->setTransform(rotate);
+    scene.addItem(rect);
+    const QRectF before = rect->sceneBoundingRect();
+    const QPointF anchor = before.topLeft();
+
+    TransformHandleItem::scaleInScene(rect, 2.0, 1.0, anchor);
+
+    const QRectF after = rect->sceneBoundingRect();
+    QVERIFY(qAbs(after.width() - before.width() * 2.0) < 0.5);
+    QVERIFY(qAbs(after.height() - before.height()) < 0.5);
+    QVERIFY(qAbs(after.left() - before.left()) < 0.5);
+    QVERIFY(qAbs(after.top() - before.top()) < 0.5);
+  }
+
   void initTestCase() {
     // Keep settings and recovery snapshots away from the user's real ones
     // (a leftover recovery copy would otherwise open a modal prompt when a

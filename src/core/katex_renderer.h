@@ -132,6 +132,7 @@ private:
    * @brief Cache and emit a capture, then start the next request.
    */
   void finishRequest(quintptr requestId, const QPixmap &pixmap);
+  void failAllRequests();
 
   static constexpr int VIEWPORT_WIDTH = 1280;
   static constexpr int VIEWPORT_HEIGHT = 640;
@@ -139,6 +140,7 @@ private:
   QWebEngineView *webView_;
   bool initialized_;
   bool rendering_;
+  quint64 requestSerial_ = 0; ///< identifies the in-flight request (watchdog)
   bool shuttingDown_;
 
   // Pending render request

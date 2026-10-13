@@ -148,6 +148,14 @@ void PageThumbnailPanel::setupUI() {
 
   connect(thumbnailList_, &QListWidget::itemClicked, this,
           &PageThumbnailPanel::onItemClicked);
+  // Arrow keys / Page Up / Page Down move the highlight without a click.
+  connect(thumbnailList_, &QListWidget::currentItemChanged, this,
+          [this](QListWidgetItem *current, QListWidgetItem *) {
+            // Only for keyboard navigation: rebuilding the list or syncing
+            // to the viewer's page must not bounce back as a page change.
+            if (current && thumbnailList_->hasFocus())
+              onItemClicked(current);
+          });
 
   layout_->addWidget(thumbnailList_);
 

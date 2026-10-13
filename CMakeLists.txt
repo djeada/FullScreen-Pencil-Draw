@@ -2,6 +2,12 @@ cmake_minimum_required(VERSION 3.16)
 
 project(FullScreen-Pencil-Draw VERSION 0.1 LANGUAGES CXX)
 
+# A plain `cmake -S . -B build` should give an optimised build, not an
+# unoptimised one (single-config generators only).
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+
 # Enable automatic handling of Qt-related features
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOUIC ON)
@@ -124,7 +130,7 @@ endif()
 if(APPLE)
     set_target_properties(${PROJECT_NAME} PROPERTIES
         MACOSX_BUNDLE TRUE
-        MACOSX_BUNDLE_GUI_IDENTIFIER my.example.com
+        MACOSX_BUNDLE_GUI_IDENTIFIER com.adamdjellouli.fullscreenpencildraw
         MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
         MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}
     )

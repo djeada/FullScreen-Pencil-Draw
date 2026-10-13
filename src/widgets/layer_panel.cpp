@@ -919,6 +919,8 @@ void LayerPanel::onCanvasSelectionChanged() {
 
   layerTree_->blockSignals(false);
   updatingSelection_ = false;
+  // Group / Merge availability depends on how many items are selected.
+  updateButtonStates();
 }
 
 void LayerPanel::updateButtonStates() {
@@ -1015,7 +1017,35 @@ void LayerPanel::onDeleteLayer() {
         return;
       }
     }
-    layerManager_->deleteLayer(activeIndex);
+    // Park the items so Undo can bring the whole layer back.
+    const LayerStackState before = layerManager_->captureState();
+    QList<ItemId> parked;
+    if (layer)
+      parked = layer->itemIds();
+    if (!layerManager_->deleteLayer(activeIndex, /*keepItemsForUndo=*/true))
+      return;
+    const LayerStackState after = layerManager_->captureState();
+    if (canvas_) {
+      QPointer<LayerManager> layers(layerManager_);
+      QPointer<LayerPanel> self(this);
+      ItemStore *store = itemStore_;
+      canvas_->addAction(std::make_unique<CallbackAction>(
+          tr("Delete Layer"),
+          [layers, store, parked, before]() {
+            if (store)
+              for (const ItemId &id : parked)
+                store->restoreItem(id);
+            if (layers)
+              layers->restoreState(before);
+          },
+          [layers, store, parked, after]() {
+            if (store)
+              for (const ItemId &id : parked)
+                store->scheduleDelete(id, true);
+            if (layers)
+              layers->restoreState(after);
+          }));
+    }
     emit deleteLayerRequested();
   }
 }
@@ -1203,8 +1233,27 @@ void LayerPanel::onTreeSelectionChanged() {
   for (int i = 0; i < layerTree_->topLevelItemCount(); ++i) {
     QTreeWidgetItem *layerItem = layerTree_->topLevelItem(i);
     QFont font = layerItem->font(0);
-    font.setBold(i == activeTreeIndex);
+    const bool isActive = i == activeTreeIndex;
+    font.setBold(isActive);
     layerItem->setFont(0, font);
+
+    // Keep the marker, tint and tooltip in step with the bold font, or the
+    // "active" dot and highlight stay on the previous layer.
+    const QString marker = QStringLiteral("\u25CF ");
+    QString text = layerItem->text(0);
+    if (text.startsWith(marker))
+      text = text.mid(marker.size());
+    layerItem->setText(0, (isActive ? marker : QString()) + text);
+    layerItem->setBackground(0, isActive ? QBrush(QColor(249, 115, 22, 45))
+                                         : QBrush());
+    const QString activeNote = tr(" - active: new drawing goes here");
+    QString tip = layerItem->toolTip(0);
+    tip.remove(activeNote);
+    if (isActive) {
+      const int at = tip.indexOf(QLatin1Char('\n'));
+      tip.insert(at < 0 ? tip.size() : at, activeNote);
+    }
+    layerItem->setToolTip(0, tip);
   }
 
   updateButtonStates();

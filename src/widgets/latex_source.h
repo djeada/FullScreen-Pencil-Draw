@@ -54,8 +54,8 @@ inline QString composeKatexSource(const QString &text) {
       if (i > 0)
         rows.append(QString());
       if (!lines[i].isEmpty())
-        rows.last() += QStringLiteral("\\text{") + escapeText(lines[i]) +
-                       QLatin1Char('}');
+        rows.last() +=
+            QStringLiteral("\\text{") + escapeText(lines[i]) + QLatin1Char('}');
     }
   };
 
@@ -68,8 +68,8 @@ inline QString composeKatexSource(const QString &text) {
     if (m.captured(1).isEmpty())
       rows.last() += QLatin1Char('{') + m.captured(2) + QLatin1Char('}');
     else
-      rows.last() += QStringLiteral("{\\displaystyle ") + m.captured(1) +
-                     QLatin1Char('}');
+      rows.last() +=
+          QStringLiteral("{\\displaystyle ") + m.captured(1) + QLatin1Char('}');
     pos = m.capturedEnd();
   }
   if (pos < text.size())

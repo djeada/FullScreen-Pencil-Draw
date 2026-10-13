@@ -1368,6 +1368,7 @@ void MainWindow::updateRecentFilesMenu() {
     for (int i = 0; i < recentFiles.size(); ++i) {
       QString filePath = recentFiles.at(i);
       QString fileName = QFileInfo(filePath).fileName();
+      fileName.replace("&", "&&"); // a literal '&' is not a mnemonic
       QString text = QString("&%1. %2").arg(i + 1).arg(fileName);
 
       QAction *action = _recentFilesMenu->addAction(text);
@@ -1836,9 +1837,9 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
   }
 #endif
   // Brush size
-  else if (event->key() == Qt::Key_BracketRight) {
+  else if (event->key() == Qt::Key_BracketRight && !ctrl) {
     _canvas->increaseBrushSize();
-  } else if (event->key() == Qt::Key_BracketLeft) {
+  } else if (event->key() == Qt::Key_BracketLeft && !ctrl) {
     _canvas->decreaseBrushSize();
   }
   // Zoom
@@ -2012,6 +2013,7 @@ void MainWindow::setupPdfToolBar() {
   _pdfPageSpinBox->setMaximum(1);
   _pdfPageSpinBox->setValue(1);
   _pdfPageSpinBox->setToolTip("Go to page (type number and press Enter)");
+  _pdfPageSpinBox->setKeyboardTracking(false); // jump on Enter, not per digit
   _pdfPageSpinBox->setFixedWidth(60);
   _pdfPageSpinBox->setAlignment(Qt::AlignCenter);
   _pdfPageSpinBox->setStyleSheet(R"(
@@ -2256,7 +2258,11 @@ void MainWindow::showPdfPanel() {
     int totalWidth = _centralSplitter->width();
     int canvasWidth = static_cast<int>(totalWidth * CANVAS_RATIO);
     int pdfWidth = static_cast<int>(totalWidth * PDF_RATIO);
-    _centralSplitter->setSizes({canvasWidth, pdfWidth});
+    // Sizes follow the widgets' order, which Swap Panel Order can reverse.
+    if (_pdfPanelOnLeft)
+      _centralSplitter->setSizes({pdfWidth, canvasWidth});
+    else
+      _centralSplitter->setSizes({canvasWidth, pdfWidth});
   }
 
   // Sync PDF viewer settings with canvas settings
@@ -2286,7 +2292,10 @@ void MainWindow::hidePdfPanel() {
   if (_pdfPanel) {
     _pdfPanel->hide();
     // Give full width back to canvas (use 1:0 ratio)
-    _centralSplitter->setSizes({1, 0});
+    if (_pdfPanelOnLeft)
+      _centralSplitter->setSizes({0, 1});
+    else
+      _centralSplitter->setSizes({1, 0});
   }
   _pdfToolBar->hide();
   _pdfModeTitle = false;
@@ -2295,6 +2304,29 @@ void MainWindow::hidePdfPanel() {
     _exportAnnotatedPdfAction->setEnabled(false);
   if (_closePdfAction)
     _closePdfAction->setEnabled(false);
+}
+
+void MainWindow::openPath(const QString &path) {
+  if (path.isEmpty())
+    return;
+  if (!QFileInfo::exists(path)) {
+    statusBar()->showMessage(tr("File not found: %1").arg(path), 5000);
+    return;
+  }
+#ifdef HAVE_QT_PDF
+  if (path.endsWith(".pdf", Qt::CaseInsensitive)) {
+    if (_pdfViewer && maybeDiscardPdfAnnotations()) {
+      if (_pdfViewer->openPdf(path))
+        _pdfDirty = false;
+      else
+        QMessageBox::warning(
+            this, tr("Open Failed"),
+            tr("Could not open PDF: %1").arg(QDir::toNativeSeparators(path)));
+    }
+    return;
+  }
+#endif
+  _canvas->openRecentFile(path);
 }
 
 void MainWindow::onOpenPdf() {
@@ -2310,7 +2342,11 @@ void MainWindow::onOpenPdf() {
   if (_pdfViewer->openPdf(fileName)) {
     _pdfDirty = false;
   } else {
-    statusBar()->showMessage("Failed to open PDF file", 3000);
+    QMessageBox::warning(
+        this, tr("Open Failed"),
+        tr("Could not open PDF: %1\n\nThe file may be damaged, "
+           "password-protected or not a PDF.")
+            .arg(QDir::toNativeSeparators(fileName)));
   }
 }
 
@@ -2370,9 +2406,34 @@ void MainWindow::onExportAnnotatedPdf() {
   }
   _pdfViewer->commitPendingEdits(); // include what is still being typed
 
-  QString fileName = FileDialogs::getSave(this, "Export Annotated PDF", "",
-                                          "PDF Files (*.pdf)");
+  const QString source = _pdfViewer->sourcePath();
+  QString suggested;
+  if (!source.isEmpty()) {
+    const QFileInfo info(source);
+    suggested = info.dir().filePath(info.completeBaseName() + "-annotated.pdf");
+  }
+  QString fileName = FileDialogs::getSave(this, "Export Annotated PDF",
+                                          suggested, "PDF Files (*.pdf)");
   if (fileName.isEmpty()) {
+    return;
+  }
+  if (!fileName.endsWith(".pdf", Qt::CaseInsensitive)) {
+    fileName += ".pdf";
+    if (QFileInfo::exists(fileName) &&
+        QMessageBox::question(
+            this, tr("Replace File"),
+            tr("\"%1\" already exists. Do you want to replace it?")
+                .arg(QFileInfo(fileName).fileName()),
+            QMessageBox::Yes | QMessageBox::Cancel,
+            QMessageBox::Cancel) != QMessageBox::Yes) {
+      return;
+    }
+  }
+  if (!source.isEmpty() && QFileInfo(fileName).canonicalFilePath() == source) {
+    QMessageBox::warning(
+        this, tr("Export Annotated PDF"),
+        tr("The annotated PDF cannot replace the PDF it was made from. "
+           "Choose a different file name."));
     return;
   }
 
@@ -2381,7 +2442,11 @@ void MainWindow::onExportAnnotatedPdf() {
     statusBar()->showMessage(
         QString("Exported annotated PDF to: %1").arg(fileName), 3000);
   } else {
-    statusBar()->showMessage("Failed to export annotated PDF", 3000);
+    QMessageBox::warning(
+        this, tr("Export Failed"),
+        tr("Could not export the annotated PDF to %1.\n\nCheck that the "
+           "location is writable and has enough free space.")
+            .arg(QDir::toNativeSeparators(fileName)));
   }
 }
 

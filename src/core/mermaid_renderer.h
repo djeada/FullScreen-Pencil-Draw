@@ -106,10 +106,12 @@ private:
    * @brief Capture the rendered content as a pixmap.
    */
   void captureResult(quintptr requestId);
+  void failAllRequests();
 
   QWebEngineView *webView_;
   bool initialized_;
   bool rendering_;
+  quint64 requestSerial_ = 0; ///< identifies the in-flight request
   bool shuttingDown_;
 
   // Pending render request

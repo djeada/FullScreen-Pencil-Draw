@@ -277,8 +277,10 @@ void AutoSaveManager::loadSettings() {
   QSettings settings(AppConstants::OrganizationName,
                      AppConstants::ApplicationName);
   enabled_ = settings.value("autosave/enabled", true).toBool();
-  intervalMinutes_ =
-      settings.value("autosave/interval", DEFAULT_INTERVAL_MINUTES).toInt();
+  intervalMinutes_ = qBound(
+      MIN_INTERVAL_MINUTES,
+      settings.value("autosave/interval", DEFAULT_INTERVAL_MINUTES).toInt(),
+      MAX_INTERVAL_MINUTES);
   legacyAutoSavePath_ = settings.value("autosave/lastPath", "").toString();
 }
 

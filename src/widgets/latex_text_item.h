@@ -209,7 +209,6 @@ private:
   qreal renderedPointSize_ = 0; // KaTeX font size of renderedContent_ (0: n/a)
   QRectF contentRect_;
   bool isEditing_;
-  qreal lastScale_; // Track scale for re-rendering
 
   // Inline editing widgets
   QGraphicsProxyWidget *proxyWidget_;

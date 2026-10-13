@@ -39,6 +39,7 @@
 #include <QSaveFile>
 #include <QStyleOptionGraphicsItem>
 #include <QtMath>
+#include <cmath>
 
 const QString ProjectSerializer::fileFilter() {
   return QStringLiteral("Project Files (*.fspd)");
@@ -209,6 +210,15 @@ QTransform ProjectSerializer::deserializeTransform(const QJsonObject &obj) {
 // ==================== Item serialization ====================
 
 namespace {
+
+// A device pixel ratio of 0, a negative or a non-finite one would give the
+// pixmap an infinite or inverted bounding rect and poison the scene.
+double sanitizedDpr(double dpr) {
+  if (!std::isfinite(dpr) || dpr < 0.1 || dpr > 16.0)
+    return 1.0;
+  return dpr;
+}
+
 // QGraphicsItem::data() key that temporarily holds a loaded element's saved
 // key until wires have been resolved against it.
 constexpr int kLoadedElementKeyData = 0x4b4559; // "KEY"
@@ -736,7 +746,7 @@ QGraphicsItem *ProjectSerializer::deserializeItem(const QJsonObject &obj,
     if (image.isNull())
       return fail(QStringLiteral("embedded image is corrupt"));
     QPixmap pm = QPixmap::fromImage(image);
-    pm.setDevicePixelRatio(obj["dpr"].toDouble(1.0));
+    pm.setDevicePixelRatio(sanitizedDpr(obj["dpr"].toDouble(1.0)));
     auto *pixItem = new QGraphicsPixmapItem(pm);
     pixItem->setOffset(obj["offsetX"].toDouble(), obj["offsetY"].toDouble());
     pixItem->setTransformationMode(static_cast<Qt::TransformationMode>(
@@ -1115,7 +1125,7 @@ bool ProjectSerializer::loadProject(const QString &filePath,
     loadedExtras.hasBackgroundImage = true;
     loadedExtras.backgroundImage = QPixmap::fromImage(image);
     loadedExtras.backgroundImage.setDevicePixelRatio(
-        bgObj["dpr"].toDouble(1.0));
+        sanitizedDpr(bgObj["dpr"].toDouble(1.0)));
     loadedExtras.backgroundImagePos =
         QPointF(bgObj["x"].toDouble(), bgObj["y"].toDouble());
     loadedExtras.backgroundImageZ = bgObj["z"].toDouble(-1000);

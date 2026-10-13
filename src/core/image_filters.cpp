@@ -25,6 +25,8 @@ QImage blur(const QImage &source, int radius) {
   // Separable box blur: horizontal pass then vertical pass.
   // Each pass uses a sliding-window running sum for O(w*h) total.
   QImage temp(w, h, QImage::Format_ARGB32_Premultiplied);
+  if (temp.isNull()) // allocation failed (huge image): leave it unchanged
+    return source;
   const int side = 2 * radius + 1;
 
   // --- Horizontal pass ---
@@ -60,6 +62,8 @@ QImage blur(const QImage &source, int radius) {
 
   // --- Vertical pass ---
   QImage result(w, h, QImage::Format_ARGB32_Premultiplied);
+  if (result.isNull())
+    return source;
   for (int x = 0; x < w; ++x) {
     int rSum = 0, gSum = 0, bSum = 0, aSum = 0;
     // Initialize window for y=0
@@ -401,6 +405,8 @@ QImage lanczosResize(const QImage &source, int newWidth, int newHeight) {
 
   // --- Horizontal pass: srcW×srcH → newWidth×srcH ---
   QImage hPass(newWidth, srcH, QImage::Format_ARGB32);
+  if (hPass.isNull())
+    return source;
   {
     const double xRatio = static_cast<double>(srcW) / newWidth;
     const double xFilterRadius = std::max(1.0, xRatio) * A;
@@ -441,6 +447,8 @@ QImage lanczosResize(const QImage &source, int newWidth, int newHeight) {
 
   // --- Vertical pass: newWidth×srcH → newWidth×newHeight ---
   QImage result(newWidth, newHeight, QImage::Format_ARGB32);
+  if (result.isNull())
+    return source;
   {
     const double yRatio = static_cast<double>(srcH) / newHeight;
     const double yFilterRadius = std::max(1.0, yRatio) * A;

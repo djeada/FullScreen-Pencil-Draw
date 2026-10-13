@@ -47,6 +47,16 @@ class TransformHandleItem : public QGraphicsObject {
   Q_OBJECT
 
 public:
+  /**
+   * @brief Scale @p item by (sx, sy) along the *scene* axes, keeping the scene
+   *        point @p anchor fixed.
+   *
+   * Scaling in the item's own axes (the old behaviour) stretched a rotated
+   * item along the wrong direction when a bounding-box handle was dragged.
+   */
+  static void scaleInScene(QGraphicsItem *item, qreal sx, qreal sy,
+                           const QPointF &anchor);
+
   // Custom type for qgraphicsitem_cast
   enum { Type = UserType + 100 };
   int type() const override { return Type; }

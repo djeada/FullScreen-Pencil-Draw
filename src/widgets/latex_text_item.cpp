@@ -479,8 +479,7 @@ static QFont selectMathFont(int pointSize) {
 // LatexTextItem implementation
 LatexTextItem::LatexTextItem(QGraphicsItem *parent)
     : QGraphicsObject(parent), textColor_(Qt::white), font_(selectMathFont(14)),
-      isEditing_(false), lastScale_(1.0), proxyWidget_(nullptr),
-      textEdit_(nullptr)
+      isEditing_(false), proxyWidget_(nullptr), textEdit_(nullptr)
 #ifdef HAVE_QT_WEBENGINE
       ,
       pendingRenderId_(0), katexConnected_(false)
@@ -686,27 +685,9 @@ void LatexTextItem::mouseDoubleClickEvent(QGraphicsSceneMouseEvent *event) {
 
 QVariant LatexTextItem::itemChange(GraphicsItemChange change,
                                    const QVariant &value) {
-  if (change == ItemTransformChange || change == ItemTransformHasChanged) {
-    // Get the current scale from the transform
-    QTransform t = transform();
-    qreal currentScale = qSqrt(t.m11() * t.m11() + t.m12() * t.m12());
-
-    // If scale changed significantly, update font size and re-render
-    if (qAbs(currentScale - lastScale_) > 0.1 && currentScale > 0.1) {
-      // Adjust font size based on scale
-      int newFontSize = qRound(14 * currentScale);
-      newFontSize = qBound(8, newFontSize, 72); // Clamp to reasonable range
-
-      if (font_.pointSize() != newFontSize) {
-        font_.setPointSize(newFontSize);
-        lastScale_ = currentScale;
-
-        // Reset transform and re-render at new size
-        setTransform(QTransform());
-        renderContent();
-      }
-    }
-  }
+  // Resizing goes through setFont() (handles, canvas), so a transform is left
+  // alone: rewriting it here reset the font to 14pt and discarded rotations,
+  // perspective and any transform loaded from a project.
   return QGraphicsObject::itemChange(change, value);
 }
 

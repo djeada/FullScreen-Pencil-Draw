@@ -14,6 +14,7 @@
 #include <QRegularExpression>
 #include <QScreen>
 #include <QTimer>
+#include <QWebEnginePage>
 #include <QWebEngineProfile>
 #include <QWebEngineSettings>
 #include <QWebEngineView>
@@ -141,8 +142,19 @@ void KatexRenderer::initializeWebEngine() {
     initialized_ = ok;
     if (ok && !pendingRequests_.isEmpty()) {
       processNextRequest();
+    } else if (!ok) {
+      failAllRequests();
     }
   });
+  // A crashed Chromium renderer never calls back: without this every later
+  // formula would queue forever behind the one that was in flight.
+  connect(webView_, &QWebEngineView::renderProcessTerminated, this,
+          [this](QWebEnginePage::RenderProcessTerminationStatus, int) {
+            initialized_ = false;
+            failAllRequests();
+            if (webView_ && !shuttingDown_)
+              webView_->reload();
+          });
 }
 
 void KatexRenderer::processNextRequest() {
@@ -152,6 +164,20 @@ void KatexRenderer::processNextRequest() {
 
   currentRequest_ = pendingRequests_.takeFirst();
   rendering_ = true;
+
+  // Watchdog: a JS error or page reload can swallow the callback, which
+  // would otherwise leave rendering_ set forever.
+  {
+    QPointer<KatexRenderer> guard(this);
+    const quintptr watchedId = currentRequest_.requestId;
+    const quint64 watchedSerial = ++requestSerial_;
+    QTimer::singleShot(8000, this, [guard, watchedId, watchedSerial]() {
+      if (guard && guard->rendering_ &&
+          guard->requestSerial_ == watchedSerial) {
+        guard->finishRequest(watchedId, QPixmap());
+      }
+    });
+  }
 
   // Apply font size via CSS, render and measure in one round trip.
   // Build the JS in a single .arg() pass: LaTeX regularly contains '%'
@@ -231,6 +257,17 @@ void KatexRenderer::cancel(quintptr requestId) {
       [requestId](const RenderRequest &r) { return r.requestId == requestId; });
 }
 
+void KatexRenderer::failAllRequests() {
+  if (rendering_) {
+    rendering_ = false;
+    emit renderComplete(currentRequest_.requestId, QPixmap(), false);
+  }
+  const QList<RenderRequest> pending = std::move(pendingRequests_);
+  pendingRequests_.clear();
+  for (const RenderRequest &request : pending)
+    emit renderComplete(request.requestId, QPixmap(), false);
+}
+
 void KatexRenderer::finishRequest(quintptr requestId, const QPixmap &pixmap) {
   if (pixmap.isNull() || pixmap.size().isEmpty()) {
     emit renderComplete(requestId, QPixmap(), false);
@@ -246,6 +283,9 @@ void KatexRenderer::finishRequest(quintptr requestId, const QPixmap &pixmap) {
 }
 
 void KatexRenderer::captureResult(quintptr requestId, const QString &sizeJson) {
+  if (!rendering_ || requestId != currentRequest_.requestId) {
+    return; // answer to a request the watchdog already gave up on
+  }
   if (shuttingDown_ || !webView_ || !webView_->page()) {
     finishRequest(requestId, QPixmap());
     return;
@@ -267,6 +307,12 @@ void KatexRenderer::captureResult(quintptr requestId, const QString &sizeJson) {
   // Add padding and ensure minimum size
   width = qMax(width + 16, 50);
   height = qMax(height + 8, 20);
+  // Never ask Chromium for an absurd surface (e.g. \rule{99999em}{1em}).
+  constexpr int kMaxSide = 4096;
+  if (width > kMaxSide || height > kMaxSide) {
+    finishRequest(requestId, QPixmap());
+    return;
+  }
 
   // Grow the viewport if the formula doesn't fit (it is never shown, so
   // this is invisible; it just triggers a relayout before the next frame).
@@ -280,16 +326,19 @@ void KatexRenderer::captureResult(quintptr requestId, const QString &sizeJson) {
   // (two animation frames), instead of guessing with fixed delays.
   QPointer<KatexRenderer> self(this);
   const QRect area(0, 0, width, height);
-  webView_->page()->runJavaScript(
-      "armFrameReady();", [self, requestId, area](const QVariant &) {
-        if (self && !self->shuttingDown_) {
-          self->pollFrameReady(requestId, area, 0);
-        }
-      });
+  webView_->page()->runJavaScript("armFrameReady();",
+                                  [self, requestId, area](const QVariant &) {
+                                    if (self && !self->shuttingDown_) {
+                                      self->pollFrameReady(requestId, area, 0);
+                                    }
+                                  });
 }
 
 void KatexRenderer::pollFrameReady(quintptr requestId, const QRect &area,
                                    int attempt) {
+  if (!rendering_ || requestId != currentRequest_.requestId) {
+    return; // superseded by the watchdog
+  }
   if (shuttingDown_ || !webView_ || !webView_->page()) {
     finishRequest(requestId, QPixmap());
     return;
