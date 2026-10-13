@@ -274,6 +274,10 @@ QRectF logicalRectFor(const QPixmap &pixmap) {
 
 void MermaidTextItem::renderContent() {
   if (mermaidCode_.isEmpty()) {
+#ifdef HAVE_QT_WEBENGINE
+    // Ignore the completion of a render requested for the old code.
+    pendingRenderId_ = 0;
+#endif
     renderedContent_ = QPixmap();
     contentRect_ = QRectF(0, 0, MIN_WIDTH, MIN_HEIGHT);
     update();

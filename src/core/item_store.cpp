@@ -46,18 +46,21 @@ ItemStore::~ItemStore() {
   for (const auto &pair : snapshotItems_) {
     snapshotPtrs.insert(pair.second);
   }
+  // Decide what to delete before deleting anything: once a group is freed
+  // its children are too, and asking a freed child for its parent is a
+  // use-after-free.
+  std::vector<QGraphicsItem *> roots;
   for (const auto &pair : snapshotItems_) {
     QGraphicsItem *item = pair.second;
-    if (!item) {
-      continue;
+    // Children die with a parent that is also tracked.
+    if (item && !hasAncestorInSet(item, snapshotPtrs)) {
+      roots.push_back(item);
     }
-    // Avoid double-deleting child items when a parent is also tracked.
-    if (hasAncestorInSet(item, snapshotPtrs)) {
-      continue;
-    }
-    delete item;
   }
   snapshotItems_.clear();
+  for (QGraphicsItem *item : roots) {
+    delete item;
+  }
 }
 
 ItemId ItemStore::registerItem(QGraphicsItem *item) {
@@ -214,22 +217,23 @@ void ItemStore::flushDeletions() {
   for (const auto &pair : deletionQueue_) {
     queuedPtrs.insert(pair.second);
   }
+  // Pick the roots first (see ~ItemStore): children of a queued parent are
+  // freed with it and must not be inspected afterwards.
+  std::vector<QGraphicsItem *> roots;
   for (const auto &pair : deletionQueue_) {
     QGraphicsItem *item = pair.second;
-    if (!item) {
-      continue;
+    if (item && !hasAncestorInSet(item, queuedPtrs)) {
+      roots.push_back(item);
     }
-    // Avoid double-deleting child items when a parent is also queued.
-    if (hasAncestorInSet(item, queuedPtrs)) {
-      continue;
-    }
+  }
+  deletionQueue_.clear();
+  for (QGraphicsItem *item : roots) {
     // Always remove from ANY scene, not just our tracked scene
     if (item->scene()) {
       item->scene()->removeItem(item);
     }
     delete item;
   }
-  deletionQueue_.clear();
 }
 
 bool ItemStore::restoreItem(const ItemId &id) {
@@ -292,6 +296,18 @@ void ItemStore::discardSnapshot(const ItemId &id) {
   }
 
   QGraphicsItem *item = it->second;
+  if (item) {
+    // A registered child parked under a parked group belongs to that group's
+    // snapshot: when only the child's own history entry was evicted, the
+    // group can still be restored and must get its children back.
+    for (QGraphicsItem *parent = item->parentItem(); parent;
+         parent = parent->parentItem()) {
+      for (const auto &pair : snapshotItems_) {
+        if (pair.second == parent)
+          return;
+      }
+    }
+  }
   snapshotItems_.erase(it);
   if (!item) {
     return;

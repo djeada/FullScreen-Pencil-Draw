@@ -656,6 +656,9 @@ add_custom_target(run_tests
     DEPENDS test_item_store test_project_serializer test_image_filters test_perspective_transform test_snap_engine test_text_whitespace test_latex_unicode test_latex_source test_busy_spinner_overlay test_brush_tip test_rotation_dialog test_alignment_dialog test_transform_action test_group_clipboard test_side_tab_bar test_undo_redo_manager test_canvas_interaction test_raster_surface test_document_integrity
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
-if(TARGET test_pdf_page_cache)
-    add_dependencies(run_tests test_pdf_page_cache)
-endif()
+foreach(extra_test test_pdf_page_cache test_architecture_elements
+        test_electronics_elements test_wire_item)
+    if(TARGET ${extra_test})
+        add_dependencies(run_tests ${extra_test})
+    endif()
+endforeach()

@@ -164,6 +164,52 @@ private slots:
     QCOMPARE(rect->scene(), &scene);
   }
 
+  // A registered group parked together with its registered children used to
+  // be freed child-after-parent when the store died (use-after-free).
+  void testDestroyingStoreWithParkedGroupAndChildren() {
+    QGraphicsScene scene;
+    {
+      ItemStore store(&scene);
+      auto *group = new QGraphicsItemGroup();
+      scene.addItem(group);
+      const ItemId groupId = store.registerItem(group);
+      std::vector<ItemId> childIds;
+      for (int i = 0; i < 4; ++i) {
+        auto *child = new QGraphicsRectItem(0, 0, 10, 10);
+        scene.addItem(child);
+        group->addToGroup(child);
+        childIds.push_back(store.registerItem(child));
+      }
+      store.scheduleDelete(groupId, true);
+      for (const ItemId &id : childIds)
+        store.scheduleDelete(id, true);
+      store.flushDeletions();
+    } // ~ItemStore must not touch freed children
+    QVERIFY(true);
+  }
+
+  // Evicting only a child's history entry must not destroy the child of a
+  // group that can still be restored.
+  void testDiscardChildSnapshotKeepsParkedGroupIntact() {
+    QGraphicsScene scene;
+    ItemStore store(&scene);
+    auto *group = new QGraphicsItemGroup();
+    scene.addItem(group);
+    const ItemId groupId = store.registerItem(group);
+    auto *child = new QGraphicsRectItem(0, 0, 10, 10);
+    scene.addItem(child);
+    group->addToGroup(child);
+    const ItemId childId = store.registerItem(child);
+
+    store.scheduleDelete(groupId, true);
+    store.scheduleDelete(childId, true);
+    store.discardSnapshot(childId);
+
+    QVERIFY(store.restoreItem(groupId));
+    QCOMPARE(group->childItems().size(), 1);
+    QCOMPARE(group->childItems().first(), child);
+  }
+
   void testItemStoreClear() {
     QGraphicsScene scene;
     ItemStore store(&scene);

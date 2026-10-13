@@ -350,9 +350,12 @@ public:
   /**
    * @brief Delete a layer by index
    * @param index The layer index
+   * @param keepItemsForUndo Park the layer's items instead of destroying
+   *        them, so restoreState() + ItemStore::restoreItem() can bring the
+   *        layer back.
    * @return true if successfully deleted
    */
-  bool deleteLayer(int index);
+  bool deleteLayer(int index, bool keepItemsForUndo = false);
 
   /**
    * @brief Delete a layer by ID

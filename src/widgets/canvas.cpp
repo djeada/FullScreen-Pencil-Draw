@@ -269,9 +269,67 @@ Canvas::Canvas(QWidget *parent)
           if (auto *text = dynamic_cast<LatexTextItem *>(item)) {
             connect(text, &LatexTextItem::textChanged, this,
                     &Canvas::canvasModified, Qt::UniqueConnection);
+            if (!text->property("editUndoText").isValid()) {
+              // Re-edits of an existing label are undoable. Items created
+              // by the text tool start untracked (their first edit is the
+              // draw action) until that session ends.
+              text->setProperty("editUndoText", text->text());
+              connect(text, &LatexTextItem::textChanged, this, [this, id]() {
+                auto *target =
+                    dynamic_cast<LatexTextItem *>(itemStore()->item(id));
+                if (!target || !target->property("editUndoText").isValid())
+                  return;
+                const QString oldText =
+                    target->property("editUndoText").toString();
+                const QString newText = target->text();
+                if (target->property("editUndoPaused").toBool() ||
+                    oldText == newText)
+                  return;
+                target->setProperty("editUndoText", newText);
+                QPointer<ItemStore> store = itemStore();
+                auto apply = [store, id](const QString &value) {
+                  if (auto *t = dynamic_cast<LatexTextItem *>(
+                          store ? store->item(id) : nullptr)) {
+                    t->setProperty("editUndoText", value);
+                    t->setText(value);
+                  }
+                };
+                addAction(std::make_unique<CallbackAction>(
+                    "Edit Text", [apply, oldText]() { apply(oldText); },
+                    [apply, newText]() { apply(newText); }));
+              });
+            }
           } else if (auto *mermaid = dynamic_cast<MermaidTextItem *>(item)) {
             connect(mermaid, &MermaidTextItem::codeChanged, this,
                     &Canvas::canvasModified, Qt::UniqueConnection);
+            if (!mermaid->property("editUndoText").isValid()) {
+              mermaid->setProperty("editUndoText", mermaid->mermaidCode());
+              connect(
+                  mermaid, &MermaidTextItem::codeChanged, this, [this, id]() {
+                    auto *target =
+                        dynamic_cast<MermaidTextItem *>(itemStore()->item(id));
+                    if (!target || !target->property("editUndoText").isValid())
+                      return;
+                    const QString oldCode =
+                        target->property("editUndoText").toString();
+                    const QString newCode = target->mermaidCode();
+                    if (target->property("editUndoPaused").toBool() ||
+                        oldCode == newCode)
+                      return;
+                    target->setProperty("editUndoText", newCode);
+                    QPointer<ItemStore> store = itemStore();
+                    auto apply = [store, id](const QString &value) {
+                      if (auto *t = dynamic_cast<MermaidTextItem *>(
+                              store ? store->item(id) : nullptr)) {
+                        t->setProperty("editUndoText", value);
+                        t->setMermaidCode(value);
+                      }
+                    };
+                    addAction(std::make_unique<CallbackAction>(
+                        "Edit Diagram", [apply, oldCode]() { apply(oldCode); },
+                        [apply, newCode]() { apply(newCode); }));
+                  });
+            }
           } else if (auto *pathText = dynamic_cast<TextOnPathItem *>(item);
                      pathText &&
                      !pathText->property("editUndoHooked").toBool()) {
@@ -935,6 +993,9 @@ void Canvas::cleanupTransientToolState() {
   // one undo step rather than leaving them outside the history.
   endPixelErase();
   endRasterStroke();
+  // An object-erase sweep cut short by a tool switch still has to be one
+  // undo step; left pending it would attach to the next unrelated sweep.
+  endEraseStroke();
   // End an in-progress Bezier / text-on-path gesture before switching away,
   // so no half-built preview items are left in the scene.
   if (activePathTool_) {
@@ -1388,6 +1449,7 @@ void Canvas::resetDocument() {
   // Drop in-progress previews first: the teardown below deletes every item,
   // which would leave the active tool holding dangling pointers.
   abortInProgressDrawing();
+  eraserStrokeAction_.reset(); // refers to items of the old document
 
   // Clear undo/redo history first (it may hold references to items); the
   // history is shared with the PDF viewer, so only drop canvas actions.
@@ -2376,14 +2438,29 @@ void Canvas::deselectAll() {
   viewport()->update();
 }
 
+// Select many items with a single selectionChanged: every setSelected() call
+// would otherwise refresh the handles and the layer panel for the whole
+// selection, which made Select All on a large drawing grind for minutes.
+template <typename Fn> static void selectInBatch(QGraphicsScene *scene, Fn fn) {
+  if (!scene)
+    return;
+  const bool wasBlocked = scene->blockSignals(true);
+  fn();
+  scene->blockSignals(wasBlocked);
+  emit scene->selectionChanged();
+}
+
 void Canvas::selectAll() {
   if (!scene_)
     return;
-  for (auto item : scene_->items())
-    if (item && item != eraserPreview_ && item != backgroundImage_ &&
-        item != colorSelectionOverlay_ && item->isVisible() &&
-        (item->flags() & QGraphicsItem::ItemIsSelectable))
-      item->setSelected(true);
+  selectInBatch(scene_, [this]() {
+    for (auto item : scene_->items())
+      if (item && item != eraserPreview_ && item != backgroundImage_ &&
+          item != colorSelectionOverlay_ && item != currentPath_ &&
+          item != tempShapeItem_ && item->isVisible() &&
+          (item->flags() & QGraphicsItem::ItemIsSelectable))
+        item->setSelected(true);
+  });
 }
 
 // Removing a circuit element must take its wires along: a wire left behind
@@ -2538,8 +2615,9 @@ void Canvas::saveToFile() {
   const ExportResult result = exporter.exportToFile(fileName);
   hideBusySpinner();
   reportExportResult(fileName, result);
-  if (result.ok)
-    RecentFilesManager::instance().addRecentFile(fileName);
+  // Exports are deliberately not added to Recent Files: they are not
+  // documents this app can reopen (PDF) or would silently turn into the
+  // base image (PNG/JPG).
 }
 
 void Canvas::reportExportResult(const QString &fileName,
@@ -2640,6 +2718,15 @@ void Canvas::openRecentFile(const QString &filePath) {
   resetColorSelection();
   if (filePath.isEmpty())
     return;
+  // Check before any "save changes?" prompt: a missing file must not cost
+  // the user their unsaved work, and its stale menu entry goes away.
+  if (!QFileInfo::exists(filePath)) {
+    RecentFilesManager::instance().removeRecentFile(filePath);
+    QMessageBox::warning(this, tr("Open Failed"),
+                         tr("The file no longer exists:\n%1")
+                             .arg(QDir::toNativeSeparators(filePath)));
+    return;
+  }
 
   // Handle project files
   if (filePath.endsWith(".fspd", Qt::CaseInsensitive)) {
@@ -2837,8 +2924,9 @@ void Canvas::exportToPDFWithFilename(const QString &fileName) {
       exporter.exportToFile(fileName, ExportFormat::Pdf);
   hideBusySpinner();
   reportExportResult(fileName, result);
-  if (result.ok)
-    RecentFilesManager::instance().addRecentFile(fileName);
+  // Exports are deliberately not added to Recent Files: they are not
+  // documents this app can reopen (PDF) or would silently turn into the
+  // base image (PNG/JPG).
 }
 
 void Canvas::createTextItem(const QPointF &pos) {
@@ -2853,6 +2941,8 @@ void Canvas::createTextItem(const QPointF &pos) {
   } else {
     scene_->addItem(textItem);
   }
+  // The first edit session is recorded as the draw action, not as an edit.
+  textItem->setProperty("editUndoPaused", true);
 
   // Connect to handle when editing is finished
   // Use QPointer to safely track the textItem in case it gets deleted before
@@ -2882,6 +2972,8 @@ void Canvas::createTextItem(const QPointF &pos) {
     } else {
       // Add to undo stack only when there's actual content
       addDrawAction(textItem);
+      textItem->setProperty("editUndoText", textItem->text());
+      textItem->setProperty("editUndoPaused", false);
     }
   };
   connect(textItem, &LatexTextItem::editingFinished, this, onTextEditDone);
@@ -2902,6 +2994,7 @@ void Canvas::createMermaidItem(const QPointF &pos) {
   } else {
     scene_->addItem(mermaidItem);
   }
+  mermaidItem->setProperty("editUndoPaused", true);
 
   // Connect to handle when editing is finished
   // Runs once, for the initial edit session only (see createTextItem).
@@ -2928,6 +3021,8 @@ void Canvas::createMermaidItem(const QPointF &pos) {
         } else {
           // Add to undo stack only when there's actual content
           addDrawAction(mermaidItem);
+          mermaidItem->setProperty("editUndoText", mermaidItem->mermaidCode());
+          mermaidItem->setProperty("editUndoPaused", false);
         }
       };
   connect(mermaidItem, &MermaidTextItem::editingFinished, this,
@@ -2993,28 +3088,28 @@ QImage Canvas::createColorSelectionMask(const QImage &image, const QPoint &seed,
   };
 
   if (contiguous) {
-    QQueue<QPoint> queue;
-    queue.enqueue(seed);
-
-    while (!queue.isEmpty()) {
-      const QPoint p = queue.dequeue();
-      if (!src.rect().contains(p)) {
-        continue;
+    // Pixels are marked when they are queued (not when dequeued), so each
+    // is queued at most once; the old scheme queued every pixel up to four
+    // times, which on a large flat image exhausted memory.
+    std::vector<QPoint> stack;
+    mask.scanLine(seed.y())[seed.x()] = COLOR_SELECTION_MARK;
+    stack.push_back(seed);
+    const QPoint kNeighbours[4] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+    while (!stack.empty()) {
+      const QPoint p = stack.back();
+      stack.pop_back();
+      for (const QPoint &d : kNeighbours) {
+        const QPoint n = p + d;
+        if (n.x() < 0 || n.y() < 0 || n.x() >= src.width() ||
+            n.y() >= src.height())
+          continue;
+        uchar *maskRow = mask.scanLine(n.y());
+        if (maskRow[n.x()] == COLOR_SELECTION_MARK ||
+            !matchesSeed(n.x(), n.y()))
+          continue;
+        maskRow[n.x()] = COLOR_SELECTION_MARK;
+        stack.push_back(n);
       }
-
-      uchar *maskRow = mask.scanLine(p.y());
-      if (maskRow[p.x()] == COLOR_SELECTION_MARK) {
-        continue;
-      }
-      if (!matchesSeed(p.x(), p.y())) {
-        continue;
-      }
-
-      maskRow[p.x()] = COLOR_SELECTION_MARK;
-      queue.enqueue(QPoint(p.x() + 1, p.y()));
-      queue.enqueue(QPoint(p.x() - 1, p.y()));
-      queue.enqueue(QPoint(p.x(), p.y() + 1));
-      queue.enqueue(QPoint(p.x(), p.y() - 1));
     }
   } else {
     for (int y = 0; y < src.height(); ++y) {
@@ -3121,7 +3216,11 @@ bool Canvas::selectByColorAt(const QPointF &scenePoint,
     return false;
   }
 
-  const QPointF localPoint = pixmapItem->mapFromScene(scenePoint);
+  // Item coordinates -> pixel index: account for the item's offset and for
+  // HiDPI pixmaps (a logical coordinate is dpr pixels wide).
+  const QPointF localPoint =
+      (pixmapItem->mapFromScene(scenePoint) - pixmapItem->offset()) *
+      pixmapItem->pixmap().devicePixelRatio();
   const QPoint seed(static_cast<int>(std::floor(localPoint.x())),
                     static_cast<int>(std::floor(localPoint.y())));
   if (!image.rect().contains(seed)) {
@@ -4079,21 +4178,23 @@ void Canvas::mouseReleaseEvent(QMouseEvent *event) {
       // Select items inside the lasso
       if (!selectionPath.isEmpty()) {
         const QList<QGraphicsItem *> allItems = scene_->items();
-        for (QGraphicsItem *item : allItems) {
-          if (!item)
-            continue;
-          if (item == eraserPreview_ || item == backgroundImage_ ||
-              item == colorSelectionOverlay_)
-            continue;
-          if (!(item->flags() & QGraphicsItem::ItemIsSelectable))
-            continue;
-          if (!item->isVisible())
-            continue; // never select content on hidden layers
-          QPainterPath mappedPath = item->mapFromScene(selectionPath);
-          if (item->shape().intersects(mappedPath)) {
-            item->setSelected(true);
+        selectInBatch(scene_, [&]() {
+          for (QGraphicsItem *item : allItems) {
+            if (!item)
+              continue;
+            if (item == eraserPreview_ || item == backgroundImage_ ||
+                item == colorSelectionOverlay_)
+              continue;
+            if (!(item->flags() & QGraphicsItem::ItemIsSelectable))
+              continue;
+            if (!item->isVisible())
+              continue; // never select content on hidden layers
+            QPainterPath mappedPath = item->mapFromScene(selectionPath);
+            if (item->shape().intersects(mappedPath)) {
+              item->setSelected(true);
+            }
           }
-        }
+        });
       }
 
       lassoPoints_.clear();
@@ -4379,6 +4480,10 @@ void Canvas::cutSelectedItems() {
   if (sel.isEmpty())
     return;
   copySelectedItems();
+  clearTransformHandles();
+  // Wires attached to a cut circuit element would otherwise be left with a
+  // detached end (Delete takes them along, so Cut must too).
+  sel = withConnectedWires(sel);
   auto composite = std::make_unique<CompositeAction>();
   for (auto item : sel) {
     if (!item)
@@ -5616,15 +5721,21 @@ void Canvas::updateTransformHandles() {
       if (id.isValid())
         nowSelected.append(id);
     }
+    // Hash lookups: with thousands selected the list scans were quadratic.
+    const QSet<ItemId> nowSelectedSet(nowSelected.cbegin(), nowSelected.cend());
     selectionOrder_.erase(std::remove_if(selectionOrder_.begin(),
                                          selectionOrder_.end(),
                                          [&](const ItemId &id) {
-                                           return !nowSelected.contains(id);
+                                           return !nowSelectedSet.contains(id);
                                          }),
                           selectionOrder_.end());
+    QSet<ItemId> alreadyOrdered(selectionOrder_.cbegin(),
+                                selectionOrder_.cend());
     for (const ItemId &id : nowSelected)
-      if (!selectionOrder_.contains(id))
+      if (!alreadyOrdered.contains(id)) {
         selectionOrder_.append(id);
+        alreadyOrdered.insert(id);
+      }
   }
   // Only show transform handles when in selection mode
   if (currentShape_ != Selection) {
@@ -5823,19 +5934,7 @@ void Canvas::applyResizeToOtherItems(QGraphicsItem *sourceItem, qreal scaleX,
     }
 
     // Scale around the shared anchor point so relative positions are preserved
-    QPointF localAnchor = item->mapFromScene(anchor);
-
-    QTransform scaleTransform;
-    scaleTransform.translate(localAnchor.x(), localAnchor.y());
-    scaleTransform.scale(scaleX, scaleY);
-    scaleTransform.translate(-localAnchor.x(), -localAnchor.y());
-
-    item->setTransform(item->transform() * scaleTransform);
-
-    // Keep the anchor point fixed in scene space
-    QPointF newAnchorPos = item->mapToScene(localAnchor);
-    QPointF posAdjust = anchor - newAnchorPos;
-    item->setPos(item->pos() + posAdjust);
+    TransformHandleItem::scaleInScene(item, scaleX, scaleY, anchor);
   }
 
   // Update all transform handles
@@ -5951,10 +6050,20 @@ void Canvas::createTransformUndoActions() {
         QFont newFont = textItem->font();
         QPointF newPos = textItem->pos();
         // Compare point size specifically since resize only adjusts font size
-        if (newFont.pointSizeF() != state.font.pointSizeF() ||
-            newPos != state.pos) {
+        const bool fontChanged =
+            newFont.pointSizeF() != state.font.pointSizeF();
+        const QTransform newTransform = textItem->transform();
+        if (fontChanged ||
+            (newPos != state.pos && newTransform == state.transform)) {
           composite->addAction(std::make_unique<TextResizeAction>(
               state.id, store, state.font, newFont, state.pos, newPos));
+        }
+        // Rotating a text item only changes its transform; without this the
+        // rotation was never recorded and Ctrl+Z skipped it.
+        if (newTransform != state.transform) {
+          composite->addAction(std::make_unique<TransformAction>(
+              state.id, store, state.transform, newTransform, state.pos,
+              newPos));
         }
       }
     } else {
@@ -6387,30 +6496,46 @@ void Canvas::changeColorOfSelectedItems() {
     // ItemStore, so FillAction-based undo is attempted when possible
     // but falls back to direct modification for unregistered children.
     else if (auto *group = dynamic_cast<QGraphicsItemGroup *>(item)) {
-      for (QGraphicsItem *child : group->childItems()) {
+      const QList<QGraphicsItem *> children = group->childItems();
+      for (int childIndex = 0; childIndex < children.size(); ++childIndex) {
+        QGraphicsItem *child = children.at(childIndex);
         ItemId childId = store->idForItem(child);
         if (auto *childShape =
                 dynamic_cast<QAbstractGraphicsShapeItem *>(child)) {
           QPen oldPen = childShape->pen();
           QPen newPen = oldPen;
           newPen.setColor(keepAlpha(newColor, oldPen.color()));
+          QBrush oldBrush = childShape->brush();
+          QBrush newBrush = oldBrush;
+          const bool hasBrush = oldBrush.style() != Qt::NoBrush;
+          if (hasBrush)
+            newBrush.setColor(keepAlpha(newColor, oldBrush.color()));
           if (childId.isValid()) {
             composite->addAction(
                 std::make_unique<FillAction>(childId, store, oldPen, newPen));
-          } else {
-            childShape->setPen(newPen);
-          }
-
-          QBrush oldBrush = childShape->brush();
-          if (oldBrush.style() != Qt::NoBrush) {
-            QBrush newBrush = oldBrush;
-            newBrush.setColor(keepAlpha(newColor, oldBrush.color()));
-            if (childId.isValid()) {
+            if (hasBrush)
               composite->addAction(std::make_unique<FillAction>(
                   childId, store, oldBrush, newBrush));
-            } else {
-              childShape->setBrush(newBrush);
-            }
+          } else {
+            // Unregistered child (arrow parts): recorded by its group and
+            // position so undo never holds a raw child pointer.
+            auto apply = [store, id, childIndex,
+                          hasBrush](const QPen &pen, const QBrush &brush) {
+              auto *g = dynamic_cast<QGraphicsItemGroup *>(store->item(id));
+              if (!g)
+                return;
+              auto *c = dynamic_cast<QAbstractGraphicsShapeItem *>(
+                  g->childItems().value(childIndex));
+              if (!c)
+                return;
+              c->setPen(pen);
+              if (hasBrush)
+                c->setBrush(brush);
+            };
+            composite->addAction(std::make_unique<CallbackAction>(
+                tr("Change Color"),
+                [apply, oldPen, oldBrush]() { apply(oldPen, oldBrush); },
+                [apply, newPen, newBrush]() { apply(newPen, newBrush); }));
           }
         } else if (auto *childLine = dynamic_cast<QGraphicsLineItem *>(child)) {
           QPen oldPen = childLine->pen();
@@ -6420,7 +6545,17 @@ void Canvas::changeColorOfSelectedItems() {
             composite->addAction(
                 std::make_unique<FillAction>(childId, store, oldPen, newPen));
           } else {
-            childLine->setPen(newPen);
+            auto apply = [store, id, childIndex](const QPen &pen) {
+              auto *g = dynamic_cast<QGraphicsItemGroup *>(store->item(id));
+              if (!g)
+                return;
+              if (auto *c = dynamic_cast<QGraphicsLineItem *>(
+                      g->childItems().value(childIndex)))
+                c->setPen(pen);
+            };
+            composite->addAction(std::make_unique<CallbackAction>(
+                tr("Change Color"), [apply, oldPen]() { apply(oldPen); },
+                [apply, newPen]() { apply(newPen); }));
           }
         }
       }

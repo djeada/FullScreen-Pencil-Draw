@@ -14,6 +14,7 @@
 #include <QRegularExpression>
 #include <QScreen>
 #include <QTimer>
+#include <QWebEnginePage>
 #include <QWebEngineProfile>
 #include <QWebEngineSettings>
 #include <QWebEngineView>
@@ -133,8 +134,19 @@ void MermaidRenderer::initializeWebEngine() {
     initialized_ = ok;
     if (ok && !pendingRequests_.isEmpty()) {
       processNextRequest();
+    } else if (!ok) {
+      failAllRequests();
     }
   });
+  // A crashed renderer process never calls back; fail the queued diagrams
+  // instead of leaving every later one stuck on its placeholder.
+  connect(webView_, &QWebEngineView::renderProcessTerminated, this,
+          [this](QWebEnginePage::RenderProcessTerminationStatus, int) {
+            initialized_ = false;
+            failAllRequests();
+            if (webView_ && !shuttingDown_)
+              webView_->reload();
+          });
 
   // Load the Mermaid HTML template from resources
   QFile htmlFile(":/mermaid/mermaid.html");
@@ -147,6 +159,18 @@ void MermaidRenderer::initializeWebEngine() {
   }
 }
 
+void MermaidRenderer::failAllRequests() {
+  ++requestSerial_; // invalidate callbacks of the request in flight
+  if (rendering_) {
+    rendering_ = false;
+    emit renderComplete(currentRequest_.requestId, QPixmap(), false);
+  }
+  const QList<RenderRequest> pending = std::move(pendingRequests_);
+  pendingRequests_.clear();
+  for (const RenderRequest &request : pending)
+    emit renderComplete(request.requestId, QPixmap(), false);
+}
+
 void MermaidRenderer::processNextRequest() {
   if (pendingRequests_.isEmpty() || rendering_ || shuttingDown_) {
     return;
@@ -154,6 +178,17 @@ void MermaidRenderer::processNextRequest() {
 
   currentRequest_ = pendingRequests_.takeFirst();
   rendering_ = true;
+  const quint64 serial = ++requestSerial_;
+  // Watchdog: a JS error or reload can swallow the callbacks below, which
+  // would leave rendering_ set and block every later diagram.
+  QTimer::singleShot(20000, this, [this, serial]() {
+    if (rendering_ && requestSerial_ == serial) {
+      ++requestSerial_;
+      rendering_ = false;
+      emit renderComplete(currentRequest_.requestId, QPixmap(), false);
+      processNextRequest();
+    }
+  });
   // Start every render from the full default size: the view keeps the
   // previous diagram's (possibly tiny) size, which squeezed the layout of
   // the next one (e.g. an error message wrapped to a narrow column).
@@ -170,15 +205,15 @@ void MermaidRenderer::processNextRequest() {
                         escapeJsString(currentRequest_.theme));
 
   QPointer<MermaidRenderer> self(this);
-  webView_->page()->runJavaScript(js, [self](const QVariant &result) {
-    if (!self || self->shuttingDown_) {
+  webView_->page()->runJavaScript(js, [self, serial](const QVariant &result) {
+    if (!self || self->shuttingDown_ || self->requestSerial_ != serial) {
       return;
     }
     qDebug() << "JavaScript result:" << result;
     const quintptr requestId = self->currentRequest_.requestId;
     // Give Mermaid time to render, then capture
-    QTimer::singleShot(500, self, [self, requestId]() {
-      if (!self || self->shuttingDown_) {
+    QTimer::singleShot(500, self, [self, requestId, serial]() {
+      if (!self || self->shuttingDown_ || self->requestSerial_ != serial) {
         return;
       }
       self->captureResult(requestId);
@@ -239,10 +274,12 @@ void MermaidRenderer::captureResult(quintptr requestId) {
   }
 
   // Get the size of the rendered diagram
+  const quint64 serial = requestSerial_;
   QPointer<MermaidRenderer> self(this);
   webView_->page()->runJavaScript(
-      "getSize();", [self, requestId](const QVariant &result) {
-        if (!self || self->shuttingDown_ || !self->webView_) {
+      "getSize();", [self, requestId, serial](const QVariant &result) {
+        if (!self || self->shuttingDown_ || !self->webView_ ||
+            self->requestSerial_ != serial) {
           return;
         }
 
@@ -265,8 +302,8 @@ void MermaidRenderer::captureResult(quintptr requestId) {
         }
 
         // Add padding and ensure minimum size
-        width = qMax(width + 32, 100);
-        height = qMax(height + 32, 100);
+        width = qBound(100, width + 32, 8192);
+        height = qBound(100, height + 32, 8192);
 
         qDebug() << "Resizing webView to:" << width << "x" << height;
 
@@ -275,8 +312,9 @@ void MermaidRenderer::captureResult(quintptr requestId) {
         self->webView_->move(-2000, -2000);
 
         // Grab after a short delay for content to render
-        QTimer::singleShot(100, self, [self, requestId]() {
-          if (!self || self->shuttingDown_ || !self->webView_) {
+        QTimer::singleShot(100, self, [self, requestId, serial]() {
+          if (!self || self->shuttingDown_ || !self->webView_ ||
+              self->requestSerial_ != serial) {
             return;
           }
 
@@ -298,6 +336,7 @@ void MermaidRenderer::captureResult(quintptr requestId) {
             emit self->renderComplete(requestId, pixmap, true);
           }
 
+          ++self->requestSerial_;
           self->rendering_ = false;
           self->processNextRequest();
         });

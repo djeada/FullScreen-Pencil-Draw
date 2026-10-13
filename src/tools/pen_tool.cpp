@@ -80,6 +80,23 @@ void PenTool::mouseReleaseEvent(QMouseEvent *event,
   if (!event || event->button() != Qt::LeftButton)
     return; // ignore other-button releases mid-stroke
 
+  // The spline lags two samples behind the cursor (and a stroke of fewer
+  // than four samples has no segment at all), so finish the tail; otherwise
+  // short strokes vanished and long ones lost their last stretch.
+  if (currentPath_ && pointBuffer_.size() >= 2) {
+    const int n = pointBuffer_.size();
+    QPainterPath path = currentPath_->path();
+    if (n >= MIN_POINTS_FOR_SPLINE) {
+      const QPointF p0 = pointBuffer_.at(n - 3);
+      const QPointF p1 = pointBuffer_.at(n - 2);
+      const QPointF p2 = pointBuffer_.at(n - 1);
+      path.cubicTo(p1 + (p2 - p0) / 6.0, p2 - (p2 - p1) / 6.0, p2);
+    } else {
+      for (int i = 1; i < n; ++i)
+        path.lineTo(pointBuffer_.at(i));
+    }
+    currentPath_->setPath(path);
+  }
   // A single-sample click still produces a visible dot with the path pen.
   if (currentPath_ && pointBuffer_.size() <= 1) {
     const QPointF pt =

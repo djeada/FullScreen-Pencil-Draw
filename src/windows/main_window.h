@@ -34,6 +34,10 @@ public:
   explicit MainWindow(QWidget *parent = nullptr);
   ~MainWindow();
 
+  /// Open a project, image, SVG or (when built in) PDF given on the command
+  /// line or by a file-manager "Open with".
+  void openPath(const QString &path);
+
 protected:
   void closeEvent(QCloseEvent *event) override;
   void keyPressEvent(QKeyEvent *event) override;

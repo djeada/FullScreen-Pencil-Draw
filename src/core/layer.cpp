@@ -325,7 +325,7 @@ void LayerManager::setItemStore(ItemStore *store) {
   }
 }
 
-bool LayerManager::deleteLayer(int index) {
+bool LayerManager::deleteLayer(int index, bool keepItemsForUndo) {
   if (index < 0 || index >= static_cast<int>(layers_.size())) {
     return false;
   }
@@ -342,13 +342,14 @@ bool LayerManager::deleteLayer(int index) {
   const QList<ItemId> ids = layer->itemIds();
   if (sceneController_) {
     for (const ItemId &id : ids) {
-      sceneController_->removeItem(id, false);
+      sceneController_->removeItem(id, keepItemsForUndo);
     }
   } else if (itemStore_) {
     for (const ItemId &id : ids) {
-      itemStore_->scheduleDelete(id);
+      itemStore_->scheduleDelete(id, keepItemsForUndo);
     }
-    itemStore_->flushDeletions();
+    if (!keepItemsForUndo)
+      itemStore_->flushDeletions();
   } else {
     for (auto *item : layer->items()) {
       if (item && item->scene() == scene_) {

@@ -37,8 +37,12 @@ std::size_t RasterTileDiff::byteSize() const {
   return bytes;
 }
 
-QList<RasterTileKey> RasterSurface::tilesFor(const QRect &area) {
+QList<RasterTileKey> RasterSurface::tilesFor(const QRect &requested) {
   QList<RasterTileKey> keys;
+  // Never hand out tiles beyond the supported extent: they would save fine
+  // but make the project fail to load (fromJson rejects them).
+  const QRect area = requested.intersected(
+      QRect(-kMaxExtent, -kMaxExtent, 2 * kMaxExtent, 2 * kMaxExtent));
   if (area.isEmpty())
     return keys;
   const int tx0 = floorDiv(area.left(), kTileSize);

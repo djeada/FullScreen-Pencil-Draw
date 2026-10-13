@@ -613,25 +613,45 @@ bool TransformHandleItem::applyResize(const QPointF &mousePos) {
   }
 
   // Apply scale transformation for non-text items
-  QTransform t = target->transform();
-  QPointF localAnchor = target->mapFromScene(anchor);
-
-  // Create scaling transform around the anchor point
-  QTransform scaleTransform;
-  scaleTransform.translate(localAnchor.x(), localAnchor.y());
-  scaleTransform.scale(scaleX, scaleY);
-  scaleTransform.translate(-localAnchor.x(), -localAnchor.y());
-
-  target->setTransform(t * scaleTransform);
-
-  // Adjust position to keep anchor point fixed
-  QPointF newAnchorPos = target->mapToScene(localAnchor);
-  QPointF posAdjust = anchor - newAnchorPos;
-  target->setPos(target->pos() + posAdjust);
+  scaleInScene(target, scaleX, scaleY, anchor);
 
   // Emit signal for other selected items to follow
   emit resizeApplied(scaleX, scaleY, anchor);
   return true;
+}
+
+void TransformHandleItem::scaleInScene(QGraphicsItem *item, qreal sx, qreal sy,
+                                       const QPointF &anchor) {
+  if (!item)
+    return;
+  if (item->parentItem() || item->rotation() != 0.0 || item->scale() != 1.0 ||
+      !item->transformations().isEmpty()) {
+    // Nested items and items using Qt's rotation/scale properties: keep the
+    // local-axis behaviour (those transforms would have to be unwound too).
+    const QPointF localAnchor = item->mapFromScene(anchor);
+    QTransform scaleTransform;
+    scaleTransform.translate(localAnchor.x(), localAnchor.y());
+    scaleTransform.scale(sx, sy);
+    scaleTransform.translate(-localAnchor.x(), -localAnchor.y());
+    item->setTransform(item->transform() * scaleTransform);
+    const QPointF moved = item->mapToScene(localAnchor);
+    item->setPos(item->pos() + (anchor - moved));
+    return;
+  }
+  // scene = transform * translate(pos) (the app only rotates and scales
+  // through transform()); apply S in the scene and fold it back into the
+  // item transform:  t' = t * T * S * T^-1.
+  const QTransform toScene =
+      QTransform::fromTranslate(item->pos().x(), item->pos().y());
+  QTransform sceneScale;
+  sceneScale.translate(anchor.x(), anchor.y());
+  sceneScale.scale(sx, sy);
+  sceneScale.translate(-anchor.x(), -anchor.y());
+  bool invertible = false;
+  const QTransform fromScene = toScene.inverted(&invertible);
+  if (!invertible)
+    return;
+  item->setTransform(item->transform() * toScene * sceneScale * fromScene);
 }
 
 void TransformHandleItem::applyRotation(const QPointF &mousePos) {

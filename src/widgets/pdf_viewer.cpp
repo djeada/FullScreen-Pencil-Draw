@@ -26,6 +26,7 @@
 #include <QPdfSearchModel>
 #include <QPdfWriter>
 #include <QPointer>
+#include <QSaveFile>
 #include <QScopedValueRollback>
 #include <QScrollBar>
 #include <QSignalBlocker>
@@ -181,7 +182,11 @@ void PdfViewer::setupScene() {
 
 bool PdfViewer::openPdf(const QString &filePath) {
   closePdf();
-  return document_->load(filePath);
+  sourcePath_.clear();
+  const bool ok = document_->load(filePath);
+  if (ok)
+    sourcePath_ = QFileInfo(filePath).canonicalFilePath();
+  return ok;
 }
 
 void PdfViewer::closePdf() {
@@ -486,10 +491,12 @@ void PdfViewer::fitToWidth() {
   // Calculate scale to fit width (a quarter turn swaps the page's sides)
   const bool quarterTurn = pageRotation_ % 180 != 0;
   double viewWidth = viewport()->width() - 20; // Margin
+  if (viewWidth <= 0)
+    return;
   double scale =
       viewWidth / (quarterTurn ? pageRect.height() : pageRect.width());
 
-  currentZoom_ = scale;
+  currentZoom_ = qBound(MIN_ZOOM, scale, MAX_ZOOM);
   renderCurrentPage();
   applyViewTransform();
   emit zoomChanged(zoomLevel());
@@ -514,8 +521,10 @@ void PdfViewer::fitToPage() {
   double scaleY =
       viewHeight / (quarterTurn ? pageRect.width() : pageRect.height());
   double scale = qMin(scaleX, scaleY);
+  if (viewWidth <= 0 || viewHeight <= 0)
+    return;
 
-  currentZoom_ = scale;
+  currentZoom_ = qBound(MIN_ZOOM, scale, MAX_ZOOM);
   renderCurrentPage();
   applyViewTransform();
   emit zoomChanged(zoomLevel());
@@ -564,8 +573,21 @@ void PdfViewer::applyZoom(double factor) {
 
 int PdfViewer::effectiveRenderDpi() const {
   const double zoomMultiplier = qMax(1.0, currentZoom_);
-  const int dpi = static_cast<int>(std::ceil(renderDpi_ * zoomMultiplier));
-  return qBound(renderDpi_, dpi, MAX_RENDER_DPI);
+  int dpi = static_cast<int>(std::ceil(renderDpi_ * zoomMultiplier));
+  dpi = qBound(renderDpi_, dpi, MAX_RENDER_DPI);
+  // Bound the page bitmap itself: a large page at a high zoom would need
+  // several GB for the render plus its flattened and inverted copies.
+  if (document_ && hasPdf()) {
+    const QSizeF points = document_->pageSize(currentPage_);
+    if (!points.isEmpty()) {
+      constexpr double kMaxPagePixels = 64e6;
+      const double inches = (points.width() / 72.0) * (points.height() / 72.0);
+      const int budgetDpi =
+          static_cast<int>(std::sqrt(kMaxPagePixels / qMax(inches, 1e-6)));
+      dpi = qMax(renderDpi_, qMin(dpi, budgetDpi));
+    }
+  }
+  return dpi;
 }
 
 void PdfViewer::toggleGrid() {
@@ -824,7 +846,22 @@ bool PdfViewer::exportAnnotatedPdf(const QString &filePath) {
     return false;
   }
 
-  QPdfWriter pdfWriter(filePath);
+  // The source document is read lazily while pages are rendered, so writing
+  // over it would truncate it mid-export. Never allow that.
+  if (!sourcePath_.isEmpty() &&
+      QFileInfo(filePath).canonicalFilePath() == sourcePath_) {
+    return false;
+  }
+
+  // Written to a temporary file and moved into place on success, so a failed
+  // export never leaves a truncated or half-written PDF behind.
+  QSaveFile outFile(filePath);
+  if (!outFile.open(QIODevice::WriteOnly)) {
+    return false;
+  }
+  bool renderedAllPages = true;
+
+  QPdfWriter pdfWriter(&outFile);
   const QSizeF firstPagePoints = document_->pageSize(0);
   pdfWriter.setPageSize(firstPagePoints.isEmpty()
                             ? QPageSize(QPageSize::A4)
@@ -837,6 +874,7 @@ bool PdfViewer::exportAnnotatedPdf(const QString &filePath) {
   QPainter painter(&pdfWriter);
   if (!painter.isActive()) {
     // Failed to open the target file (bad path / permissions)
+    outFile.cancelWriting();
     return false;
   }
   painter.setRenderHint(QPainter::Antialiasing);
@@ -855,10 +893,15 @@ bool PdfViewer::exportAnnotatedPdf(const QString &filePath) {
       pdfWriter.newPage();
     }
 
+    // Only the displayed page's annotations are visible, and hidden items
+    // are not painted: show this page's overlay before drawing it.
+    overlayManager_->showPage(i);
+
     // Render the page itself; dark mode is only a viewing aid and must not
     // end up inverted in the exported document.
     QImage pageImage = document_->renderPage(i, renderDpi_, false);
     if (pageImage.isNull()) {
+      renderedAllPages = false; // never present a blank page as exported
       continue;
     }
 
@@ -903,13 +946,18 @@ bool PdfViewer::exportAnnotatedPdf(const QString &filePath) {
     painter.restore();
   }
 
-  const bool ok = painter.isActive();
+  const bool painted = painter.isActive();
   painter.end();
 
-  // Restore current page
+  // Restore current page (and which page's annotations are visible)
+  overlayManager_->showPage(savedPage);
   goToPage(savedPage);
 
-  return ok;
+  if (!painted || !renderedAllPages) {
+    outFile.cancelWriting();
+    return false;
+  }
+  return outFile.commit();
 }
 
 void PdfViewer::drawBackground(QPainter *painter, const QRectF &rect) {

@@ -150,6 +150,15 @@ private slots:
       QCOMPARE(loaded.tile(key), surface.tile(key));
   }
 
+  void paintFarOutsideTheSupportedExtentAllocatesNothing() {
+    // Such tiles would save but make the project unloadable.
+    RasterSurface surface;
+    fillRect(surface, QRect(RasterSurface::kMaxExtent + 1000, 0, 50, 50),
+             Qt::red);
+    QCOMPARE(surface.tileCount(), 0);
+    QVERIFY(RasterSurface::tilesFor(QRect(0, 0, 10, 10)).size() == 1);
+  }
+
   void jsonRejectsCorruptTiles() {
     RasterSurface surface;
     fillRect(surface, QRect(0, 0, 10, 10), Qt::red);

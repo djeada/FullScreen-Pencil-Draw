@@ -19,6 +19,7 @@ public:
 
   QStringList recentFiles() const;
   void addRecentFile(const QString &filePath);
+  void removeRecentFile(const QString &filePath);
   void clearRecentFiles();
   int maxRecentFiles() const;
 

@@ -40,6 +40,13 @@ void RecentFilesManager::clearRecentFiles() {
   emit recentFilesChanged();
 }
 
+void RecentFilesManager::removeRecentFile(const QString &filePath) {
+  if (recentFiles_.removeAll(filePath) == 0)
+    return;
+  saveRecentFiles();
+  emit recentFilesChanged();
+}
+
 int RecentFilesManager::maxRecentFiles() const { return MAX_RECENT_FILES; }
 
 void RecentFilesManager::loadRecentFiles() {

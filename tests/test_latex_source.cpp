@@ -5,11 +5,11 @@ class TestLatexSource : public QObject {
   Q_OBJECT
 private slots:
   void multilineDisplayMath() {
-    const QString math = QStringLiteral(
-        "\n\\begin{cases}\n"
-        "0 & x\\leq 0 \\\\\n"
-        "\\frac{100-x}{100} & 0\\leq x\\leq 100 \\\\\n"
-        "0 & 100\\leq x\n\\end{cases}\n");
+    const QString math =
+        QStringLiteral("\n\\begin{cases}\n"
+                       "0 & x\\leq 0 \\\\\n"
+                       "\\frac{100-x}{100} & 0\\leq x\\leq 100 \\\\\n"
+                       "0 & 100\\leq x\n\\end{cases}\n");
     QCOMPARE(LatexSource::composeKatexSource("$$" + math + "$$"),
              "{\\displaystyle " + math + "}");
   }
